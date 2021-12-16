@@ -1,0 +1,110 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+    # http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Amazon Transcribe Live Call Analytics - Chime Voice Connector
+
+Parameters:
+
+  InstallDemoAsteriskServer:
+    Type: String
+    Default: true
+    AllowedValues:
+        - true
+        - false
+    Description: Set to true to automatically install a demo Asterisk server for testing Chime Voice Connector streaming.
+
+  DemoSoftphoneAllowedCidr:
+    Type: String
+    AllowedPattern: "( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))"
+    Description: >
+      Ignored if Install Demo Asterisk Server is false.
+      CIDR block allowed by demo Asterisk server for soft phone registration.
+      Example: '198.51.100.36/32'
+
+  SiprecAllowedCidrList:
+    Type: String
+    AllowedPattern: "( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*"
+    Description: >
+      Ignored if Install Demo Asterisk Server is true.
+      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
+      Example: '198.51.100.0/27, 203.0.113.128/27'
+
+  DemoAsteriskDownloadUrl:
+    Type: String
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-16-current.tar.gz
+    Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
+
+  DemoAsteriskAgentAudioURL:
+    Type: String
+    Description: URL for audio (agent.wav) file download for demo Asterisk server.
+
+Metadata:
+    AWS::CloudFormation::Interface:
+        ParameterGroups:
+            - Label:
+                default: Options
+              Parameters:
+                  - InstallDemoAsteriskServer
+                  - DemoSoftphoneAllowedCidr
+                  - SiprecAllowedCidrList
+
+
+Conditions:
+  ShouldInstallDemoAsteriskServer: !Equals [!Ref InstallDemoAsteriskServer, 'true']
+  ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
+
+Resources:
+
+  DeployChimeVCAsteriskDemo:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallDemoAsteriskServer
+    Properties:
+      TemplateURL: ./cloudformation-templates/chime-vc-with-asterisk-server.yaml
+      Parameters:
+        SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
+        DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
+        DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
+
+  DeployChimeVCsiprec:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallChimeVCsiprec
+    Properties:
+      TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
+      Parameters:
+        CidrBlocks: !Ref SiprecAllowedCidrList
+
+Outputs:
+
+  DemoPBXIPAddress:
+    Value:
+      !If
+      - ShouldInstallDemoAsteriskServer
+      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.IPAddress
+      - "Demo PBX not enabled"
+
+  DemoPBXPhoneNumber:
+    Value:
+      !If
+      - ShouldInstallDemoAsteriskServer
+      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.PhoneNumber
+      - "Demo PBX not enabled"
+
+  AsteriskInstanceId:
+    Value:
+      !If
+      - ShouldInstallDemoAsteriskServer
+      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.InstanceID
+      - "Demo PBX not enabled"

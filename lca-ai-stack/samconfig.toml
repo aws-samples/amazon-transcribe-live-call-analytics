@@ -1,0 +1,33 @@
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html
+# https://aws.amazon.com/blogs/compute/optimizing-serverless-development-with-samconfig/
+
+version=0.1
+[default.build.parameters]
+use_container = true
+
+# shared account
+[shared.global.parameters]
+s3_bucket = "lca-artifacts-253873381732-us-east-1"
+s3_prefix = "artifacts/lca/0.1.0"
+
+[shared.deploy.parameters]
+stack_name = "LiveCallAnalytics"
+s3_bucket = "lca-artifacts-253873381732-us-east-1"
+s3_prefix = "artifacts/lca/0.1.0"
+region = "us-east-1"
+fail_on_empty_changeset = false
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = [
+  "BootstrapBucketBaseName=lca-artifacts-253873381732",
+  "BootstrapS3Prefix=artifacts/lca",
+  "BootstrapVersion=0.1.0",
+  "S3BucketName=shared-ai-for-chime-vc-audio",
+  "AllowedSignUpEmailDomain=amazon.com",
+  "IsContentRedactionEnabled=true",
+  "IsSentimentAnalysisEnabled=true",
+]
+
+[shared.package.parameters]
+s3_bucket = "lca-artifacts-253873381732-us-east-1"
+s3_prefix = "artifacts/lca/0.1.0"

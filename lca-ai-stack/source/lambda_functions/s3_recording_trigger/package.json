@@ -1,0 +1,14 @@
+{
+    "name": "process_contact",
+    "description": "Puts an event containing the recording S3 URL",
+    "main": "index.js",
+    "author": {
+        "name": "AWS"
+    },
+    "version": "0.0.1",
+    "private": "true",
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.35.0",
+        "@aws-sdk/lib-dynamodb": "^3.35.0"
+    }
+}

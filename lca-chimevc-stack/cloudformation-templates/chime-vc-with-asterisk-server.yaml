@@ -1,0 +1,799 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Amazon Transcribe Live Call Analytics - Chime Voice Connector with Asterisk demo server
+
+Parameters:
+  InstanceType:
+    Description: Instance type to launch EC2 instances.
+    Type: String
+    Default: t4g.large
+    AllowedValues: [t4g.micro, t4g.small, t4g.medium, t4g.large]
+  LatestImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
+  SoftPhoneCIDR:
+    Description: CIDR block for soft phone access (optional)
+    Type: String
+    AllowedPattern: ^([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))$||""
+    ConstraintDescription: Must be a valid public CIDR block in the form x.x.x.x/y
+  DemoAsteriskDownloadUrl:
+    Type: String
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-16-current.tar.gz
+    Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
+  DemoAsteriskAgentAudioURL:
+    Type: String
+    Description: URL for audio (agent.wav) file download for demo Asterisk server.
+  Ec2Troubleshoot:
+    Description: >
+      Controls whether cloud init errors cause the stack to fail. Set to
+      true when troubleshooting.
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+Conditions:
+  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, ""]]
+Resources:
+  AsteriskVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Ec2CdkStack/VPC
+  AsteriskSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      VpcId:
+        Ref: AsteriskVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: asterisk
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: Ec2CdkStack/VPC/asteriskSubnet1
+  AsteriskSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: AsteriskVPC
+      Tags:
+        - Key: Name
+          Value: Ec2CdkStack/VPC/asteriskSubnet1
+  AsteriskSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: AsteriskSubnet1RouteTable
+      SubnetId:
+        Ref: AsteriskSubnet1
+  AsteriskSubnet1DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: AsteriskSubnet1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: VPCInternetGateway
+    DependsOn:
+      - VPCGatewayAttachment
+  AsteriskSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId:
+        Ref: AsteriskVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: asterisk
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: Ec2CdkStack/VPC/asteriskSubnet2
+  AsteriskSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: AsteriskVPC
+      Tags:
+        - Key: Name
+          Value: Ec2CdkStack/VPC/asteriskSubnet2
+  AsteriskSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: AsteriskSubnet2RouteTable
+      SubnetId:
+        Ref: AsteriskSubnet2
+  AsteriskSubnet2DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: AsteriskSubnet2RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: VPCInternetGateway
+    DependsOn:
+      - VPCGatewayAttachment
+  VPCInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Ec2CdkStack/VPC
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: AsteriskVPC
+      InternetGatewayId:
+        Ref: VPCInternetGateway
+  AsteriskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Asterisk Server
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 3.80.16.0/23
+          Description: Allow Chime Voice Connector Signaling Access
+          FromPort: 5060
+          IpProtocol: udp
+          ToPort: 5060
+        - CidrIp: 3.80.16.0/23
+          Description: Allow Chime Voice Connector Signaling Access
+          FromPort: 5060
+          IpProtocol: tcp
+          ToPort: 5061
+        - CidrIp: 99.77.253.0/24
+          Description: Allow Chime Voice Connector Signaling Access
+          FromPort: 5060
+          IpProtocol: udp
+          ToPort: 5060
+        - CidrIp: 99.77.253.0/24
+          Description: Allow Chime Voice Connector Signaling Access
+          FromPort: 5060
+          IpProtocol: tcp
+          ToPort: 5061
+        - CidrIp: 99.77.253.0/24
+          Description: Allow Chime Voice Connector Signaling Access
+          FromPort: 5000
+          IpProtocol: udp
+          ToPort: 65000
+        - CidrIp: 3.80.16.0/23
+          Description: Allow Chime Voice Connector Media Access
+          FromPort: 5000
+          IpProtocol: udp
+          ToPort: 65000
+        - CidrIp: 52.55.62.128/25
+          Description: Allow Chime Voice Connector Media Access
+          FromPort: 1024
+          IpProtocol: udp
+          ToPort: 65535
+        - CidrIp: 52.55.63.0/25
+          Description: Allow Chime Voice Connector Media Access
+          FromPort: 1024
+          IpProtocol: udp
+          ToPort: 65535
+        - CidrIp: 34.212.95.128/25
+          Description: Allow Chime Voice Connector Media Access
+          FromPort: 1024
+          IpProtocol: udp
+          ToPort: 65535
+        - CidrIp: 34.223.21.0/25
+          Description: Allow Chime Voice Connector Media Access
+          FromPort: 1024
+          IpProtocol: udp
+          ToPort: 65535
+        - CidrIp:
+            !If [SoftPhoneCIDRExists, !Ref SoftPhoneCIDR, !Ref "AWS::NoValue"]
+          Description: Soft Phone CIDR
+          IpProtocol: "-1"
+      VpcId:
+        Ref: AsteriskVPC
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                Fn::Join:
+                  - ""
+                  - - ec2.
+                    - Ref: AWS::URLSuffix
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AmazonSSMManagedInstanceCore
+  InstanceDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ssm:DescribeParameters
+              - ssm:GetParameters
+              - ssm:GetParameter
+              - ssm:GetParameterHistory
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:"
+                  - Ref: AWS::Partition
+                  - ":ssm:"
+                  - Ref: AWS::Region
+                  - ":"
+                  - Ref: AWS::AccountId
+                  - :parameter
+                  - Ref: SSMPhoneNumber
+          - Action:
+              - ssm:DescribeParameters
+              - ssm:GetParameters
+              - ssm:GetParameter
+              - ssm:GetParameterHistory
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:"
+                  - Ref: AWS::Partition
+                  - ":ssm:"
+                  - Ref: AWS::Region
+                  - ":"
+                  - Ref: AWS::AccountId
+                  - :parameter
+                  - Ref: SSMvoiceConnector
+          - Action:
+              - ssm:DescribeParameters
+              - ssm:GetParameters
+              - ssm:GetParameter
+              - ssm:GetParameterHistory
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:"
+                  - Ref: AWS::Partition
+                  - ":ssm:"
+                  - Ref: AWS::Region
+                  - ":"
+                  - Ref: AWS::AccountId
+                  - :parameter
+                  - Ref: SSMOutboundHostname
+        Version: "2012-10-17"
+      PolicyName: InstanceDefaultPolicy
+      Roles:
+        - Ref: InstanceRole
+
+  # Allows cfn-init to signal back to the cloudformation stack
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
+  CfnRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CfnDescribeSignal
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:DescribeStackResource
+              - cloudformation:SignalResource
+            Effect: Allow
+            Resource: !Ref AWS::StackId
+      Roles:
+        - !Ref InstanceRole
+
+  EIP:
+    Type: AWS::EC2::EIP
+  createChimeLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - chime:CreateVoiceConnector
+                  - chime:DeleteVoiceConnector
+                  - chime:GetPhoneNumberOrder
+                  - chime:SearchAvailablePhoneNumbers
+                  - chime:CreatePhoneNumberOrder
+                  - chime:GetPhoneNumberOrder
+                  - chime:DeletePhoneNumber
+                  - chime:DisassociatePhoneNumbersFromVoiceConnector
+                  - chime:AssociatePhoneNumbersWithVoiceConnector
+                  - chime:PutVoiceConnectorTermination
+                  - chime:PutVoiceConnectorStreamingConfiguration
+                  - chime:PutVoiceConnectorOrigination
+                  - cloudformation:DescribeStacks
+                  - iam:CreateServiceLinkedRole
+                  - iam:PutRolePolicy
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: chimePolicy
+  createVCLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import json
+          import boto3
+          import time
+          import uuid
+          import urllib.parse
+
+          chime = boto3.client('chime')
+          cloudformation = boto3.resource("cloudformation")
+
+          def authorizeEIP (voiceConnectorId, elasticIP):
+            response = chime.put_voice_connector_origination(
+              VoiceConnectorId=voiceConnectorId,
+              Origination={
+                  'Routes': [
+                      {
+                          'Host': elasticIP,
+                          'Port': 5060,
+                          'Protocol': 'UDP',
+                          'Priority': 1,
+                          'Weight': 1
+                      },
+                  ],
+                  'Disabled': False
+              }
+            )
+            print(response)
+
+            response = chime.put_voice_connector_termination(
+              VoiceConnectorId=voiceConnectorId,
+              Termination={
+                  'CpsLimit': 1,
+                  'CallingRegions': [
+                      'US',
+                  ],
+                  'CidrAllowedList': [
+                      elasticIP + '/32',
+                  ],
+                  'Disabled': False
+              }
+            )
+            print(response)
+
+
+          def getPhoneNumber ():
+            search_response = chime.search_available_phone_numbers(
+                # AreaCode='string',
+                # City='string',
+                # Country='string',
+                State='IL',
+                # TollFreePrefix='string',
+                MaxResults=1
+            )
+            phoneNumberToOrder = search_response['E164PhoneNumbers'][0]
+            print ('Phone Number: ' + phoneNumberToOrder)
+            phone_order = chime.create_phone_number_order(
+                ProductType='VoiceConnector',
+                E164PhoneNumbers=[
+                    phoneNumberToOrder,
+                ]
+            )
+            print ('Phone Order: ' + str(phone_order))
+
+            check_phone_order = chime.get_phone_number_order(
+              PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
+            )
+            order_status = check_phone_order['PhoneNumberOrder']['Status']
+            timeout = 0
+
+            while not order_status == 'Successful':
+              timeout += 1  
+              print('Checking status: ' + str(order_status))
+              time.sleep(5)
+              check_phone_order = chime.get_phone_number_order(
+                PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
+              )
+              print('Current Response: ' + str(check_phone_order))
+              order_status = check_phone_order['PhoneNumberOrder']['Status']
+              if timeout == 15:
+                return 'Could not get phone number'
+
+            return phoneNumberToOrder
+
+          def createVoiceConnector (region, phoneNumber):
+            print(str(uuid.uuid1()))
+            print(region)
+            response = chime.create_voice_connector(
+                Name='Trunk' + str(uuid.uuid1()),
+                AwsRegion=region,
+                RequireEncryption=False
+            )
+                
+            voiceConnectorId = response['VoiceConnector']['VoiceConnectorId']
+            outboundHostName = response['VoiceConnector']['OutboundHostName']
+
+            response = chime.associate_phone_numbers_with_voice_connector(
+                VoiceConnectorId=voiceConnectorId,
+                E164PhoneNumbers=[
+                    phoneNumber,
+                ],
+                ForceAssociate=True
+            )
+
+            chime.put_voice_connector_streaming_configuration(
+              VoiceConnectorId=voiceConnectorId,
+              StreamingConfiguration={
+                'DataRetentionInHours': 1,
+                'Disabled': False,
+                'StreamingNotificationTargets': [
+                  {
+                    'NotificationTarget': 'EventBridge'
+                  },
+                ]
+              }
+            )
+
+            voiceConnector = { 'voiceConnectorId': voiceConnectorId, 'outboundHostName': outboundHostName, 'phoneNumber': phoneNumber}
+            return voiceConnector
+
+          def handler(event, context):
+              print(event)
+              if event['RequestType'] == 'Create':
+                  try:              
+                    physical_id = 'VoiceConnectorResources'
+                    region = event['ResourceProperties']['region']
+                    elasticIP = event['ResourceProperties']['eip']
+
+                    newPhoneNumber = getPhoneNumber()
+                    voiceConnector = createVoiceConnector(region, newPhoneNumber)
+                    authorizeEIP(voiceConnector['voiceConnectorId'], elasticIP)
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, voiceConnector, physical_id)
+                  except Exception as e:
+                    error = { 'error': f'Exception thrown: {e}'}
+                    print(error)
+                    cfnresponse.send(event, context, cfnresponse.FAILED, error )                    
+              elif event['RequestType'] == 'Delete':
+                  try:              
+                    physical_id = 'VoiceConnectorResources'
+                    stack_name = event["ResourceProperties"]["stackName"]
+                    stack = cloudformation.Stack(stack_name)
+                    if stack.outputs:
+                      outputs = {output["OutputKey"]: output["OutputValue"] for output in stack.outputs}
+                      phone_number = outputs["PhoneNumber"]
+                      voice_connector = outputs["VoiceConnector"]
+                      print(phone_number)
+                      print(voice_connector)
+                      chime.disassociate_phone_numbers_from_voice_connector(
+                          VoiceConnectorId=voice_connector,
+                          E164PhoneNumbers=[
+                              phone_number,
+                          ]
+                      )
+                      time.sleep(10)
+                      response = {}
+                      response['delete_vc'] = chime.delete_voice_connector(VoiceConnectorId=voice_connector)
+                      parsed_number = urllib.parse.quote_plus(phone_number)
+                      time.sleep(10)
+                      response['delete_phone'] = chime.delete_phone_number(PhoneNumberId=parsed_number)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physical_id)
+                    else:
+                      responseData = {'Message': 'No Cloudformation Output. Returning success status.'}
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                      
+                  except Exception as e:
+                    error = { 'error': f'Exception thrown: {e}'}
+                    print(error)
+                    cfnresponse.send(event, context, cfnresponse.FAILED, error )                      
+              else:
+                  responseData = {'Message': 'Update is no-op. Returning success status.'}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+      Role:
+        Fn::GetAtt:
+          - createChimeLambdaRole
+          - Arn
+      Handler: index.handler
+      Runtime: python3.8
+      Timeout: 300
+  voiceConnectorResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - createVCLambda
+          - Arn
+      region:
+        Ref: AWS::Region
+      eip:
+        Ref: EIP
+      stackName:
+        Ref: AWS::StackName
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+  SSMPhoneNumber:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value:
+        Fn::GetAtt:
+          - voiceConnectorResource
+          - phoneNumber
+      Name: !Sub /${AWS::StackName}/phoneNumber
+  SSMvoiceConnector:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value:
+        Fn::GetAtt:
+          - voiceConnectorResource
+          - voiceConnectorId
+      Name: !Sub /${AWS::StackName}/voiceConnector
+  SSMOutboundHostname:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value:
+        Fn::GetAtt:
+          - voiceConnectorResource
+          - outboundHostName
+      Name: !Sub /${AWS::StackName}/outboundHostName
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: InstanceRole
+  AsteriskInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      ImageId: !Ref LatestImageId
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - AsteriskSecurityGroup
+            - GroupId
+      SubnetId:
+        Ref: AsteriskSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "AsteriskInstance-${AWS::StackName}"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+
+          # trap errors and handle cfn signals
+          completed=0
+          function error_exit
+          {
+            if [ $completed -eq 0 ]; then
+              local error_reason=${!1:-failure}
+              local exit_code=${!2:-1}
+              local troubleshoot=${Ec2Troubleshoot}
+              [[ $troubleshoot == 'false' ]] && {
+                /opt/aws/bin/cfn-signal -e $exit_code -r "$error_reason" '${InstanceInitWaitHandle}'
+                exit $exit_code
+              }
+            fi
+            /opt/aws/bin/cfn-signal --success true '${InstanceInitWaitHandle}'
+          }
+          trap error_exit EXIT
+
+          HOMEDIR=/home/ec2-user
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+          yum install net-tools -y
+          yum install wget -y
+          yum -y install make gcc gcc-c++ make subversion libxml2-devel ncurses-devel openssl-devel vim-enhanced man glibc-devel autoconf libnewt kernel-devel kernel-headers linux-headers openssl-devel zlib-devel libsrtp libsrtp-devel uuid libuuid-devel mariadb-server jansson-devel libsqlite3x libsqlite3x-devel epel-release.noarch bash-completion bash-completion-extras unixODBC unixODBC-devel libtool-ltdl libtool-ltdl-devel mysql-connector-odbc mlocate libiodbc sqlite sqlite-devel sql-devel.i686 sqlite-doc.noarch sqlite-tcl.x86_64 patch libedit-devel jq
+          cd /tmp
+          wget ${DemoAsteriskDownloadUrl}
+          tar xvzf asterisk-16-current.tar.gz 
+          cd asterisk-16*/
+          ./configure --libdir=/usr/lib64 --with-jansson-bundled
+          make menuselect.makeopts
+          menuselect/menuselect \
+                  --disable BUILD_NATIVE \
+                  --disable chan_sip \
+                  --disable chan_skinny \
+                  --enable cdr_csv \
+                  --enable res_snmp \
+                  --enable res_http_websocket \
+                  menuselect.makeopts
+          make 
+          make install
+          make basic-pbx
+          touch /etc/redhat-release
+          make config
+          ldconfig
+          PASSWORD=$( curl http://169.254.169.254/latest/meta-data/instance-id)
+          IP=$( curl http://169.254.169.254/latest/meta-data/public-ipv4 )
+          REGION=$( curl http://169.254.169.254/latest/meta-data/placement/region )
+          PhoneNumber=$( aws ssm get-parameter --name /${AWS::StackName}/phoneNumber --region $REGION | jq -r '.Parameter.Value' )
+          VoiceConnectorHost=$( aws ssm get-parameter --name /${AWS::StackName}/voiceConnector --region $REGION | jq -r '.Parameter.Value' )
+          OutboundHostName=$( aws ssm get-parameter --name /${AWS::StackName}/outboundHostName --region $REGION | jq -r '.Parameter.Value' )
+          curl ${DemoAsteriskAgentAudioURL} --output /var/lib/asterisk/sounds/agent.wav
+
+          echo "[udp]
+          type=transport
+          protocol=udp
+          bind=0.0.0.0
+          external_media_address=$IP
+          external_signaling_address=$IP
+          allow_reload=yes
+          [VoiceConnector]
+          type=endpoint
+          context=from-voiceConnector
+          transport=udp
+          disallow=all
+          allow=ulaw
+          aors=VoiceConnector
+          direct_media=no
+          ice_support=yes
+          force_rport=yes
+          [VoiceConnector]
+          type=identify
+          endpoint=VoiceConnector
+          match=$OutboundHostName
+          [VoiceConnector]
+          type=aor
+          contact=sip:$OutboundHostName
+          [$PhoneNumber]
+          type=endpoint
+          context=from-phone
+          disallow=all
+          allow=ulaw
+          transport=udp
+          auth=$PhoneNumber
+          aors=$PhoneNumber
+          send_pai=yes
+          direct_media=no
+          rewrite_contact=yes
+          ice_support=yes
+          force_rport=yes
+          [$PhoneNumber]
+          type=auth
+          auth_type=userpass
+          password=$PASSWORD
+          username=$PhoneNumber
+          [$PhoneNumber]
+          type=aor
+          max_contacts=5" > /etc/asterisk/pjsip.conf
+
+          echo "; extensions.conf - the Asterisk dial plan
+          ;
+          [general]
+          static=yes
+          writeprotect=no
+          clearglobalvars=no
+          [catch-all]
+          exten => _[+0-9].,1,Answer()
+          exten => _[+0-9].,n,Wait(1)
+          exten => _[+0-9].,n,Playback(agent)
+          exten => _[+0-9].,n,Wait(1)
+          exten => _[+0-9].,n,echo()
+          exten => _[+0-9].,n,Wait(1)
+          exten => _[+0-9].,n,Hangup()
+          [from-phone]
+          include => outbound_phone
+          [outbound_phone]
+          exten => _+X.,1,NoOP(Outbound Normal)
+          same => n,Dial(PJSIP/\${!EXTEN}@VoiceConnector,20)
+          same => n,Congestion
+          [from-voiceConnector]
+          include => phones
+          include => catch-all
+          [phones]
+          exten => $PhoneNumber,1,Dial(PJSIP/$PhoneNumber)" > /etc/asterisk/extensions.conf
+
+          echo "[options]
+          runuser = asterisk
+          rungroup = asterisk" > /etc/asterisk/asterisk.conf
+
+          echo "[general]
+          [logfiles]
+          console = verbose,notice,warning,error
+          messages = notice,warning,error" > /etc/asterisk/logger.conf
+
+          groupadd asterisk
+          useradd -r -d /var/lib/asterisk -g asterisk asterisk
+          usermod -aG audio,dialout asterisk
+          chown -R asterisk.asterisk /etc/asterisk
+          chown -R asterisk.asterisk /var/lib/asterisk
+          chown -R asterisk.asterisk /var/log/asterisk
+          chown -R asterisk.asterisk /var/spool/asterisk
+
+          systemctl start asterisk
+          completed=1
+          exit
+    DependsOn:
+      - InstanceDefaultPolicy
+      - InstanceRole
+
+  InstanceInitWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
+  # Allow 30 minutes max to receive signal from instance
+  InstanceInitWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Handle: !Ref InstanceInitWaitHandle
+      Timeout: "1800"
+
+  EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      EIP:
+        Ref: EIP
+      InstanceId:
+        Ref: AsteriskInstance
+
+Outputs:
+  IPAddress:
+    Value:
+      Fn::GetAtt:
+        - AsteriskInstance
+        - PublicIp
+  InstanceID:
+    Value:
+      Ref: AsteriskInstance
+  PhoneNumber:
+    Value:
+      Fn::GetAtt:
+        - voiceConnectorResource
+        - phoneNumber
+  VoiceConnector:
+    Value:
+      Fn::GetAtt:
+        - voiceConnectorResource
+        - voiceConnectorId

@@ -1,0 +1,18 @@
+amazon-transcribe-live-call-analytics
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0
+
+**********************
+THIRD PARTY COMPONENTS
+**********************
+This software includes third party software subject to the following copyrights:
+
+** Pydub - https://github.com/jiaaro/pydub
+Copyright (c) 2011 James Robert, http://jiaaro.com
+SPDX-License-Identifier: MIT
+
+----------------
+
+** GQL - https://github.com/graphql-python/gql
+Copyright (c) 2016 GraphQL Python
+SPDX-License-Identifier: MIT

@@ -1,0 +1,21 @@
+#set( $PK = "trs#${ctx.args.input.CallId}" )
+#set( $CreatedAt = $util.defaultIfNullOrBlank($ctx.args.input.CreatedAt, $util.time.nowISO8601()) )
+#set( $SK = "ts#${CreatedAt}#c#${ctx.args.input.Channel}" )
+
+$util.qr($ctx.args.input.put("CreatedAt", ${CreatedAt}))
+
+{
+  "version" : "2018-05-29",
+  "operation": "PutItem",
+  "key" : {
+    "PK": $util.dynamodb.toDynamoDBJson($PK),
+    "SK": $util.dynamodb.toDynamoDBJson($SK),
+  },
+  "attributeValues": $util.dynamodb.toMapValuesJson($ctx.args.input),
+  "condition": {
+    "expression": "attribute_not_exists(#PK)",
+    "expressionNames": {
+      "#PK": "PK",
+    },
+  },
+}
