@@ -1,0 +1,2515 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics - LCA AI Stack
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: >
+      (Optional) Existing bucket where call recording files will be stored.
+      Leave blank to automatically create new bucket.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  AudioFilePrefix:
+    Type: String
+    Default: lca-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
+
+  MonoAudioFilePrefix:
+    Type: String
+    Default: lca-mono-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
+
+  DynamoDbExpirationInDays:
+    Type: Number
+    Default: 90
+    Description: >-
+      Number of days set in the time to live of event data stored in the DynamoDB table
+
+  IsContentRedactionEnabled:
+    Type: String
+    Default: "false"
+    Description: >-
+      Enable content redaction from Amazon Transcribe transcription output
+    AllowedValues:
+      - "true"
+      - "false"
+
+  TranscribeContentRedactionType:
+    Type: String
+    Default: PII
+    Description: >-
+      Type of content redaction from Amazon Transcribe transcription output
+    AllowedValues:
+      - PII
+
+  TranscribeLanguageCode:
+    Type: String
+    Description: >-
+      Language code to be used for Amazon Transcribe
+    Default: en-US
+    AllowedValues:
+      - en-US
+      # - en-GB
+      # - es-US
+      # - fr-CA
+      # - fr-FR
+      # - en-AU
+      # - it-IT
+      # - de-DE
+      # - pt-BR
+      # - ja-JP
+      # - ko-KR
+      # - zh-CN
+
+  TranscribePiiEntityTypes:
+    Type: String
+    # yamllint disable rule:line-length
+    Default: BANK_ACCOUNT_NUMBER,BANK_ROUTING,CREDIT_DEBIT_NUMBER,CREDIT_DEBIT_CVV,CREDIT_DEBIT_EXPIRY,PIN,EMAIL,ADDRESS,NAME,PHONE,SSN
+    # yamllint enable rule:line-length
+    Description: >-
+      Select the PII entity types you want to identify or redact. Remove the values that you don't
+      want to redact from the default.  DO NOT ADD CUSTOM VALUES HERE.
+
+  CustomVocabularyName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the vocabulary to use when processing the transcription job. Leave blank if no
+      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+
+  IsSentimentAnalysisEnabled:
+    Type: String
+    Default: 'true'
+    Description: >-
+      Enable sentiment analysis using Amazon Comprehend
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  ComprehendLanguageCode:
+    Type: String
+    Description: >-
+      Language code to be used for Amazon Comprehend to detect sentiment. This
+      should match the Amazon Transcribe language.
+    Default: en
+    AllowedValues:
+      - en
+      - es
+      - fr
+      - de
+      - it
+      - pt
+      - ar
+      - hi
+      - ja
+      - ko
+      - zh
+      - zh-TW
+
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_100
+    Description: >-
+      Specify the CloudFront price class. See https://aws.amazon.com/cloudfront/pricing/ for a
+      description of each price class.
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    ConstraintDescription: >-
+      Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
+
+  AllowedSignUpEmailDomain:
+    Type: String
+    Description: >-
+      Email domain that is allowed to signup using the web UI
+
+  # NOTE: These parameters are dynamically updated during release
+  BootstrapBucketBaseName:
+    Type: String
+    Default: aws-bigdata-blog
+    Description: >-
+      Base name of bootstrap S3 bucket. The region is appended to the bucket name. For example if
+      you provide a base name `mybucket`, a bucket with a region suffix must exist in the region
+      you are deploying (e.g. `mybucket-us-east-1`)
+      The bucket contains pre-staged packaged templates and source artifacts
+    # yamllint disable rule:line-length
+    AllowedPattern: '(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)'
+    # yamllint enable rule:line-length
+
+  BootstrapS3Prefix:
+    Type: String
+    Default: artifacts/lca
+    Description: >
+      S3 prefix where the templates and source are stored under
+
+  BootstrapVersion:
+    Type: String
+    Default: 0.1.0
+    Description: >
+      Artifacts version (semver). Used to point to a specific release in the S3
+      bootstrap bucket
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: Amazon S3 Configuration
+        Parameters:
+          - S3BucketName
+          - AudioFilePrefix
+          - MonoAudioFilePrefix
+      - Label:
+          default: Amazon CloudFront Configuration
+        Parameters:
+          - CloudFrontPriceClass
+    ParameterLabels:
+      S3BucketName:
+        default: Call Audio Bucket Name
+      CloudFrontPriceClass:
+        default: Price Class
+      AudioFilePrefix:
+        default: Audio File Prefix
+      IsContentRedactionEnabled:
+        default: Enable Content Redaction
+      TranscribeContentRedactionType:
+        default: Type of Content Redaction
+      TranscribeLanguageCode:
+        default: Transcription Language Code
+      TranscribePiiEntityTypes:
+        default: Transcription PII Redaction Entity Types
+      CustomVocabularyName:
+        default: Transcription Custom Vocabulary Name
+      IsSentimentAnalysisEnabled:
+        default: Enable Sentiment Analysis with Comprehend
+      ComprehendLanguageCode:
+        default: Comprehend Sentiment Analysis Language Code
+
+Conditions:
+  ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
+  ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
+
+Outputs:
+  EventSourcingTableArn:
+    Description: >-
+      The ARN of the DynamoDB table created to store events and the contact
+      details used in this solution
+    Value: !GetAtt EventSourcingTable.Arn
+  S3BucketName:
+    Description: Bucket which contains all the call recordings
+    Value: !If
+      - ShouldCreateRecordingBucket
+      - !Ref RecordingsBucket
+      - !Ref S3BucketName
+  CloudfrontEndpoint:
+    Description: Endpoint for Cloudfront distribution
+    Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/index.html"
+  TranscribingFargateTrigger:
+    Description: >-
+      AWS Lambda Function triggered by Chime Voice Connector EventBridge Events. It sends an Amazon
+      SQS Message with the stream details for an inbound contact.
+    Value: !Ref TranscribingFargateTrigger
+  TranscribingFargateTriggerARN:
+    Description: ARN for the TranscribingFargateTrigger Function
+    Value: !GetAtt TranscribingFargateTrigger.Arn
+
+Resources:
+  ## BUCKET TO STORE MONO RECORDINGS
+  MonoRecordingsS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    DependsOn: MergeRecordingQueuePolicy
+    Properties:
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Queue: !GetAtt MergeRecordingQueue.Arn
+            Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: wav
+      AccessControl: LogDeliveryWrite
+      # XXX figure out access logging
+      # LoggingConfiguration:
+      #    DestinationBucketName: !Ref S3BucketName
+      #    LogFilePrefix: 'logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  MonoRecordingsS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MonoRecordingsS3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "s3:*"
+            Effect: "Deny"
+            Principal: "*"
+            Resource:
+              - !GetAtt MonoRecordingsS3Bucket.Arn
+              - !Sub "${MonoRecordingsS3Bucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+  ## BUCKET TO STORE STEREO RECORDINGS
+  S3RecordingFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref S3RecordingFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  RecordingsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Condition: ShouldCreateRecordingBucket
+    Properties:
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Function: !GetAtt S3RecordingFunction.Arn
+            Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: wav
+      AccessControl: LogDeliveryWrite
+      # XXX figure out access logging
+      # LoggingConfiguration:
+      #    DestinationBucketName: !Ref S3BucketName
+      #    LogFilePrefix: 'logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  RecordingsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateRecordingBucket
+    Properties:
+      Bucket: !Ref RecordingsBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "s3:*"
+            Effect: "Deny"
+            Principal: "*"
+            Resource:
+              - !GetAtt RecordingsBucket.Arn
+              - !Sub "${RecordingsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+
+  EventSourcingTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AttributeDefinitions:
+        # primary key attributes
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ExpiresAfter
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  S3RecordingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt EventSourcingTable.Arn
+
+  S3RecordingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        AWS Lambda Function that will be triggered when the individual channel wav call recording
+        file is placed in S3. It puts an event in the event sourcing table
+        containing the individual S3 URL
+      Handler: index.handler
+      Role: !GetAtt S3RecordingFunctionRole.Arn
+      Runtime: nodejs14.x
+      MemorySize: 256
+      Timeout: 900
+      Environment:
+        Variables:
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
+          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
+      CodeUri: ../source/lambda_functions/s3_recording_trigger
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  MergeRecordingAudioFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt EventSourcingTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !If
+                        - ShouldCreateRecordingBucket
+                        - !Ref RecordingsBucket
+                        - !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !If
+                        - ShouldCreateRecordingBucket
+                        - !Ref RecordingsBucket
+                        - !Ref S3BucketName
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt MonoRecordingsS3Bucket.Arn
+                  - !Sub "${MonoRecordingsS3Bucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:ChangeMessageVisibility
+                  - sqs:GetQueueUrl
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - !GetAtt MergeRecordingQueue.Arn
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey*
+                Resource: '*'
+
+  MergeRecordingAudioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        AWS Lambda Function that will be triggered when the combined wav call recording
+        file is placed in S3. It puts an event in the event sourcing table
+        containing the combined S3 URL
+      Handler: merge_recording_audio.lambda_handler
+      Role: !GetAtt MergeRecordingAudioFunctionRole.Arn
+      Runtime: python3.9
+      MemorySize: 256
+      Timeout: 120
+      Environment:
+        Variables:
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
+          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
+          OUTPUT_BUCKET: !If
+            - ShouldCreateRecordingBucket
+            - !Ref RecordingsBucket
+            - !Ref S3BucketName
+          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
+          MONO_RECORDING_FILE_PREFIX: !Ref MonoAudioFilePrefix
+      CodeUri: ../source/lambda_functions/merge_recording_audio
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  MergeRecordingAudioFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MergeRecordingAudioFunction
+      Action: lambda:InvokeFunction
+      Principal: sqs.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  MergeRecordingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 5400
+      KmsMasterKeyId: !Ref SQSManagedKey
+
+  MergeRecordingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref "MergeRecordingQueue"]
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: MergeRecordingSQSQueuePolicy
+        Statement:
+          - Sid: Allow-SQS-SendMessage
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: ["sqs:SendMessage"]
+            Resource: !GetAtt [MergeRecordingQueue, Arn]
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref "AWS::AccountId"
+              ArnLike:
+                # TODO: Lock down using a custom resource or predefine S3 bucket name
+                AWS:SourceArn: "arn:aws:s3:*:*:*"
+  MergeRecordingAudioEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !GetAtt MergeRecordingQueue.Arn
+      FunctionName: !GetAtt MergeRecordingAudioFunction.Arn
+
+  # Add permissions to the default key to allow S3 access
+  SQSManagedKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "s3.amazonaws.com"
+            Action:
+              - "kms:GenerateDataKey*"
+              - "kms:Decrypt"
+            Resource: "*"
+          - Effect: Allow
+            Principal:
+              AWS: !Join
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action:
+              - "kms:*"
+            Resource: "*"
+
+  # CUSTOM RESOURCE FOR ADDING NOTIFICATIONS TO EXISTING BUCKET
+  CustomLambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Condition: ShouldNotCreateRecordingBucket
+    Properties:
+      FunctionName: !GetAtt S3RecordingFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:s3:::${S3BucketName}'
+
+  CustomResourceLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Condition: ShouldNotCreateRecordingBucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketNotification'
+                  - 's3:PutBucketNotification'
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  CustomResourceLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Condition: ShouldNotCreateRecordingBucket
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt CustomResourceLambdaRole.Arn
+      Code:
+        ZipFile: |
+            from __future__ import print_function
+            import json
+            import boto3
+            import cfnresponse
+
+            SUCCESS = "SUCCESS"
+            FAILED = "FAILED"
+
+            s3 = boto3.resource('s3')
+
+            def lambda_handler(event, context):
+                print("Received event: " + json.dumps(event, indent=2))
+                responseData={}
+                try:
+                    if event['RequestType'] == 'Delete':
+                        print("Request Type:",event['RequestType'])
+                        Bucket=event['ResourceProperties']['Bucket']
+                        delete_notification(Bucket)
+                        print("Sending response to custom resource after Delete")
+                    elif event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                        print("Request Type:",event['RequestType'])
+                        LambdaArn=event['ResourceProperties']['LambdaArn']
+                        Bucket=event['ResourceProperties']['Bucket']
+                        add_notification(LambdaArn, Bucket)
+                        responseData={'Bucket':Bucket}
+                        print("Sending response to custom resource")
+                    responseStatus = 'SUCCESS'
+                except Exception as e:
+                    print('Failed to process:', e)
+                    responseStatus = 'FAILED'
+                    responseData = {
+                      'Failure': 'Could not set up event trigger to recording function.'
+                    }
+                cfnresponse.send(event, context, responseStatus, responseData)
+
+            def add_notification(LambdaArn, Bucket):
+                bucket_notification = s3.BucketNotification(Bucket)
+                response = bucket_notification.put(
+                  NotificationConfiguration={
+                    'LambdaFunctionConfigurations': [
+                      {
+                          'LambdaFunctionArn': LambdaArn,
+                          'Events': [
+                              's3:ObjectCreated:*'
+                          ],
+                           'Filter': {
+                              'Key': {
+                                  'FilterRules': [
+                                      {
+                                          'Name': 'suffix',
+                                          'Value': 'wav'
+                                      },
+                                  ]
+                              }
+                          }
+                      }
+                    ]
+                  }
+                )
+                print("Put request completed....")
+
+            def delete_notification(Bucket):
+                bucket_notification = s3.BucketNotification(Bucket)
+                response = bucket_notification.put(
+                    NotificationConfiguration={}
+                )
+                print("Delete request completed....")
+      Runtime: python3.9
+      Timeout: 50
+
+  LambdaTrigger:
+    Type: 'Custom::LambdaTrigger'
+    Condition: ShouldNotCreateRecordingBucket
+    DependsOn: CustomLambdaInvokePermission
+    Properties:
+      ServiceToken: !GetAtt CustomResourceLambdaFunction.Arn
+      LambdaArn: !GetAtt S3RecordingFunction.Arn
+      Bucket: !Ref S3BucketName
+
+  ##########################################################################
+  # CodeBuild
+  ##########################################################################
+  TranscriberECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageScanningConfiguration:
+        ScanOnPush: "true"
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow Amazon ECR read access to the users of this AWS account"
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub ${AWS::AccountId}
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+
+  EcrImagesDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: deleteEcrImages
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/\
+                    ${TranscriberECRRepository}"
+                Action:
+                  - ecr:DescribeImages
+                  - ecr:ListImages
+                  - ecr:BatchGetImage
+                  - ecr:BatchDeleteImage
+
+  EcrImagesDeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      MemorySize: 128
+      Timeout: 60
+      Role: !GetAtt EcrImagesDeleteLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          client = boto3.client("ecr")
+          def delete_ecr_images(repository_name):
+              print(f"Deleting images in ECR repo {repository_name}")
+              list_image_paginator = client.get_paginator("list_images")
+              image_filter = {"tagStatus": "ANY"}
+              list_response_iterator = list_image_paginator.paginate(
+                  repositoryName=repository_name, filter=image_filter,
+              )
+              # Iterate over responses and remove untagged images
+              for list_response in list_response_iterator:
+                  images = list_response.get("imageIds", [])
+                  if images:
+                      print(f"Deleting images: {images}")
+                      delete_response = client.batch_delete_image(
+                          repositoryName=repository_name, imageIds=images,
+                      )
+                      if delete_response.get("failures"):
+                          print(f"Delete failures: {delete_response.get('failures')}")
+                      else:
+                          print("Done")
+          def lambda_handler(event, context):
+              print(event)
+              status = cfnresponse.SUCCESS
+              response_data = {}
+              if event["RequestType"] == "Delete":
+                  try:
+                      repository_name = event["ResourceProperties"]["RepositoryName"]
+                      delete_ecr_images(repository_name)
+                      response_data["RepositoryName"] = repository_name
+                  except Exception as e:
+                      print(e)
+                      response_data["Reason"] = f"Exception thrown: {e}"
+                      status = cfnresponse.FAILED
+              cfnresponse.send(event, context, status, response_data)
+
+  EcrImagesDelete:
+    Type: Custom::EcrImagesDelete
+    Properties:
+      ServiceToken: !GetAtt EcrImagesDeleteLambda.Arn
+      RepositoryName: !Ref TranscriberECRRepository
+
+  TranscriberCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/\
+                    ${BootstrapS3Prefix}/*"
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:PutObject
+                  - s3:ListBucket
+              - Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/codebuild/*:*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+              - Resource:
+                  !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/\
+                  ${TranscriberECRRepository}"
+                Effect: Allow
+                Action:
+                  - ecr:DescribeImages
+                  - ecr:ListImages
+                  - ecr:PutImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetRepositoryPolicy
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${WebAppBucket}/*"
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:\
+                    distribution/${WebAppCloudFrontDistribution}"
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              ECR do not support resource-level permissions for GetAuthorizationToken and therefore
+              cannot be specificed directly.
+
+  TranscriberCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: !Sub >-
+        Builds docker images and the website of stack: ${AWS::StackName}
+      ServiceRole: !Ref TranscriberCodeBuildServiceRole
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Location:
+          !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+          ${BootstrapVersion}/src.zip"
+        Type: S3
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo ${SOURCE_CODE_LOCATION}
+                - echo `ls -altr`
+                - echo `pwd`
+                - echo Logging in to Amazon ECR...
+                - >
+                  aws ecr get-login-password --region $AWS_DEFAULT_REGION |
+                  docker login --username AWS
+                  --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - echo Installing Web UI dependencies
+                - npm install -g npm@7.23.0
+                - cd source/ui
+                - npm install
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building kvs transcribe streamig container image
+                - cd $CODEBUILD_SRC_DIR
+                - docker build -t "${REPOSITORY_URI}:${IMAGE_TAG}" source/kvs_transcribe_streaming/
+                - echo Building Web UI
+                - cd source/ui
+                - npm run build
+                - >
+                  printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
+                  $REPOSITORY_URI $PROJECT_NAME $ARTIFACT_BUCKET > build.json
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo "Pushing Docker image to ECR"
+                - docker push "${REPOSITORY_URI}:${IMAGE_TAG}"
+                - echo Copying Web UI
+                - find build -ls
+                - aws s3 cp --recursive build s3://${WEBAPP_BUCKET}/
+                - echo Invalidating CloudFront Distribution
+                - >
+                  aws cloudfront create-invalidation
+                  --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths '/*'
+          artifacts:
+            files:
+              - build.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: REPOSITORY_URI
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}\
+              .amazonaws.com/${TranscriberECRRepository}"
+          - Name: IMAGE_TAG
+            Value: !Ref BootstrapVersion
+          - Name: SOURCE_CODE_LOCATION
+            Value: !Sub "${BootstrapBucketBaseName}-${AWS::Region}/\
+              ${BootstrapS3Prefix}/${BootstrapVersion}"
+          - Name: WEBAPP_BUCKET
+            Value: !Ref WebAppBucket
+          - Name: CLOUDFRONT_DISTRIBUTION_ID
+            Value: !Ref WebAppCloudFrontDistribution
+          # These REACT_APP_ variables are used by the web ui in the
+          # aws-exports.js Amplify config. The values are embedded in the
+          # code at build time. See:
+          # https://create-react-app.dev/docs/adding-custom-environment-variables/
+          - Name: REACT_APP_USER_POOL_ID
+            Value: !Ref UserPool
+          - Name: REACT_APP_USER_POOL_CLIENT_ID
+            Value: !Ref UserPoolClient
+          - Name: REACT_APP_IDENTITY_POOL_ID
+            Value: !Ref IdentityPool
+          - Name: REACT_APP_APPSYNC_GRAPHQL_URL
+            Value: !GetAtt AppSyncApi.GraphQLUrl
+          - Name: REACT_APP_AWS_REGION
+            Value: !Ref AWS::Region
+      TimeoutInMinutes: 10
+
+  LambdaCodeBuildStartBuildExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt TranscriberCodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/lambda/*"
+        # Used by custom resource helper poller
+        # https://github.com/aws-cloudformation/custom-resource-helper
+        - PolicyName: CustomResourcePoller
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:\
+                    ${AWS::AccountId}:rule/*"
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:\
+                    ${AWS::AccountId}:function:*"
+
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt LambdaCodeBuildStartBuild.Arn
+      BuildProjectName: !Ref TranscriberCodeBuildProject
+      # pass code location to support upgrades
+      CodeLocation:
+        !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+        ${BootstrapVersion}/src.zip"
+
+  LambdaCodeBuildStartBuild:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_start_codebuild.handler
+      CodeUri: ../source/lambda_functions/start_codebuild
+      Description: This AWS Lambda Function kicks off a code build job.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  ##########################################################################
+  # Fargate
+  ##########################################################################
+  TranscribingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: alias/aws/sqs
+
+  TranscribingFargateTriggerServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-\
+            TranscribingFargateTriggerServiceRoleDefaultPolicy"
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                Resource: !GetAtt TranscribingQueue.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt EventSourcingTable.Arn
+
+  TranscribingFargateTrigger:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../source/lambda_functions/transcribing_fargate_trigger
+      Description: >-
+        This Lambda is triggered by Chime Voice Connector EventBridge Events. It sends an
+        Amazon SQS Message with the stream details for an inbound contact.
+      Handler: lambda_transcribing_fargate_trigger.lambda_handler
+      Role: !GetAtt TranscribingFargateTriggerServiceRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref TranscribingQueue
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
+          ENABLE_SAVE_RECORDING: "true"
+          ENABLE_TRANSCRIPTION: "true"
+          LANGUAGE_CODE: "en-US"
+          LOG_LEVEL: INFO
+          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
+      Tracing: Active
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  AllowEventBridgeToTranscribingFargateTriggerLambda:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref TranscribingFargateTrigger
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRuleToTriggerFargate.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  EventBridgeRuleToTriggerFargate:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This rule is triggered when the Chime VoiceConnector streaming status changes"
+      EventPattern:
+        detail-type:
+          - "Chime VoiceConnector Streaming Status"
+        source:
+          - aws.chime
+      Targets:
+        - Id: FargateTarget
+          Arn: !GetAtt TranscribingFargateTrigger.Arn
+      State: "ENABLED"
+
+  ##########################################################################
+  # VPC
+  ##########################################################################
+  TranscribingVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+
+  VPCFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 3653
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: >-
+              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
+              server-side encryption keys (AWS Managed Keys).
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              "Allow Resource * for CloudWatch Logs API since the resources are customer defined."
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: LogRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: "*"
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt "VPCFlowLogsRole.Arn"
+      LogGroupName: !Ref "VPCFlowLogsLogGroup"
+      ResourceId: !Ref "TranscribingVPC"
+      ResourceType: VPC
+      TrafficType: ALL
+  TranscribingVPCPublicSubnet1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W33
+            reason: Public IP on launch is needed by the solution
+
+  TranscribingVPCPublicSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet1RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet1Subnet
+
+  TranscribingVPCPublicSubnet1DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: TranscribingVPCIGW
+    DependsOn:
+      - TranscribingVPCVPCGW
+
+  TranscribingVPCPublicSubnet:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  TranscribingVPCPublicSubnet1NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - TranscribingVPCPublicSubnet
+          - AllocationId
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet1Subnet
+
+  TranscribingVPCPublicSubnet2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.64.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W33
+            reason: Public IP on launch is needed by the solution
+
+  TranscribingVPCPublicSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet2RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet2Subnet
+
+  TranscribingVPCPublicSubnet2DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet2RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: TranscribingVPCIGW
+    DependsOn:
+      - TranscribingVPCVPCGW
+
+  TranscribingVPCPublicSubnet2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  TranscribingVPCPublicSubnet2NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - TranscribingVPCPublicSubnet2
+          - AllocationId
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet2Subnet
+
+  TranscribingVPCPrivateSubnet1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.128.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+
+  TranscribingVPCPrivateSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet1RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPrivateSubnet1Subnet
+
+  TranscribingVPCPrivateSubnet1DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: TranscribingVPCPublicSubnet1NATGateway
+
+  TranscribingVPCPrivateSubnet2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.192.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+
+  TranscribingVPCPrivateSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet2RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPrivateSubnet2Subnet
+
+  TranscribingVPCPrivateSubnet2DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet2RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: TranscribingVPCPublicSubnet2NATGateway
+
+  TranscribingVPCIGW:
+    Type: AWS::EC2::InternetGateway
+
+  TranscribingVPCVPCGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+      InternetGatewayId:
+        Ref: TranscribingVPCIGW
+
+  ##########################################################################
+  # ECS
+  ##########################################################################
+  TranscribingCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  TranscriberPoolQueueProcessingTaskDefTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+
+  TranscriberPoolQueueProcessingTaskDefTaskRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - sqs:ReceiveMessage
+              - sqs:ChangeMessageVisibility
+              - sqs:GetQueueUrl
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Effect: Allow
+            Resource: !GetAtt TranscribingQueue.Arn
+          - Action:
+              - s3:GetObject*
+              - s3:GetBucket*
+              - s3:List*
+              - s3:DeleteObject*
+              - s3:PutObject*
+              - s3:Abort*
+            Effect: Allow
+            Resource:
+              - !Sub
+                - "arn:aws:s3:::${bucket}"
+                - bucket: !Ref MonoRecordingsS3Bucket
+              - !Sub
+                - "arn:aws:s3:::${bucket}/*"
+                - bucket: !Ref MonoRecordingsS3Bucket
+          - Action:
+              - dynamodb:PutItem
+            Effect: Allow
+            Resource:
+              - !GetAtt EventSourcingTable.Arn
+          - Action:
+              - transcribe:DeleteTranscriptionJob
+              - transcribe:GetTranscriptionJob
+              - transcribe:GetVocabulary
+              - transcribe:ListTranscriptionJobs
+              - transcribe:ListVocabularies
+              - transcribe:StartStreamTranscription
+              - transcribe:StartTranscriptionJob
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - "kinesisvideo:Describe*"
+              - "kinesisvideo:Get*"
+              - "kinesisvideo:List*"
+            Effect: "Allow"
+            Resource: "*"
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt TranscriberPoolQueueProcessingTaskDefxraydaemonLogGroup.Arn
+        Version: "2012-10-17"
+      PolicyName: !Sub ${AWS::StackName}-TranscriberPoolQueueProcessingTaskDefTaskRoleDefaultPolicy
+      Roles:
+        - !Ref TranscriberPoolQueueProcessingTaskDefTaskRole
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W12
+            reason: comprehend, translate, and connect do not support resource-level permissions.
+
+  TranscriberPoolQueueProcessingTaskDef:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: CodeBuildRun
+    Properties:
+      ContainerDefinitions:
+        -
+          Environment:
+            - Name: MAX_THREADS
+              Value: "30"
+            - Name: APP_REGION
+              Value: !Ref AWS::Region
+            - Name: RECORDINGS_BUCKET_NAME
+              Value: !Ref MonoRecordingsS3Bucket
+            - Name: RECORDINGS_KEY_PREFIX
+              Value: !Ref MonoAudioFilePrefix
+            - Name: RECORDINGS_PUBLIC_READ_ACL
+              Value: "FALSE"
+            - Name: START_SELECTOR_TYPE
+              Value: "NOW"
+            - Name: TRANSCRIBE_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: CONSOLE_LOG_TRANSCRIPT_FLAG
+              Value: "TRUE"
+            - Name: LOGGING_LEVEL
+              Value: FINE
+            - Name: SAVE_PARTIAL_TRANSCRIPTS
+              Value: "TRUE"
+            - Name: EXPIRATION_IN_DAYS
+              Value: !Ref DynamoDbExpirationInDays
+            - Name: EVENT_SOURCING_TABLE_NAME
+              Value: !Ref EventSourcingTable
+            - Name: QUEUE_NAME
+              Value: !GetAtt TranscribingQueue.QueueName
+            - Name: IS_CONTENT_REDACTION_ENABLED
+              Value: !Ref IsContentRedactionEnabled
+            - Name: TRANSCRIBE_LANGUAGE_CODE
+              Value: !Ref TranscribeLanguageCode
+            - Name: PII_ENTITY_TYPES
+              Value: !Ref TranscribePiiEntityTypes
+            - Name: CUSTOM_VOCABULARY_NAME
+              Value: !Ref CustomVocabularyName
+            - Name: CONTENT_REDACTION_TYPE
+              Value: !Ref TranscribeContentRedactionType
+          Essential: true
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/\
+            ${TranscriberECRRepository}:${BootstrapVersion}"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Ref: TranscriberPoolQueueProcessingTaskDefQueueProcessingContainerLogGroup
+              awslogs-stream-prefix: transcriberPool
+              awslogs-region:
+                Ref: AWS::Region
+          Name: QueueProcessingContainer
+        - Cpu: 32
+          Essential: false
+          Image: amazon/aws-xray-daemon
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Ref: TranscriberPoolQueueProcessingTaskDefxraydaemonLogGroup
+              awslogs-stream-prefix: xrayLog
+              awslogs-region:
+                Ref: AWS::Region
+          MemoryReservation: 256
+          Name: xray-daemon
+          PortMappings:
+            - ContainerPort: 2000
+              Protocol: udp
+      Cpu: 2048
+      ExecutionRoleArn: !GetAtt TranscriberPoolQueueProcessingTaskDefExecutionRole.Arn
+      Family: !Sub ${AWS::StackName}TranscriberPoolQueueProcessingTaskDef
+      Memory: 4096
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: !GetAtt TranscriberPoolQueueProcessingTaskDefTaskRole.Arn
+
+  TranscriberPoolQueueProcessingTaskDefQueueProcessingContainerLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      RetentionInDays: 3653
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: >-
+              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
+              server-side encryption keys (AWS Managed Keys).
+
+  TranscriberPoolQueueProcessingTaskDefExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+
+  TranscriberPoolQueueProcessingTaskDefExecutionRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+            Effect: Allow
+            Resource:
+              Fn::GetAtt:
+                - TranscriberECRRepository
+                - Arn
+          - Action: ecr:GetAuthorizationToken
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              Fn::GetAtt:
+                - TranscriberPoolQueueProcessingTaskDefQueueProcessingContainerLogGroup
+                - Arn
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              Fn::GetAtt:
+                - TranscriberPoolQueueProcessingTaskDefxraydaemonLogGroup
+                - Arn
+        Version: "2012-10-17"
+      PolicyName:
+        !Sub "${AWS::StackName}-\
+              TranscriberPoolQueueProcessingTaskDefExecutionRoleDefaultPolicy"
+      Roles:
+        - Ref: TranscriberPoolQueueProcessingTaskDefExecutionRole
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W12
+            reason: comprehend, translate, and connect do not support resource-level permissions.
+
+  TranscriberPoolQueueProcessingTaskDefxraydaemonLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      RetentionInDays: 3653
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: >-
+              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
+              server-side encryption keys (AWS Managed Keys).
+
+  TranscriberPoolQueueProcessingFargateService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster:
+        Ref: TranscribingCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      EnableECSManagedTags: false
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::GetAtt:
+                - TranscriberPoolQueueProcessingFargateServiceSecurityGroup
+                - GroupId
+          Subnets:
+            - Ref: TranscribingVPCPrivateSubnet1Subnet
+            - Ref: TranscribingVPCPrivateSubnet2Subnet
+      TaskDefinition:
+        Ref: TranscriberPoolQueueProcessingTaskDef
+
+  TranscriberPoolQueueProcessingFargateServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:
+        !Sub "${AWS::StackName}/transcriberPool/QueueProcessingFargateService/SecurityGroup"
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      VpcId:
+        Ref: TranscribingVPC
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W40
+            reason: IpProtocol set to -1 to specify all protocols.
+          - id: W5
+            reason: >-
+              Egress open to the world is expected. Customer can use VPC endpoints to privately
+              connect the VPC to supported AWS services.
+
+  TranscriberPoolQueueProcessingFargateServiceTaskCountTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 5
+      MinCapacity: 1
+      ResourceId:
+        !Sub "service/${TranscribingCluster}/\
+              ${TranscriberPoolQueueProcessingFargateService.Name}"
+      RoleARN:
+        !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/\
+        ecs.application-autoscaling.amazonaws.com/\
+        AWSServiceRoleForApplicationAutoScaling_ECSService"
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  TranscriberPoolQueueProcessingFargateServiceTaskCountTargetCpuScaling:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}\
+        TranscriberPoolQueueProcessingFargateServiceTaskCountTargetCpuScaling"
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: TranscriberPoolQueueProcessingFargateServiceTaskCountTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 25
+
+  TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessagesVisibleScalingLowerPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}\
+        TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessages\
+        VisibleScalingLowerPolicy"
+      PolicyType: StepScaling
+      ScalingTargetId:
+        Ref: TranscriberPoolQueueProcessingFargateServiceTaskCountTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: -1
+
+  ? TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessagesVisibleScalingLowerAlarm
+  : Type: AWS::CloudWatch::Alarm
+    Properties:
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      AlarmActions:
+        # yamllint disable rule:line-length
+        - !Ref TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessagesVisibleScalingLowerPolicy
+        # yamllint enable rule:line-length
+      AlarmDescription: Lower threshold scaling alarm
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt TranscribingQueue.QueueName
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 300
+      Statistic: Maximum
+      Threshold: 0
+
+  TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessagesVisibleScalingUpperPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}\
+        TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessages\
+        VisibleScalingUpperPolicy"
+      PolicyType: StepScaling
+      ScalingTargetId:
+        Ref: TranscriberPoolQueueProcessingFargateServiceTaskCountTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            MetricIntervalUpperBound: 400
+            ScalingAdjustment: 1
+          - MetricIntervalLowerBound: 400
+            ScalingAdjustment: 5
+
+  ? TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessagesVisibleScalingUpperAlarm
+  : Type: AWS::CloudWatch::Alarm
+    Properties:
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      AlarmActions:
+        # yamllint disable rule:line-length
+        - !Ref TranscriberPoolQueueProcessingFargateServiceTaskCountTargetQueueMessagesVisibleScalingUpperPolicy
+        # yamllint enable rule:line-length
+      AlarmDescription: Upper threshold scaling alarm
+      Dimensions:
+        - Name: QueueName
+          Value:
+            Fn::GetAtt:
+              - TranscribingQueue
+              - QueueName
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 300
+      Statistic: Maximum
+      Threshold: 100
+
+  ##########################################################################
+  # Event Sourcing Processor
+  ##########################################################################
+
+  CallEventStreamProcessFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+    Properties:
+      CodeUri: ../source/lambda_functions/call_event_stream_processor
+      Description: >-
+        Call Event DynamoDB Table Stream Processor
+      Events:
+        # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-dynamodb.html
+        DynamoDBStream:
+          Type: DynamoDB
+          Properties:
+            BisectBatchOnFunctionError: true
+            # TODO Add SQS queue for discarded records
+            # DestinationConfig:
+            Enabled: true
+            MaximumRetryAttempts: 3
+            Stream: !GetAtt EventSourcingTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 20
+            # Tumbling Window is used for aggregations over different invocations
+            # https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html#services-ddb-windows
+            TumblingWindowInSeconds: 900
+      AutoPublishAlias: live
+      DeploymentPreference:
+        # TODO change to gradual deployments
+        Type: AllAtOnce
+        # TODO add alarms to detect application level errors for automatic rollback
+      Handler: lambda_function.handler
+      Layers:
+        - !Ref CallEventStreamProcessLayer
+        # periodically update the Lambda Insights Layer
+        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
+        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16"
+      MemorySize: 2048
+      # policy templates:
+      # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventSourcingTable
+        - DynamoDBStreamReadPolicy:
+            TableName: !Ref EventSourcingTable
+            StreamName: !Select
+              - 3
+              - !Split
+                - /
+                - !GetAtt EventSourcingTable.StreamArn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - appsync:GraphQL
+              Resource:
+                - !Sub "${AppSyncApi.Arn}/types/Mutation/*"
+                - !Sub "${AppSyncApi.Arn}/types/Query/fields/__schema"
+            - Effect: Allow
+              Action:
+                - comprehend:DetectSentiment
+              Resource: "*"
+        # CloudWatch Insights Managed Policy
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+      Runtime: python3.9
+      Timeout: 60
+      Tracing: Active
+      Environment:
+        Variables:
+          # XXX add log level parameter or map
+          LOG_LEVEL: DEBUG
+          POWERTOOLS_METRICS_NAMESPACE: !Sub "CallAnalytics-${AWS::StackName}"
+          POWERTOOLS_SERVICE_NAME: CallEventStreamProcessor
+          # XXX add trace parameter or map
+          POWERTOOLS_TRACE_DISABLED: false
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
+          APPSYNC_GRAPHQL_URL: !GetAtt AppSyncApi.GraphQLUrl
+          COMPREHEND_LANGUAGE_CODE: !Ref ComprehendLanguageCode
+          IS_SENTIMENT_ANALYSIS_ENABLED: !Ref IsSentimentAnalysisEnabled
+
+  CallEventStreamProcessLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      # uses a makefile due to pre-release version of gql
+      # TODO change to regular build once gql is GA
+      BuildMethod: makefile
+    Properties:
+      Description: >-
+        Call Event DynamoDB Table Stream Processor Layer
+      ContentUri: ../source/lambda_layers/call_event_stream_processor
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  ##########################################################################
+  # AppSync
+  ##########################################################################
+
+  AppSyncCwlRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - appsync.amazonaws.com
+
+  AppSyncDynamoDbRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - appsync.amazonaws.com
+      Policies:
+        - PolicyName: dynamoDB
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt EventSourcingTable.Arn
+
+  AppSyncApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub "CallAnalytics-${AWS::StackName}"
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      UserPoolConfig:
+        AppIdClientRegex: !Ref UserPoolClient
+        AwsRegion: !Ref AWS::Region
+        UserPoolId: !Ref UserPool
+        # XXX change to DENY and explicitly add access (e.g. Supervisors, Agent)
+        DefaultAction: ALLOW
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: AWS_IAM
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt AppSyncCwlRole.Arn
+        ExcludeVerboseContent: FALSE
+        FieldLogLevel: ALL
+      # Commenting out Xray as it causes issues with the ServiceLinked role on first deployment
+      # similar to: https://github.com/aws/aws-cdk/issues/16598
+      # XrayEnabled: true
+
+  AppSyncSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DefinitionS3Location: ../source/appsync/schema.graphql
+
+  AppSyncDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      Name: CallEventSourcing
+      Description: Call Analytics Event Sourcing DynamoDB Table
+      Type: AMAZON_DYNAMODB
+      ServiceRoleArn: !GetAtt AppSyncDynamoDbRole.Arn
+      DynamoDBConfig:
+        TableName: !Ref EventSourcingTable
+        AwsRegion: !Ref AWS::Region
+
+  GetCallAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: getCall
+      RequestMappingTemplateS3Location: ../source/appsync/getCall.request.vtl
+      ResponseMappingTemplate: $util.toJson($context.result)
+
+  CreateCallAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: createCall
+      # This VTL uses a local sub so it needs to be kept here
+      RequestMappingTemplate: !Sub |-
+        #set( $shardsInDay = 6 )
+        #set( $shardDivider = 24 / $shardsInDay )
+        #set( $Integer = 0 )
+        #set( $now = $util.time.nowISO8601() )
+
+        #set( $date = $now.substring(0, 10) )
+        #set( $hourString = $now.substring(11, 13) )
+        #set( $hour = $Integer.parseInt($hourString) )
+
+        #set( $hourShard = $hour / $shardDivider )
+        #set( $shardPad = $date.format("%02d", $hourShard) )
+
+        #set( $PK = "c#${!ctx.args.input.CallId}" )
+
+        #set( $listPk = "cls#${!date}#s#${!shardPad}" )
+        #set( $listSk = "ts#${!now}#id#${!ctx.args.input.CallId}" )
+
+        $util.qr($ctx.args.input.put("CreatedAt", $now))
+        $util.qr($ctx.args.input.put("UpdatedAt", $now))
+        $util.qr($ctx.args.input.put("Status", "STARTED"))
+
+        {
+          "version" : "2018-05-29",
+          "operation" : "TransactWriteItems",
+          "transactItems": [
+            {
+              "table": "${EventSourcingTable}",
+              "operation": "PutItem",
+              "key" : {
+                "PK": $util.dynamodb.toDynamoDBJson($PK),
+                "SK": $util.dynamodb.toDynamoDBJson($PK),
+              },
+              "attributeValues": $util.dynamodb.toMapValuesJson($ctx.args.input),
+              "condition": {
+                "expression": "attribute_not_exists(#PK)",
+                "expressionNames": {
+                  "#PK": "PK",
+                },
+              },
+            },
+            {
+              "table": "${EventSourcingTable}",
+              "operation": "PutItem",
+              "key" : {
+                "PK": $util.dynamodb.toDynamoDBJson($listPk),
+                "SK": $util.dynamodb.toDynamoDBJson($listSk),
+              },
+              "attributeValues": {
+                "CallId": $util.dynamodb.toDynamoDBJson($ctx.args.input.CallId),
+                "CreatedAt": $util.dynamodb.toDynamoDBJson($ctx.args.input.CreatedAt),
+                "UpdatedAt": $util.dynamodb.toDynamoDBJson($ctx.args.input.UpdatedAt),
+              },
+            },
+          ],
+        }
+      ResponseMappingTemplateS3Location: ../source/appsync/createCall.response.vtl
+
+  UpdateCallStatusAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: updateCallStatus
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  UpdateRecordingUrlAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: updateRecordingUrl
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  UpdateCallAggregationAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: updateCallAggregation
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  AddTranscriptSegmentAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: addTranscriptSegment
+      RequestMappingTemplateS3Location: ../source/appsync/addTranscriptSegment.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  ListCallsDateHourAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: listCallsDateHour
+      RequestMappingTemplateS3Location: ../source/appsync/listCallsDateHour.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/listCalls.response.vtl
+
+  ListCallsDateShardAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: listCallsDateShard
+      RequestMappingTemplateS3Location: ../source/appsync/listCallsDateShard.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/listCalls.response.vtl
+
+  ListCallsAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: listCalls
+      RequestMappingTemplateS3Location: ../source/appsync/listCalls.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/listCalls.response.vtl
+
+  GetTranscriptSegmentsAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: getTranscriptSegments
+      RequestMappingTemplateS3Location: ../source/appsync/getTranscriptSegments.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/getTranscriptSegments.response.vtl
+
+  ##########################################################################
+  # Cognito
+  # Sample Cognito resources
+  ##########################################################################
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AutoVerifiedAttributes:
+        - email
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      EmailVerificationMessage: >-
+        Please verify your email to complete account registration. Confirmation Code {####}.
+      EmailVerificationSubject: >-
+        Account Verification
+      LambdaConfig:
+        PreAuthentication: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+        PreSignUp: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+      UserPoolName: !Sub "${AWS::StackName}-UserPool"
+      UsernameAttributes:
+        - email
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      AccessTokenValidity: 1
+      ClientName: !Sub "${AWS::StackName}-Client"
+      EnableTokenRevocation: true
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      IdTokenValidity: 1
+      PreventUserExistenceErrors: ENABLED
+      ReadAttributes:
+        - email
+        - email_verified
+        - preferred_username
+      RefreshTokenValidity: 30
+      SupportedIdentityProviders:
+        - COGNITO
+      UserPoolId: !Ref UserPool
+
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${AWS::StackName}-IdentityPool"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  CognitoIdentityPoolSetRole:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthorizedRole.Arn
+
+  CognitoAuthorizedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: accessS3RecordingsPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !If
+                        - ShouldCreateRecordingBucket
+                        - !Ref RecordingsBucket
+                        - !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !If
+                        - ShouldCreateRecordingBucket
+                        - !Ref RecordingsBucket
+                        - !Ref S3BucketName
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W12
+            reason: comprehend, translate, and connect do not support resource-level permissions
+
+  CognitoUserPoolEmailDomainVerifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Timeout: 3
+      Environment:
+        Variables:
+          ALLOWED_SIGNUP_EMAIL_DOMAIN: !Ref AllowedSignUpEmailDomain
+      InlineCode: |
+        exports.handler = async (event, context) => {
+          console.log(event);
+          const { email } = event.request?.userAttributes;
+          if (!email || !email.includes('@')) {
+            throw Error('Username does not exists or invalid email address');
+          }
+          const emailDomain = email?.split('@')[1];
+          if (!emailDomain || !process.env?.ALLOWED_SIGNUP_EMAIL_DOMAIN) {
+            throw new Error('Server error - invalid configuration');
+          }
+          if (emailDomain !== process.env?.ALLOWED_SIGNUP_EMAIL_DOMAIN) {
+            throw new Error('Invalid email address domain');
+          }
+          return event;
+        };
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  CognitoUserPoolEmailDomainVerifyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CognitoUserPoolEmailDomainVerifyFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt UserPool.Arn
+
+  ##########################################################################
+  # Web Site
+  ##########################################################################
+
+  # Custom resource to empty and delete WebApp bucket when stack is deleted
+
+  BucketDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:DeleteBucket"
+                  - "s3:ListBucket"
+                  - "s3:ListBucketVersions"
+                  - "s3:DeleteObject"
+                  - "s3:DeleteObjectVersion"
+                Resource:
+                  - !Sub "arn:aws:s3:::${WebAppBucket}"
+                  - !Sub "arn:aws:s3:::${WebAppBucket}/*"
+          PolicyName: deleteBucketS3Policy
+
+  BucketDeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: "index.lambda_handler"
+      Runtime: python3.9
+      MemorySize: 128
+      Timeout: 60
+      Role: !GetAtt BucketDeleteLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def deleteS3Bucket(bucketName):
+             print("Deleting S3 Bucket %s" % bucketName)
+             bucket = boto3.resource("s3").Bucket(bucketName)
+             bucket.object_versions.all().delete()
+             bucket.delete()
+          def lambda_handler(event, context):
+            print(event)
+            responseData = {}
+            status = cfnresponse.SUCCESS
+            if event['RequestType'] == 'Delete':
+              try:
+                deleteS3Bucket(event['ResourceProperties']['BucketName'])
+              except Exception as e:
+                print(e)
+                responseData["Error"] = f"Exception thrown: {e}"
+                status = cfnresponse.FAILED
+                responseData['Data'] = "Success"
+            cfnresponse.send(event, context, status, responseData)
+
+  RemoveWebAppBucketOnDelete:
+    Type: Custom::RemoveWebAppBucketOnDelete
+    Properties:
+      ServiceToken: !GetAtt BucketDeleteLambda.Arn
+      BucketName: !Ref WebAppBucket
+
+  WebAppBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # XXX figure out access logging
+      # LoggingConfiguration:
+      #    DestinationBucketName: !Ref RecordingsBucket
+      #    LogFilePrefix: logs/
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+  WebAppBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebAppBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+            Action: s3:GetObject
+            Resource: !Sub "${WebAppBucket.Arn}/*"
+          - Effect: "Deny"
+            Action:
+              - "s3:*"
+            Principal: "*"
+            Resource:
+              - !GetAtt WebAppBucket.Arn
+              - !Sub "${WebAppBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "CloudFront OAI for ${WebAppBucket}"
+
+  WebAppCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "Web app cloudfront distribution ${AWS::StackName}"
+        CustomErrorResponses:
+          # Send errors to index file
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          TargetOriginId: webapp-s3-bucket
+          ViewerProtocolPolicy: redirect-to-https
+          DefaultTTL: 600
+          MinTTL: 300
+          MaxTTL: 900
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        # Logging:
+        #   Bucket: !GetAtt RecordingsBucket.DomainName
+        #   IncludeCookies: false
+        #   Prefix: logs/cloudfront/
+        Origins:
+          - Id: webapp-s3-bucket
+            DomainName: !GetAtt WebAppBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity:
+                !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+        PriceClass: !Ref CloudFrontPriceClass
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: whitelist
+            Locations:
+              - US
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W70
+            reason: This is using Cloudfront default TLS, can be changed by customer if needed.

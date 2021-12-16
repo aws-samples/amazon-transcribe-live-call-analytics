@@ -1,0 +1,15 @@
+/* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+   SPDX-License-Identifier: Apache-2.0 */
+.transcript-box {
+    overflow-y: auto;
+    max-height: 30vh;
+}
+
+.transcript-segment {
+    display: flex;
+    align-items: center;
+}
+
+.sentiment-image-popover {
+    cursor: pointer;
+}

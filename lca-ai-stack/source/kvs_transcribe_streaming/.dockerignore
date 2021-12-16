@@ -1,0 +1,4 @@
+bin
+jars
+.env
+*.class
