@@ -10,6 +10,7 @@ RUN ls -altr
 WORKDIR /build
 COPY src /build/src
 COPY build.gradle .
+COPY amazon-kinesis-video-streams-parser-library-1.1.0.jar .
 RUN gradle buildFargate --info --warning-mode all --no-daemon
 
 RUN find /build -name '*.jar' -ls
