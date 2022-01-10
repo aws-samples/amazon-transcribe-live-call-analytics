@@ -22,7 +22,8 @@ AI_STACK_DIR="${ROOT_DIR}/lca-ai-stack"
 # values can be overridden by existing environment vars values
 VERSION_FILE=${VERSION_FILE:-"${ROOT_DIR}/VERSION"}
 AI_STACK_VERSION_FILE=${AI_STACK_VERSION_FILE:-"${AI_STACK_DIR}/VERSION"}
-TEMPLATE_FILE=${TEMPLATE_FILE:-"${AI_STACK_DIR}/deployment/ai-powered-speech-analytics-for-amazon-chime-voice-connector.yaml"}
+TEMPLATE_FILE=${TEMPLATE_FILE:-"${ROOT_DIR}/lca-main.yaml"}
+AI_STACK_TEMPLATE_FILE=${AI_STACK_TEMPLATE_FILE:-"${AI_STACK_DIR}/deployment/ai-powered-speech-analytics-for-amazon-chime-voice-connector.yaml"}
 SAMCONFIG_FILE=${SAMCONFIG_FILE:-"${AI_STACK_DIR}/samconfig.toml"}
 UI_PACKAGE_JSON_FILE=${UI_PACKAGE_JSON_FILE:-"${AI_STACK_DIR}/source/ui/package.json"}
 UI_PACKAGE_LOCK_JSON_FILE=${UI_PACKAGE_LOCK_JSON_FILE:-"${AI_STACK_DIR}/source/ui/package-lock.json"}
@@ -53,14 +54,26 @@ if [[ -f "$TEMPLATE_FILE" ]] ; then
     sed --in-place --regexp-extended --expression "$(
         # shellcheck disable=SC2016
         echo '
-		  /^ {2,}BootstrapVersion:/ , /^ {2,}Default:/ {
-            s/^(.*Default: {1,})${VERSION_REGEX}(.*)/\1${NEW_VERSION}\5/;
-          }
+          s/^(Description: .+\(v)${VERSION_REGEX}(\).*)$/\1${NEW_VERSION}\5/;
         ' | \
         envsubst '${VERSION_REGEX} ${NEW_VERSION}' \
     )" "$TEMPLATE_FILE"
 else
     echo "[WARNING] ${TEMPLATE_FILE} file does not exist" >&2
+fi
+
+if [[ -f "$AI_STACK_TEMPLATE_FILE" ]] ; then
+    sed --in-place --regexp-extended --expression "$(
+        # shellcheck disable=SC2016
+        echo '
+		  /^ {2,}BootstrapVersion:/ , /^ {2,}Default:/ {
+            s/^(.*Default: {1,})${VERSION_REGEX}(.*)/\1${NEW_VERSION}\5/;
+          }
+        ' | \
+        envsubst '${VERSION_REGEX} ${NEW_VERSION}' \
+    )" "$AI_STACK_TEMPLATE_FILE"
+else
+    echo "[WARNING] ${AI_STACK_TEMPLATE_FILE} file does not exist" >&2
 fi
 
 if [[ -f "$SAMCONFIG_FILE" ]] ; then
