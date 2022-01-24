@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Added script to update semantic versions in source files. `scripts/update-version.sh`
+- Added web UI admin user creation via CloudFormation. The email address of the admin user is
+  passed via the `AdminEmail` CloudFormation parameter. An initial temporary password is
+  automatically sent to this user via email. This email also includes the link to the web UI
+### Changed
+- The CloudFormation `AllowedSignUpEmailDomain` parameter is now optional. If left empty, signup
+  via the web UI is disabled and users will have to be created using Cognito. If you configure a
+  domain, **only** email addresses from that domain will be allowed to signup and signin via the
+  web UI
 ### Fixed
 - Reverted kvs stream parser library version workaround
 

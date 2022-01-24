@@ -23,9 +23,11 @@ parameter_overrides = [
   "BootstrapS3Prefix=artifacts/lca",
   "BootstrapVersion=0.1.0",
   "S3BucketName=shared-ai-for-chime-vc-audio",
-  "AllowedSignUpEmailDomain=amazon.com",
   "IsContentRedactionEnabled=true",
   "IsSentimentAnalysisEnabled=true",
+  # set the following values
+  # "AdminEmail=jdoe@example.com",
+  # "AllowedSignUpEmailDomain=''",
 ]
 
 [shared.package.parameters]

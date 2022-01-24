@@ -140,10 +140,21 @@ Parameters:
     ConstraintDescription: >-
       Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
 
-  AllowedSignUpEmailDomain:
+  AdminEmail:
     Type: String
     Description: >-
-      Email domain that is allowed to signup using the web UI
+      Email address of admin user (e.g. jdoe@example.com) used for the API and web UI.
+      An initial temporary password will be automatically sent to this user via email.
+    AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+
+  AllowedSignUpEmailDomain:
+    Type: String
+    Default: ''
+    Description: >-
+      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      If left empty, signup via the web UI is disabled and users will have to be created using
+      Cognito.
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
 
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
@@ -209,6 +220,7 @@ Metadata:
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
+  ShouldAllowSignUpEmailDomain: !Not [!Equals [!Ref AllowedSignUpEmailDomain, ""]]
 
 Outputs:
   EventSourcingTableArn:
@@ -224,7 +236,7 @@ Outputs:
       - !Ref S3BucketName
   CloudfrontEndpoint:
     Description: Endpoint for Cloudfront distribution
-    Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/index.html"
+    Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
   TranscribingFargateTrigger:
     Description: >-
       AWS Lambda Function triggered by Chime Voice Connector EventBridge Events. It sends an Amazon
@@ -998,6 +1010,11 @@ Resources:
             Value: !GetAtt AppSyncApi.GraphQLUrl
           - Name: REACT_APP_AWS_REGION
             Value: !Ref AWS::Region
+          - Name: REACT_APP_SHOULD_HIDE_SIGN_UP
+            Value: !If
+              - ShouldAllowSignUpEmailDomain
+              - false
+              - true
       TimeoutInMinutes: 10
 
   LambdaCodeBuildStartBuildExecutionRole:
@@ -2188,6 +2205,24 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: !If
+          - ShouldAllowSignUpEmailDomain
+          - false
+          - true
+        InviteMessageTemplate:
+          EmailSubject: Welcome to Live Call Analytics!
+          EmailMessage: !Sub |-
+            <p>Hello {username},
+            <p>Welcome to Live Call Analytics! Your temporary password is:
+            <p>     {####}
+            <p>
+            <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
+             the Live Call Analytics web interface and set your permanent password.
+            <p>     https://${WebAppCloudFrontDistribution.DomainName}/
+            <p>
+            <p>Good luck!
+            <p>Live Call Analytics (amazon.com/live-call-analytics)
       AutoVerifiedAttributes:
         - email
       EmailConfiguration:
@@ -2196,9 +2231,11 @@ Resources:
         Please verify your email to complete account registration. Confirmation Code {####}.
       EmailVerificationSubject: >-
         Account Verification
-      LambdaConfig:
-        PreAuthentication: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
-        PreSignUp: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+      LambdaConfig: !If
+        - ShouldAllowSignUpEmailDomain
+        - PreAuthentication: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+          PreSignUp: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+        - !Ref AWS::NoValue
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -2295,8 +2332,35 @@ Resources:
           - id: W12
             reason: comprehend, translate, and connect do not support resource-level permissions
 
+  AdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums:
+        - EMAIL
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+      Username: !Ref AdminEmail
+      UserPoolId: !Ref UserPool
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: Administrators
+      GroupName: Admin
+      Precedence: 0
+      UserPoolId: !Ref UserPool
+
+  AdminUserToGroupAttachment:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Properties:
+      GroupName: !Ref AdminGroup
+      Username: !Ref AdminUser
+      UserPoolId: !Ref UserPool
+
   CognitoUserPoolEmailDomainVerifyFunction:
     Type: AWS::Serverless::Function
+    Condition: ShouldAllowSignUpEmailDomain
     Properties:
       Handler: index.handler
       Runtime: nodejs14.x
@@ -2328,6 +2392,7 @@ Resources:
 
   CognitoUserPoolEmailDomainVerifyPermission:
     Type: AWS::Lambda::Permission
+    Condition: ShouldAllowSignUpEmailDomain
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref CognitoUserPoolEmailDomainVerifyFunction

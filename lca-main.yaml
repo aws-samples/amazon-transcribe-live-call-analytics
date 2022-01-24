@@ -109,11 +109,21 @@ Parameters:
       The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom
       vocabulary must pre-exist in your account.
 
-  AllowedSignUpEmailDomain:
+  AdminEmail:
     Type: String
     Description: >-
-      Email domain that is allowed to signup using the web UI
-    MinLength: 4
+      Email address of admin user (e.g. jdoe@example.com) used for the API and web UI.
+      An initial temporary password will be automatically sent to this user via email.
+    AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+
+  AllowedSignUpEmailDomain:
+    Type: String
+    Default: ''
+    Description: >-
+      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      If left empty, signup via the web UI is disabled and users will have to be created using
+      Cognito.
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
 
   DemoAsteriskDownloadUrl:
     Type: String
@@ -137,6 +147,7 @@ Metadata:
       - Label:
           default: Web UI Authentication
         Parameters:
+          - AdminEmail
           - AllowedSignUpEmailDomain
       - Label:
           default: Amazon S3 Configuration
@@ -161,6 +172,8 @@ Metadata:
         default: Call Audio Recordings Bucket Name
       AudioFilePrefix:
         default: Audio File Prefix
+      AdminEmail:
+        default: Admin Email Address
       AllowedSignUpEmailDomain:
         default: Authorized Account Email Domain
       InstallDemoAsteriskServer:
@@ -195,6 +208,7 @@ Resources:
       Parameters:
         S3BucketName: !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
+        AdminEmail: !Ref AdminEmail
         AllowedSignUpEmailDomain: !Ref AllowedSignUpEmailDomain
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
