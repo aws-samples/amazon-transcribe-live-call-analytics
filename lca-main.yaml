@@ -109,6 +109,15 @@ Parameters:
       The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom
       vocabulary must pre-exist in your account.
 
+  IsSentimentAnalysisEnabled:
+    Type: String
+    Default: 'true'
+    Description: >-
+      Enable sentiment analysis using Amazon Comprehend
+    AllowedValues:
+      - 'true'
+      - 'false'
+
   AdminEmail:
     Type: String
     Description: >-
@@ -163,6 +172,10 @@ Metadata:
           - TranscribePiiEntityTypes
           - CustomVocabularyName
       - Label:
+          default: Amazon Comprehend Configuration
+        Parameters:
+          - IsSentimentAnalysisEnabled
+      - Label:
           default: Download locations
         Parameters:
           - DemoAsteriskDownloadUrl
@@ -196,6 +209,15 @@ Metadata:
         default: Demo Asterisk Server Source Code Download URL
       DemoAsteriskAgentAudioURL:
         default: Demo Asterisk Server Agent WAV File Download URL
+      IsSentimentAnalysisEnabled:
+        default: Enable Sentiment Analysis using Amazon Comprehend
+
+Mappings:
+  TranscribeToComprehendLanguage:
+    en-US:
+      Value: en
+    es-US:
+      Value: es
 
 Resources:
 
@@ -215,6 +237,9 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        ComprehendLanguageCode:
+          !FindInMap [TranscribeToComprehendLanguage, !Ref TranscribeLanguageCode, Value]
+        IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

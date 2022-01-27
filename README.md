@@ -84,6 +84,7 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     11. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
     12. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.
     13. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+    14. `Enable Sentiment Analysis using Amazon Comprehend` - Enable sentiment analysis using Amazon Comprehend
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**.  This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
