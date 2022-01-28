@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IsSentimentAnalysisEnabled` parameter
 - Added CloudFormation mapping to configure the Amazon Comprehend language from the selected Amazon
   Transcribe language
+- Added support to select the Spanish language (es-US) in the CloudFormation template. The
+  CloudFormation template now allows to select either English (en-US) or Spanish (es-US) using the
+  `TranscribeLanguageCode` parameter. **NOTE:** Content redaction is only available when using the
+  English language (en-US). It is automatically disabled when using other languages
 ### Changed
 - The CloudFormation `AllowedSignUpEmailDomain` parameter is now optional. If left empty, signup
   via the web UI is disabled and users will have to be created using Cognito. If you configure a

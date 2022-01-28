@@ -79,7 +79,7 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     6. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI
     7. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
     8. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
-    9. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output
+    9. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
     10. `Language for Transcription` - Language code to be used for Amazon Transcribe
     11. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
     12. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.

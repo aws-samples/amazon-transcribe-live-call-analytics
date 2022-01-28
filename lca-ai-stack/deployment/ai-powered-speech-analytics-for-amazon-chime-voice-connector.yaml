@@ -50,7 +50,8 @@ Parameters:
     Type: String
     Default: "false"
     Description: >-
-      Enable content redaction from Amazon Transcribe transcription output
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - "true"
       - "false"
@@ -70,8 +71,8 @@ Parameters:
     Default: en-US
     AllowedValues:
       - en-US
+      - es-US
       # - en-GB
-      # - es-US
       # - fr-CA
       # - fr-FR
       # - en-AU
@@ -116,16 +117,16 @@ Parameters:
     AllowedValues:
       - en
       - es
-      - fr
-      - de
-      - it
-      - pt
-      - ar
-      - hi
-      - ja
-      - ko
-      - zh
-      - zh-TW
+      # - fr
+      # - de
+      # - it
+      # - pt
+      # - ar
+      # - hi
+      # - ja
+      # - ko
+      # - zh
+      # - zh-TW
 
   CloudFrontPriceClass:
     Type: String
@@ -221,6 +222,9 @@ Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
   ShouldAllowSignUpEmailDomain: !Not [!Equals [!Ref AllowedSignUpEmailDomain, ""]]
+  ShouldEnableContentRedaction: !And
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
 
 Outputs:
   EventSourcingTableArn:
@@ -1571,7 +1575,10 @@ Resources:
             - Name: QUEUE_NAME
               Value: !GetAtt TranscribingQueue.QueueName
             - Name: IS_CONTENT_REDACTION_ENABLED
-              Value: !Ref IsContentRedactionEnabled
+              Value: !If
+                - ShouldEnableContentRedaction
+                - 'true'
+                - 'false'
             - Name: TRANSCRIBE_LANGUAGE_CODE
               Value: !Ref TranscribeLanguageCode
             - Name: PII_ENTITY_TYPES

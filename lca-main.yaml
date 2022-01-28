@@ -64,7 +64,8 @@ Parameters:
     Type: String
     Default: 'false'
     Description: >-
-      Enable content redaction from Amazon Transcribe transcription output
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - 'true'
       - 'false'
@@ -84,8 +85,8 @@ Parameters:
     Default: en-US
     AllowedValues:
       - en-US
+      - es-US
       # - en-GB
-      # - es-US
       # - fr-CA
       # - fr-FR
       # - en-AU
