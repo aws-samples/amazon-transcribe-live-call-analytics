@@ -498,7 +498,7 @@ Resources:
                     authorizeEIP(voiceConnector['voiceConnectorId'], elasticIP)
                     cfnresponse.send(event, context, cfnresponse.SUCCESS, voiceConnector, physical_id)
                   except Exception as e:
-                    error = { 'error': f'Exception thrown: {e}'}
+                    error = { 'Error': f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'}
                     print(error)
                     cfnresponse.send(event, context, cfnresponse.FAILED, error )                    
               elif event['RequestType'] == 'Delete':
@@ -529,7 +529,7 @@ Resources:
                       responseData = {'Message': 'No Cloudformation Output. Returning success status.'}
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                      
                   except Exception as e:
-                    error = { 'error': f'Exception thrown: {e}'}
+                    error = { 'Error': f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'}
                     print(error)
                     cfnresponse.send(event, context, cfnresponse.FAILED, error )                      
               else:
@@ -762,6 +762,8 @@ Resources:
 
   InstanceInitWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
+    DependsOn: 
+      voiceConnectorResource
 
   # Allow 30 minutes max to receive signal from instance
   InstanceInitWaitCondition:
