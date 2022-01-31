@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Added script to update semantic versions in source files. `scripts/update-version.sh`
+- Added TROUBLESHOOTING.md for instructions on how to check for errors
 - Added web UI admin user creation via CloudFormation. The email address of the admin user is
   passed via the `AdminEmail` CloudFormation parameter. An initial temporary password is
   automatically sent to this user via email. This email also includes the link to the web UI
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   web UI
 ### Fixed
 - Reverted kvs stream parser library version workaround
+- Asterisk server will wait for voice connector to get a phone number before initializing
 
 ## [0.1.0] - 2021-12-16
 ### Added
