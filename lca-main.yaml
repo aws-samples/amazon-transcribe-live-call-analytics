@@ -145,6 +145,30 @@ Parameters:
     Default: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
 
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_100
+    Description: >-
+      Specify the CloudFront price class. See https://aws.amazon.com/cloudfront/pricing/ for a
+      description of each price class.
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    ConstraintDescription: >-
+      Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
+
+  CloudFrontAllowedGeos:
+    Type: String
+    Default: ''
+    Description: >-
+      Specify a comma separated list of two letter country codes (uppercase ISO 3166-1) that are
+      allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if
+      you do not want geo restrictions to be applied.
+    AllowedPattern: '^(|[A-Z]{2}(,[A-Z]{2})*)$'
+    ConstraintDescription: >-
+      Comma separated list of uppercase two letter country codes or empty
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -181,6 +205,11 @@ Metadata:
         Parameters:
           - DemoAsteriskDownloadUrl
           - DemoAsteriskAgentAudioURL
+      - Label:
+          default: Amazon CloudFront Configuration
+        Parameters:
+          - CloudFrontPriceClass
+          - CloudFrontAllowedGeos
     ParameterLabels:
       S3BucketName:
         default: Call Audio Recordings Bucket Name
@@ -212,6 +241,10 @@ Metadata:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
         default: Enable Sentiment Analysis using Amazon Comprehend
+      CloudFrontPriceClass:
+        default: CloudFront Price Class
+      CloudFrontAllowedGeos:
+        default: CloudFront Allowed Geographies
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -241,6 +274,8 @@ Resources:
         ComprehendLanguageCode:
           !FindInMap [TranscribeToComprehendLanguage, !Ref TranscribeLanguageCode, Value]
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        CloudFrontAllowedGeos: !Ref CloudFrontAllowedGeos
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

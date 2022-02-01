@@ -141,6 +141,17 @@ Parameters:
     ConstraintDescription: >-
       Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
 
+  CloudFrontAllowedGeos:
+    Type: String
+    Default: ''
+    Description: >-
+      Specify a comma separated list of two letter country codes (uppercase ISO 3166-1) that are
+      allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if
+      you do not want geo restrictions to be applied.
+    AllowedPattern: '^(|[A-Z]{2}(,[A-Z]{2})*)$'
+    ConstraintDescription: >-
+      Comma separated list of uppercase two letter country codes or empty
+
   AdminEmail:
     Type: String
     Description: >-
@@ -196,11 +207,14 @@ Metadata:
           default: Amazon CloudFront Configuration
         Parameters:
           - CloudFrontPriceClass
+          - CloudFrontAllowedGeos
     ParameterLabels:
       S3BucketName:
         default: Call Audio Bucket Name
       CloudFrontPriceClass:
-        default: Price Class
+        default: CloudFront Price Class
+      CloudFrontAllowedGeos:
+        default: CloudFront Allowed Geographies
       AudioFilePrefix:
         default: Audio File Prefix
       IsContentRedactionEnabled:
@@ -225,6 +239,7 @@ Conditions:
   ShouldEnableContentRedaction: !And
     - !Equals [!Ref IsContentRedactionEnabled, 'true']
     - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+  ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
 
 Outputs:
   EventSourcingTableArn:
@@ -2575,11 +2590,14 @@ Resources:
               OriginAccessIdentity:
                 !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
         PriceClass: !Ref CloudFrontPriceClass
-        Restrictions:
-          GeoRestriction:
-            RestrictionType: whitelist
-            Locations:
-              - US
+        Restrictions: !If
+          - ShouldEnableGeoRestriction
+          - GeoRestriction:
+              RestrictionType: whitelist
+              Locations:
+                !Split [',', !Ref CloudFrontAllowedGeos]
+          - GeoRestriction:
+              RestrictionType: none
     Metadata:
       cfn_nag:
         rules_to_suppress:

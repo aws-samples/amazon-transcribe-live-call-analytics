@@ -19,11 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CloudFormation template now allows to select either English (en-US) or Spanish (es-US) using the
   `TranscribeLanguageCode` parameter. **NOTE:** Content redaction is only available when using the
   English language (en-US). It is automatically disabled when using other languages
+- Added the `CloudFrontAllowedGeos` CloudFormation parameter to control the CloudFront geographic
+  restrictions. You can specify a comma separated list of two letter country codes (uppercase ISO
+  3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA.
+  Leave empty if you do not want geo restrictions to be applied
 ### Changed
 - The CloudFormation `AllowedSignUpEmailDomain` parameter is now optional. If left empty, signup
   via the web UI is disabled and users will have to be created using Cognito. If you configure a
   domain, **only** email addresses from that domain will be allowed to signup and signin via the
   web UI
+- The CloudFront distribution now defaults to no geographic restrictions. There's a new parameter
+  named `CloudFrontAllowedGeos` that allows you to add geographic restrictions. If you leave this
+  parameter empty, the previous geographic restriction will be removed on an update to this version.
+  The previous version had a hardcoded value that set the restriction to `US` only. Set the
+  `CloudFrontAllowedGeos` to `US` if you want to preserve the previous default configuration after
+  updating to this version
 ### Fixed
 - Reverted kvs stream parser library version workaround
 - Asterisk server will wait for voice connector to get a phone number before initializing
