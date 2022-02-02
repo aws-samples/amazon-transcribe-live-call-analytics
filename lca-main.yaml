@@ -64,7 +64,8 @@ Parameters:
     Type: String
     Default: 'false'
     Description: >-
-      Enable content redaction from Amazon Transcribe transcription output
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - 'true'
       - 'false'
@@ -84,8 +85,8 @@ Parameters:
     Default: en-US
     AllowedValues:
       - en-US
+      - es-US
       # - en-GB
-      # - es-US
       # - fr-CA
       # - fr-FR
       # - en-AU
@@ -109,11 +110,30 @@ Parameters:
       The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom
       vocabulary must pre-exist in your account.
 
-  AllowedSignUpEmailDomain:
+  IsSentimentAnalysisEnabled:
+    Type: String
+    Default: 'true'
+    Description: >-
+      Enable sentiment analysis using Amazon Comprehend
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  AdminEmail:
     Type: String
     Description: >-
-      Email domain that is allowed to signup using the web UI
-    MinLength: 4
+      Email address of admin user (e.g. jdoe@example.com) used for the API and web UI.
+      An initial temporary password will be automatically sent to this user via email.
+    AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+
+  AllowedSignUpEmailDomain:
+    Type: String
+    Default: ''
+    Description: >-
+      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      If left empty, signup via the web UI is disabled and users will have to be created using
+      Cognito.
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
 
   DemoAsteriskDownloadUrl:
     Type: String
@@ -124,6 +144,30 @@ Parameters:
     Type: String
     Default: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
+
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_100
+    Description: >-
+      Specify the CloudFront price class. See https://aws.amazon.com/cloudfront/pricing/ for a
+      description of each price class.
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    ConstraintDescription: >-
+      Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
+
+  CloudFrontAllowedGeos:
+    Type: String
+    Default: ''
+    Description: >-
+      Specify a comma separated list of two letter country codes (uppercase ISO 3166-1) that are
+      allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if
+      you do not want geo restrictions to be applied.
+    AllowedPattern: '^(|[A-Z]{2}(,[A-Z]{2})*)$'
+    ConstraintDescription: >-
+      Comma separated list of uppercase two letter country codes or empty
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -137,6 +181,7 @@ Metadata:
       - Label:
           default: Web UI Authentication
         Parameters:
+          - AdminEmail
           - AllowedSignUpEmailDomain
       - Label:
           default: Amazon S3 Configuration
@@ -152,15 +197,26 @@ Metadata:
           - TranscribePiiEntityTypes
           - CustomVocabularyName
       - Label:
+          default: Amazon Comprehend Configuration
+        Parameters:
+          - IsSentimentAnalysisEnabled
+      - Label:
           default: Download locations
         Parameters:
           - DemoAsteriskDownloadUrl
           - DemoAsteriskAgentAudioURL
+      - Label:
+          default: Amazon CloudFront Configuration
+        Parameters:
+          - CloudFrontPriceClass
+          - CloudFrontAllowedGeos
     ParameterLabels:
       S3BucketName:
         default: Call Audio Recordings Bucket Name
       AudioFilePrefix:
         default: Audio File Prefix
+      AdminEmail:
+        default: Admin Email Address
       AllowedSignUpEmailDomain:
         default: Authorized Account Email Domain
       InstallDemoAsteriskServer:
@@ -183,6 +239,19 @@ Metadata:
         default: Demo Asterisk Server Source Code Download URL
       DemoAsteriskAgentAudioURL:
         default: Demo Asterisk Server Agent WAV File Download URL
+      IsSentimentAnalysisEnabled:
+        default: Enable Sentiment Analysis using Amazon Comprehend
+      CloudFrontPriceClass:
+        default: CloudFront Price Class
+      CloudFrontAllowedGeos:
+        default: CloudFront Allowed Geographies
+
+Mappings:
+  TranscribeToComprehendLanguage:
+    en-US:
+      Value: en
+    es-US:
+      Value: es
 
 Resources:
 
@@ -195,12 +264,18 @@ Resources:
       Parameters:
         S3BucketName: !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
+        AdminEmail: !Ref AdminEmail
         AllowedSignUpEmailDomain: !Ref AllowedSignUpEmailDomain
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        ComprehendLanguageCode:
+          !FindInMap [TranscribeToComprehendLanguage, !Ref TranscribeLanguageCode, Value]
+        IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        CloudFrontAllowedGeos: !Ref CloudFrontAllowedGeos
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

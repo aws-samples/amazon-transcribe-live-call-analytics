@@ -50,7 +50,7 @@ When complete, it displays the URLS for the CloudFormation templates, 1-click UR
 Outputs
 Template URL: https://s3.us-east-1.amazonaws.com/bobs-lca-artifacts-us-east-1/LCA-public/0.1.0/lca-main.yaml
 CF Launch URL: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://s3.us-east-1.amazonaws.com/bobs-lca-artifacts-us-east-1/LCA-public/0.1.0/lca-main.yaml&stackName=LiveCallAnalytics&param_installDemoAsteriskServer=true
-CLI Deploy: aws cloudformation deploy --region us-east-1 --template-file /tmp/lca/lca-main.yaml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AllowedSignUpEmailDomain=<YOUREMAIL@ACME.COM> installDemoAsteriskServer=true
+CLI Deploy: aws cloudformation deploy --region us-east-1 --template-file /tmp/lca/lca-main.yaml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AdminEmail='jdoe@example.com' installDemoAsteriskServer=true
 ```
 
 ### Deploy
@@ -75,20 +75,24 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     2. `Install Demo Asterisk Server` - Set to true to automatically install a demo Asterisk server for testing Chime Voice Connector streaming
     3. `Allowed CIDR Block for Demo Softphone` - Ignored if `Install Demo Asterisk Server` is false. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24' 
     4. `Allowed CIDR List for Siprec Integration` - Ignored if `Install Demo Asterisk Server` is true. Comma delimited list of CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24' 
-    5. `Authorized Account Email Domain` - Enter the email domain that is allowed to signup using the web UI
-    6. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
-    7. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
-    8. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output
-    9. `Language for Transcription` - Language code to be used for Amazon Transcribe
-    10. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
-    11. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.
-    12. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+    5. `Admin Email Address` - Enter the email address of the admin user to be used to log into the web UI. An initial temporary password will be automatically sent via email. This email also includes the link to the web UI
+    6. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI
+    7. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
+    8. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
+    9. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
+    10. `Language for Transcription` - Language code to be used for Amazon Transcribe
+    11. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
+    12. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.
+    13. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+    14. `Enable Sentiment Analysis using Amazon Comprehend` - Enable sentiment analysis using Amazon Comprehend
+    15. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
+    16. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**.  This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
-    1. The output of the CloudFormation stack creation will provide a CloudFront URL (in the **Outputs** table of the stack details page).  Click the link or copy and paste the CloudFront URL into your browser.
-    2. You can sign into your application by registering an email address and a password.  Choose **Sign up** to register.  The registration/login experience is run in your AWS account, and the supplied credentials are stored in Amazon Cognito.  *Note: given that this is a demo application, we highly suggest that you do not use an email and password combination that you use for other purposes (such as an AWS account, email, or e-commerce site).*
-    3. Once you provide your credentials, you will receive a verification code at the email address you provided. Upon entering this verification code, you will be signed into the application.
+    1. The admin user will receive a temporary password and the link to the CloudFront URL of the web UI (this can take a few minutes). The output of the CloudFormation stack creation will also provide a CloudFront URL (in the **Outputs** table of the stack details page). Click the link or copy and paste the CloudFront URL into your browser.
+    2. You can sign into your application using the admin email address as the username and the temporary password you received via email. The web UI will prompt you to provide your permanent password. The user registration/login experience is run in your AWS account, and the supplied credentials are stored in Amazon Cognito. *Note: given that this is a demo application, we highly suggest that you do not use an email and password combination that you use for other purposes (such as an AWS account, email, or e-commerce site).*.
+    3. Once you provide your credentials, you will be prompted to verify the email address. You can verify your account at a later time by clicking the Skip link. Otherwise, you will receive a verification code at the email address you provided (this can take a few minutes). Upon entering this verification code in the web UI, you will be signed into the application.
 
 ## Testing
 You can test this solution if you installed the demo asterisk server during deployment. To test, perform the following steps:

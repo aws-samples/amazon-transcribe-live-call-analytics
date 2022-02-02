@@ -4,15 +4,24 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Redirect, Route, Switch } from 'react-router-dom';
 
-import { AmplifyAuthContainer, AmplifyAuthenticator, AmplifySignUp } from '@aws-amplify/ui-react';
+import {
+  AmplifyAuthContainer,
+  AmplifyAuthenticator,
+  AmplifySignIn,
+  AmplifySignUp,
+} from '@aws-amplify/ui-react';
 
 import { LOGIN_PATH, LOGOUT_PATH, REDIRECT_URL_PARAM } from './constants';
+
+// this is set at build time depending on the AllowedSignUpEmailDomain CloudFormation parameter
+const { REACT_APP_SHOULD_HIDE_SIGN_UP = 'true' } = process.env;
 
 const UnauthRoutes = ({ location }) => (
   <Switch>
     <Route path={LOGIN_PATH}>
       <AmplifyAuthContainer>
         <AmplifyAuthenticator>
+          <AmplifySignIn hideSignUp={REACT_APP_SHOULD_HIDE_SIGN_UP} slot="sign-in" />
           <AmplifySignUp
             slot="sign-up"
             h

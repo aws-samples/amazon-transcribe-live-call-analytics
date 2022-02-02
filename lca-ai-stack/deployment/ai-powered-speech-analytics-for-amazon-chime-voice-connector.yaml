@@ -50,7 +50,8 @@ Parameters:
     Type: String
     Default: "false"
     Description: >-
-      Enable content redaction from Amazon Transcribe transcription output
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - "true"
       - "false"
@@ -70,8 +71,8 @@ Parameters:
     Default: en-US
     AllowedValues:
       - en-US
+      - es-US
       # - en-GB
-      # - es-US
       # - fr-CA
       # - fr-FR
       # - en-AU
@@ -116,16 +117,16 @@ Parameters:
     AllowedValues:
       - en
       - es
-      - fr
-      - de
-      - it
-      - pt
-      - ar
-      - hi
-      - ja
-      - ko
-      - zh
-      - zh-TW
+      # - fr
+      # - de
+      # - it
+      # - pt
+      # - ar
+      # - hi
+      # - ja
+      # - ko
+      # - zh
+      # - zh-TW
 
   CloudFrontPriceClass:
     Type: String
@@ -140,10 +141,32 @@ Parameters:
     ConstraintDescription: >-
       Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
 
-  AllowedSignUpEmailDomain:
+  CloudFrontAllowedGeos:
+    Type: String
+    Default: ''
+    Description: >-
+      Specify a comma separated list of two letter country codes (uppercase ISO 3166-1) that are
+      allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if
+      you do not want geo restrictions to be applied.
+    AllowedPattern: '^(|[A-Z]{2}(,[A-Z]{2})*)$'
+    ConstraintDescription: >-
+      Comma separated list of uppercase two letter country codes or empty
+
+  AdminEmail:
     Type: String
     Description: >-
-      Email domain that is allowed to signup using the web UI
+      Email address of admin user (e.g. jdoe@example.com) used for the API and web UI.
+      An initial temporary password will be automatically sent to this user via email.
+    AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+
+  AllowedSignUpEmailDomain:
+    Type: String
+    Default: ''
+    Description: >-
+      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      If left empty, signup via the web UI is disabled and users will have to be created using
+      Cognito.
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
 
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
@@ -166,7 +189,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.1.0
+    Default: 0.2.0
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -184,11 +207,14 @@ Metadata:
           default: Amazon CloudFront Configuration
         Parameters:
           - CloudFrontPriceClass
+          - CloudFrontAllowedGeos
     ParameterLabels:
       S3BucketName:
         default: Call Audio Bucket Name
       CloudFrontPriceClass:
-        default: Price Class
+        default: CloudFront Price Class
+      CloudFrontAllowedGeos:
+        default: CloudFront Allowed Geographies
       AudioFilePrefix:
         default: Audio File Prefix
       IsContentRedactionEnabled:
@@ -209,6 +235,11 @@ Metadata:
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
+  ShouldAllowSignUpEmailDomain: !Not [!Equals [!Ref AllowedSignUpEmailDomain, ""]]
+  ShouldEnableContentRedaction: !And
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+  ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
 
 Outputs:
   EventSourcingTableArn:
@@ -224,7 +255,7 @@ Outputs:
       - !Ref S3BucketName
   CloudfrontEndpoint:
     Description: Endpoint for Cloudfront distribution
-    Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/index.html"
+    Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
   TranscribingFargateTrigger:
     Description: >-
       AWS Lambda Function triggered by Chime Voice Connector EventBridge Events. It sends an Amazon
@@ -998,6 +1029,11 @@ Resources:
             Value: !GetAtt AppSyncApi.GraphQLUrl
           - Name: REACT_APP_AWS_REGION
             Value: !Ref AWS::Region
+          - Name: REACT_APP_SHOULD_HIDE_SIGN_UP
+            Value: !If
+              - ShouldAllowSignUpEmailDomain
+              - false
+              - true
       TimeoutInMinutes: 10
 
   LambdaCodeBuildStartBuildExecutionRole:
@@ -1554,7 +1590,10 @@ Resources:
             - Name: QUEUE_NAME
               Value: !GetAtt TranscribingQueue.QueueName
             - Name: IS_CONTENT_REDACTION_ENABLED
-              Value: !Ref IsContentRedactionEnabled
+              Value: !If
+                - ShouldEnableContentRedaction
+                - 'true'
+                - 'false'
             - Name: TRANSCRIBE_LANGUAGE_CODE
               Value: !Ref TranscribeLanguageCode
             - Name: PII_ENTITY_TYPES
@@ -2188,6 +2227,24 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: !If
+          - ShouldAllowSignUpEmailDomain
+          - false
+          - true
+        InviteMessageTemplate:
+          EmailSubject: Welcome to Live Call Analytics!
+          EmailMessage: !Sub |-
+            <p>Hello {username},
+            <p>Welcome to Live Call Analytics! Your temporary password is:
+            <p>     {####}
+            <p>
+            <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
+             the Live Call Analytics web interface and set your permanent password.
+            <p>     https://${WebAppCloudFrontDistribution.DomainName}/
+            <p>
+            <p>Good luck!
+            <p>Live Call Analytics (amazon.com/live-call-analytics)
       AutoVerifiedAttributes:
         - email
       EmailConfiguration:
@@ -2196,9 +2253,11 @@ Resources:
         Please verify your email to complete account registration. Confirmation Code {####}.
       EmailVerificationSubject: >-
         Account Verification
-      LambdaConfig:
-        PreAuthentication: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
-        PreSignUp: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+      LambdaConfig: !If
+        - ShouldAllowSignUpEmailDomain
+        - PreAuthentication: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+          PreSignUp: !GetAtt CognitoUserPoolEmailDomainVerifyFunction.Arn
+        - !Ref AWS::NoValue
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -2295,8 +2354,35 @@ Resources:
           - id: W12
             reason: comprehend, translate, and connect do not support resource-level permissions
 
+  AdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums:
+        - EMAIL
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+      Username: !Ref AdminEmail
+      UserPoolId: !Ref UserPool
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: Administrators
+      GroupName: Admin
+      Precedence: 0
+      UserPoolId: !Ref UserPool
+
+  AdminUserToGroupAttachment:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Properties:
+      GroupName: !Ref AdminGroup
+      Username: !Ref AdminUser
+      UserPoolId: !Ref UserPool
+
   CognitoUserPoolEmailDomainVerifyFunction:
     Type: AWS::Serverless::Function
+    Condition: ShouldAllowSignUpEmailDomain
     Properties:
       Handler: index.handler
       Runtime: nodejs14.x
@@ -2328,6 +2414,7 @@ Resources:
 
   CognitoUserPoolEmailDomainVerifyPermission:
     Type: AWS::Lambda::Permission
+    Condition: ShouldAllowSignUpEmailDomain
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref CognitoUserPoolEmailDomainVerifyFunction
@@ -2503,11 +2590,14 @@ Resources:
               OriginAccessIdentity:
                 !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
         PriceClass: !Ref CloudFrontPriceClass
-        Restrictions:
-          GeoRestriction:
-            RestrictionType: whitelist
-            Locations:
-              - US
+        Restrictions: !If
+          - ShouldEnableGeoRestriction
+          - GeoRestriction:
+              RestrictionType: whitelist
+              Locations:
+                !Split [',', !Ref CloudFrontAllowedGeos]
+          - GeoRestriction:
+              RestrictionType: none
     Metadata:
       cfn_nag:
         rules_to_suppress:

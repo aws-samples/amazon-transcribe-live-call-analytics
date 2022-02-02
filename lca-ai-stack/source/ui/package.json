@@ -1,6 +1,6 @@
 {
   "name": "lca-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "dependencies": {
     "@aws-amplify/core": "^4.3.10",
