@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Updated the Python GraphQL client in the Call Event Stream Processor Lambda function to the
+  recently released stable version [gql v3.0.0](https://github.com/graphql-python/gql/releases/tag/v3.0.0).
+  This version is now out of pre-release which removed the need for the Makefile based sam cli
+  build of the Lambda layer. The library also added direct support for AppSync which removed the
+  need for the custom AppSync transport and authentication code. The Makefile build and custom
+  AppSync code has been deleted
+- Updated dependency versions of various components including:
+    - Web UI
+    - KVS Transcribe Processor Fargate container
+    - Call Event Processor Lambda function
+    - S3 Recording Trigger Lambda function
+    - Project build and development
 
 ## [0.2.1] - 2022-02-02
 ### Fixed
