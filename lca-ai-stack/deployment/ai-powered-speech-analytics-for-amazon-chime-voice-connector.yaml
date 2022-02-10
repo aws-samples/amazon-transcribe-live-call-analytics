@@ -962,8 +962,10 @@ Resources:
                   aws ecr get-login-password --region $AWS_DEFAULT_REGION |
                   docker login --username AWS
                   --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - echo Installing NodeJS
+                - n 14.19.0
+                - npm install -g npm@8.4.1
                 - echo Installing Web UI dependencies
-                - npm install -g npm@7.23.0
                 - cd source/ui
                 - npm install
             build:
