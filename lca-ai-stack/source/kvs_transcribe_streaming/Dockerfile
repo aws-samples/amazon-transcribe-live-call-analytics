@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Install dependencies and build jar
 
-FROM public.ecr.aws/bitnami/gradle:7.2.0 as build
+FROM public.ecr.aws/bitnami/gradle:7.4.0 as build
 
 RUN pwd
 RUN ls -altr
@@ -15,7 +15,7 @@ RUN gradle buildFargate --info --warning-mode all --no-daemon
 RUN find /build -name '*.jar' -ls
 
 # use same version as installed in local environment
-FROM public.ecr.aws/amazoncorretto/amazoncorretto:11.0.12-al2
+FROM public.ecr.aws/amazoncorretto/amazoncorretto:17.0.2-al2
 
 WORKDIR /app
 
