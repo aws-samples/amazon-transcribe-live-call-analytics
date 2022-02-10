@@ -1959,9 +1959,7 @@ Resources:
   CallEventStreamProcessLayer:
     Type: AWS::Serverless::LayerVersion
     Metadata:
-      # uses a makefile due to pre-release version of gql
-      # TODO change to regular build once gql is GA
-      BuildMethod: makefile
+      BuildMethod: python3.9
     Properties:
       Description: >-
         Call Event DynamoDB Table Stream Processor Layer

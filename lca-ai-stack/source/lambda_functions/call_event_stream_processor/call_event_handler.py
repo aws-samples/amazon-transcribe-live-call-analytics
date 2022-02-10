@@ -12,7 +12,7 @@ from aws_lambda_powertools import Logger, Metrics
 import boto3
 from gql.client import AsyncClientSession
 from gql.transport.exceptions import TransportQueryError
-from gql.dsl import DSLMutation, DSLSchema, dsl_gql  # type: ignore
+from gql.dsl import DSLMutation, DSLSchema, dsl_gql
 from graphql.language.ast import DocumentNode
 from graphql.language.printer import print_ast
 
