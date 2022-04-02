@@ -189,7 +189,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.2.1
+    Default: 0.2.2
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -1034,8 +1034,8 @@ Resources:
           - Name: REACT_APP_SHOULD_HIDE_SIGN_UP
             Value: !If
               - ShouldAllowSignUpEmailDomain
-              - false
-              - true
+              - 'false'
+              - 'true'
       TimeoutInMinutes: 10
 
   LambdaCodeBuildStartBuildExecutionRole:
@@ -1118,6 +1118,150 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
+  ##########################################################################
+  # Call Transcriber
+  ##########################################################################
+
+  CallTranscriberFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        AWS Lambda Function that will be triggered when a new call starts. This will
+        read from the KVS streams, stitch the channels together, send audio to
+        transcribe, and store the transcriptions in DynamoDB
+      Handler: index.handler
+      Role: !GetAtt CallTranscriberFunctionRole.Arn
+      Runtime: nodejs14.x
+      MemorySize: 512
+      Timeout: 900
+      Environment:
+        Variables:
+          LAMBDA_INVOKE_TIMEOUT: "720000"
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
+          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
+          REGION: !Ref AWS::Region
+          OUTPUT_BUCKET: !If
+            - ShouldCreateRecordingBucket
+            - !Ref RecordingsBucket
+            - !Ref S3BucketName
+          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
+          MONO_RECORDING_FILE_PREFIX: !Ref MonoAudioFilePrefix
+          RAW_FILE_PREFIX: "raw"
+          TEMP_FILE_PATH: "/tmp/"
+          SAVE_PARTIAL_TRANSCRIPTS: "TRUE"
+          IS_CONTENT_REDACTION_ENABLED: !If
+            - ShouldEnableContentRedaction
+            - 'true'
+            - 'false'
+          TRANSCRIBE_LANGUAGE_CODE: !Ref TranscribeLanguageCode
+          CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
+          PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
+          CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
+      CodeUri: ../source/lambda_functions/call_transcriber
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  CallTranscriberFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                - transcribe:DeleteTranscriptionJob
+                - transcribe:GetTranscriptionJob
+                - transcribe:GetVocabulary
+                - transcribe:ListTranscriptionJobs
+                - transcribe:ListVocabularies
+                - transcribe:StartStreamTranscription
+                - transcribe:StartTranscriptionJob
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                - lambda:InvokeFunction
+                Resource: 
+                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*-CallTranscriberFunction-*"
+              - Action:
+                  - "kinesisvideo:Describe*"
+                  - "kinesisvideo:Get*"
+                  - "kinesisvideo:List*"
+                Effect: "Allow"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt EventSourcingTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !If
+                        - ShouldCreateRecordingBucket
+                        - !Ref RecordingsBucket
+                        - !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !If
+                        - ShouldCreateRecordingBucket
+                        - !Ref RecordingsBucket
+                        - !Ref S3BucketName
+
+  AllowEventBridgeToCallTranscriberFunctionLambda:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref CallTranscriberFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambda.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  EventBridgeRuleToTriggerCallTranscriberLambda:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This rule is triggered when the Chime VoiceConnector streaming status changes"
+      EventPattern:
+        detail-type:
+          - "Chime VoiceConnector Streaming Status"
+        source:
+          - aws.chime
+      Targets:
+        - Id: CallTranscriberTarget
+          Arn: !GetAtt CallTranscriberFunction.Arn
+      State: "ENABLED"
+      
   ##########################################################################
   # Fargate
   ##########################################################################
@@ -1632,10 +1776,10 @@ Resources:
           PortMappings:
             - ContainerPort: 2000
               Protocol: udp
-      Cpu: 2048
+      Cpu: '2048'
       ExecutionRoleArn: !GetAtt TranscriberPoolQueueProcessingTaskDefExecutionRole.Arn
       Family: !Sub ${AWS::StackName}TranscriberPoolQueueProcessingTaskDef
-      Memory: 4096
+      Memory: '4096'
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -1873,6 +2017,7 @@ Resources:
       Period: 300
       Statistic: Maximum
       Threshold: 100
+
 
   ##########################################################################
   # Event Sourcing Processor
