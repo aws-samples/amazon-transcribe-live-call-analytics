@@ -25,8 +25,8 @@ const interleave = require("interleave-stream");
 const mergeFiles = require('./mergeFiles');
 
 const REGION = process.env.REGION || 'us-east-1';
-const EVENT_SOURCING_TABLE_NAME = process.env.EVENT_SOURCING_TABLE_NAME || 'LiveCallAnalytics-AISTACK-1LC4XFLOV4KAU-EventSourcingTable-122HTKPUVAOFR'
-const OUTPUT_BUCKET = process.env.OUTPUT_BUCKET || 'livecallanalytics-aistack-1lc4xf-recordingsbucket-1gbqhdzo3aegr';
+const EVENT_SOURCING_TABLE_NAME = process.env.EVENT_SOURCING_TABLE_NAME;
+const OUTPUT_BUCKET = process.env.OUTPUT_BUCKET;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
@@ -108,7 +108,10 @@ const writeTranscriptionSegment = async function(transcriptionEvent, callId, str
   //only write if there is more than 0
   const result = transcriptionEvent.TranscriptEvent.Transcript.Results[0];
   if(!result) return;
-  if(result.IsPartial == true && !SAVE_PARTIAL_TRANSCRIPTS) return;
+  if(result.IsPartial == true && !SAVE_PARTIAL_TRANSCRIPTS) {
+    console.log("Not saving partial.");
+    return;
+  }
   const transcript = result.Alternatives[0];
   if(!transcript.Transcript) return;
 
@@ -269,7 +272,9 @@ const runKVSWorker = function (workerData, streamPipe) {
   let newWorker = undefined;
 
   let workerPromise = new Promise((resolve, reject) => {
+    console.log('instantiating worker');
     newWorker =  new Worker('./kvsWorker.js', { workerData });
+    console.log('done instantiating worker');
     newWorker.on('message', (message) => {
       if(message.type === 'chunk') {
         //console.log('writing chunk to ffmpeg');
@@ -368,9 +373,10 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
   let requestId = tsResponse['RequestId'];
   if(lastAgentFragment == undefined)  writeStatusToDynamo('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
   else writeStatusToDynamo('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
-  
+  console.log('creating readable from transcript stream');
   const tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
  
+  console.log('creating interleave streams');
   let agentBlock = new BlockStream(2);
   let callerBlock = new BlockStream(2);
   let combinedStream = new PassThrough();
@@ -382,7 +388,7 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
   });
 
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
-
+  console.log('starting workers');
   var callerWorker = runKVSWorker({
     region: REGION,
     streamName: 'Caller',
@@ -396,6 +402,8 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
     streamArn: agentStreamArn,  
     lastFragment: lastAgentFragment
   }, agentBlock);
+
+  console.log('done starting workers');
 
   timeToStop = false;
   stopTimer = setTimeout(() => {
@@ -427,7 +435,7 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
     clearTimeout(stopTimer);
     timeToStop = false;
   }
-  
+
   writeRecordingStream.end();
 
   return {
@@ -442,11 +450,13 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
 
 //async function handler (event) {
 const handler = async function (event, context) {
+  if(!event.detail.lambdaCount) event.detail.lambdaCount = 0;
+
   console.log(JSON.stringify(event));
   await writeCallEventToDynamo(event);
 
   let result = undefined;
-  
+
   if(event.detail.streamingStatus === "CONTINUE") {
     console.log("---CONTINUING FROM PREVIOUS LAMBDA: ", event.detail.lambdaCount, "---");
     result = await go(event.detail.callId, event.detail.lambdaCount, event.detail.agentStreamArn, event.detail.callerStreamArn, event.detail.transcribeSessionId,event.detail.lastAgentFragment, event.detail.lastCallerFragment);

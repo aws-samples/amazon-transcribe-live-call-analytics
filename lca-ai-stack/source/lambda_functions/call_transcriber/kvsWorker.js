@@ -5,14 +5,14 @@ SPDX-License-Identifier: Apache-2.0
 
 const { workerData, parentPort } = require('worker_threads')
 const process = require('process');
-const { EbmlStreamDecoder, EbmlTagId, EbmlTag, EbmlTagPosition } = require('ebml-stream');
-const { KinesisVideoClient, GetDataEndpointCommand, GetDataEndpointInput } = require("@aws-sdk/client-kinesis-video");
-const { KinesisVideoMediaClient, KinesisVideoMedia, GetMediaCommand, GetMediaInput } = require("@aws-sdk/client-kinesis-video-media");
+const { EbmlStreamDecoder, EbmlTagId, EbmlTagPosition } = require('ebml-stream');
+const { KinesisVideoClient, GetDataEndpointCommand } = require("@aws-sdk/client-kinesis-video");
+const { KinesisVideoMedia } = require("@aws-sdk/client-kinesis-video-media");
 
 const stream = require('stream');
 const util = require('util');
-const { exitCode } = require('process');
-const finished = util.promisify(stream.finished); 
+// const { exitCode } = require('process');
+// const finished = util.promisify(stream.finished); 
 
 console.log('inside',workerData.streamName,'worker');
 

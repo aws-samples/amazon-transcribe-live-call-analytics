@@ -1132,7 +1132,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt CallTranscriberFunctionRole.Arn
       Runtime: nodejs14.x
-      MemorySize: 512
+      MemorySize: 2048
       Timeout: 900
       Environment:
         Variables:
@@ -1146,9 +1146,9 @@ Resources:
             - !Ref S3BucketName
           RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
           MONO_RECORDING_FILE_PREFIX: !Ref MonoAudioFilePrefix
-          RAW_FILE_PREFIX: "raw"
-          TEMP_FILE_PATH: "/tmp/"
-          SAVE_PARTIAL_TRANSCRIPTS: "TRUE"
+          RAW_FILE_PREFIX: 'lca-audio-raw/'
+          TEMP_FILE_PATH: '/tmp/'
+          SAVE_PARTIAL_TRANSCRIPTS: 'true'
           IS_CONTENT_REDACTION_ENABLED: !If
             - ShouldEnableContentRedaction
             - 'true'

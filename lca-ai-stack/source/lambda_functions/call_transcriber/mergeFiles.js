@@ -9,12 +9,11 @@ const path = require('path');
 
 const REGION = process.env.REGION || 'us-east-1';
 const s3Client = new S3Client({ region: REGION });
-const tempFilePath = '/tmp/';
+const tempFilePath = process.env.TEMP_FILE_PATH || '/tmp/';
 const bitDepth = 16;
 const bytesPerSample = bitDepth / 8;
 const outSampleRate = 8000;
 const outNumChannels = 2;
-
 
 // based on https://github.com/mattdiamond/Recorderjs/blob/master/src/recorder.js
 const createHeader = function (length) {
@@ -78,7 +77,9 @@ const mergeFiles = async function (event) {
   console.log('Creating merged file');
   const readStream = fs.createReadStream(combinedRawFilename);
   const writeStream = fs.createWriteStream(combinedWavFilename);
+  console.log('Writing header');
   writeStream.write(header);
+  console.log('Writing body chunks');
   for await (const chunk of readStream) {
     writeStream.write(chunk);
   }
@@ -102,6 +103,7 @@ const mergeFiles = async function (event) {
   for(let i = 0; i <= event.lambdaCount; i++)
   {    
     const key = event.rawPrefix + event.callId + "-" + i + ".raw";
+    console.log("Deleting " + key);
     const bucketParams = {
       Bucket: event.bucketName,
       Key: key,
