@@ -168,6 +168,32 @@ Parameters:
       Cognito.
     AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
 
+  # NOTE: These parameters are dynamically updated during release
+  BootstrapBucketBaseName:
+    Type: String
+    Default: aws-bigdata-blog
+    Description: >-
+      Base name of bootstrap S3 bucket. The region is appended to the bucket name. For example if
+      you provide a base name `mybucket`, a bucket with a region suffix must exist in the region
+      you are deploying (e.g. `mybucket-us-east-1`)
+      The bucket contains pre-staged packaged templates and source artifacts
+    # yamllint disable rule:line-length
+    AllowedPattern: '(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)'
+    # yamllint enable rule:line-length
+
+  BootstrapS3Prefix:
+    Type: String
+    Default: artifacts/lca
+    Description: >
+      S3 prefix where the templates and source are stored under
+
+  BootstrapVersion:
+    Type: String
+    Default: 0.2.2
+    Description: >
+      Artifacts version (semver). Used to point to a specific release in the S3
+      bootstrap bucket
+
 Metadata:
   "AWS::CloudFormation::Interface":
     ParameterGroups:
@@ -328,6 +354,245 @@ Resources:
             Action:
               - "kms:*"
             Resource: "*"
+
+  ##########################################################################
+  # CodeBuild
+  ##########################################################################
+
+  TranscriberCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/\
+                    ${BootstrapS3Prefix}/*"
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:PutObject
+                  - s3:ListBucket
+              - Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/codebuild/*:*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${WebAppBucket}/*"
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:\
+                    distribution/${WebAppCloudFrontDistribution}"
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              ECR do not support resource-level permissions for GetAuthorizationToken and therefore
+              cannot be specificed directly.
+
+  TranscriberCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: !Sub >-
+        Builds docker images and the website of stack: ${AWS::StackName}
+      ServiceRole: !Ref TranscriberCodeBuildServiceRole
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Location:
+          !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+          ${BootstrapVersion}/src.zip"
+        Type: S3
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo ${SOURCE_CODE_LOCATION}
+                - echo `ls -altr`
+                - echo `pwd`
+                - echo Installing NodeJS
+                - n 14.19.0
+                - npm install -g npm@8.4.1
+                - echo Installing Web UI dependencies
+                - cd source/ui
+                - npm install
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building kvs transcribe streamig container image
+                - cd $CODEBUILD_SRC_DIR
+                - echo Building Web UI
+                - cd source/ui
+                - npm run build
+                - >
+                  printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
+                  $REPOSITORY_URI $PROJECT_NAME $ARTIFACT_BUCKET > build.json
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo Copying Web UI
+                - find build -ls
+                - aws s3 cp --recursive build s3://${WEBAPP_BUCKET}/
+                - echo Invalidating CloudFront Distribution
+                - >
+                  aws cloudfront create-invalidation
+                  --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths '/*'
+          artifacts:
+            files:
+              - build.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: IMAGE_TAG
+            Value: !Ref BootstrapVersion
+          - Name: SOURCE_CODE_LOCATION
+            Value: !Sub "${BootstrapBucketBaseName}-${AWS::Region}/\
+              ${BootstrapS3Prefix}/${BootstrapVersion}"
+          - Name: WEBAPP_BUCKET
+            Value: !Ref WebAppBucket
+          - Name: CLOUDFRONT_DISTRIBUTION_ID
+            Value: !Ref WebAppCloudFrontDistribution
+          # These REACT_APP_ variables are used by the web ui in the
+          # aws-exports.js Amplify config. The values are embedded in the
+          # code at build time. See:
+          # https://create-react-app.dev/docs/adding-custom-environment-variables/
+          - Name: REACT_APP_USER_POOL_ID
+            Value: !Ref UserPool
+          - Name: REACT_APP_USER_POOL_CLIENT_ID
+            Value: !Ref UserPoolClient
+          - Name: REACT_APP_IDENTITY_POOL_ID
+            Value: !Ref IdentityPool
+          - Name: REACT_APP_APPSYNC_GRAPHQL_URL
+            Value: !GetAtt AppSyncApi.GraphQLUrl
+          - Name: REACT_APP_AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: REACT_APP_SHOULD_HIDE_SIGN_UP
+            Value: !If
+              - ShouldAllowSignUpEmailDomain
+              - 'false'
+              - 'true'
+      TimeoutInMinutes: 10
+
+  LambdaCodeBuildStartBuildExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt TranscriberCodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/lambda/*"
+        # Used by custom resource helper poller
+        # https://github.com/aws-cloudformation/custom-resource-helper
+        - PolicyName: CustomResourcePoller
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:\
+                    ${AWS::AccountId}:rule/*"
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:\
+                    ${AWS::AccountId}:function:*"
+
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt LambdaCodeBuildStartBuild.Arn
+      BuildProjectName: !Ref TranscriberCodeBuildProject
+      # pass code location to support upgrades
+      CodeLocation:
+        !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+        ${BootstrapVersion}/src.zip"
+
+  LambdaCodeBuildStartBuild:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_start_codebuild.handler
+      CodeUri: ../source/lambda_functions/start_codebuild
+      Description: This AWS Lambda Function kicks off a code build job.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
 
   ##########################################################################
   # Call Transcriber
