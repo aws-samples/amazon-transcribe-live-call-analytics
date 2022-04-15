@@ -57,54 +57,62 @@ tmpdir=/tmp/lca
 mkdir -p $tmpdir
 pwd
 
-dir=lca-chimevc-stack
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
-popd
+# dir=lca-chimevc-stack
+# echo "PACKAGING $dir"
+# pushd $dir
+# ./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
+# popd
 
 
-dir=lca-ai-stack
+# dir=lca-ai-stack
+# echo "PACKAGING $dir"
+# pushd $dir/deployment
+# rm -fr ../out
+# chmod +x ./build-s3-dist.sh
+# ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-ai-stack $VERSION $REGION || exit 1
+# popd
+
+dir=lca-genesys-audiohook-stack
 echo "PACKAGING $dir"
 pushd $dir/deployment
-rm -fr ../out
+rm -rf ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-ai-stack $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME artifacts/lca/genesys-audiohook $VERSION $REGION || exit 1
 popd
 
-echo "PACKAGING Main Stack Cfn artifacts"
-MAIN_TEMPLATE=lca-main.yaml
+# echo "PACKAGING Main Stack Cfn artifacts"
+# MAIN_TEMPLATE=lca-main.yaml
 
-echo "Inline edit $MAIN_TEMPLATE to replace "
-echo "   <ARTIFACT_BUCKET_TOKEN> with bucket name: $BUCKET"
-echo "   <ARTIFACT_PREFIX_TOKEN> with prefix: $PREFIX_AND_VERSION"
-echo "   <VERSION_TOKEN> with version: $VERSION"
-echo "   <REGION_TOKEN> with region: $REGION"
-cat ./$MAIN_TEMPLATE | 
-sed -e "s%<ARTIFACT_BUCKET_TOKEN>%$BUCKET%g" | 
-sed -e "s%<ARTIFACT_PREFIX_TOKEN>%$PREFIX_AND_VERSION%g" |
-sed -e "s%<VERSION_TOKEN>%$VERSION%g" |
-sed -e "s%<REGION_TOKEN>%$REGION%g" > $tmpdir/$MAIN_TEMPLATE
-# upload main template
-aws s3 cp $tmpdir/$MAIN_TEMPLATE s3://${BUCKET}/${PREFIX}/$MAIN_TEMPLATE || exit 1
+# echo "Inline edit $MAIN_TEMPLATE to replace "
+# echo "   <ARTIFACT_BUCKET_TOKEN> with bucket name: $BUCKET"
+# echo "   <ARTIFACT_PREFIX_TOKEN> with prefix: $PREFIX_AND_VERSION"
+# echo "   <VERSION_TOKEN> with version: $VERSION"
+# echo "   <REGION_TOKEN> with region: $REGION"
+# cat ./$MAIN_TEMPLATE | 
+# sed -e "s%<ARTIFACT_BUCKET_TOKEN>%$BUCKET%g" | 
+# sed -e "s%<ARTIFACT_PREFIX_TOKEN>%$PREFIX_AND_VERSION%g" |
+# sed -e "s%<VERSION_TOKEN>%$VERSION%g" |
+# sed -e "s%<REGION_TOKEN>%$REGION%g" > $tmpdir/$MAIN_TEMPLATE
+# # upload main template
+# aws s3 cp $tmpdir/$MAIN_TEMPLATE s3://${BUCKET}/${PREFIX}/$MAIN_TEMPLATE || exit 1
 
-if $PUBLIC; then
-  echo "Setting public read ACLs on published artifacts"
-  files=$(aws s3api list-objects --bucket ${BUCKET} --prefix ${PREFIX} --query "(Contents)[].[Key]" --output text)
-  for file in $files
-    do
-    aws s3api put-object-acl --acl public-read --bucket ${BUCKET} --key $file
-    done
-fi
+# if $PUBLIC; then
+#   echo "Setting public read ACLs on published artifacts"
+#   files=$(aws s3api list-objects --bucket ${BUCKET} --prefix ${PREFIX} --query "(Contents)[].[Key]" --output text)
+#   for file in $files
+#     do
+#     aws s3api put-object-acl --acl public-read --bucket ${BUCKET} --key $file
+#     done
+# fi
 
-template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX}/${MAIN_TEMPLATE}"
-echo "Validating template: $template"
-aws cloudformation validate-template --template-url $template > /dev/null || exit 1
+# template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX}/${MAIN_TEMPLATE}"
+# echo "Validating template: $template"
+# aws cloudformation validate-template --template-url $template > /dev/null || exit 1
 
-echo "OUTPUTS"
-echo Template URL: $template
-echo CF Launch URL: https://${REGION}.console.aws.amazon.com/cloudformation/home?region=${REGION}#/stacks/create/review?templateURL=${template}\&stackName=LiveCallAnalytics\&param_installDemoAsteriskServer=true
-echo CLI Deploy: aws cloudformation deploy --region $REGION --template-file $tmpdir/$MAIN_TEMPLATE --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AdminEmail='jdoe@example.com' installDemoAsteriskServer=true demoSoftphoneAllowedCidr=CIDRBLOCK siprecAllowedCidrList=\"\" S3BucketName=\"\"
-echo Done
+# echo "OUTPUTS"
+# echo Template URL: $template
+# echo CF Launch URL: https://${REGION}.console.aws.amazon.com/cloudformation/home?region=${REGION}#/stacks/create/review?templateURL=${template}\&stackName=LiveCallAnalytics\&param_installDemoAsteriskServer=true
+# echo CLI Deploy: aws cloudformation deploy --region $REGION --template-file $tmpdir/$MAIN_TEMPLATE --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AdminEmail='jdoe@example.com' installDemoAsteriskServer=true demoSoftphoneAllowedCidr=CIDRBLOCK siprecAllowedCidrList=\"\" S3BucketName=\"\"
+# echo Done
 exit 0
 

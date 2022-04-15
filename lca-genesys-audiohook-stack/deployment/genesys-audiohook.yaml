@@ -1,0 +1,500 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics - Genesys Audiohook
+
+Parameters:
+
+  S3BucketName:
+    Type: String
+    Description: >
+      (Optional) Existing bucket where call recording files will be stored.
+      Leave blank to automatically create new bucket.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  AudioFilePrefix:
+    Type: String
+    Default: lca-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
+  
+  HostedZone:
+    Type: String
+    Description: >-
+      Hosted zone that will be used to setup Websocket endpoint
+
+  DynamoDbExpirationInDays:
+    Type: Number
+    Default: 90
+    Description: >-
+      Number of days set in the time to live of event data stored in the DynamoDB table
+
+
+  EventSourcingTableArn:
+    Type: String
+    Default: "arn:aws:dynamodb:us-east-1:647866889803:table/LiveCallAnalytics-AISTACK-19ZZ8N9SVCGA8-EventSourcingTable-FLR8JEZWVJE1"
+    Description: >-
+      Name of the dynamo db table used by LCA solution 
+
+  EventSourcingTableName:
+    Type: String
+    Default: "LiveCallAnalytics-AISTACK-19ZZ8N9SVCGA8-EventSourcingTable-FLR8JEZWVJE1"
+    Description: >-
+      Name of the dynamo db table used by LCA solution 
+
+  IsContentRedactionEnabled:
+    Type: String
+    Default: "false"
+    Description: >-
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
+    AllowedValues:
+      - "true"
+      - "false"
+
+  TranscribeContentRedactionType:
+    Type: String
+    Default: PII
+    Description: >-
+      Type of content redaction from Amazon Transcribe transcription output
+    AllowedValues:
+      - PII
+
+  TranscribeLanguageCode:
+    Type: String
+    Description: >-
+      Language code to be used for Amazon Transcribe
+    Default: en-US
+    AllowedValues:
+      - en-US
+      - es-US
+      # - en-GB
+      # - fr-CA
+      # - fr-FR
+      # - en-AU
+      # - it-IT
+      # - de-DE
+      # - pt-BR
+      # - ja-JP
+      # - ko-KR
+      # - zh-CN
+
+  TranscribePiiEntityTypes:
+    Type: String
+    # yamllint disable rule:line-length
+    Default: BANK_ACCOUNT_NUMBER,BANK_ROUTING,CREDIT_DEBIT_NUMBER,CREDIT_DEBIT_CVV,CREDIT_DEBIT_EXPIRY,PIN,EMAIL,ADDRESS,NAME,PHONE,SSN
+    # yamllint enable rule:line-length
+    Description: >-
+      Select the PII entity types you want to identify or redact. Remove the values that you don't
+      want to redact from the default.  DO NOT ADD CUSTOM VALUES HERE.
+
+  CustomVocabularyName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the vocabulary to use when processing the transcription job. Leave blank if no
+      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+
+  # NOTE: These parameters are dynamically updated during release
+  BootstrapBucketBaseName:
+    Type: String
+    Default: ai-ml-blog
+    Description: >
+      Base name of bootstrap S3 bucket. The region is appended to the bucket name. For example if
+      you provide a base name `mybucket`, a bucket with a region suffix must exist in the region
+      you are deploying (e.g. `mybucket-us-east-1`)
+      The bucket contains pre-staged packaged templates and source artifacts
+    # yamllint disable rule:line-length
+    AllowedPattern: '(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)'
+    # yamllint enable rule:line-length
+
+  BootstrapS3Prefix:
+    Type: String
+    Default: artifacts/lca/lca-genesys-audiohook
+    Description: >
+      S3 prefix where the templates and source are stored under
+
+  BootstrapVersion:
+    Type: String
+    Default: 0.2.1
+    Description: >
+      Artifacts version (semver). Used to point to a specific release in the S3
+      bootstrap bucket
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: Amazon S3 Configuration
+        Parameters:
+          - S3BucketName
+          - AudioFilePrefix
+          - MonoAudioFilePrefix
+
+    ParameterLabels:
+      S3BucketName:
+        default: Call Audio Bucket Name
+      AudioFilePrefix:
+        default: Audio File Prefix
+      IsContentRedactionEnabled:
+        default: Enable Content Redaction
+      TranscribeContentRedactionType:
+        default: Type of Content Redaction
+      TranscribeLanguageCode:
+        default: Transcription Language Code
+      TranscribePiiEntityTypes:
+        default: Transcription PII Redaction Entity Types
+      CustomVocabularyName:
+        default: Transcription Custom Vocabulary Name
+      HostedZone:
+        default: Hosted Zone Name
+      EventSourcingTableArn:
+        default: DynamoDB Table Arn
+      EventSourcingTableName:
+        default: DynamoDB Table Name
+
+Conditions:
+  ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
+  ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
+  ShouldEnableContentRedaction: !And
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+
+Outputs:
+  S3BucketName:
+    Description: Bucket which contains all the call recordings
+    Value: !Ref S3BucketName
+
+Resources:
+
+  ##########################################################################
+  # CodeBuild
+  ##########################################################################
+  TranscriberECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageScanningConfiguration:
+        ScanOnPush: "true"
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow Amazon ECR read access to the users of this AWS account"
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub ${AWS::AccountId}
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+
+  EcrImagesDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: deleteEcrImages
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/\
+                    ${TranscriberECRRepository}"
+                Action:
+                  - ecr:DescribeImages
+                  - ecr:ListImages
+                  - ecr:BatchGetImage
+                  - ecr:BatchDeleteImage
+
+  EcrImagesDeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      MemorySize: 128
+      Timeout: 60
+      Role: !GetAtt EcrImagesDeleteLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          client = boto3.client("ecr")
+          def delete_ecr_images(repository_name):
+              print(f"Deleting images in ECR repo {repository_name}")
+              list_image_paginator = client.get_paginator("list_images")
+              image_filter = {"tagStatus": "ANY"}
+              list_response_iterator = list_image_paginator.paginate(
+                  repositoryName=repository_name, filter=image_filter,
+              )
+              # Iterate over responses and remove untagged images
+              for list_response in list_response_iterator:
+                  images = list_response.get("imageIds", [])
+                  if images:
+                      print(f"Deleting images: {images}")
+                      delete_response = client.batch_delete_image(
+                          repositoryName=repository_name, imageIds=images,
+                      )
+                      if delete_response.get("failures"):
+                          print(f"Delete failures: {delete_response.get('failures')}")
+                      else:
+                          print("Done")
+          def lambda_handler(event, context):
+              print(event)
+              status = cfnresponse.SUCCESS
+              response_data = {}
+              if event["RequestType"] == "Delete":
+                  try:
+                      repository_name = event["ResourceProperties"]["RepositoryName"]
+                      delete_ecr_images(repository_name)
+                      response_data["RepositoryName"] = repository_name
+                  except Exception as e:
+                      print(e)
+                      response_data["Reason"] = f"Exception thrown: {e}"
+                      status = cfnresponse.FAILED
+              cfnresponse.send(event, context, status, response_data)
+
+  EcrImagesDelete:
+    Type: Custom::EcrImagesDelete
+    Properties:
+      ServiceToken: !GetAtt EcrImagesDeleteLambda.Arn
+      RepositoryName: !Ref TranscriberECRRepository
+
+  TranscriberCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/\
+                    ${BootstrapS3Prefix}/*"
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:PutObject
+                  - s3:ListBucket
+              - Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/codebuild/*:*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+              - Resource:
+                  !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/\
+                  ${TranscriberECRRepository}"
+                Effect: Allow
+                Action:
+                  - ecr:DescribeImages
+                  - ecr:ListImages
+                  - ecr:PutImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetRepositoryPolicy
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              ECR do not support resource-level permissions for GetAuthorizationToken and therefore
+              cannot be specificed directly.
+  
+
+  TranscriberCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: !Sub >-
+        Builds docker images : ${AWS::StackName}
+      ServiceRole: !Ref TranscriberCodeBuildServiceRole
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Location:
+          !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+          ${BootstrapVersion}/audiohooksrc.zip"
+        Type: S3
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo ${SOURCE_CODE_LOCATION}
+                - echo `pwd`
+                - echo `ls -lhrt`
+                - echo Logging in to Amazon ECR...
+                - >
+                  aws ecr get-login-password --region $AWS_DEFAULT_REGION |
+                  docker login --username AWS
+                  --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - npm install -g npm@7.23.0
+                - cd source/app
+                - npm install
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building Genesys audiohook container image
+                - cd $CODEBUILD_SRC_DIR
+                - docker build -t "${REPOSITORY_URI}:${IMAGE_TAG}" app/
+                - >
+                  printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
+                  $REPOSITORY_URI $PROJECT_NAME $ARTIFACT_BUCKET > build.json
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo "Pushing Docker image to ECR"
+                - docker push "${REPOSITORY_URI}:${IMAGE_TAG}"
+
+          artifacts:
+            files:
+              - build.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: REPOSITORY_URI
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}\
+              .amazonaws.com/${TranscriberECRRepository}"
+          - Name: IMAGE_TAG
+            Value: !Ref BootstrapVersion
+          - Name: SOURCE_CODE_LOCATION
+            Value: !Sub "${BootstrapBucketBaseName}-${AWS::Region}/\
+              ${BootstrapS3Prefix}/${BootstrapVersion}"
+      TimeoutInMinutes: 10
+
+  LambdaCodeBuildStartBuildExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt TranscriberCodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/lambda/*"
+        # Used by custom resource helper poller
+        # https://github.com/aws-cloudformation/custom-resource-helper
+        - PolicyName: CustomResourcePoller
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:\
+                    ${AWS::AccountId}:rule/*"
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:\
+                    ${AWS::AccountId}:function:*"
+
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt LambdaCodeBuildStartBuild.Arn
+      BuildProjectName: !Ref TranscriberCodeBuildProject
+      # pass code location to support upgrades
+      CodeLocation:
+        !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+        ${BootstrapVersion}/audiohooksrc.zip"
+
+  LambdaCodeBuildStartBuild:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_start_codebuild.handler
+      CodeUri: ../source/lambda_functions/start_codebuild
+      Description: This AWS Lambda Function kicks off a code build job.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired

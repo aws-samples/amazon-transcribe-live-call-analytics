@@ -1,0 +1,63 @@
+[
+    {
+        "name": "too big postive integer - serialize",
+        "header_type": "item",
+        "expected": [1000000000000000, []],
+        "must_fail": true
+    },
+    {
+        "name": "too big negative integer - serialize",
+        "header_type": "item",
+        "expected": [-1000000000000000, []],
+        "must_fail": true
+    },
+    {
+        "name": "too big postive decimal - serialize",
+        "header_type": "item",
+        "expected": [1000000000000.1, []],
+        "must_fail": true
+    },
+    {
+        "name": "too big negative decimal - serialize",
+        "header_type": "item",
+        "expected": [-1000000000000.1, []],
+        "must_fail": true
+    },
+    {
+        "name": "round positive odd decimal - serialize",
+        "header_type": "item",
+        "expected": [0.0015, []],
+        "canonical": ["0.002"]
+    },
+    {
+        "name": "round positive even decimal - serialize",
+        "header_type": "item",
+        "expected": [2.0025, []],
+        "canonical": ["2.002"]
+    },
+    {
+        "name": "round negative odd decimal - serialize",
+        "header_type": "item",
+        "expected": [-0.0015, []],
+        "canonical": ["-0.002"]
+    },
+    {
+        "name": "round negative even decimal - serialize",
+        "header_type": "item",
+        "expected": [-1.0025, []],
+        "canonical": ["-1.002"]
+    },
+    {
+        "name": "decimal round to even - serialize",
+        "header_type": "item",
+        "expected": [9.9995, []],
+        "canonical": ["9.999"]
+    },
+    {
+        "name": "decimal round odd number rounded up above midpoint - serialize",
+        "header_type": "item",
+        "expected": [9.9995001, []],
+        "canonical": ["10.0"]
+    }
+]
+
