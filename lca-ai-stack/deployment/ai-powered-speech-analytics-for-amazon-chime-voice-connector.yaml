@@ -255,9 +255,14 @@ Outputs:
   CloudfrontEndpoint:
     Description: Endpoint for Cloudfront distribution
     Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
+  EventSourcingTableARN:
+    Description: The ARN for the DynamoDB that is used to store transcriptions and events
+    Value: !GetAtt EventSourcingTable.Arn 
+  EventSourcingTableName:
+    Description: The Name for the DynamoDB that is used to store transcriptions and events
+    Value: !Ref EventSourcingTable
 
 Resources:
-  
   ## BUCKET TO STORE STEREO RECORDINGS
   RecordingsBucket:
     Type: AWS::S3::Bucket
