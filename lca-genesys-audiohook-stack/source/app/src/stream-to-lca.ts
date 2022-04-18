@@ -38,11 +38,9 @@ export const addStreamToLCA = (session: Session) => {
     session.addOpenHandler(async (session, selectedMedia, openparms) => {
 
         //##### LCA integration #####
-
         session.logger.info(`Conversation Id: ${openparms.conversationId}`);
         session.logger.info(`Channels supported: ${selectedMedia?.channels}`);
         session.logger.info('Call Participant: ');
-        console.dir(openparms.participant);
 
         await writeCallEventToDynamo({
             callId: openparms.conversationId,
@@ -52,16 +50,13 @@ export const addStreamToLCA = (session: Session) => {
             toNumber: openparms.participant.dnis
         });
         
-        // await dynamoHack(openparms.conversationId);
-
         const client = new TranscribeStreamingClient({
             region: awsRegion 
         });
-        const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio');
 
+        const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio');
         const transcribeInput = async function* () {
             for await (const audiodata of audioDataIterator) {
-                // const mediadata = audiodata as unknown as MediaDataFrame;
                 const data = audiodata.as('L16').audio.data;
                 const chunk = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
                 yield { AudioEvent: { AudioChunk: chunk } };
@@ -80,7 +75,7 @@ export const addStreamToLCA = (session: Session) => {
                 NumberOfChannels: selectedMedia?.channels.length || 2,
                 VocabularyName: customVocab,
                 ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
-                PiiEntityTypes: piiEntities,
+                PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
                 AudioStream: transcribeInput()
             })
         );
@@ -101,7 +96,6 @@ export const addStreamToLCA = (session: Session) => {
                     if (event.TranscriptEvent) {
                         const message: TranscriptEvent = event.TranscriptEvent;
                         await writeTranscriptionSegment(message, openparms.conversationId, sid);
-                        // session.logger.info('Consuming Transcript results.....');
                     }
                 }
             }

@@ -899,7 +899,6 @@ Resources:
       LoadBalancerAttributes:
         - Key: deletion_protection.enabled
           Value: 'false'
-      # Name: audiohook-fargate-lb
       Scheme: internet-facing
       SecurityGroups:
         - Fn::GetAtt:
@@ -915,11 +914,6 @@ Resources:
     Properties:
       GroupDescription: Security Group for ELB  
       SecurityGroupIngress:
-        # - CidrIp: 0.0.0.0/0
-        #   Description: Allow from anyone on port 443
-        #   FromPort: 443
-        #   IpProtocol: tcp
-        #   ToPort: 443
         - CidrIp: 0.0.0.0/0
           Description: Allow from anyone on port 80
           FromPort: 80
@@ -1016,21 +1010,6 @@ Resources:
         Ref: TranscribingAudiohookLoadBalancerListener
       Priority: 200
    
-  # serviceLBPublicRedirectListenerD4551B3A:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #     - RedirectConfig:
-  #         Port: '443'
-  #         Protocol: HTTPS
-  #         StatusCode: HTTP_301
-  #       Type: redirect
-  #     LoadBalancerArn:
-  #       Ref: serviceLBD84AC665
-  #     Port: 80
-  #     Protocol: HTTP
-
-
   ##########################################################################
   # ECS
   #########################################################################
@@ -1115,7 +1094,7 @@ Resources:
             - Name: RECORDINGS_KEY_PREFIX
               Value: !Ref AudioFilePrefix
             - Name: SERVERHOST
-              Value: !GetAtt WebSocketCloudFrontDistribution.DomainName
+              Value: '0.0.0.0'
             - Name: SERVERPORT
               Value: '8080'
             - Name: EVENT_SOURCING_TABLE_NAME
@@ -1244,14 +1223,14 @@ Resources:
             Ref: TranscribingAudiohookLoadBalancerListenerTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
           SecurityGroups:
             - Fn::GetAtt:
                 - TranscriberAudiohookFargateServiceSecurityGroup
                 - GroupId
           Subnets:
-            - Ref: TranscribingVPCPrivateSubnet1Subnet
-            - Ref: TranscribingVPCPrivateSubnet2Subnet
+            - Ref: TranscribingVPCPublicSubnet1Subnet
+            - Ref: TranscribingVPCPublicSubnet2Subnet
       TaskDefinition:
         Ref: TranscriberAudiohookTaskDef
     DependsOn:
@@ -1271,7 +1250,7 @@ Resources:
       VpcId: !Ref TranscribingVPC
 
 
-  TranscriberAudiohookFargateServiceSecurityGroupEgress:
+  TranscriberAudiohookFargateServiceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       IpProtocol: tcp
@@ -1335,8 +1314,18 @@ Resources:
           Headers: 
             - "Sec-WebSocket-Key"
             - "Sec-WebSocket-Version"
-            - "Sec-WebSocket-Protocol"
-            - "Sec-WebSocket-Accept"
+            # - "Sec-WebSocket-Protocol"
+            # - "Sec-WebSocket-Accept"
+            - "Host"
+            - "Origin"
+            # - "Referer"
+            - "audiohook-organization-id"
+            - "audiohook-session-id"
+            - "audiohook-correlation-id"
+            - "x-api-key"
+            - "signature-input"
+            - "signature"
+
         QueryStringsConfig: 
           QueryStringBehavior: none
 
@@ -1349,25 +1338,23 @@ Resources:
           - Id: audiohook-fargate
             DomainName: !GetAtt TranscribingAudiohookLoadBalancer.DNSName
             CustomOriginConfig: 
-              HTTPSPort: '443'
-              OriginProtocolPolicy: https-only
-              OriginSSLProtocols: 
-                - TLSv1.2
+              HTTPPort: '80'
+              OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
           AllowedMethods:
             - GET
             - HEAD
             - OPTIONS
-          Compress: true
-          ForwardedValues:
-            QueryString: false
-            Cookies:
-              Forward: none
+            - PUT
+            - POST
+            - PATCH
+            - DELETE
           TargetOriginId: audiohook-fargate
-          ViewerProtocolPolicy: redirect-to-https
-          DefaultTTL: 600
-          MinTTL: 300
-          MaxTTL: 900
+          ViewerProtocolPolicy: https-only
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          Compress: false
+
         CustomErrorResponses:
           - ErrorCachingMinTTL: 300
             ErrorCode: 403

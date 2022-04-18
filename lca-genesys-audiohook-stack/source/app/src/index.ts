@@ -137,17 +137,17 @@ server.get('/api/v1/audiohook/ws', { websocket: true }, (connection, request) =>
                 'L16'
             ) 
         );
-
-        recorder.session.addOpenHandler(
-            createWavWriter(
-                fileLogRoot, 
-                (filename, samplesWritten) => {
-                    logger.info(`Wrote ${samplesWritten} samples to ${filename}`);
-                },
-                'L16'
-            )
-        );
     }
+    recorder.session.addOpenHandler(
+        createWavWriter(
+            fileLogRoot, 
+            (filename, samplesWritten) => {
+                logger.info(`Wrote ${samplesWritten} samples to ${filename}`);
+            },
+            'L16'
+        )
+    );
+
 
     ++sessionCount;
     recorder.session.addFiniHandler(() => {
@@ -198,7 +198,6 @@ server.listen(
     (err) => {
         if (err) {
             console.error(err);
-            process.exit(1);
         }
         serviceState = 'RUNNING';
         server.log.info(`Routes: \n${server.printRoutes()}`);
