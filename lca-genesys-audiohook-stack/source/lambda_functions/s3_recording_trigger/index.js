@@ -32,7 +32,7 @@ exports.handler = async (event, context) => {
     (Number(now) + Number(EXPIRATION_IN_DAYS) * 24 * 3600 * 1000) / 1000,
   );
 
-  const eventType = 'ADD_S3_RECORDING_URL';
+  const eventType = 'ADD_CHANNEL_S3_RECORDING_URL';
   const item = {
     PK: `ce#${callId}`,
     SK: `ts#${currentTimeStamp}#et#${eventType}`,

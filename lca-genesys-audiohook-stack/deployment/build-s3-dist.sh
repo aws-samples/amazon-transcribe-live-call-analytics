@@ -43,7 +43,12 @@ fi
 
 [ -d ${OUT_DIR} ] && rm -fr ${OUT_DIR}
 mkdir -p ${OUT_DIR}
-git ls-files .. | xargs zip -@ --filesync ${OUT_DIR}/audiohooksrc.zip
+
+cd ..
+zip -r out/audiohooksrc.zip source/ -x source/app/node_modules/**\* source/app/dist/**\*
+cd deployment
+
+# git ls-files .. | xargs zip -@ --filesync ${OUT_DIR}/audiohooksrc.zip
 export RELEASE_S3_BUCKET=${RELEASE_S3_BUCKET_BASE}-${AWS_REGION}
 aws s3 cp ${OUT_DIR}/audiohooksrc.zip s3://${RELEASE_S3_BUCKET}/${RELEASE_S3_PREFIX}/${RELEASE_VERSION}/audiohooksrc.zip
 

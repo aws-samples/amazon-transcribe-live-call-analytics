@@ -39,7 +39,7 @@ export const addStreamToLCA = (session: Session) => {
 
         //##### LCA integration #####
 
-        session.logger.info(`Conversaion Id: ${openparms.conversationId}`);
+        session.logger.info(`Conversation Id: ${openparms.conversationId}`);
         session.logger.info(`Channels supported: ${selectedMedia?.channels}`);
         session.logger.info('Call Participant: ');
         console.dir(openparms.participant);
