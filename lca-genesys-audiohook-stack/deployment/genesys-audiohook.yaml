@@ -1,0 +1,1379 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics - Genesys Audiohook
+
+Parameters:
+
+  S3BucketName:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) Existing bucket where call recording files will be stored.
+      Leave blank to automatically create new bucket.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  AudioFilePrefix:
+    Type: String
+    Default: lca-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
+
+  DynamoDbExpirationInDays:
+    Type: Number
+    Default: 90
+    Description: >-
+      Number of days set in the time to live of event data stored in the DynamoDB table
+
+  EventSourcingTableArn:
+    Type: String
+    Default: "arn:aws:dynamodb:us-east-1:647866889803:table/LiveCallAnalytics-AISTACK-19ZZ8N9SVCGA8-EventSourcingTable-FLR8JEZWVJE1"
+    Description: >-
+      Name of the dynamo db table used by LCA solution 
+
+  EventSourcingTableName:
+    Type: String
+    Default: "LiveCallAnalytics-AISTACK-19ZZ8N9SVCGA8-EventSourcingTable-FLR8JEZWVJE1"
+    Description: >-
+      Name of the dynamo db table used by LCA solution 
+
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_100
+    Description: >-
+      Specify the CloudFront price class. See https://aws.amazon.com/cloudfront/pricing/ for a
+      description of each price class.
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    ConstraintDescription: >-
+      Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
+
+  IsContentRedactionEnabled:
+    Type: String
+    Default: "false"
+    Description: >-
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
+    AllowedValues:
+      - "true"
+      - "false"
+
+  TranscribeContentRedactionType:
+    Type: String
+    Default: PII
+    Description: >-
+      Type of content redaction from Amazon Transcribe transcription output
+    AllowedValues:
+      - PII
+
+  TranscribeLanguageCode:
+    Type: String
+    Description: >-
+      Language code to be used for Amazon Transcribe
+    Default: en-US
+    AllowedValues:
+      - en-US
+      - es-US
+      # - en-GB
+      # - fr-CA
+      # - fr-FR
+      # - en-AU
+      # - it-IT
+      # - de-DE
+      # - pt-BR
+      # - ja-JP
+      # - ko-KR
+      # - zh-CN
+
+  TranscribePiiEntityTypes:
+    Type: String
+    # yamllint disable rule:line-length
+    Default: BANK_ACCOUNT_NUMBER,BANK_ROUTING,CREDIT_DEBIT_NUMBER,CREDIT_DEBIT_CVV,CREDIT_DEBIT_EXPIRY,PIN,EMAIL,ADDRESS,NAME,PHONE,SSN
+    # yamllint enable rule:line-length
+    Description: >-
+      Select the PII entity types you want to identify or redact. Remove the values that you don't
+      want to redact from the default.  DO NOT ADD CUSTOM VALUES HERE.
+
+  CustomVocabularyName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the vocabulary to use when processing the transcription job. Leave blank if no
+      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+
+  # NOTE: These parameters are dynamically updated during release
+  BootstrapBucketBaseName:
+    Type: String
+    Default: ai-ml-blog
+    Description: >
+      Base name of bootstrap S3 bucket. The region is appended to the bucket name. For example if
+      you provide a base name `mybucket`, a bucket with a region suffix must exist in the region
+      you are deploying (e.g. `mybucket-us-east-1`)
+      The bucket contains pre-staged packaged templates and source artifacts
+    # yamllint disable rule:line-length
+    AllowedPattern: '(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)'
+    # yamllint enable rule:line-length
+
+  BootstrapS3Prefix:
+    Type: String
+    Default: artifacts/lca/lca-genesys-audiohook
+    Description: >
+      S3 prefix where the templates and source are stored under
+
+  BootstrapVersion:
+    Type: String
+    Default: 0.2.1
+    Description: >
+      Artifacts version (semver). Used to point to a specific release in the S3
+      bootstrap bucket
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: Amazon S3 Configuration
+        Parameters:
+          - S3BucketName
+          - AudioFilePrefix
+
+    ParameterLabels:
+      S3BucketName:
+        default: Call Audio Bucket Name
+      AudioFilePrefix:
+        default: Audio File Prefix
+      IsContentRedactionEnabled:
+        default: Enable Content Redaction
+      TranscribeContentRedactionType:
+        default: Type of Content Redaction
+      TranscribeLanguageCode:
+        default: Transcription Language Code
+      TranscribePiiEntityTypes:
+        default: Transcription PII Redaction Entity Types
+      CustomVocabularyName:
+        default: Transcription Custom Vocabulary Name
+      EventSourcingTableArn:
+        default: DynamoDB Table Arn
+      EventSourcingTableName:
+        default: DynamoDB Table Name
+
+Conditions:
+  ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
+  ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
+  ShouldEnableContentRedaction: !And
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+
+Outputs:
+  S3BucketName:
+    Description: Bucket which contains all the call recordings
+    Value: !If
+      - ShouldCreateRecordingBucket
+      - !Ref RecordingsBucket
+      - !Ref S3BucketName
+  WebSocketEndpoint:
+    Description: Websocket endpoint for Audiohook integration
+    Value: !Join
+              - ''
+              - - 'wss://'
+                - !GetAtt WebSocketCloudFrontDistribution.DomainName
+                - '/api/v1/audiohook/ws'
+
+Resources:
+## BUCKET TO STORE STEREO RECORDINGS
+  S3RecordingFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref S3RecordingFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  RecordingsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Condition: ShouldCreateRecordingBucket
+    Properties:
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Function: !GetAtt S3RecordingFunction.Arn
+            Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: wav
+      AccessControl: LogDeliveryWrite
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  RecordingsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateRecordingBucket
+    Properties:
+      Bucket: !Ref RecordingsBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "s3:*"
+            Effect: "Deny"
+            Principal: "*"
+            Resource:
+              - !GetAtt RecordingsBucket.Arn
+              - !Sub "${RecordingsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+  
+  S3RecordingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !Ref EventSourcingTableArn
+
+  S3RecordingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        AWS Lambda Function that will be triggered when the individual channel wav call recording
+        file is placed in S3. It puts an event in the event sourcing table
+        containing the individual S3 URL
+      Handler: index.handler
+      Role: !GetAtt S3RecordingFunctionRole.Arn
+      Runtime: nodejs14.x
+      MemorySize: 256
+      Timeout: 900
+      Environment:
+        Variables:
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTableName
+          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
+      CodeUri: ../source/lambda_functions/s3_recording_trigger
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+                        
+  ##########################################################################
+  # CodeBuild
+  ##########################################################################
+  TranscriberECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageScanningConfiguration:
+        ScanOnPush: "true"
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow Amazon ECR read access to the users of this AWS account"
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub ${AWS::AccountId}
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+
+  EcrImagesDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: deleteEcrImages
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/\
+                    ${TranscriberECRRepository}"
+                Action:
+                  - ecr:DescribeImages
+                  - ecr:ListImages
+                  - ecr:BatchGetImage
+                  - ecr:BatchDeleteImage
+
+  EcrImagesDeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      MemorySize: 128
+      Timeout: 60
+      Role: !GetAtt EcrImagesDeleteLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          client = boto3.client("ecr")
+          def delete_ecr_images(repository_name):
+              print(f"Deleting images in ECR repo {repository_name}")
+              list_image_paginator = client.get_paginator("list_images")
+              image_filter = {"tagStatus": "ANY"}
+              list_response_iterator = list_image_paginator.paginate(
+                  repositoryName=repository_name, filter=image_filter,
+              )
+              # Iterate over responses and remove untagged images
+              for list_response in list_response_iterator:
+                  images = list_response.get("imageIds", [])
+                  if images:
+                      print(f"Deleting images: {images}")
+                      delete_response = client.batch_delete_image(
+                          repositoryName=repository_name, imageIds=images,
+                      )
+                      if delete_response.get("failures"):
+                          print(f"Delete failures: {delete_response.get('failures')}")
+                      else:
+                          print("Done")
+          def lambda_handler(event, context):
+              print(event)
+              status = cfnresponse.SUCCESS
+              response_data = {}
+              if event["RequestType"] == "Delete":
+                  try:
+                      repository_name = event["ResourceProperties"]["RepositoryName"]
+                      delete_ecr_images(repository_name)
+                      response_data["RepositoryName"] = repository_name
+                  except Exception as e:
+                      print(e)
+                      response_data["Reason"] = f"Exception thrown: {e}"
+                      status = cfnresponse.FAILED
+              cfnresponse.send(event, context, status, response_data)
+
+  EcrImagesDelete:
+    Type: Custom::EcrImagesDelete
+    Properties:
+      ServiceToken: !GetAtt EcrImagesDeleteLambda.Arn
+      RepositoryName: !Ref TranscriberECRRepository
+
+  TranscriberCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/\
+                    ${BootstrapS3Prefix}/*"
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:PutObject
+                  - s3:ListBucket
+              - Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/codebuild/*:*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+              - Resource:
+                  !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/\
+                  ${TranscriberECRRepository}"
+                Effect: Allow
+                Action:
+                  - ecr:DescribeImages
+                  - ecr:ListImages
+                  - ecr:PutImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetRepositoryPolicy
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              ECR do not support resource-level permissions for GetAuthorizationToken and therefore
+              cannot be specificed directly.
+  
+
+  TranscriberCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: !Sub >-
+        Builds docker images : ${AWS::StackName}
+      ServiceRole: !Ref TranscriberCodeBuildServiceRole
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Location:
+          !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+          ${BootstrapVersion}/audiohooksrc.zip"
+        Type: S3
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo ${SOURCE_CODE_LOCATION}
+                - echo `pwd`
+                - echo `ls -lhrt`
+                - echo Logging in to Amazon ECR...
+                - >
+                  aws ecr get-login-password --region $AWS_DEFAULT_REGION |
+                  docker login --username AWS
+                  --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - npm install -g npm@7.23.0
+                - cd source/app
+                - npm install
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building Genesys audiohook container image
+                - cd $CODEBUILD_SRC_DIR
+                - echo `pwd`
+                - docker build -t "${REPOSITORY_URI}:${IMAGE_TAG}" source/app/
+                - >
+                  printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
+                  $REPOSITORY_URI $PROJECT_NAME $ARTIFACT_BUCKET > build.json
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo "Pushing Docker image to ECR"
+                - docker push "${REPOSITORY_URI}:${IMAGE_TAG}"
+
+          artifacts:
+            files:
+              - build.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: REPOSITORY_URI
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}\
+              .amazonaws.com/${TranscriberECRRepository}"
+          - Name: IMAGE_TAG
+            Value: !Ref BootstrapVersion
+          - Name: SOURCE_CODE_LOCATION
+            Value: !Sub "${BootstrapBucketBaseName}-${AWS::Region}/\
+              ${BootstrapS3Prefix}/${BootstrapVersion}"
+      TimeoutInMinutes: 10
+
+  LambdaCodeBuildStartBuildExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt TranscriberCodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:\
+                    /aws/lambda/*"
+        # Used by custom resource helper poller
+        # https://github.com/aws-cloudformation/custom-resource-helper
+        - PolicyName: CustomResourcePoller
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:\
+                    ${AWS::AccountId}:rule/*"
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:\
+                    ${AWS::AccountId}:function:*"
+
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt LambdaCodeBuildStartBuild.Arn
+      BuildProjectName: !Ref TranscriberCodeBuildProject
+      # pass code location to support upgrades
+      CodeLocation:
+        !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
+        ${BootstrapVersion}/audiohooksrc.zip"
+
+  LambdaCodeBuildStartBuild:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_start_codebuild.handler
+      CodeUri: ../source/lambda_functions/start_codebuild
+      Description: This AWS Lambda Function kicks off a code build job.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  ##########################################################################
+  # VPC
+  ##########################################################################
+  TranscribingVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+
+  VPCFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 3653
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: >-
+              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
+              server-side encryption keys (AWS Managed Keys).
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              "Allow Resource * for CloudWatch Logs API since the resources are customer defined."
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: LogRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: "*"
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt "VPCFlowLogsRole.Arn"
+      LogGroupName: !Ref "VPCFlowLogsLogGroup"
+      ResourceId: !Ref "TranscribingVPC"
+      ResourceType: VPC
+      TrafficType: ALL
+
+  TranscribingVPCPublicSubnet1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W33
+            reason: Public IP on launch is needed by the solution
+
+  TranscribingVPCPublicSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet1RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet1Subnet
+
+  TranscribingVPCPublicSubnet1DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: TranscribingVPCIGW
+    DependsOn:
+      - TranscribingVPCVPCGW
+
+  TranscribingVPCPublicSubnet:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  TranscribingVPCPublicSubnet1NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - TranscribingVPCPublicSubnet
+          - AllocationId
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet1Subnet
+
+  TranscribingVPCPublicSubnet2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.64.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W33
+            reason: Public IP on launch is needed by the solution
+
+  TranscribingVPCPublicSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet2RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet2Subnet
+
+  TranscribingVPCPublicSubnet2DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPublicSubnet2RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: TranscribingVPCIGW
+    DependsOn:
+      - TranscribingVPCVPCGW
+
+  TranscribingVPCPublicSubnet2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  TranscribingVPCPublicSubnet2NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - TranscribingVPCPublicSubnet2
+          - AllocationId
+      SubnetId:
+        Ref: TranscribingVPCPublicSubnet2Subnet
+
+  TranscribingVPCPrivateSubnet1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.128.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+
+  TranscribingVPCPrivateSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet1RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPrivateSubnet1Subnet
+
+  TranscribingVPCPrivateSubnet1DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: TranscribingVPCPublicSubnet1NATGateway
+
+  TranscribingVPCPrivateSubnet2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.192.0/18
+      VpcId:
+        Ref: TranscribingVPC
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+
+  TranscribingVPCPrivateSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+
+  TranscribingVPCPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet2RouteTable
+      SubnetId:
+        Ref: TranscribingVPCPrivateSubnet2Subnet
+
+  TranscribingVPCPrivateSubnet2DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: TranscribingVPCPrivateSubnet2RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: TranscribingVPCPublicSubnet2NATGateway
+
+  TranscribingVPCIGW:
+    Type: AWS::EC2::InternetGateway
+
+  TranscribingVPCVPCGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+      InternetGatewayId:
+        Ref: TranscribingVPCIGW
+
+  ##########################################################################
+  # ELB
+  ##########################################################################
+  TranscribingCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  TranscribingAudiohookLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+      Scheme: internet-facing
+      SecurityGroups:
+        - Fn::GetAtt:
+          - TranscribingAudiohookLoadBalancerSecurityGroup
+          - GroupId
+      Subnets:
+        - !Ref TranscribingVPCPublicSubnet1Subnet
+        - !Ref TranscribingVPCPublicSubnet2Subnet
+      Type: application
+
+  TranscribingAudiohookLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for ELB  
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow from anyone on port 80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80      
+      VpcId: !Ref TranscribingVPC
+ 
+  TranscribingAudiohookLoadBalancerSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId:
+        Fn::GetAtt:
+          - TranscribingAudiohookLoadBalancerSecurityGroup
+          - GroupId
+      IpProtocol: tcp
+      Description: Load balancer to target
+      DestinationSecurityGroupId:
+        Fn::GetAtt:
+          - TranscriberAudiohookFargateServiceSecurityGroup
+          - GroupId
+      FromPort: 8080
+      ToPort: 8080
+
+  TranscribingAudiohookLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - FixedResponseConfig:
+            ContentType: application/json
+            MessageBody: '{"status":403,"message":"This is not a valid endpoint"}'
+            StatusCode: '403'
+          Type: fixed-response
+      LoadBalancerArn:
+        Ref: TranscribingAudiohookLoadBalancer
+      Port: 80
+      Protocol: HTTP
+ 
+  TranscribingAudiohookLoadBalancerListenerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/health/check"
+      HealthCheckTimeoutSeconds: 4
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'false'
+        - Key: deregistration_delay.timeout_seconds
+          Value: '180'
+      TargetType: ip
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref TranscribingVPC
+ 
+  TranscribingAudiohookLoadBalancerListenerRule1:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn:
+            Ref: TranscribingAudiohookLoadBalancerListenerTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !GetAtt WebSocketCloudFrontDistribution.DomainName
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - "/api/v1/*"
+      ListenerArn:
+        Ref: TranscribingAudiohookLoadBalancerListener
+      Priority: 100
+ 
+  TranscribingAudiohookLoadBalancerListenerRule2:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - FixedResponseConfig:
+            ContentType: application/json
+            MessageBody: '{"status":404,"message":"Resource not found"}'
+            StatusCode: '404'
+          Type: fixed-response
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !GetAtt WebSocketCloudFrontDistribution.DomainName
+      ListenerArn:
+        Ref: TranscribingAudiohookLoadBalancerListener
+      Priority: 200
+   
+  ##########################################################################
+  # ECS
+  #########################################################################
+
+  TranscriberAudiohookTaskDefTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+
+  TranscriberAudiohookTaskDefTaskRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+            - s3:GetObject*
+            - s3:GetBucket*
+            - s3:List*
+            - s3:DeleteObject*
+            - s3:PutObject
+            - s3:PutObjectLegalHold
+            - s3:PutObjectRetention
+            - s3:PutObjectTagging
+            - s3:PutObjectVersionTagging
+            - s3:Abort*
+            Effect: Allow
+            Resource:
+              - !Sub
+                - "arn:aws:s3:::${bucket}"
+                - bucket: !Ref RecordingsBucket
+              - !Sub
+                - "arn:aws:s3:::${bucket}/*"
+                - bucket: !Ref RecordingsBucket
+          - Action:
+              - dynamodb:PutItem
+            Effect: Allow
+            Resource:
+              - !Ref EventSourcingTableArn
+          - Action:
+              - transcribe:DeleteTranscriptionJob
+              - transcribe:GetTranscriptionJob
+              - transcribe:GetVocabulary
+              - transcribe:ListTranscriptionJobs
+              - transcribe:ListVocabularies
+              - transcribe:StartStreamTranscription
+              - transcribe:StartTranscriptionJob
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt TranscriberAudiohookTaskDefAudiohookContainerLogGroup.Arn
+        Version: "2012-10-17"
+      PolicyName: !Sub ${AWS::StackName}-TranscriberAudiohookTaskDefTaskRoleDefaultPolicy
+      Roles:
+        - !Ref TranscriberAudiohookTaskDefTaskRole
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W12
+            reason: comprehend, translate, and connect do not support resource-level permissions.
+
+  TranscriberAudiohookTaskDef:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: CodeBuildRun
+    Properties:
+      ContainerDefinitions:
+        - Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: NODE_ENV
+              Value: 'Production'
+            - Name: RECORDINGS_BUCKET_NAME
+              Value: !Ref RecordingsBucket
+            - Name: RECORDINGS_KEY_PREFIX
+              Value: !Ref AudioFilePrefix
+            - Name: SERVERHOST
+              Value: '0.0.0.0'
+            - Name: SERVERPORT
+              Value: '8080'
+            - Name: EVENT_SOURCING_TABLE_NAME
+              Value: !Ref EventSourcingTableName
+            - Name: EVENT_SOURCING_TABLE_ARN
+              Value: !Ref EventSourcingTableArn
+            - Name: EXPIRATION_IN_DAYS
+              Value: !Ref DynamoDbExpirationInDays
+            - Name: SAVE_PARTIAL_TRANSCRIPTS
+              Value: "true"
+            - Name: IS_CONTENT_REDACTION_ENABLED
+              Value: !If
+                - ShouldEnableContentRedaction
+                - 'true'
+                - 'false'
+            - Name: CONTENT_REDACTION_TYPE
+              Value: !Ref TranscribeContentRedactionType      
+            - Name: TRANSCRIBE_PII_ENTITY_TYPES
+              Value: !Ref TranscribePiiEntityTypes      
+            - Name: TRANSCRIBE_LANGUAGE_CODE
+              Value: !Ref TranscribeLanguageCode
+            - Name: CUSTOM_VOCABULARY_NAME
+              Value: !Ref CustomVocabularyName
+          Essential: true
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/\
+            ${TranscriberECRRepository}:${BootstrapVersion}"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Ref: TranscriberAudiohookTaskDefAudiohookContainerLogGroup
+              awslogs-stream-prefix: audiohook
+              awslogs-region:
+                Ref: AWS::Region
+          Name: audiohookcontainer
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+      Cpu: 2048
+      ExecutionRoleArn: !GetAtt TranscriberAudiohookTaskDefExecutionRole.Arn
+      Family: !Sub ${AWS::StackName}TranscriberAudiohookTaskDef
+      Memory: 4096
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: !GetAtt TranscriberAudiohookTaskDefTaskRole.Arn
+
+  TranscriberAudiohookTaskDefAudiohookContainerLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      RetentionInDays: 3653
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: >-
+              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
+              server-side encryption keys (AWS Managed Keys).
+
+  TranscriberAudiohookTaskDefExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+
+  TranscriberAudiohookTaskDefExecutionRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+            Effect: Allow
+            Resource:
+              Fn::GetAtt:
+                - TranscriberECRRepository
+                - Arn
+          - Action: ecr:GetAuthorizationToken
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              Fn::GetAtt:
+                - TranscriberAudiohookTaskDefAudiohookContainerLogGroup
+                - Arn
+        Version: "2012-10-17"
+      PolicyName:
+        !Sub "${AWS::StackName}-\
+              TranscriberAudiohookTaskDefExecutionRoleDefaultPolicy"
+      Roles:
+        - Ref: TranscriberAudiohookTaskDefExecutionRole
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W12
+            reason: comprehend, translate, and connect do not support resource-level permissions.
+
+  TranscriberAudiohookFargateService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster:
+        Ref: TranscribingCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      HealthCheckGracePeriodSeconds: 60
+      EnableECSManagedTags: false
+      LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: audiohookcontainer
+          ContainerPort: 8080
+          TargetGroupArn:
+            Ref: TranscribingAudiohookLoadBalancerListenerTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - Fn::GetAtt:
+                - TranscriberAudiohookFargateServiceSecurityGroup
+                - GroupId
+          Subnets:
+            - Ref: TranscribingVPCPublicSubnet1Subnet
+            - Ref: TranscribingVPCPublicSubnet2Subnet
+      TaskDefinition:
+        Ref: TranscriberAudiohookTaskDef
+    DependsOn:
+      - TranscribingAudiohookLoadBalancerListenerTargetGroup
+      - TranscribingAudiohookLoadBalancerListenerRule1
+      - TranscribingAudiohookLoadBalancerListenerRule2
+      - TranscribingAudiohookLoadBalancerListener
+
+  TranscriberAudiohookFargateServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: audiohook-fargate/service/Service/SecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      VpcId: !Ref TranscribingVPC
+
+
+  TranscriberAudiohookFargateServiceSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      Description: Load balancer to target
+      FromPort: 8080
+      GroupId:
+        Fn::GetAtt:
+          - TranscriberAudiohookFargateServiceSecurityGroup
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - TranscribingAudiohookLoadBalancerSecurityGroup
+          - GroupId
+      ToPort: 8080
+
+  TranscriberAudiohookFargateServiceTaskCountTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 3
+      MinCapacity: 1
+      ResourceId:
+        !Sub "service/${TranscribingCluster}/\
+              ${TranscriberAudiohookFargateService.Name}"
+      RoleARN:
+        !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/\
+        ecs.application-autoscaling.amazonaws.com/\
+        AWSServiceRoleForApplicationAutoScaling_ECSService"
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  TranscriberAudiohookFargateServiceTaskCountTargetCpuScaling:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}\
+        TranscriberAudiohookFargateServiceTaskCountTargetCpuScaling"
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: TranscriberAudiohookFargateServiceTaskCountTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 50
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "CloudFront OAI"
+
+  CloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties: 
+      OriginRequestPolicyConfig:
+        Name: !Sub ${AWS::StackName}-CloudFrontOriginRequestPolicyConfig
+        CookiesConfig: 
+          CookieBehavior: none
+        HeadersConfig: 
+          HeaderBehavior: whitelist
+          Headers: 
+            - "Sec-WebSocket-Key"
+            - "Sec-WebSocket-Version"
+            # - "Sec-WebSocket-Protocol"
+            # - "Sec-WebSocket-Accept"
+            - "Host"
+            - "Origin"
+            # - "Referer"
+            - "audiohook-organization-id"
+            - "audiohook-session-id"
+            - "audiohook-correlation-id"
+            - "x-api-key"
+            - "signature-input"
+            - "signature"
+
+        QueryStringsConfig: 
+          QueryStringBehavior: none
+
+  WebSocketCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "Web Socket audiohook proxy cloudfront distribution ${AWS::StackName}"
+        Origins:
+          - Id: audiohook-fargate
+            DomainName: !GetAtt TranscribingAudiohookLoadBalancer.DNSName
+            CustomOriginConfig: 
+              HTTPPort: '80'
+              OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - POST
+            - PATCH
+            - DELETE
+          TargetOriginId: audiohook-fargate
+          ViewerProtocolPolicy: https-only
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          Compress: false
+
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        PriceClass: !Ref CloudFrontPriceClass       
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: 'true'
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W70
+            reason: This is using Cloudfront default TLS, can be changed by customer if needed.
