@@ -18,21 +18,22 @@ Description: Amazon Transcribe Live Call Analytics - LCA (v0.2.1)
 
 Parameters:
 
-  InstallDemoAsteriskServer:
+  CallAudioSource:
     Type: String
-    Default: true
     AllowedValues:
-      - true
-      - false
+      - Demo Asterisk PBX Server
+      - Chime Voice Connector (SIPREC)
+      - Genesys Cloud Audiohook Web Socket
     Description: >
-      Set to true to automatically install a demo Asterisk server for testing
-      Chime Voice Connector streaming.
+      Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
+      Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center, 
+      or a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center.    
 
   DemoSoftphoneAllowedCidr:
     Type: String
     AllowedPattern: "( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))"
     Description: >
-      Ignored if Install Demo Asterisk Server is false.
+      Used only when CallAudioSource is set to 'Demo Asterisk Server'
       CIDR block allowed by demo Asterisk server for soft phone registration.
       Example: '198.51.100.36/32'
 
@@ -42,7 +43,7 @@ Parameters:
     AllowedPattern: "( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*"
     # yamllint enable rule:line-length
     Description: >
-      Ignored if Install Demo Asterisk Server is true.
+      Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
       Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
@@ -175,7 +176,7 @@ Metadata:
       - Label:
           default: Telephony Ingestion Options
         Parameters:
-          - InstallDemoAsteriskServer
+          - CallAudioSource
           - DemoSoftphoneAllowedCidr
           - SiprecAllowedCidrList
       - Label:
@@ -219,8 +220,8 @@ Metadata:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
         default: Authorized Account Email Domain
-      InstallDemoAsteriskServer:
-        default: Install Demo Asterisk Server
+      CallAudioSource:
+        default: Call Audio Source
       DemoSoftphoneAllowedCidr:
         default: Allowed CIDR Block for Demo Softphone
       SiprecAllowedCidrList:
@@ -245,6 +246,12 @@ Metadata:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
         default: CloudFront Allowed Geographies
+
+Conditions:
+  ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
+  ShouldInstallChimeVCsiprec: !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
+  ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
+  ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -279,20 +286,44 @@ Resources:
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallChimeVCStack
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        InstallDemoAsteriskServer: !Ref InstallDemoAsteriskServer
+        InstallDemoAsteriskServer: 
+          !If
+          - ShouldInstallDemoAsteriskServer
+          - true
+          - false
         DemoSoftphoneAllowedCidr: !Ref DemoSoftphoneAllowedCidr
         SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
 
+  GENESYSAUDIOHOOKSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallGenesysAudiohookStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-genesys-audiohook-stack/<VERSION_TOKEN>/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        S3BucketName: !Ref S3BucketName
+        AudioFilePrefix: !Ref AudioFilePrefix
+        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
+        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+
 Outputs:
 
-  CloudfrontEndpoint:
+  ApplicationCloudfrontEndpoint:
     Description: Endpoint for Cloudfront distribution
     Value: !GetAtt AISTACK.Outputs.CloudfrontEndpoint
 
@@ -302,12 +333,32 @@ Outputs:
 
   DemoPBXIPAddress:
     Description: Demo Asterisk Server IP Address
-    Value: !GetAtt CHIMEVCSTACK.Outputs.DemoPBXIPAddress
+    Value: 
+      !If
+      - ShouldInstallChimeVCStack
+      - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXIPAddress
+      - "Demo Asterisk PBX not enabled" 
 
   DemoPBXPhoneNumber:
     Description: Demo Asterisk Server Phone Number
-    Value: !GetAtt CHIMEVCSTACK.Outputs.DemoPBXPhoneNumber
+    Value: 
+      !If
+      - ShouldInstallChimeVCStack
+      - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXPhoneNumber
+      - "Demo Asterisk PBX not enabled" 
 
   AsteriskInstanceId:
     Description: Demo Asterisk Server EC2 instanceId
-    Value: !GetAtt CHIMEVCSTACK.Outputs.AsteriskInstanceId
+    Value:
+      !If
+      - ShouldInstallChimeVCStack
+      - !GetAtt CHIMEVCSTACK.Outputs.AsteriskInstanceId
+      - "Demo Asterisk PBX not enabled"
+
+  WebSocketEndpoint:
+    Description: Websocket endpoint for Genesys Cloud Audiohook integration
+    Value:
+      !If
+      - ShouldInstallGenesysAudiohookStack
+      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
+      - "Genesys Cloud Audiohook Web Socket not enabled"    

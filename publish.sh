@@ -77,7 +77,7 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME artifacts/lca/genesys-audiohook $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-genesys-audiohook-stack $VERSION $REGION || exit 1
 popd
 
 echo "PACKAGING Main Stack Cfn artifacts"
