@@ -14,7 +14,7 @@
 ---
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Amazon Transcribe Live Call Analytics - LCA (v0.2.1)
+Description: Amazon Transcribe Live Call Analytics - LCA (v0.2.3)
 
 Parameters:
 
@@ -312,7 +312,6 @@ Resources:
       Parameters:
         S3BucketName: !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
-        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -361,4 +360,19 @@ Outputs:
       !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
-      - "Genesys Cloud Audiohook Web Socket not enabled"    
+      - "Genesys Cloud Audiohook Web Socket not enabled"  
+
+  WebSocketAPIKey:
+    Value:
+      !If
+      - ShouldInstallGenesysAudiohookStack
+      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIKey
+      - "Genesys Cloud Audiohook Web Socket not enabled" 
+  
+  WebSocketAPIClientSecret: 
+    Value:
+      !If
+      - ShouldInstallGenesysAudiohookStack
+      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
+      - "Genesys Cloud Audiohook Web Socket not enabled" 
+  
