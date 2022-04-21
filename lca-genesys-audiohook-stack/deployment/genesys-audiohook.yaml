@@ -1049,6 +1049,10 @@ Resources:
               Value: !Ref EventSourcingTableName
             - Name: EXPIRATION_IN_DAYS
               Value: !Ref DynamoDbExpirationInDays
+            - Name: API_KEY_ARN
+              Value: !Ref SecretsManagerAPIKey
+            - Name: CLIENT_SECRET_ARN
+              Value: !Ref SecretsManagerAPIClientSecret
             - Name: SAVE_PARTIAL_TRANSCRIPTS
               Value: "true"
             - Name: IS_CONTENT_REDACTION_ENABLED

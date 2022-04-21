@@ -73,7 +73,6 @@ const verifyRequestSignature = (request: IncomingMessage, logger?: Logger): Prom
                 await new Promise(resolve => setTimeout(resolve, 50 + 200*Math.random()));
             }
 
-            //TODO: Replace hard code API key with secrets manager
             const smAPIKey:SMAPIKey = JSON.parse(await retrieveSecret(apikeyArn));
             const smClientSecret:SMClientSecret = JSON.parse(await retrieveSecret(apiclientsecretArn));
            
@@ -160,4 +159,3 @@ export const initiateRequestAuthentication = (session: Session, request: Incomin
         }
     });  
 };
-
