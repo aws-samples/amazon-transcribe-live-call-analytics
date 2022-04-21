@@ -42,15 +42,8 @@ Parameters:
     Description: >-
       Number of days set in the time to live of event data stored in the DynamoDB table
 
-  EventSourcingTableArn:
-    Type: String
-    Default: "arn:aws:dynamodb:us-east-1:647866889803:table/LiveCallAnalytics-AISTACK-19ZZ8N9SVCGA8-EventSourcingTable-FLR8JEZWVJE1"
-    Description: >-
-      Name of the dynamo db table used by LCA solution 
-
   EventSourcingTableName:
     Type: String
-    Default: "LiveCallAnalytics-AISTACK-19ZZ8N9SVCGA8-EventSourcingTable-FLR8JEZWVJE1"
     Description: >-
       Name of the dynamo db table used by LCA solution 
 
@@ -170,8 +163,6 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
-      EventSourcingTableArn:
-        default: DynamoDB Table Arn
       EventSourcingTableName:
         default: DynamoDB Table Name
 
@@ -196,32 +187,19 @@ Outputs:
               - - 'wss://'
                 - !GetAtt WebSocketCloudFrontDistribution.DomainName
                 - '/api/v1/audiohook/ws'
+  AudiohookAPIKey:
+    Value: !Ref SecretsManagerAPIKey
+  AudiohookAPIClientSecret: 
+    Value: !Ref SecretsManagerAPIClientSecret
 
 Resources:
 ## BUCKET TO STORE STEREO RECORDINGS
-  S3RecordingFunctionPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref S3RecordingFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-
   RecordingsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Condition: ShouldCreateRecordingBucket
     Properties:
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Function: !GetAtt S3RecordingFunction.Arn
-            Event: "s3:ObjectCreated:*"
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: wav
       AccessControl: LogDeliveryWrite
       VersioningConfiguration:
         Status: Enabled
@@ -253,62 +231,6 @@ Resources:
             Condition:
               Bool:
                 "aws:SecureTransport": false
-  
-  S3RecordingFunctionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: lambda-policy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
-                    ${AWS::AccountId}:log-group:/aws/lambda/*"
-              - Effect: Allow
-                Action:
-                  - dynamodb:PutItem
-                Resource:
-                  - !Ref EventSourcingTableArn
-
-  S3RecordingFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Description: >-
-        AWS Lambda Function that will be triggered when the individual channel wav call recording
-        file is placed in S3. It puts an event in the event sourcing table
-        containing the individual S3 URL
-      Handler: index.handler
-      Role: !GetAtt S3RecordingFunctionRole.Arn
-      Runtime: nodejs14.x
-      MemorySize: 256
-      Timeout: 900
-      Environment:
-        Variables:
-          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTableName
-          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
-      CodeUri: ../source/lambda_functions/s3_recording_trigger
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W89
-            reason: Customer can use VPC if desired
-                        
   ##########################################################################
   # CodeBuild
   ##########################################################################
@@ -883,6 +805,30 @@ Resources:
       InternetGatewayId:
         Ref: TranscribingVPCIGW
 
+  SecretsManagerAPIKey:
+    Type: AWS::SecretsManager::Secret
+    Properties: 
+      Description: "API Key and client secret for Genesys Audiohook"
+      Name: !Sub "${AWS::StackName}/genesys/audiohook/wss/apikey"
+      GenerateSecretString: 
+          GenerateStringKey: "apikey"
+          SecretStringTemplate: '{ "api": "audiohook" }'
+          PasswordLength: 32
+          RequireEachIncludedType: true
+          ExcludePunctuation: true
+   
+  SecretsManagerAPIClientSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties: 
+      Description: "API Key and client secret for Genesys Audiohook"
+      Name: !Sub "${AWS::StackName}/genesys/audiohook/wss/clientsecret"
+      GenerateSecretString: 
+          GenerateStringKey: "clientsecret"
+          SecretStringTemplate: '{ "api": "audiohook" }'
+          PasswordLength: 44
+          RequireEachIncludedType: true
+          ExcludePunctuation: true
+
   ##########################################################################
   # ELB
   ##########################################################################
@@ -1053,7 +999,9 @@ Resources:
               - dynamodb:PutItem
             Effect: Allow
             Resource:
-              - !Ref EventSourcingTableArn
+              - !Sub 
+                - "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}"
+                - tableName: !Ref EventSourcingTableName
           - Action:
               - transcribe:DeleteTranscriptionJob
               - transcribe:GetTranscriptionJob
@@ -1099,8 +1047,6 @@ Resources:
               Value: '8080'
             - Name: EVENT_SOURCING_TABLE_NAME
               Value: !Ref EventSourcingTableName
-            - Name: EVENT_SOURCING_TABLE_ARN
-              Value: !Ref EventSourcingTableArn
             - Name: EXPIRATION_IN_DAYS
               Value: !Ref DynamoDbExpirationInDays
             - Name: SAVE_PARTIAL_TRANSCRIPTS
@@ -1223,14 +1169,14 @@ Resources:
             Ref: TranscribingAudiohookLoadBalancerListenerTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           SecurityGroups:
             - Fn::GetAtt:
                 - TranscriberAudiohookFargateServiceSecurityGroup
                 - GroupId
           Subnets:
-            - Ref: TranscribingVPCPublicSubnet1Subnet
-            - Ref: TranscribingVPCPublicSubnet2Subnet
+            - Ref: TranscribingVPCPrivateSubnet1Subnet
+            - Ref: TranscribingVPCPrivateSubnet2Subnet
       TaskDefinition:
         Ref: TranscriberAudiohookTaskDef
     DependsOn:
