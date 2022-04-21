@@ -8,9 +8,11 @@ import { createMonoWavWriter, createWavWriter } from './wav-writer-demo';
 import { initiateRequestAuthentication } from './authenticator';
 import { queryCanonicalizedHeaderField } from './httpsignature';
 import { addStreamToLCA } from './stream-to-lca';
+import { writeRecordingUrlToDynamo } from './lca/lca';
+
 import dotenv from 'dotenv';
 dotenv.config();
-console.dir(process.env);
+
 const isDev = process.env['NODE_ENV'] !== 'production';
 
 const server = fastify({
@@ -142,6 +144,15 @@ server.get('/api/v1/audiohook/ws', { websocket: true }, (connection, request) =>
         createWavWriter(
             fileLogRoot, 
             (filename, samplesWritten) => {
+                (async () => {
+                    await writeRecordingUrlToDynamo({
+                        callId: recorder.session.id,
+                        eventType: 'ADD_S3_RECORDING_URL',
+                        recordingsBucket: recordingS3Bucket ?? '',
+                        recordingsKeyPrefix: recordingKeyPrefix ?? '',
+                        recordingsKey: filename
+                    }); 
+                })(); 
                 logger.info(`Wrote ${samplesWritten} samples to ${filename}`);
             },
             'L16'

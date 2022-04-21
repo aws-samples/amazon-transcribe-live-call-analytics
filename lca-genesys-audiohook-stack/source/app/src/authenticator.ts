@@ -8,7 +8,38 @@ import {
     withFailure,
     queryCanonicalizedHeaderField
 } from './httpsignature';
+import { 
+    SecretsManagerClient, 
+    GetSecretValueCommand, 
+    GetSecretValueCommandInput,
+    GetSecretValueCommandOutput
+} from '@aws-sdk/client-secrets-manager';
+import dotenv from 'dotenv';
+dotenv.config();
 
+type SMAPIKey = { apikey: string, api: string };
+type SMClientSecret = { clientsecret: string, api: string};
+
+const awsRegion: string = process.env['AWS_REGION'] || 'us-east-1';
+const apikeyArn: string = process.env['API_KEY_ARN'] || '';
+const apiclientsecretArn: string = process.env['CLIENT_SECRET_ARN'] || ''; 
+
+const retrieveSecret = async (smArn: string): Promise<string> => {
+
+    const smClient = new SecretsManagerClient({ region: awsRegion });
+    const cmdInput: GetSecretValueCommandInput = {
+        SecretId: smArn
+    };
+    const smCmd = new GetSecretValueCommand(cmdInput);
+
+    try {
+        const smRes: GetSecretValueCommandOutput =  await smClient.send(smCmd);
+        const secret = smRes.SecretString || '';
+        return secret;
+    } catch (err) {
+        return '';
+    }
+};
 
 const verifyRequestSignature = (request: IncomingMessage, logger?: Logger): Promise<VerifyResult> => {
     return verifySignature({
@@ -43,10 +74,13 @@ const verifyRequestSignature = (request: IncomingMessage, logger?: Logger): Prom
             }
 
             //TODO: Replace hard code API key with secrets manager
-            if (parameters.keyid === 'SGVsbG8sIEkgYW0gdGhlIEFQSSBrZXkh') {
+            const smAPIKey:SMAPIKey = JSON.parse(await retrieveSecret(apikeyArn));
+            const smClientSecret:SMClientSecret = JSON.parse(await retrieveSecret(apiclientsecretArn));
+           
+            if (parameters.keyid === smAPIKey.apikey && smAPIKey.api === 'audiohook') {
                 return {
                     code: 'GOODKEY',
-                    key: Buffer.from('TXlTdXBlclNlY3JldEtleVRlbGxOby0xITJAMyM0JDU=', 'base64')
+                    key: Buffer.from(smClientSecret.clientsecret, 'base64')
                 };
             } else {
                 // Wrong API Key. We use a dummy of the same size as what we'd expect and perform a signature check.
@@ -76,15 +110,6 @@ export const initiateRequestAuthentication = (session: Session, request: Incomin
         }
         return true;
     });
-
-    //TODO: The hard coded api validation is used only for Dev/testing. To be removed before production
-    const apiKey = queryCanonicalizedHeaderField(request.headers, 'x-api-key');
-    if (apiKey === '3783cc5c3ef91bc25ccd2e39a7a2b4c8') {
-
-        // Test API key that does not require a signature check
-        session.logger.warn('WARNING - This session has "disable signature check" API key!');
-        return;
-    }
 
     // Initiate the signature verification asynchronously and attach an authentication handler for it.
     // The authentication handler will then wait until the signature verification has completed 

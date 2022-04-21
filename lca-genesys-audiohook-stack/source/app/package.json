@@ -19,6 +19,7 @@
   "keywords": [],
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.67.0",
+    "@aws-sdk/client-secrets-manager": "^3.74.0",
     "@aws-sdk/client-transcribe-streaming": "^3.67.0",
     "aws-sdk": "^2.1087.0",
     "dotenv": "^16.0.0",

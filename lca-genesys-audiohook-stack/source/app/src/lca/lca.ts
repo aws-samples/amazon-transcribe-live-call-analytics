@@ -12,7 +12,7 @@
 // # See the License for the specific language governing permissions and
 // # limitations under the License.
 
-import { CallEvent, CallEventStatus } from './entities-lca';
+import { CallEvent, CallEventStatus, CallRecordingEvent } from './entities-lca';
 import {
     DynamoDBClient,
     PutItemCommand
@@ -23,13 +23,11 @@ dotenv.config();
 
 const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
 const ddbTableName = process.env['EVENT_SOURCING_TABLE_NAME'] || null;
-// const ddbTableArn = process.env['EVENT_SOURCING_TABLE_NAME'] || null;
 const expireInDays = Number(process.env['EXPIRATION_IN_DAYS']) || 90;
 const savePartial = process.env['SAVE_PARTIAL_TRANSCRIPTS'] === 'true';
 
 const dynamoClient = new DynamoDBClient({ region: awsRegion });
 export const writeCallEventToDynamo = async (callEvent: CallEvent ) => {
-    console.dir(callEvent);
 
     const now = new Date().toISOString();
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
@@ -57,9 +55,38 @@ export const writeCallEventToDynamo = async (callEvent: CallEvent ) => {
     }
 };
 
+export const writeRecordingUrlToDynamo = async (recordingEvent: CallRecordingEvent) => {
+
+    const url = new URL(recordingEvent.recordingsKeyPrefix+recordingEvent.recordingsKey, `https://${recordingEvent.recordingsBucket}.s3.${awsRegion}.amazonaws.com`);
+    const recordingUrl = url.href;
+    
+    const now = new Date();
+    const currentTimeStamp = now.toISOString();
+    const expiresAfter = Math.ceil((Number(now) + expireInDays * 24 * 3600 * 1000) / 1000,);
+  
+    const putParams = {
+        TableName: ddbTableName ?? '',
+        Item : {
+            PK: { 'S' : `ce#${recordingEvent.callId}` },  
+            SK: { 'S' : `ts#${currentTimeStamp}#et#${recordingEvent.eventType}` },
+            CallId: { 'S' : recordingEvent.callId },
+            ExpiresAfter: { 'N' : expiresAfter.toString() },
+            CreatedAt: { 'S' : currentTimeStamp },
+            RecordingUrl: { 'S' : recordingUrl },
+            EventType: { 'S' : recordingEvent.eventType },
+        }
+    };
+    
+    const putCmd = new PutItemCommand(putParams);
+  
+    try {
+        await dynamoClient.send(putCmd);
+    } catch (error) {
+        console.error(error);  
+    }
+};
 
 export const writeStatusToDynamo = async (status: CallEventStatus) => {
-    console.dir(status);
 
     const now = new Date().toISOString();
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
@@ -85,6 +112,7 @@ export const writeStatusToDynamo = async (status: CallEventStatus) => {
         console.error(err);
     }
 };
+
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: string, transactionId:string | undefined) {
 
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
@@ -103,7 +131,7 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const transid = transactionId || '';
             const { Transcript: transcript } = transcribeMessageJson.Transcript.Results[0].Alternatives[0];
             const ispartial: boolean = result.IsPartial;
-            console.log(channel, ': ',transcript);
+            // console.log(channel, ': ',transcript);
             const now = new Date().toISOString();
             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
             const eventType = 'ADD_TRANSCRIPT_SEGMENT';

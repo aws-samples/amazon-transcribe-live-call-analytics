@@ -28,3 +28,11 @@ export type CallEventStatus = {
     channel: string,
     transactionId: string | undefined
 };
+
+export type CallRecordingEvent = {
+    callId: string,
+    eventType: string,
+    recordingsBucket: string,
+    recordingsKeyPrefix: string,
+    recordingsKey: string
+}
