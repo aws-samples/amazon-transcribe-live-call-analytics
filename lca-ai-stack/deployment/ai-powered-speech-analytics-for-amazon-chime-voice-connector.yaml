@@ -604,6 +604,8 @@ Resources:
   ##########################################################################
 
   CallTranscriberFunction:
+    Architecture:
+      - arm64
     Type: AWS::Serverless::Function
     Properties:
       Description: >-
@@ -829,6 +831,9 @@ Resources:
           IS_SENTIMENT_ANALYSIS_ENABLED: !Ref IsSentimentAnalysisEnabled
 
   CallEventStreamProcessLayer:
+    CompatibleArchitectures:
+      - x86_64
+      - arm64
     Type: AWS::Serverless::LayerVersion
     Metadata:
       BuildMethod: python3.9
