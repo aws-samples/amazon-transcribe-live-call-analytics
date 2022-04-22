@@ -606,6 +606,8 @@ Resources:
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - arm64
       Description: >-
         AWS Lambda Function that will be triggered when a new call starts. This will
         read from the KVS streams, stitch the channels together, send audio to
