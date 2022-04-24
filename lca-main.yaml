@@ -252,6 +252,28 @@ Mappings:
       Value: en
     es-US:
       Value: es
+    en-GB:
+      Value: en
+    fr-CA:
+      Value: fr
+    fr-FR:
+      Value: fr
+    en-AU:
+      Value: en
+    it-IT:
+      Value: it
+    de-DE:
+      Value: de
+    pt-BR:
+      Value: pt
+    ja-JP:
+      Value: ja
+    ko-KR:
+      Value: ko
+    zh-CN:
+      Value: zh
+
+
 
 Resources:
 
