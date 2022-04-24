@@ -86,16 +86,16 @@ Parameters:
     AllowedValues:
       - en-US
       - es-US
-      # - en-GB
-      # - fr-CA
-      # - fr-FR
-      # - en-AU
-      # - it-IT
-      # - de-DE
-      # - pt-BR
-      # - ja-JP
-      # - ko-KR
-      # - zh-CN
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
 
   TranscribePiiEntityTypes:
     Type: String

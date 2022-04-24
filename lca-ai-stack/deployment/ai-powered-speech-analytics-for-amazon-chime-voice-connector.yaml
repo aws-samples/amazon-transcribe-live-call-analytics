@@ -72,16 +72,16 @@ Parameters:
     AllowedValues:
       - en-US
       - es-US
-      # - en-GB
-      # - fr-CA
-      # - fr-FR
-      # - en-AU
-      # - it-IT
-      # - de-DE
-      # - pt-BR
-      # - ja-JP
-      # - ko-KR
-      # - zh-CN
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
 
   TranscribePiiEntityTypes:
     Type: String
@@ -117,16 +117,16 @@ Parameters:
     AllowedValues:
       - en
       - es
-      # - fr
-      # - de
-      # - it
-      # - pt
-      # - ar
+      - fr
+      - de
+      - it
+      - pt
+      - ar
       # - hi
-      # - ja
-      # - ko
-      # - zh
-      # - zh-TW
+      - ja
+      - ko
+      - zh
+      #- zh-TW
 
   CloudFrontPriceClass:
     Type: String
