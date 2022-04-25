@@ -619,6 +619,7 @@ Resources:
       Timeout: 900
       Environment:
         Variables:
+          BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
           EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
