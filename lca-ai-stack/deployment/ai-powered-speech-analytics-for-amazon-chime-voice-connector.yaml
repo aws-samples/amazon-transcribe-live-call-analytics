@@ -675,11 +675,6 @@ Resources:
                 - transcribe:StartStreamTranscription
                 - transcribe:StartTranscriptionJob
                 Resource: "*"
-              - Effect: Allow
-                Action:
-                - lambda:InvokeFunction
-                Resource: 
-                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*-CallTranscriberFunction-*"
               - Action:
                   - "kinesisvideo:Describe*"
                   - "kinesisvideo:Get*"
@@ -745,7 +740,15 @@ Resources:
         - Id: CallTranscriberTarget
           Arn: !GetAtt CallTranscriberFunction.Arn
       State: "ENABLED"
-  
+
+  # Permission for Call Transcriber to invoke itself
+  CallTranscriberPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CallTranscriberFunction
+      Principal: !GetAtt CallTranscriberFunctionRole.Arn
+
   ##########################################################################
   # Event Sourcing Processor
   ##########################################################################
