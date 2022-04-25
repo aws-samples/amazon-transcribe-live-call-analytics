@@ -14,7 +14,7 @@
 ---
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Amazon Transcribe Live Call Analytics - LCA (v0.2.1)
+Description: Amazon Transcribe Live Call Analytics - LCA (v0.3.0)
 
 Parameters:
 
