@@ -31,6 +31,7 @@ const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-re
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
 const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || "90"); 
+const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || "128"); 
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || "true") === 'true';
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || "true") === "true";
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
@@ -321,7 +322,7 @@ const runKVSWorker = function (workerData, streamPipe) {
 
 const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn, sessionId, lastAgentFragment, lastCallerFragment) { 
   let firstChunkToTranscribe = true;
-  const passthroughStream = new stream.PassThrough({ highWaterMark: 128 });
+  const passthroughStream = new stream.PassThrough({ highWaterMark: BUFFER_SIZE });
   const audioStream = async function* () {
     try {
       for await (const payloadChunk of passthroughStream) {
