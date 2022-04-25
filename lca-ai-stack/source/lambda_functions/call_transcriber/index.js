@@ -103,6 +103,15 @@ const writeToS3 = async function(sourceFile, destBucket, destPrefix, destKey) {
   return data; 
 }
 
+const deleteTempFile = async function(sourceFile) {
+  try {
+    console.log("deleting tmp file");
+    await fs.promises.unlink(sourceFile);
+  } catch(err) {
+    console.log("error deleting: ", err);
+  }
+}
+
 const writeTranscriptionSegment = async function(transcriptionEvent, callId, streamArn, transactionId) {
 
   //only write if there is more than 0
@@ -441,6 +450,9 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
 //async function handler (event) {
 const handler = async function (event, context) {
   if(!event.detail.lambdaCount) event.detail.lambdaCount = 0;
+  if(event.detail.lambdaCount > 30) {
+    console.log("Stopping due to runaway recursive Lambda.");
+  }
 
   console.log(JSON.stringify(event));
   await writeCallEventToDynamo(event);
@@ -498,6 +510,7 @@ const handler = async function (event, context) {
     
     //regardless, write to s3 before completely exiting
     await writeToS3(TEMP_FILE_PATH + result.tempFileName, OUTPUT_BUCKET, RAW_FILE_PREFIX, result.tempFileName);
+    await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
 
     if(!timeToStop) {
       await mergeFiles.mergeFiles({
