@@ -345,7 +345,7 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
     AudioStream: audioStream(),
   }
   
-  if(IS_CONTENT_REDACTION_ENABLED) {
+  if(IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
     tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
     if(PII_ENTITY_TYPES) tsParams.PiiEntityTypes = PII_ENTITY_TYPES;
   }
@@ -355,17 +355,7 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
   }
   
   const tsCmd = new StartStreamTranscriptionCommand(tsParams);
-  
-  tsClient.middlewareStack.add(
-    (next, context) => (args) => {
-      args.request.headers["x-amzn-transcribe-enable-raised-voice-detection"] = "true";
-      console.log("\n -- printed from inside middleware -- \n");
-      return next(args);
-    },
-    {
-      step: "build"
-    }
-  );
+
   
   const tsResponse = await tsClient.send(tsCmd);
   //console.log(tsResponse);
