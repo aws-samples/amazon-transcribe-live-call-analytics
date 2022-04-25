@@ -118,7 +118,6 @@ const writeTranscriptionSegment = async function(transcriptionEvent, callId, str
   const result = transcriptionEvent.TranscriptEvent.Transcript.Results[0];
   if(!result) return;
   if(result.IsPartial == true && !SAVE_PARTIAL_TRANSCRIPTS) {
-    console.log("Not saving partial.");
     return;
   }
   const transcript = result.Alternatives[0];
@@ -148,8 +147,6 @@ const writeTranscriptionSegment = async function(transcriptionEvent, callId, str
       ExpiresAfter: {'N': expiration.toString() }
     }
   }
-  if(!result.IsPartial) console.log(`${channel}: ${result.Alternatives[0].Transcript}`)
-  //console.log(putParams);
   const putCmd = new PutItemCommand(putParams);
   try {
     const data = await dynamoClient.send(putCmd);
@@ -311,7 +308,6 @@ const runKVSWorker = function (workerData, streamPipe) {
  const readTranscripts = async function (tsStream, callId, callerStreamArn, sessionId) {
   try {
     for await (const chunk of tsStream) {
-      console.log(JSON.stringify(chunk));
       writeTranscriptionSegment(chunk, callId, callerStreamArn, sessionId);
     }
   }
