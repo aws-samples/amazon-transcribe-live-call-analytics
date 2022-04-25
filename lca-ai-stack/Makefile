@@ -85,6 +85,14 @@ install-node-dependencies: $(OUT_DIR)/$(PACKAGE_JSON)
 endif
 .PHONY: install-node-dependencies
 
+DOCKER_MULTIARCH := $(OUT_DIR)/docker-multiarch.txt
+$(DOCKER_MULTIARCH): | $(OUT_DIR)
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes | \
+		tee '$(@)'
+
+install-docker-multiarch: $(DOCKER_MULTIARCH)
+.PHONY: install-docker-multiarch
+
 install: install-python-venv install-python-requirements install-node-dependencies
 .PHONY: install
 
@@ -167,7 +175,7 @@ $(SAM_BUILD_TOML_FILE): $(BUILD_SOURCES) | $(SAM_CMD)
 SAM_BUILD_TEMPLATE_FILE := $(SAM_BUILD_DIR)/build/template.yaml
 $(SAM_BUILD_TEMPLATE_FILE): $(SAM_BUILD_TOML_FILE)
 
-build: $(SAM_BUILD_TEMPLATE_FILE)
+build: $(SAM_BUILD_TEMPLATE_FILE) $(DOCKER_MULTIARCH)
 .PHONY: build
 
 ##########################################################################
@@ -251,6 +259,9 @@ $(PACKAGE_RELEASE_OUT_FILE): $(PACKAGE_RELEASE_REPLACE_OUT_FILE) | $(OUT_DIR)
 	  echo '[ERROR] need to set env var: RELEASE_S3_BUCKET_BASE' && \
 	  exit 1 || true
 
+	@echo '[INFO] configuring docker multiarchitecture for sam cross platform build'
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
 	@echo '[INFO] sam building template file for release $(RELEASE_VERSION)'
 	sam build \
 		--use-container \
@@ -284,7 +295,7 @@ $(RELEASE_UPLOAD_FILE): $(PACKAGE_RELEASE_OUT_FILE) $(BUNDLE_RELEASE_FILE) | $(O
 	@echo '[INFO] CloudFormation Console Launch URL: https://$(AWS_REGION).console.aws.amazon.com/cloudformation/home?region=$(AWS_REGION)#/stacks/create/review?templateURL=https://$(RELEASE_S3_BUCKET).s3.amazonaws.com/$(RELEASE_S3_PREFIX)/$(RELEASE_VERSION)/template.yaml'
 
 release: $(RELEASE_UPLOAD_FILE)
-.PHONY: releaase
+.PHONY: release
 
 ##########################################################################
 # deploy
