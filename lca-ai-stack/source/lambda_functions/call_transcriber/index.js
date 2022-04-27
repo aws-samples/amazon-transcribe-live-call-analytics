@@ -339,7 +339,6 @@ const go = async function (
 
   const tsClient = new TranscribeStreamingClient({ region: REGION });
   const tsParams = {
-    SessionId: sessionId,
     LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
     MediaEncoding: 'pcm',
     MediaSampleRateHertz: 8000,
@@ -347,6 +346,10 @@ const go = async function (
     EnableChannelIdentification: true,
     AudioStream: audioStream(),
   };
+
+  if(sessionId !== undefined) {
+    tsParams.sessionId = sessionId;
+  }
 
   if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
     tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
