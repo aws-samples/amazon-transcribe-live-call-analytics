@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 // TODO: Add Metrics & Logger from Lambda Powertools
 // TODO: Retries and resiliency
 // TODO: Debug why sometimes it is now working twice
-// TODO: Decouple transcribe and lca
-
 
 const { DynamoDBClient, QueryCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -31,8 +29,9 @@ const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
-const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || '90');
-const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128');
+const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || '90', 10);
+const PARTIAL_EXPIRATION = parseInt(process.env.PARTIAL_EXPIRATION || '1', 10);
+const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || 'true') === 'true';
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
@@ -47,7 +46,7 @@ const EVENT_TYPE = {
   FAILED: 'ERROR',
   CONTINUE: 'CONTINUE',
 };
-const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT) || 720000;
+const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
 
 const s3Client = new S3Client({ region: REGION });
 const dynamoClient = new DynamoDBClient({ region: REGION });
@@ -58,11 +57,15 @@ let stopTimer;
 let keepAliveTimer;
 let keepAliveChunk = Buffer.alloc(2, 0);
 
+const getExpiration = function (numberOfDays){
+  return Math.round(Date.now() / 1000) + numberOfDays * 24 * 3600;
+};
+
 const writeS3Url = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
 
   const now = new Date().toISOString();
-  const expiration = Math.round(Date.now() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = 'ADD_S3_RECORDING_URL';
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
 
@@ -133,7 +136,8 @@ const writeTranscriptionSegment = async function (
 
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
-  const expiration = Math.round(Date.now() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION)
+      : getExpiration(EXPIRATION_IN_DAYS);
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putParams = {
@@ -165,7 +169,7 @@ const writeTranscriptionSegment = async function (
 
 const writeCallEventToDynamo = async function (callEvent) {
   const startTime = new Date(callEvent.detail.startTime);
-  const expiration = Math.round(startTime.getTime() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = getExpirationEXPIRATION_IN_DAYS);
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
@@ -196,7 +200,7 @@ const writeCallEventToDynamo = async function (callEvent) {
 
 const writeStatusToDynamo = async function (channel, status, callId, streamArn, transactionId) {
   const now = new Date().toISOString();
-  const expiration = Math.round(Date.now() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const putParams = {
     TableName: EVENT_SOURCING_TABLE_NAME,
     Item: {
@@ -350,7 +354,7 @@ const go = async function (
     AudioStream: audioStream(),
   };
 
-  if(sessionId !== undefined) {
+  if (sessionId !== undefined) {
     tsParams.sessionId = sessionId;
   }
 
@@ -367,8 +371,9 @@ const go = async function (
   const tsResponse = await tsClient.send(tsCmd);
   // console.log(tsResponse);
   sessionId = tsResponse.SessionId;
-  if (lastAgentFragment === undefined)
+  if (lastAgentFragment === undefined) {
     writeStatusToDynamo('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
+  }    
   else writeStatusToDynamo('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
   console.log('creating readable from transcript stream');
   const tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
@@ -377,7 +382,7 @@ const go = async function (
   const agentBlock = new BlockStream(2);
   const callerBlock = new BlockStream(2);
   const combinedStream = new PassThrough();
-  const combinedStreamBlock = new BlockStream(4); // TODO: Calculate this size based on 250ms 'chunks'
+  const combinedStreamBlock = new BlockStream(4);
   combinedStream.pipe(combinedStreamBlock);
   combinedStreamBlock.on('data', (chunk) => {
     passthroughStream.write(chunk);
