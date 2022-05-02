@@ -558,6 +558,17 @@ Resources:
       EnableDnsSupport: true
       InstanceTenancy: default
 
+  TranscribingVPCIGW:
+    Type: AWS::EC2::InternetGateway
+
+  TranscribingVPCVPCGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: TranscribingVPC
+      InternetGatewayId:
+        Ref: TranscribingVPCIGW
+
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -621,6 +632,9 @@ Resources:
           - 0
           - Fn::GetAZs: ""
       MapPublicIpOnLaunch: true
+    DependsOn:
+      - TranscribingVPCVPCGW
+    
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -632,7 +646,7 @@ Resources:
     Properties:
       VpcId:
         Ref: TranscribingVPC
-
+    
   TranscribingVPCPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -678,6 +692,8 @@ Resources:
           - 1
           - Fn::GetAZs: ""
       MapPublicIpOnLaunch: true
+    DependsOn:
+      - TranscribingVPCVPCGW
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -794,16 +810,7 @@ Resources:
       NatGatewayId:
         Ref: TranscribingVPCPublicSubnet2NATGateway
 
-  TranscribingVPCIGW:
-    Type: AWS::EC2::InternetGateway
 
-  TranscribingVPCVPCGW:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-      InternetGatewayId:
-        Ref: TranscribingVPCIGW
 
   SecretsManagerAPIKey:
     Type: AWS::SecretsManager::Secret
@@ -1002,6 +1009,19 @@ Resources:
               - !Sub 
                 - "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}"
                 - tableName: !Ref EventSourcingTableName
+          - Action: 
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+            Effect: Allow
+            Resource:
+              - !Ref SecretsManagerAPIClientSecret
+              - !Ref SecretsManagerAPIKey
+          - Action:
+              - secretsmanager:ListSecrets
+            Effect: Allow
+            Resource: "*"
           - Action:
               - transcribe:DeleteTranscriptionJob
               - transcribe:GetTranscriptionJob

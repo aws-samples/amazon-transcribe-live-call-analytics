@@ -74,9 +74,10 @@ const verifyRequestSignature = (request: IncomingMessage, logger?: Logger): Prom
             }
 
             const smAPIKey:SMAPIKey = JSON.parse(await retrieveSecret(apikeyArn));
-            const smClientSecret:SMClientSecret = JSON.parse(await retrieveSecret(apiclientsecretArn));
            
             if (parameters.keyid === smAPIKey.apikey && smAPIKey.api === 'audiohook') {
+                const smClientSecret:SMClientSecret = JSON.parse(await retrieveSecret(apiclientsecretArn));
+                
                 return {
                     code: 'GOODKEY',
                     key: Buffer.from(smClientSecret.clientsecret, 'base64')

@@ -54,7 +54,8 @@ export const addStreamToLCA = (session: Session) => {
             region: awsRegion 
         });
 
-        const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio');
+        const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio'); 
+        
         const transcribeInput = async function* () {
             for await (const audiodata of audioDataIterator) {
                 const data = audiodata.as('L16').audio.data;
@@ -108,6 +109,7 @@ export const addStreamToLCA = (session: Session) => {
                 console.log(err);
             });
 
+        
         return async () => {
             
             await writeStatusToDynamo({
