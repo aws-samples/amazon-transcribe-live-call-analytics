@@ -39,6 +39,7 @@ const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US'
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
+const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -54,6 +55,8 @@ const lambdaClient = new LambdaClient({ region: REGION });
 
 let timeToStop = false;
 let stopTimer;
+let keepAliveTimer;
+let keepAliveChunk = Buffer.alloc(2, 0);
 
 const writeS3Url = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
@@ -411,6 +414,15 @@ const go = async function (
     agentWorker.worker.postMessage('Agent, Time to stop!');
     callerWorker.worker.postMessage('Caller, Time to stop!');
   }, TIMEOUT);
+
+  keepAliveTimer = setTimeout(() => {
+    if (timeToStop === true) {
+      clearTimeout(keepAliveTimer);
+    } else {
+      agentBlock.write(keepAliveChunk);
+      callerBlock.write(keepAliveChunk);
+    }
+  }, KEEP_ALIVE);
 
   const transcribePromise = readTranscripts(tsStream, callId, callerStreamArn, sessionId);
 
