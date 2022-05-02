@@ -72,16 +72,16 @@ Parameters:
     AllowedValues:
       - en-US
       - es-US
-      # - en-GB
-      # - fr-CA
-      # - fr-FR
-      # - en-AU
-      # - it-IT
-      # - de-DE
-      # - pt-BR
-      # - ja-JP
-      # - ko-KR
-      # - zh-CN
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
 
   TranscribePiiEntityTypes:
     Type: String
@@ -117,16 +117,16 @@ Parameters:
     AllowedValues:
       - en
       - es
-      # - fr
-      # - de
-      # - it
-      # - pt
-      # - ar
+      - fr
+      - de
+      - it
+      - pt
+      - ar
       # - hi
-      # - ja
-      # - ko
-      # - zh
-      # - zh-TW
+      - ja
+      - ko
+      - zh
+      #- zh-TW
 
   CloudFrontPriceClass:
     Type: String
@@ -606,6 +606,8 @@ Resources:
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - arm64
       Description: >-
         AWS Lambda Function that will be triggered when a new call starts. This will
         read from the KVS streams, stitch the channels together, send audio to
@@ -617,6 +619,7 @@ Resources:
       Timeout: 900
       Environment:
         Variables:
+          BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
           EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
@@ -673,11 +676,6 @@ Resources:
                 - transcribe:StartStreamTranscription
                 - transcribe:StartTranscriptionJob
                 Resource: "*"
-              - Effect: Allow
-                Action:
-                - lambda:InvokeFunction
-                Resource: 
-                  - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*-CallTranscriberFunction-*"
               - Action:
                   - "kinesisvideo:Describe*"
                   - "kinesisvideo:Get*"
@@ -743,7 +741,15 @@ Resources:
         - Id: CallTranscriberTarget
           Arn: !GetAtt CallTranscriberFunction.Arn
       State: "ENABLED"
-  
+
+  # Permission for Call Transcriber to invoke itself
+  CallTranscriberPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CallTranscriberFunction
+      Principal: !GetAtt CallTranscriberFunctionRole.Arn
+
   ##########################################################################
   # Event Sourcing Processor
   ##########################################################################

@@ -31,6 +31,7 @@ const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-re
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
 const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || "90"); 
+const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || "128"); 
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || "true") === 'true';
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || "true") === "true";
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
@@ -103,13 +104,21 @@ const writeToS3 = async function(sourceFile, destBucket, destPrefix, destKey) {
   return data; 
 }
 
+const deleteTempFile = async function(sourceFile) {
+  try {
+    console.log("deleting tmp file");
+    await fs.promises.unlink(sourceFile);
+  } catch(err) {
+    console.log("error deleting: ", err);
+  }
+}
+
 const writeTranscriptionSegment = async function(transcriptionEvent, callId, streamArn, transactionId) {
 
   //only write if there is more than 0
   const result = transcriptionEvent.TranscriptEvent.Transcript.Results[0];
   if(!result) return;
   if(result.IsPartial == true && !SAVE_PARTIAL_TRANSCRIPTS) {
-    console.log("Not saving partial.");
     return;
   }
   const transcript = result.Alternatives[0];
@@ -139,8 +148,6 @@ const writeTranscriptionSegment = async function(transcriptionEvent, callId, str
       ExpiresAfter: {'N': expiration.toString() }
     }
   }
-  if(!result.IsPartial) console.log(`${channel}: ${result.Alternatives[0].Transcript}`)
-  //console.log(putParams);
   const putCmd = new PutItemCommand(putParams);
   try {
     const data = await dynamoClient.send(putCmd);
@@ -302,7 +309,6 @@ const runKVSWorker = function (workerData, streamPipe) {
  const readTranscripts = async function (tsStream, callId, callerStreamArn, sessionId) {
   try {
     for await (const chunk of tsStream) {
-      console.log(JSON.stringify(chunk));
       writeTranscriptionSegment(chunk, callId, callerStreamArn, sessionId);
     }
   }
@@ -316,7 +322,7 @@ const runKVSWorker = function (workerData, streamPipe) {
 
 const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn, sessionId, lastAgentFragment, lastCallerFragment) { 
   let firstChunkToTranscribe = true;
-  const passthroughStream = new stream.PassThrough({ highWaterMark: 128 });
+  const passthroughStream = new stream.PassThrough({ highWaterMark: BUFFER_SIZE });
   const audioStream = async function* () {
     try {
       for await (const payloadChunk of passthroughStream) {
@@ -345,7 +351,7 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
     AudioStream: audioStream(),
   }
   
-  if(IS_CONTENT_REDACTION_ENABLED) {
+  if(IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
     tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
     if(PII_ENTITY_TYPES) tsParams.PiiEntityTypes = PII_ENTITY_TYPES;
   }
@@ -355,17 +361,7 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
   }
   
   const tsCmd = new StartStreamTranscriptionCommand(tsParams);
-  
-  tsClient.middlewareStack.add(
-    (next, context) => (args) => {
-      args.request.headers["x-amzn-transcribe-enable-raised-voice-detection"] = "true";
-      console.log("\n -- printed from inside middleware -- \n");
-      return next(args);
-    },
-    {
-      step: "build"
-    }
-  );
+
   
   const tsResponse = await tsClient.send(tsCmd);
   //console.log(tsResponse);
@@ -451,6 +447,9 @@ const go = async function (callId, lambdaCount, agentStreamArn, callerStreamArn,
 //async function handler (event) {
 const handler = async function (event, context) {
   if(!event.detail.lambdaCount) event.detail.lambdaCount = 0;
+  if(event.detail.lambdaCount > 30) {
+    console.log("Stopping due to runaway recursive Lambda.");
+  }
 
   console.log(JSON.stringify(event));
   await writeCallEventToDynamo(event);
@@ -508,6 +507,7 @@ const handler = async function (event, context) {
     
     //regardless, write to s3 before completely exiting
     await writeToS3(TEMP_FILE_PATH + result.tempFileName, OUTPUT_BUCKET, RAW_FILE_PREFIX, result.tempFileName);
+    await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
 
     if(!timeToStop) {
       await mergeFiles.mergeFiles({
