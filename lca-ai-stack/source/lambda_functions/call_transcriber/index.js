@@ -420,9 +420,9 @@ const go = async function (
     callerWorker.worker.postMessage('Caller, Time to stop!');
   }, TIMEOUT);
 
-  keepAliveTimer = setTimeout(() => {
+  keepAliveTimer = setInterval(() => {
     if (timeToStop === true) {
-      clearTimeout(keepAliveTimer);
+      clearInterval(keepAliveTimer);
     } else {
       agentBlock.write(keepAliveChunk);
       callerBlock.write(keepAliveChunk);
