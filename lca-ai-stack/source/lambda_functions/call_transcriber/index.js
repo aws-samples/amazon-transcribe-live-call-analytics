@@ -23,6 +23,11 @@ const { PassThrough } = require('stream');
 const interleave = require('interleave-stream');
 const mergeFiles = require('./mergeFiles');
 
+const { EbmlStreamDecoder, EbmlTagId, EbmlTagPosition } = require('ebml-stream');
+const { KinesisVideoClient, GetDataEndpointCommand } = require('@aws-sdk/client-kinesis-video');
+const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
+
+
 const REGION = process.env.REGION || 'us-east-1';
 const { EVENT_SOURCING_TABLE_NAME } = process.env;
 const { OUTPUT_BUCKET } = process.env;
@@ -269,49 +274,99 @@ const getStreamsFromDynamo = async function (callId, agentArn, callerArn) {
   return resultArns;
 };
 
-// returns a promise, so we can await it
-const runKVSWorker = function (workerData, streamPipe) {
-  let newWorker;
 
-  const workerPromise = new Promise((resolve, reject) => {
-    console.log('instantiating worker');
-    newWorker = new Worker('./kvsWorker.js', { workerData });
-    console.log('done instantiating worker');
-    newWorker.on('message', (message) => {
-      if (message.type === 'chunk') {
-        // console.log('writing chunk to ffmpeg');
-        try {
-          streamPipe.write(message.chunk);
-        } catch (error) {
-          console.log('error writing to ffmpeg pipe', error);
-        }
-      } if (message.type === 'chunk') {
-        // console.log('writing chunk to ffmpeg');
-        try {
-          streamPipe.write(message.chunk);
-        } catch (error) {
-          console.log('error writing to ffmpeg pipe', error);
-        }
-      }
-      if (message.type === 'lastFragment') {
-        console.log('last fragment:', message.streamName, message.lastFragment);
-        resolve(message.lastFragment);
-      }
-      if (message.type === 'timeout') {
-        console.log('worker timeout:', message.streamName);
-        resolve(message.lastFragment);
-      }
-    });
-    newWorker.on('error', reject);
-    newWorker.on('exit', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Worker stopped with exit code ${code}`));
-      }
-    });
+const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
+  let timeToStop = false;
+  let actuallyStop = false;
+  let firstDecodeEbml = true;
+
+  let lastMessageTime;
+
+  console.log('inside readKVS worker', REGION, streamName, streamArn);
+  const decoder = new EbmlStreamDecoder({
+    bufferTagIds: [EbmlTagId.SimpleTag, EbmlTagId.SimpleBlock],
   });
-  workerPromise.worker = newWorker;
-  return workerPromise;
+  decoder.on('error', (error) => {
+    console.log('Decoder Error:', JSON.stringify(error));
+  });
+  decoder.on('data', (chunk) => {
+    lastMessageTime = Date().now;
+    if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
+      // this is the end of a segment. Lets forcefully stop if needed.
+      if (timeToStop) actuallyStop = true;
+    }
+    if (!timeToStop) {
+      if (chunk.id === EbmlTagId.SimpleTag) {
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_FRAGMENT_NUMBER') {
+          lastFragment = chunk.Children[1].data;
+        }
+      }
+      if (chunk.id === EbmlTagId.SimpleBlock) {
+        if (firstDecodeEbml) {
+          firstDecodeEbml = false;
+          console.log(`decoded ebml, simpleblock size:${chunk.size} stream: ${streamName}`);
+        }
+        try {
+          streamPipe.write(chunk.payload);
+        } catch (error) {
+          console.error('Error posting payload chunk', error);
+        }
+      }
+    }
+  }); // use this to find last fragment tag we received
+  decoder.on('end', () => {
+    // close stdio
+    console.log(streamName, 'Finished');
+    console.log(`Last fragment for ${streamName} ${lastFragment} total size: ${totalSize}`);
+  });
+  console.log(`Starting stream ${streamName}`);
+  const kvClient = new KinesisVideoClient({ REGION });
+  const getDataCmd = new GetDataEndpointCommand({ APIName: 'GET_MEDIA', StreamARN: streamArn });
+  const response = await kvClient.send(getDataCmd);
+  const mediaClient = new KinesisVideoMedia({ REGION, endpoint: response.DataEndpoint });
+  let fragmentSelector = { StreamARN: streamArn, StartSelector: { StartSelectorType: 'NOW' } };
+  if (lastFragment && lastFragment.length > 0) {
+    fragmentSelector = {
+      StreamARN: streamArn,
+      StartSelector: {
+        StartSelectorType: 'FRAGMENT_NUMBER',
+        AfterFragmentNumber: lastFragment,
+      },
+    };
+  }
+  const result = await mediaClient.getMedia(fragmentSelector);
+  const streamReader = result.Payload;
+
+  const timeout = setTimeout(() => {
+    // Check every 10 seconds if 5 minutes have passed
+    if (Date.now() - lastMessageTime > 1000 * 60 * 5) {
+      clearInterval(timeout);
+      streamReader.destroy();
+    }
+  }, 10000);
+
+  let totalSize = 0;
+  let firstKvsChunk = true;
+  try {
+    for await (const chunk of streamReader) {
+      if (firstKvsChunk) {
+        firstKvsChunk = false;
+        console.log(`${streamName} received chunk size: ${chunk.length}`);
+      }
+      totalSize += chunk.length;
+      decoder.write(chunk);
+      if (actuallyStop) break;
+    }
+  } catch (error) {
+    console.error('error writing to decoder', error);
+  } finally {
+    console.log(`Closing buffers ${streamName}`);
+    decoder.end();
+  }
+  
+  return lastFragment;
 };
+
 
 const readTranscripts = async function (tsStream, callId, callerStreamArn, sessionId) {
   try {
@@ -401,6 +456,11 @@ const go = async function (
 
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
+  
+  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
+  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
+  
+  /*
   const callerWorker = runKVSWorker(
     {
       region: REGION,
@@ -419,7 +479,7 @@ const go = async function (
       lastFragment: lastAgentFragment,
     },
     agentBlock,
-  );
+  );*/
 
   console.log('done starting workers');
 
