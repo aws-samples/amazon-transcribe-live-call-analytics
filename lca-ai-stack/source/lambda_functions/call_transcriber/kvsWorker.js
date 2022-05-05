@@ -14,6 +14,7 @@ console.log('inside', workerData.streamName, 'worker');
 
 let timeToStop = false;
 
+
 parentPort.on('message', (message) => {
   console.log('received message from parent', message);
   timeToStop = true;
@@ -23,6 +24,17 @@ parentPort.on('message', (message) => {
 const readKVS = async (region, streamName, streamArn, lastFragment) => {
   let actuallyStop = false;
   let firstDecodeEbml = true;
+
+  let lastMessageTime;
+
+  const timeout = setTimeout(() => {
+    // Check every 10 seconds if 5 minutes have passed
+    if (Date.now() - lastMessageTime > 1000 * 60 * 5) {
+      parentPort.postMessage({ type: 'timeout', streamName, lastFragment });
+      clearInterval(timeout);
+    }
+  }, 10000);
+
   console.log('inside readKVS worker', region, streamName, streamArn);
   const decoder = new EbmlStreamDecoder({
     bufferTagIds: [EbmlTagId.SimpleTag, EbmlTagId.SimpleBlock],
@@ -31,6 +43,7 @@ const readKVS = async (region, streamName, streamArn, lastFragment) => {
     console.log('Decoder Error:', JSON.stringify(error));
   });
   decoder.on('data', (chunk) => {
+    lastMessageTime = Date().now;
     if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
       // this is the end of a segment. Lets forcefully stop if needed.
       if (timeToStop) actuallyStop = true;

@@ -136,8 +136,7 @@ const writeTranscriptionSegment = async function (
 
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
-  const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION)
-      : getExpiration(EXPIRATION_IN_DAYS);
+  const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION) : getExpiration(EXPIRATION_IN_DAYS));
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putParams = {
@@ -169,7 +168,7 @@ const writeTranscriptionSegment = async function (
 
 const writeCallEventToDynamo = async function (callEvent) {
   const startTime = new Date(callEvent.detail.startTime);
-  const expiration = getExpirationEXPIRATION_IN_DAYS);
+  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
@@ -286,9 +285,20 @@ const runKVSWorker = function (workerData, streamPipe) {
         } catch (error) {
           console.log('error writing to ffmpeg pipe', error);
         }
+      } if (message.type === 'chunk') {
+        // console.log('writing chunk to ffmpeg');
+        try {
+          streamPipe.write(message.chunk);
+        } catch (error) {
+          console.log('error writing to ffmpeg pipe', error);
+        }
       }
       if (message.type === 'lastFragment') {
         console.log('last fragment:', message.streamName, message.lastFragment);
+        resolve(message.lastFragment);
+      }
+      if (message.type === 'timeout') {
+        console.log('worker timeout:', message.streamName);
         resolve(message.lastFragment);
       }
     });
