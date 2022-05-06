@@ -66,6 +66,10 @@ const getExpiration = function (numberOfDays){
   return Math.round(Date.now() / 1000) + numberOfDays * 24 * 3600;
 };
 
+const sleep = async function (msec) {
+    return new Promise(resolve => setTimeout(resolve, msec));
+}
+
 const writeS3Url = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
 
@@ -459,27 +463,6 @@ const go = async function (
   
   const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
   const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
-  
-  /*
-  const callerWorker = runKVSWorker(
-    {
-      region: REGION,
-      streamName: 'Caller',
-      streamArn: callerStreamArn,
-      lastFragment: lastCallerFragment,
-    },
-    callerBlock,
-  );
-
-  const agentWorker = runKVSWorker(
-    {
-      region: REGION,
-      streamName: 'Agent',
-      streamArn: agentStreamArn,
-      lastFragment: lastAgentFragment,
-    },
-    agentBlock,
-  );*/
 
   console.log('done starting workers');
 
@@ -504,7 +487,6 @@ const go = async function (
   const returnVals = await Promise.all([callerWorker, agentWorker]);
 
   // we are done with transcribe.
-  // passthroughStream.write(Buffer.alloc(0));
   passthroughStream.end();
 
   await transcribePromise;
@@ -559,21 +541,42 @@ const handler = async function (event, context) {
     let callerStreamArn;
 
     // save which stream we just received from event
-    if (event.detail.isCaller === true) callerStreamArn = event.detail.streamArn;
-    else agentStreamArn = event.detail.streamArn;
+    if (event.detail.isCaller === true) {
+      callerStreamArn = event.detail.streamArn;
+    }
+    else {
+      //agentStreamArn = event.detail.streamArn;
+      console.log("this is not the caller stream, so return.");
+      return;
+    }
 
-    const streamResults = await getStreamsFromDynamo(
+    let streamResults = await getStreamsFromDynamo(
       event.detail.callId,
       agentStreamArn,
       callerStreamArn,
     );
     console.log(`agent stream:${streamResults.agentStreamArn}`);
     console.log(`caller stream:${streamResults.callerStreamArn}`);
-
-    if (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
-      console.log('Agent or caller streams not yet available.');
-      return 'not done yet'; // TODO: Figure out what to return from Lambda
+    
+    let loopCount = 0;
+    
+    while (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
+      console.log(loopCount,'Agent or caller streams not yet available. Sleeping 100ms.');
+      await sleep(100);
+      streamResults = await getStreamsFromDynamo(
+        event.detail.callId,
+        agentStreamArn,
+        callerStreamArn,
+      );
+      console.log(`agent stream:${streamResults.agentStreamArn}`);
+      console.log(`caller stream:${streamResults.callerStreamArn}`);
+      loopCount = loopCount + 1;
+      if(loopCount == 100) {
+        console.log("Both KVS streams not active after 10 seconds. Exiting.");
+        return;
+      }
     }
+    
     result = await go(
       event.detail.callId,
       0,
