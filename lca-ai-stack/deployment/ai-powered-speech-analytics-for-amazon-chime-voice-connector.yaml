@@ -616,7 +616,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt CallTranscriberFunctionRole.Arn
       Runtime: nodejs14.x
-      MemorySize: 2048
+      MemorySize: 768
       Timeout: 900
       Environment:
         Variables:
