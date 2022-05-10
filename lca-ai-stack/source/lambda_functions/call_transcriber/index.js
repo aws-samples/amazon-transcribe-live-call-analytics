@@ -469,8 +469,6 @@ const go = async function (
   timeToStop = false;
   stopTimer = setTimeout(() => {
     timeToStop = true;
-    agentWorker.worker.postMessage('Agent, Time to stop!');
-    callerWorker.worker.postMessage('Caller, Time to stop!');
   }, TIMEOUT);
 
   keepAliveTimer = setInterval(() => {
