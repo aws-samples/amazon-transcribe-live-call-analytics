@@ -71,7 +71,7 @@ PYTHON_TARGET_REQUIREMENTS := $(patsubst \
 $(PYTHON_TARGET_REQUIREMENTS): $(OUT_DIR)/%: $(PYTHON_REQUIREMENTS_DIR)/% | $(OUT_DIR) $(VENV_CFG)
 	@echo "[INFO] Installing python dependencies file: [$(^)]"
 	@source '$(VIRTUALENV_BIN_DIR)/activate' && \
-		pip install -U -r $(^) | tee $(@)
+		pip install -r $(^) | tee $(@)
 install-python-requirements: $(PYTHON_TARGET_REQUIREMENTS)
 .PHONY: install-python-requirements
 
@@ -85,12 +85,11 @@ install-node-dependencies: $(OUT_DIR)/$(PACKAGE_JSON)
 endif
 .PHONY: install-node-dependencies
 
-DOCKER_MULTIARCH := $(OUT_DIR)/docker-multiarch.txt
-$(DOCKER_MULTIARCH): | $(OUT_DIR)
-	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes | \
-		tee '$(@)'
+BINFMT_MULTIARCH := /proc/sys/fs/binfmt_misc/qemu-arm
+$(BINFMT_MULTIARCH): | $(OUT_DIR)
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
-install-docker-multiarch: $(DOCKER_MULTIARCH)
+install-docker-multiarch: $(BINFMT_MULTIARCH)
 .PHONY: install-docker-multiarch
 
 install: install-python-venv install-python-requirements install-node-dependencies
@@ -165,7 +164,7 @@ BUILD_SOURCES += $(LAMBDA_FUNCTIONS_JS_SRC_FILES)
 endif
 
 SAM_BUILD_TOML_FILE := $(SAM_BUILD_DIR)/build.toml
-$(SAM_BUILD_TOML_FILE): $(BUILD_SOURCES) | $(SAM_CMD)
+$(SAM_BUILD_TOML_FILE): $(BUILD_SOURCES) $(BINFMT_MULTIARCH) | $(SAM_CMD)
 	@echo '[INFO] sam building config env: [$(CONFIG_ENV)]'
 	'$(SAM_CMD)' build \
 		--config-file '$(realpath $(SAMCONFIG_FILE))' \
@@ -175,7 +174,7 @@ $(SAM_BUILD_TOML_FILE): $(BUILD_SOURCES) | $(SAM_CMD)
 SAM_BUILD_TEMPLATE_FILE := $(SAM_BUILD_DIR)/build/template.yaml
 $(SAM_BUILD_TEMPLATE_FILE): $(SAM_BUILD_TOML_FILE)
 
-build: $(DOCKER_MULTIARCH) $(SAM_BUILD_TEMPLATE_FILE)
+build: $(SAM_BUILD_TEMPLATE_FILE)
 .PHONY: build
 
 ##########################################################################
