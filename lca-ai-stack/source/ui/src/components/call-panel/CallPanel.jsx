@@ -181,16 +181,17 @@ const getTimestampFromSeconds = (secs) => {
 };
 
 const TranscriptContent = ({ segment }) => {
-  const { transcript, segmentId } = segment;
+  const { transcript, segmentId, channel } = segment;
   const transcriptPiiSplit = transcript.split(piiTypesSplitRegEx);
   const transcriptComponents = transcriptPiiSplit.map((t, i) => {
     if (piiTypes.includes(t)) {
       // eslint-disable-next-line react/no-array-index-key
       return <Badge key={`${segmentId}-pii-${i}`} color="red">{`${t}`}</Badge>;
     }
+    const className = channel === 'AGENT_ASSISTANT' ? 'transcript-segment-agent-assist' : '';
     return (
       // eslint-disable-next-line react/no-array-index-key
-      <TextContent key={`${segmentId}-text-${i}`} color="gray">
+      <TextContent key={`${segmentId}-text-${i}`} color="gray" className={className}>
         {t.trim()}
       </TextContent>
     );
@@ -203,32 +204,37 @@ const TranscriptContent = ({ segment }) => {
   );
 };
 
-const TranscriptSegment = ({ segment }) => (
-  <Grid
-    className="transcript-segment"
-    disableGutters
-    gridDefinition={[{ colspan: 1 }, { colspan: 11 }]}
-  >
-    {getSentimentImage(segment)}
-    <SpaceBetween direction="vertical" size="xxs">
-      <SpaceBetween direction="horizontal" size="xs">
-        <TextContent>
-          <strong>{segment.channel}</strong>
-        </TextContent>
-        <TextContent>
-          {`${getTimestampFromSeconds(segment.startTime)} -
-            ${getTimestampFromSeconds(segment.endTime)}`}
-        </TextContent>
+const TranscriptSegment = ({ segment }) => {
+  const { channel } = segment;
+  const channelClass = channel === 'AGENT_ASSISTANT' ? 'transcript-segment-agent-assist' : '';
+  return (
+    <Grid
+      className="transcript-segment"
+      disableGutters
+      gridDefinition={[{ colspan: 1 }, { colspan: 11 }]}
+    >
+      {getSentimentImage(segment)}
+      <SpaceBetween direction="vertical" size="xxs" className={channelClass}>
+        <SpaceBetween direction="horizontal" size="xs">
+          <TextContent>
+            <strong>{segment.channel}</strong>
+          </TextContent>
+          <TextContent>
+            {`${getTimestampFromSeconds(segment.startTime)} -
+              ${getTimestampFromSeconds(segment.endTime)}`}
+          </TextContent>
+        </SpaceBetween>
+        <TranscriptContent segment={segment} />
       </SpaceBetween>
-      <TranscriptContent segment={segment} />
-    </SpaceBetween>
-  </Grid>
-);
+    </Grid>
+  );
+};
 
 const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll }) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
-  const maxChannels = 2;
+  // channels: AGENT, AGENT_ASSITS, CALLER,
+  const maxChannels = 3;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);

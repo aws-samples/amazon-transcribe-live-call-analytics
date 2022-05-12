@@ -10,10 +10,12 @@ const logger = new Logger('SentimentCharts');
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 2;
+  const maxChannels = 3;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
-  const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
+  const transcriptChannels = Object.keys(transcriptsForThisCallId)
+    .slice(0, maxChannels)
+    .filter((c) => c !== 'AGENT_ASSISTANT');
 
   const sentimentPerChannel = transcriptChannels
     .map((channel) => transcriptsForThisCallId[channel])
@@ -71,10 +73,12 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 };
 
 export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 2;
+  const maxChannels = 3;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
-  const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
+  const transcriptChannels = Object.keys(transcriptsForThisCallId)
+    .slice(0, maxChannels)
+    .filter((c) => c !== 'AGENT_ASSISTANT');
 
   const sentimentByQuarterPerChannel = transcriptChannels
     .map((channel) => item?.sentiment?.SentimentByPeriod?.QUARTER[channel] || [])

@@ -10,6 +10,11 @@
     align-items: center;
 }
 
+.transcript-segment-agent-assist {
+    background-color: #f1faff;
+    padding: 2px;
+}
+
 .sentiment-image-popover {
     cursor: pointer;
 }
