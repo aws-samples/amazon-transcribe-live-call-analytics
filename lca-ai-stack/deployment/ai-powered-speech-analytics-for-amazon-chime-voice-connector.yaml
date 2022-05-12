@@ -169,6 +169,57 @@ Parameters:
       Cognito.
     AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
 
+  IsLexAgentAssistEnabled:
+    Type: String
+    Default: 'false'
+    Description: >-
+      Enables the Lex Agent Assist feature. The LexBotId, LexBotAliasId and LexBotLocaleId
+      parameters should have values if this is set to 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  LexAgentAssistBotId:
+    Type: String
+    Default: ''
+    Description: >-
+      Lex Bot Id used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
+    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
+
+  LexAgentAssistAliasId:
+    Type: String
+    Default: ''
+    Description: >-
+      Lex Bot Alias ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
+    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
+
+  LexAgentAssistLocaleId:
+    Type: String
+    Default: 'en_US'
+    Description: >-
+        Lex Bot Locale ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to
+        'true'
+    AllowedValues:
+      - ca_ES
+      - de_AT
+      - de_DE
+      - en_AU
+      - en_GB
+      - en_IN
+      - en_US
+      - en_ZA
+      - es_419
+      - es_ES
+      - es_US
+      - fr_CA
+      - fr_FR
+      - it_IT
+      - ja_JP
+      - ko_KR
+      - pt_BR
+      - pt_PT
+      - zh_CN
+
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
     Type: String
@@ -599,6 +650,19 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
+  ##########################################################################
+  # Kinesis Data Stream
+  ##########################################################################
+  CallDataStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      # TODO pass retention from a parameter from 24hrs (1day) up to 8760hrs (365days)
+      RetentionPeriodHours: 24
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
 
   ##########################################################################
   # Call Transcriber
@@ -614,10 +678,15 @@ Resources:
         read from the KVS streams, stitch the channels together, send audio to
         transcribe, and store the transcriptions in DynamoDB
       Handler: index.handler
+      Layers:
+        # periodically update the Lambda Insights Layer
+        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
+        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
       Role: !GetAtt CallTranscriberFunctionRole.Arn
       Runtime: nodejs14.x
       MemorySize: 2048
       Timeout: 900
+      Tracing: Active
       Environment:
         Variables:
           BUFFER_SIZE: "128"
@@ -662,6 +731,10 @@ Resources:
             Action:
               - sts:AssumeRole
       Path: /
+      ManagedPolicyArns:
+        # CloudWatch Insights Managed Policy
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
       Policies:
         - PolicyName: lambda-policy
           PolicyDocument:
@@ -758,10 +831,9 @@ Resources:
       Principal: !GetAtt CallTranscriberFunctionRole.Arn
 
   ##########################################################################
-  # Event Sourcing Processor
+  # Transcript Processor
   ##########################################################################
-
-  CallEventStreamProcessFunction:
+  TranscriptProcessorFunction:
     Type: AWS::Serverless::Function
     Metadata:
       cfn_nag:
@@ -769,86 +841,84 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
     Properties:
-      CodeUri: ../source/lambda_functions/call_event_stream_processor
-      Description: >-
-        Call Event DynamoDB Table Stream Processor
+      Architectures:
+        - arm64
+      CodeUri: ../source/lambda_functions/transcript_processor
+      Description: !Sub >-
+        Call Transcript Processor for stack: ${AWS::StackName}
       Events:
-        # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-dynamodb.html
-        DynamoDBStream:
-          Type: DynamoDB
+        TranscriptKds:
+          Type: Kinesis
           Properties:
+            # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-kinesis.html#sam-property-function-kinesis--examples
+            BatchSize: 20
             BisectBatchOnFunctionError: true
             # TODO Add SQS queue for discarded records
             # DestinationConfig:
             Enabled: true
-            MaximumRetryAttempts: 3
-            Stream: !GetAtt EventSourcingTable.StreamArn
+            MaximumRetryAttempts: 2
+            MaximumBatchingWindowInSeconds: 0
+            # XXX MaximumRecordAgeInSeconds: 900
             StartingPosition: LATEST
-            BatchSize: 20
+            Stream: !GetAtt CallDataStream.Arn
             # Tumbling Window is used for aggregations over different invocations
-            # https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html#services-ddb-windows
+            # https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-windows
             TumblingWindowInSeconds: 900
-      AutoPublishAlias: live
-      DeploymentPreference:
-        # TODO change to gradual deployments
-        Type: AllAtOnce
-        # TODO add alarms to detect application level errors for automatic rollback
       Handler: lambda_function.handler
       Layers:
-        - !Ref CallEventStreamProcessLayer
-        # periodically update the Lambda Insights Layer
-        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16"
-      MemorySize: 2048
-      # policy templates:
-      # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - !Ref TranscriptEnrichmentPythonLayer
+      MemorySize: 1024
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref EventSourcingTable
-        - DynamoDBStreamReadPolicy:
-            TableName: !Ref EventSourcingTable
-            StreamName: !Select
-              - 3
-              - !Split
-                - /
-                - !GetAtt EventSourcingTable.StreamArn
         - Statement:
             - Effect: Allow
               Action:
                 - appsync:GraphQL
               Resource:
+                # XXX specific mutation - addEnrichment
                 - !Sub "${AppSyncApi.Arn}/types/Mutation/*"
                 - !Sub "${AppSyncApi.Arn}/types/Query/fields/__schema"
             - Effect: Allow
               Action:
-                - comprehend:DetectSentiment
-              Resource: "*"
-        # CloudWatch Insights Managed Policy
-        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+                - lex:RecognizeText
+              Resource:
+                # XXX make specific to bot passed in parameter
+                "*"
       Runtime: python3.9
       Timeout: 60
-      Tracing: Active
       Environment:
         Variables:
           # XXX add log level parameter or map
           LOG_LEVEL: DEBUG
-          POWERTOOLS_METRICS_NAMESPACE: !Sub "CallAnalytics-${AWS::StackName}"
-          POWERTOOLS_SERVICE_NAME: CallEventStreamProcessor
+          POWERTOOLS_METRICS_NAMESPACE:
+            !Sub "TranscriptProcessor-${AWS::StackName}"
+          POWERTOOLS_SERVICE_NAME: TranscriptProcessor
           # XXX add trace parameter or map
           POWERTOOLS_TRACE_DISABLED: false
-          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
           APPSYNC_GRAPHQL_URL: !GetAtt AppSyncApi.GraphQLUrl
+          STATE_DYNAMODB_TABLE_NAME: !Ref EventSourcingTable
           COMPREHEND_LANGUAGE_CODE: !Ref ComprehendLanguageCode
           IS_SENTIMENT_ANALYSIS_ENABLED: !Ref IsSentimentAnalysisEnabled
+          # Lex Agent Assist
+          IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
+          LEX_BOT_ID: !Ref LexAgentAssistBotId
+          LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
+          LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
 
-  CallEventStreamProcessLayer:
+  ##########################################################################
+  # Transcript Enrichment Lambda Layers
+  ##########################################################################
+  TranscriptEnrichmentPythonLayer:
     Type: AWS::Serverless::LayerVersion
     Metadata:
       BuildMethod: python3.9
     Properties:
-      Description: >-
-        Call Event DynamoDB Table Stream Processor Layer
-      ContentUri: ../source/lambda_layers/call_event_stream_processor
+      Description:
+        !Sub "Transcript Enrichment Python Layer for stack: ${AWS::StackName}"
+      ContentUri: ../source/lambda_layers/transcript_enrichment_layer
+      CompatibleArchitectures:
+        - arm64
       CompatibleRuntimes:
         - python3.9
       RetentionPolicy: Delete

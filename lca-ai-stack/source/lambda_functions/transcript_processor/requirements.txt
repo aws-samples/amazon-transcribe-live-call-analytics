@@ -1,4 +1,3 @@
-# requirements kept in Lambda Layer
-
 # temporarily uncomment debugpy for local debugging
+# XXX
 # debugpy

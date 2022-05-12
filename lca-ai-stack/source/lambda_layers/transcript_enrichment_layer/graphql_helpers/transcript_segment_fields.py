@@ -20,12 +20,4 @@ def transcript_segment_fields(schema: DSLSchema) -> Tuple[DSLField, ...]:
         schema.TranscriptSegment.EndTime,
         schema.TranscriptSegment.Transcript,
         schema.TranscriptSegment.IsPartial,
-        schema.TranscriptSegment.Sentiment,
-        schema.TranscriptSegment.SentimentWeighted,
-        schema.TranscriptSegment.SentimentScore.select(
-            schema.SentimentScore.Positive,
-            schema.SentimentScore.Negative,
-            schema.SentimentScore.Neutral,
-            schema.SentimentScore.Mixed,
-        ),
     )

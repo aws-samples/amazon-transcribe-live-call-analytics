@@ -6,15 +6,21 @@ from statistics import fmean
 import traceback
 from typing import TYPE_CHECKING, Any, Dict, Final, List, Set
 
+# imports from Lambda layer
+# pylint: disable=import-error
+# third party dependencies
 from aws_lambda_powertools import Logger
-from gql.client import AsyncClientSession
+from gql.client import Client as GqlClient
 from gql.dsl import DSLMutation, DSLSchema, dsl_gql
 from graphql.language.printer import print_ast
 
-from appsync import execute_gql_query_with_retries  # pylint: disable=import-error
-from graphql_helpers import call_fields  # pylint: disable=import-error
+# shared modules
+from appsync_utils import execute_gql_query_with_retries
+from tumbling_window_state import StateManager
+from graphql_helpers import call_fields
 
-from .state_manager import StateManager
+# pylint: enable=import-error
+
 from .call_state_model import (
     CallState,
     ChannelType,
@@ -33,8 +39,8 @@ else:
 LOGGER = Logger(child=True, location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 
-class CallStateManager(StateManager):
-    """Call State Manager
+class TranscriptStateManager(StateManager):
+    """Transcript State Manager
 
     Manages call state aggregations in the Lambda tumbling window and sends
     AppSync mutations on changes to the aggregated state
@@ -46,7 +52,7 @@ class CallStateManager(StateManager):
         self,
         event: Dict[str, Any],
         dynamodb_table: DynamoDbTable,
-        appsync_session: AsyncClientSession,
+        appsync_client: GqlClient,
         max_inactivity_in_secs: int = DEFAULT_MAX_INACTIVITY_IN_SECS,
         **kwargs,
     ) -> None:
@@ -59,23 +65,24 @@ class CallStateManager(StateManager):
 
         :param event: Lambda event
         :param dynamodb_table: boto3 DynamoDb Table resource
-        :param appsync_session: gql Client Session used to send AppSync queries
+        :param appsync_client: gql Client used to send AppSync queries
         :param max_inactivity_in_secs: Used to expire items from state that have
             not being updated within this time window. Defaults to 1200
             (20 mins)
         """
+        self._has_error = False
         super().__init__(event=event, dynamodb_table=dynamodb_table, **kwargs)
 
         # override empty dict state and default from super
         self._state: CallState = self._state or CallState({"StatePerCallId": {}})
 
-        self._appsync_session = appsync_session
+        self._appsync_client = appsync_client
         self._max_inactivity_in_secs = max_inactivity_in_secs
 
         # introspection schema from AppSync endpoint
-        if not appsync_session.client.schema:
+        if not self._appsync_client.schema:
             raise RuntimeError("GraphQL schema not found")
-        self._ds = DSLSchema(appsync_session.client.schema)
+        self._ds = DSLSchema(self._appsync_client.schema)
 
         # updated call ids should be added to this set to iterate over changes
         # when the context manager exits
@@ -159,12 +166,14 @@ class CallStateManager(StateManager):
         """Updates the state statistics/aggregations
 
         Maintains a subset of the Transcribe Call Analytics output:
+        # XXX
         https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-output.html
         """
         for call_id in self._changed_call_ids:
             # call_state is used to update the state in place
             call_state = self._state["StatePerCallId"][call_id]
             call_state_per_channel = call_state["StatePerChannel"]
+
             for channel in call_state_per_channel.keys():
                 sentiment_list = call_state_per_channel[channel].get("SentimentList", [])
 
@@ -211,21 +220,23 @@ class CallStateManager(StateManager):
                 call_aggregation["Sentiment"] = sentiment
 
             try:
-                query = dsl_gql(
-                    DSLMutation(
-                        self._ds.Mutation.updateCallAggregation.args(input=call_aggregation).select(
-                            *call_fields(self._ds)
+                async with self._appsync_client as appsync_session:
+                    query = dsl_gql(
+                        DSLMutation(
+                            self._ds.Mutation.updateCallAggregation.args(
+                                input=call_aggregation
+                            ).select(*call_fields(self._ds))
                         )
                     )
-                )
-                result = await execute_gql_query_with_retries(
-                    query=query,
-                    client_session=self._appsync_session,
-                    logger=LOGGER,
-                )
-
-                query_string = print_ast(query)
-                LOGGER.debug("state graphql update", extra=dict(query=query_string, result=result))
+                    result = await execute_gql_query_with_retries(
+                        query=query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+                    query_string = print_ast(query)
+                    LOGGER.debug(
+                        "transcript state mutation", extra=dict(query=query_string, result=result)
+                    )
             except Exception as error:  # pylint: disable=broad-except
                 LOGGER.error("error in call state graphql update: [%s]", error)
                 LOGGER.exception("exception in call state graphql update")
@@ -279,7 +290,10 @@ class CallStateManager(StateManager):
             updated_call_id_state["TotalConversationDurationMillis"] = end_time
             self._changed_call_ids.add(call_id)
 
-        previous_state_per_channel = updated_call_id_state.get("StatePerChannel", {channel: {}})
+        previous_state_per_channel = updated_call_id_state.get(
+            "StatePerChannel",
+            {channel: {}},
+        )
         previous_channel_state = previous_state_per_channel.get(channel, {})
 
         updated_channel_state = previous_channel_state
@@ -297,7 +311,6 @@ class CallStateManager(StateManager):
             )
             if updated_channel_state != previous_channel_state:
                 self._changed_call_ids.add(call_id)
-
         self._state = {
             **self._state,  # type: ignore
             "StatePerCallId": {
@@ -380,6 +393,7 @@ class CallStateManager(StateManager):
         )
         now = datetime.now(timezone.utc).astimezone().isoformat()
 
+        # XXX this logic seems to be wrong - createdat is always the same as updatedat
         created_at = previous.get("CreatedAt", now)
 
         # take the latest UpdatedAt
@@ -416,9 +430,11 @@ class CallStateManager(StateManager):
 
     def update_state(self, input_item: Dict[str, Any]) -> CallState:
         """Updates the call state aggregations"""
-        # update state when the transcript contains a weighted sentiment
+        # update state from transcripts
         if input_item.get("addTranscriptSegment", {}):
             return self._update_state_from_add_transcript_segment_result(input_item)
+
+        # XXX is this used here? probably should be but need to move signaling events to KDS
         if input_item.get("updateCallStatus", {}):
             return self._update_state_from_update_call_status_result(input_item)
 

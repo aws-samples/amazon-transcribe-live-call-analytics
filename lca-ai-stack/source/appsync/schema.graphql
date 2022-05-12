@@ -55,6 +55,7 @@ enum CallStatus {
 enum Channel {
 	CALLER
 	AGENT
+	AGENT_ASSISTANT
 }
 
 input CreateCallInput {
