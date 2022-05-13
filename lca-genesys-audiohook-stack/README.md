@@ -7,7 +7,7 @@ This repo contains code to showcase a sample service that implements the Genesys
 3. integration of transcriptions with Live Call Analytics (LCA) sample solution 
 
 ## Architecture
-![Architecture Diagram](../images/architecture-diagram.png)
+![Architecture Diagram](../images/lca_with_audiohook.png)
 
 
 ## Genesys Audiohook - Deployment and Configuration instructions
@@ -17,30 +17,38 @@ This repo contains code to showcase a sample service that implements the Genesys
 3. Deplyoment is via the LCA Main stack
 
 ### Cloudformation Deployment
-The Genesys Audiohook is an optional component of the main LCA sample solution. You can deploy audiohook component by choosing "Genesys Cloud Audiohook Web Socket" for "CallAudioSource" parameter when deploying the LCA main stack.
+Genesys Audiohook is an optional component of the main LCA sample solution. You can deploy audiohook component by choosing "Genesys Cloud Audiohook Web Socket" for "CallAudioSource" parameter when deploying the LCA main stack.
 
 ### Audiohook configuration
 The cloudformation stack deploys the proxy service and creates the required resources that enables Genesys Audiohook to send audio stream to LCA. The following resources created by the cloudformation template are required to configure  your instance of Genesys Audiohook audio streaming. You can find references to these resources in the `Outputs` section of the cloudformation stack.
 
-1. WebSocketEndpoint - Websocket service endpoint - wss://<<xxxxxxxx>>.cloudfront.net/api/v1/audiohook/ws
-The sample integration service (Fargate containers) is deployed behind an External Loadbalancer. By default, the websocket endpoint is delivered via Cloudfront to avoid having to setup custom domain names for the demo. However, our recommended method is to use a custom domain name (along with an SSL certificate) and map it to external loadbalancer endpoint. You can either use your existing DNS and SSL certificate or use Route53 Hosted Zone for DNS and Amazon Certificate Manager (ACM) for provisioning SSL certificates. In both cases, you need to ensure that your DNS resolves to the external load balancer deployed by this solution. 
+1. WebSocketEndpoint - Websocket service endpoint - `wss://<<xxxxxxxx>>.cloudfront.net/api/v1/audiohook/ws`
+
+    The sample integration service (Fargate containers) is deployed behind an External Loadbalancer. By default, the websocket endpoint is delivered via Cloudfront to avoid having to setup custom domain names for the demo. However, our recommended method is to use a custom domain name (along with an SSL certificate) and map it to external loadbalancer endpoint. You can either use your existing DNS and SSL certificate or use Route53 Hosted Zone for DNS and Amazon Certificate Manager (ACM) for provisioning SSL certificates. In both cases, you need to ensure that your DNS resolves to the external load balancer deployed by this solution. 
 
 2. WebSocketAPIKey - Secrets Manager ARN for API Key 
 3. WebSocketAPIClientSecret - Secrets Manager ARN for Client Secret
 
-Steps to retrieve and configure api key and client secret 
-a. Go to your 'AWS Secrets Manager' console and locate the API Key and API ClientSecret resources. 
-`AWS Secrets Manager -> Secrets -> <<Secret name referenced by WebSocketAPIKey resource>>`
-`AWS Secrets Manager -> Secrets -> <<Secret name referenced by WebSocketAPIClientSecret resource>>`
+### Steps to retrieve and configure api key and client secret 
+1. Go to your 'AWS Secrets Manager' console and locate the API Key and API ClientSecret resources.
 
-b. Retrieve key values
-Click on `Retrieve secret value` and copy the `Secret value` for the `Secret key:` `audiohook-api-key`
-Click on `Retrieve secret value` and copy the `Secret value` for the `Secret key:` `audiohook-client-secret`
+    Navigate to `AWS Secrets Manager -> Secrets -> <<Secret name referenced by WebSocketAPIKey resource>>` to retrieve API Key
 
-c. Go to Genesys Cloud Admin console and configure the API key and client secret
-`Admin -> Integrations -> Audiohook -> Configuration -> Credentials`
-Click `Change` button to update API Key and Client Secret retrieved from Secrets Manager in steps a & b above.
-Click `OK` and `Save` to finalize the changes
+    Navigate to `AWS Secrets Manager -> Secrets -> <<Secret name referenced by WebSocketAPIClientSecret resource>>` to retrieve client secret
+
+2. Retrieve key values
+
+    Click on `Retrieve secret value` and copy the `Secret value` for the `Secret key:` `audiohook-api-key`
+
+    Click on `Retrieve secret value` and copy the `Secret value` for the `Secret key:` `audiohook-client-secret`
+
+3. Go to Genesys Cloud Admin console and configure the API key and client secret
+
+    Navigate to `Admin -> Integrations -> Audiohook -> Configuration -> Credentials`
+
+    Click `Change` button to update API Key and Client Secret retrieved from Secrets Manager in steps 1 & 2 above.
+
+    Click `OK` and `Save` to finalize the changes
 
 The audiohook is now ready to stream audio to LCA.
 
