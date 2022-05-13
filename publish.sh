@@ -72,6 +72,14 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-ai-stack $VERSION $REGION || exit 1
 popd
 
+dir=lca-genesys-audiohook-stack
+echo "PACKAGING $dir"
+pushd $dir/deployment
+rm -rf ../out
+chmod +x ./build-s3-dist.sh
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-genesys-audiohook-stack $VERSION $REGION || exit 1
+popd
+
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
 

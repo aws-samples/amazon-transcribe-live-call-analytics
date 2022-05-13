@@ -367,7 +367,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
     console.log(`Closing buffers ${streamName}`);
     decoder.end();
   }
-  
+
   return lastFragment;
 };
 
@@ -442,7 +442,7 @@ const go = async function (
   sessionId = tsResponse.SessionId;
   if (lastAgentFragment === undefined) {
     writeStatusToDynamo('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
-  }    
+  }
   else writeStatusToDynamo('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
   console.log('creating readable from transcript stream');
   const tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
@@ -460,7 +460,7 @@ const go = async function (
 
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
-  
+
   const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
   const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
 
@@ -555,9 +555,9 @@ const handler = async function (event, context) {
     );
     console.log(`agent stream:${streamResults.agentStreamArn}`);
     console.log(`caller stream:${streamResults.callerStreamArn}`);
-    
+
     let loopCount = 0;
-    
+
     while (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
       console.log(loopCount,'Agent or caller streams not yet available. Sleeping 100ms.');
       await sleep(100);
@@ -574,7 +574,7 @@ const handler = async function (event, context) {
         return;
       }
     }
-    
+
     result = await go(
       event.detail.callId,
       0,
