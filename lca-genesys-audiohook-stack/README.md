@@ -1,10 +1,16 @@
 # Genesys Cloud - AudioHook Sample Service
 
 ## Introduction
-This repo contains code to showcase a sample service that implements the Genesys AudioHook protocol. The implementation includes the following: 
+This repo contains code to showcase a sample service that implements the [Genesys AudioHook](https://help.mypurecloud.com/articles/audiohook-integration-overview/) protocol. The implementation includes the following: 
 1. ingestion of audio stream from Genesys Cloud via Audiohook protocol
 2. transcription of audio stream to text using Amazon Transcribe streaming SDK
 3. integration of transcriptions with Live Call Analytics (LCA) sample solution 
+
+> **IMPORTANT**
+> 
+> The code in this repository is provided as a sample blueprint to get started building an AudioHook server and test protocol compliance.
+> It does not include some of the robustness and resiliency patterns that you will likely require for a production quality service.
+> 
 
 ## Architecture
 ![Architecture Diagram](../images/lca_with_audiohook.png)
@@ -13,7 +19,7 @@ This repo contains code to showcase a sample service that implements the Genesys
 ## Genesys Audiohook - Deployment and Configuration instructions
 ### Pre-requisites
 1. Instance of Genesys Cloud (with Audiohook integration enabled)
-2. AWS Account
+2. AWS Account with necessary privileges to deploy the application.
 3. Deplyoment is via the LCA Main stack
 
 ### Cloudformation Deployment
@@ -60,9 +66,3 @@ The audiohook is now ready to stream audio to LCA.
 5. Click on the Call ID to see the call details page that includes live turn-by-turn transcripts and sentiment trends
 
 ***
-
-Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
-
-Licensed under the the Apache-2.0 License. See the LICENSE file.
-This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions and limitations under the License.

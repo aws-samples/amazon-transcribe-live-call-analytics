@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "author": "felix.wyss@genesys.com",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "description": "",
   "main": "src/index.ts",
   "scripts": {

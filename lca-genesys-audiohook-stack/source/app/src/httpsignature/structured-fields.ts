@@ -2,9 +2,6 @@
  * Types and utility functions to compose and parse structured fields according to RFC8941
  * 
  * @see https://www.rfc-editor.org/rfc/rfc8941.html
- * 
- * @author felix.wyss@genesys.com 
- * @copyright (c) 2022 Genesys.  All rights reserved
  */
 
 /**
