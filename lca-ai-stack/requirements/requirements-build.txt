@@ -1,1 +1,1 @@
-aws-sam-cli~=1.37.0
+aws-sam-cli~=1.49.0

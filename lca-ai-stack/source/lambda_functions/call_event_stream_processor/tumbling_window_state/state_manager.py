@@ -14,10 +14,10 @@ from boto3.dynamodb.conditions import Key
 
 if TYPE_CHECKING:
     from mypy_boto3_dynamodb.service_resource import Table as DynamoDbTable
-    from mypy_boto3_dynamodb.type_defs import QueryInputTableTypeDef
+    from mypy_boto3_dynamodb.type_defs import QueryInputTableQueryTypeDef
 else:
     DynamoDbTable = object
-    QueryInputTableTypeDef = object
+    QueryInputTableQueryTypeDef = object
 
 LOGGER = Logger(child=True, location="%(filename)s:%(lineno)d - %(funcName)s()")
 
@@ -155,7 +155,7 @@ class StateManager(ABC):
         key_condition_expression = Key(self._ddb_config["pk_name"]).eq(
             self._ddb_config["pk_value"]
         ) & Key(self._ddb_config["sk_name"]).gt(max_window_delta_timestamp)
-        query_args: QueryInputTableTypeDef = dict(
+        query_args: QueryInputTableQueryTypeDef = dict(
             KeyConditionExpression=key_condition_expression,
             # scan index in reverse order since we want to return the most
             # recent items on top

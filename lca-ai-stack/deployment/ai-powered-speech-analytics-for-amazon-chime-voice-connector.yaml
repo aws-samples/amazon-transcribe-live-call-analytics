@@ -21,6 +21,7 @@ Description: Amazon Transcribe Live Call Analytics - LCA AI Stack
 Parameters:
   S3BucketName:
     Type: String
+    Default: ""
     Description: >
       (Optional) Existing bucket where call recording files will be stored.
       Leave blank to automatically create new bucket.
@@ -126,7 +127,7 @@ Parameters:
       - ja
       - ko
       - zh
-      #- zh-TW
+      # - zh-TW
 
   CloudFrontPriceClass:
     Type: String
@@ -189,7 +190,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.2.2
+    Default: 0.3.0
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -257,7 +258,7 @@ Outputs:
     Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
   EventSourcingTableARN:
     Description: The ARN for the DynamoDB that is used to store transcriptions and events
-    Value: !GetAtt EventSourcingTable.Arn 
+    Value: !GetAtt EventSourcingTable.Arn
   EventSourcingTableName:
     Description: The Name for the DynamoDB that is used to store transcriptions and events
     Value: !Ref EventSourcingTable
@@ -615,7 +616,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt CallTranscriberFunctionRole.Arn
       Runtime: nodejs14.x
-      MemorySize: 2048
+      MemorySize: 768
       Timeout: 900
       Environment:
         Variables:
@@ -668,13 +669,13 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                - transcribe:DeleteTranscriptionJob
-                - transcribe:GetTranscriptionJob
-                - transcribe:GetVocabulary
-                - transcribe:ListTranscriptionJobs
-                - transcribe:ListVocabularies
-                - transcribe:StartStreamTranscription
-                - transcribe:StartTranscriptionJob
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:GetVocabulary
+                  - transcribe:ListTranscriptionJobs
+                  - transcribe:ListVocabularies
+                  - transcribe:StartStreamTranscription
+                  - transcribe:StartTranscriptionJob
                 Resource: "*"
               - Action:
                   - "kinesisvideo:Describe*"
@@ -718,6 +719,12 @@ Resources:
                         - ShouldCreateRecordingBucket
                         - !Ref RecordingsBucket
                         - !Ref S3BucketName
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              Transcribe does not support resource-level permissions and KVS streams are dynamic
 
   AllowEventBridgeToCallTranscriberFunctionLambda:
     Type: "AWS::Lambda::Permission"
@@ -1333,6 +1340,11 @@ Resources:
           PolicyName: deleteBucketS3Policy
 
   BucketDeleteLambda:
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
     Type: AWS::Lambda::Function
     Properties:
       Handler: "index.lambda_handler"
