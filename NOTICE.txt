@@ -7,12 +7,30 @@ THIRD PARTY COMPONENTS
 **********************
 This software includes third party software subject to the following copyrights:
 
-** Pydub - https://github.com/jiaaro/pydub
-Copyright (c) 2011 James Robert, http://jiaaro.com
+** GQL - https://github.com/graphql-python/gql
+Copyright (c) 2016 GraphQL Python
 SPDX-License-Identifier: MIT
 
 ----------------
 
-** GQL - https://github.com/graphql-python/gql
-Copyright (c) 2016 GraphQL Python
+** Genesys Cloud Services, Inc. - https://www.genesys.com/
+Copyright (c) 2022 Genesys Cloud Services, Inc.
+SPDX-License-Identifier: MIT
+
+----------------
+
+** block-stream2 - https://github.com/substack/block-stream2
+Copyright (c) James Halliday
+SPDX-License-Identifier: MIT
+
+----------------
+
+** ebml-stream - https://github.com/austinleroy/node-ebml
+Copyright (c) 2013-2018 Mark Schmale and contributors
+SPDX-License-Identifier: MIT
+
+----------------
+
+** interleave-stream - https://github.com/gmaclennan/interleave-stream
+Copyright (c) Gregor MacLennan
 SPDX-License-Identifier: MIT
