@@ -1,14 +1,14 @@
-# Genesys Cloud - AudioHook Sample Service
+# Genesys Cloud - Audiohook Sample Service
 
 ## Introduction
-This repo contains code to showcase a sample service that implements the [Genesys AudioHook](https://help.mypurecloud.com/articles/audiohook-integration-overview/) protocol. The implementation includes the following: 
+This repo contains code to showcase a sample service that implements the [Genesys Audiohook](https://help.mypurecloud.com/articles/audiohook-integration-overview/) protocol. The implementation includes the following: 
 1. ingestion of audio stream from Genesys Cloud via Audiohook protocol
 2. transcription of audio stream to text using Amazon Transcribe streaming SDK
 3. integration of transcriptions with Live Call Analytics (LCA) sample solution 
 
 > **IMPORTANT**
 > 
-> The code in this repository is provided as a sample blueprint to get started building an AudioHook server and test protocol compliance.
+> The code in this repository is provided as a sample blueprint to get started building an Audiohook server and test protocol compliance.
 > It does not include some of the robustness and resiliency patterns that you will likely require for a production quality service.
 > 
 
@@ -23,7 +23,7 @@ This repo contains code to showcase a sample service that implements the [Genesy
 3. Deplyoment is via the LCA Main stack
 
 ### Cloudformation Deployment
-Genesys Audiohook is an optional component of the main LCA sample solution. You can deploy audiohook component by choosing "Genesys Cloud Audiohook Web Socket" for "CallAudioSource" parameter when deploying the LCA main stack.
+Genesys Audiohook is an optional component of the main LCA sample solution. You can deploy Audiohook component by choosing "Genesys Cloud Audiohook Web Socket" for "CallAudioSource" parameter when deploying the LCA main stack.
 
 ### Audiohook configuration
 The cloudformation stack deploys the proxy service and creates the required resources that enables Genesys Audiohook to send audio stream to LCA. The following resources created by the cloudformation template are required to configure  your instance of Genesys Audiohook audio streaming. You can find references to these resources in the `Outputs` section of the cloudformation stack.
