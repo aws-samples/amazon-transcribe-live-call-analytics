@@ -48,31 +48,60 @@ $(OUT_DIR):
 
 PYTHON_VERSION ?= 3.8
 # python virtual environment directory
-VIRTUALENV_DIR ?= $(OUT_DIR)/venv
-VENV_CFG := $(VIRTUALENV_DIR)/pyvenv.cfg
-$(VENV_CFG): | $(OUT_DIR)
-	echo "[INFO] Creating python virtual env under directory: [$(VIRTUALENV_DIR)]"
-	python$(PYTHON_VERSION) -m venv '$(VIRTUALENV_DIR)'
-install-python-venv: $(VENV_CFG)
+VIRTUALENV_DEV_DIR ?= $(OUT_DIR)/venv-dev
+VENV_DEV_CFG := $(VIRTUALENV_DEV_DIR)/pyvenv.cfg
+$(VENV_DEV_CFG): | $(OUT_DIR)
+	echo "[INFO] Creating python dev virtual env under directory: [$(VIRTUALENV_DEV_DIR)]"
+	python$(PYTHON_VERSION) -m venv '$(VIRTUALENV_DEV_DIR)'
+install-python-dev-venv: $(VENV_DEV_CFG)
+.PHONY: install-python-dev-venv
+
+VIRTUALENV_BUILD_DIR ?= $(OUT_DIR)/venv-build
+VENV_BUILD_CFG := $(VIRTUALENV_BUILD_DIR)/pyvenv.cfg
+$(VENV_BUILD_CFG): | $(OUT_DIR)
+	echo "[INFO] Creating python build virtual env under directory: [$(VIRTUALENV_BUILD_DIR)]"
+	python$(PYTHON_VERSION) -m venv '$(VIRTUALENV_BUILD_DIR)'
+install-python-build-venv: $(VENV_BUILD_CFG)
+.PHONY: install-python-build-venv
+
+install-python-venv: install-python-dev-venv install-python-build-venv
 .PHONY: install-python-venv
 
-VIRTUALENV_BIN_DIR ?= $(VIRTUALENV_DIR)/bin
+VIRTUALENV_DEV_BIN_DIR ?= $(VIRTUALENV_DEV_DIR)/bin
+VIRTUALENV_BUILD_BIN_DIR ?= $(VIRTUALENV_BUILD_DIR)/bin
 PYTHON_REQUIREMENTS_DIR ?= requirements
+# supports multiple requirement files for either build or development
 PYTHON_BUILD_REQUIREMENTS := $(PYTHON_REQUIREMENTS_DIR)/requirements-build.txt
 PYTHON_DEV_REQUIREMENTS := $(PYTHON_REQUIREMENTS_DIR)/requirements-dev.txt
 
-PYTHON_SRC_REQUIREMENTS := $(PYTHON_DEV_REQUIREMENTS) $(PYTHON_BUILD_REQUIREMENTS)
-PYTHON_TARGET_REQUIREMENTS := $(patsubst \
+PYTHON_SRC_DEV_REQUIREMENTS := $(PYTHON_DEV_REQUIREMENTS)
+PYTHON_SRC_BUILD_REQUIREMENTS := $(PYTHON_BUILD_REQUIREMENTS)
+PYTHON_TARGET_DEV_REQUIREMENTS := $(patsubst \
 	$(PYTHON_REQUIREMENTS_DIR)/%, \
 	$(OUT_DIR)/%, \
-	$(PYTHON_SRC_REQUIREMENTS) \
+	$(PYTHON_SRC_DEV_REQUIREMENTS) \
+)
+PYTHON_TARGET_BUILD_REQUIREMENTS := $(patsubst \
+	$(PYTHON_REQUIREMENTS_DIR)/%, \
+	$(OUT_DIR)/%, \
+	$(PYTHON_SRC_BUILD_REQUIREMENTS) \
 )
 
-$(PYTHON_TARGET_REQUIREMENTS): $(OUT_DIR)/%: $(PYTHON_REQUIREMENTS_DIR)/% | $(OUT_DIR) $(VENV_CFG)
-	@echo "[INFO] Installing python dependencies file: [$(^)]"
-	@source '$(VIRTUALENV_BIN_DIR)/activate' && \
-		pip install -U -r $(^) | tee $(@)
-install-python-requirements: $(PYTHON_TARGET_REQUIREMENTS)
+$(PYTHON_TARGET_DEV_REQUIREMENTS): $(OUT_DIR)/%: $(PYTHON_REQUIREMENTS_DIR)/% | $(OUT_DIR) $(VENV_DEV_CFG)
+	@echo "[INFO] Installing python dev dependencies file: [$(^)]"
+	@source '$(VIRTUALENV_DEV_BIN_DIR)/activate' && \
+		pip install -r $(^) | tee $(@)
+install-python-dev-requirements: $(PYTHON_TARGET_DEV_REQUIREMENTS)
+.PHONY: install-python-dev-requirements
+
+$(PYTHON_TARGET_BUILD_REQUIREMENTS): $(OUT_DIR)/%: $(PYTHON_REQUIREMENTS_DIR)/% | $(OUT_DIR) $(VENV_BUILD_CFG)
+	@echo "[INFO] Installing python build dependencies file: [$(^)]"
+	@source '$(VIRTUALENV_BUILD_BIN_DIR)/activate' && \
+		pip install -r $(^) | tee $(@)
+install-python-build-requirements: $(PYTHON_TARGET_BUILD_REQUIREMENTS)
+.PHONY: install-python-build-requirements
+
+install-python-requirements: install-python-dev-requirements install-python-build-requirements
 .PHONY: install-python-requirements
 
 ifeq ($(HAS_JS),true)
@@ -85,18 +114,26 @@ install-node-dependencies: $(OUT_DIR)/$(PACKAGE_JSON)
 endif
 .PHONY: install-node-dependencies
 
+BINFMT_MULTIARCH := /proc/sys/fs/binfmt_misc/qemu-arm
+$(BINFMT_MULTIARCH): | $(OUT_DIR)
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+install-docker-multiarch: $(BINFMT_MULTIARCH)
+.PHONY: install-docker-multiarch
+
 install: install-python-venv install-python-requirements install-node-dependencies
 .PHONY: install
 
-# prepend python virtual env bin directory to path
-VIRTUALENV_BIN_DIR ?= "$(VIRTUALENV_DIR)/bin"
-export PATH := "$(VIRTUALENV_BIN_DIR):$(PATH)"
+# prepend python virtual env bin directories to path
+VIRTUALENV_DEV_BIN_DIR ?= "$(VIRTUALENV_DEV_DIR)/bin"
+VIRTUALENV_BUILD_BIN_DIR ?= "$(VIRTUALENV_BUILD_DIR)/bin"
+export PATH := "$(VIRTUALENV_BUILD_BIN_DIR):$(VIRTUALENV_DEV_BIN_DIR):$(PATH)"
 export VIRTUALENV_DIR
 
 ##########################################################################
 # build
 ##########################################################################
-SAM_CMD ?= $(VIRTUALENV_BIN_DIR)/sam
+SAM_CMD ?= $(VIRTUALENV_BUILD_BIN_DIR)/sam
 
 LAMBDA_FUNCTIONS_DIR ?= $(SRC_DIR)/lambda_functions
 LAMBDA_FUNCTIONS := $(wildcard $(LAMBDA_FUNCTIONS_DIR)/*)
@@ -157,7 +194,7 @@ BUILD_SOURCES += $(LAMBDA_FUNCTIONS_JS_SRC_FILES)
 endif
 
 SAM_BUILD_TOML_FILE := $(SAM_BUILD_DIR)/build.toml
-$(SAM_BUILD_TOML_FILE): $(BUILD_SOURCES) | $(SAM_CMD)
+$(SAM_BUILD_TOML_FILE): $(BUILD_SOURCES) $(BINFMT_MULTIARCH) | $(SAM_CMD)
 	@echo '[INFO] sam building config env: [$(CONFIG_ENV)]'
 	'$(SAM_CMD)' build \
 		--config-file '$(realpath $(SAMCONFIG_FILE))' \
@@ -251,6 +288,9 @@ $(PACKAGE_RELEASE_OUT_FILE): $(PACKAGE_RELEASE_REPLACE_OUT_FILE) | $(OUT_DIR)
 	  echo '[ERROR] need to set env var: RELEASE_S3_BUCKET_BASE' && \
 	  exit 1 || true
 
+	@echo '[INFO] configuring docker multiarchitecture for sam cross platform build'
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
 	@echo '[INFO] sam building template file for release $(RELEASE_VERSION)'
 	sam build \
 		--use-container \
@@ -284,7 +324,7 @@ $(RELEASE_UPLOAD_FILE): $(PACKAGE_RELEASE_OUT_FILE) $(BUNDLE_RELEASE_FILE) | $(O
 	@echo '[INFO] CloudFormation Console Launch URL: https://$(AWS_REGION).console.aws.amazon.com/cloudformation/home?region=$(AWS_REGION)#/stacks/create/review?templateURL=https://$(RELEASE_S3_BUCKET).s3.amazonaws.com/$(RELEASE_S3_PREFIX)/$(RELEASE_VERSION)/template.yaml'
 
 release: $(RELEASE_UPLOAD_FILE)
-.PHONY: releaase
+.PHONY: release
 
 ##########################################################################
 # deploy
@@ -417,7 +457,7 @@ endif
 # DEBUGGER_JS=true make local-invoke-my_node_function
 $(SAM_INVOKE_TARGETS): local-invoke-%: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR) $(SAM_CMD)
 	@FUNCTION_LOGICAL_ID=$$( \
-	'$(VIRTUALENV_BIN_DIR)/python' -c 'import toml; \
+	'$(VIRTUALENV_DEV_BIN_DIR)/python' -c 'import toml; \
 	f_defs = ( \
 	    toml.load("$(SAM_BUILD_TOML_FILE)") \
 	    .get("function_build_definitions") \
@@ -468,7 +508,7 @@ test: test-local-invoke-default
 CFN_LINT_OUT_FILE := $(OUT_DIR)/lint-cfn-lint.txt
 $(CFN_LINT_OUT_FILE): $(TEMPLATE_FILE) | $(OUT_DIR)
 	@echo '[INFO] running cfn-lint on template: [$(^)]'
-	$(VIRTUALENV_BIN_DIR)/cfn-lint '$(^)' | tee '$(@)'
+	$(VIRTUALENV_DEV_BIN_DIR)/cfn-lint '$(^)' | tee '$(@)'
 
 lint-cfn-lint: $(CFN_LINT_OUT_FILE)
 .PHONY: lint-cfn-lint
@@ -479,7 +519,7 @@ lint-cfn-lint: $(CFN_LINT_OUT_FILE)
 YAMLLINT_OUT_FILE := $(OUT_DIR)/lint-yamllint.txt
 $(YAMLLINT_OUT_FILE): $(TEMPLATE_FILE) | $(OUT_DIR)
 	@echo '[INFO] running yamllint on template: [$(^)]'
-	$(VIRTUALENV_BIN_DIR)/yamllint '$(^)' | tee '$(@)'
+	$(VIRTUALENV_DEV_BIN_DIR)/yamllint '$(^)' | tee '$(@)'
 
 lint-yamllint: $(YAMLLINT_OUT_FILE)
 .PHONY: lint-yamllint
@@ -490,7 +530,7 @@ lint-yamllint: $(YAMLLINT_OUT_FILE)
 VALIDATE_OUT_FILE := $(OUT_DIR)/lint-validate.txt
 $(VALIDATE_OUT_FILE): $(TEMPLATE_FILE) | $(OUT_DIR)
 	@echo '[INFO] running sam validate on config env: [$(CONFIG_ENV)]'
-	$(VIRTUALENV_BIN_DIR)/sam validate \
+	'$(SAM_CMD)' validate \
 		--config-env '$(CONFIG_ENV)' \
 		--template-file '$(TEMPLATE_FILE)' \
 	| tee '$(@)'
@@ -515,13 +555,13 @@ lint-cfn_nag: $(CFN_NAG_OUT_FILE)
 CFN_POLICY_VALIDATOR_OUT_FILE := $(OUT_DIR)/lint-cfn-policy-validator.txt
 $(CFN_POLICY_VALIDATOR_OUT_FILE): $(TEMPLATE_FILE) | $(OUT_DIR)
 	@echo '[INFO] running cfn-policy-validator with config env: [$(CONFIG_ENV)]'
-	@read -r REGION PARAMETERS <<< $$('$(VIRTUALENV_BIN_DIR)/python' -c 'import toml ; \
+	@read -r REGION PARAMETERS <<< $$('$(VIRTUALENV_DEV_BIN_DIR)/python' -c 'import toml ; \
 		deploy_config = toml.load("$(SAMCONFIG_FILE)").get("$(CONFIG_ENV)").get("deploy").get("parameters"); \
 		region = deploy_config.get("region"); parameter_overrides = deploy_config.get("parameter_overrides"); \
 		params = " ".join(parameter_overrides); \
 		print(region, params)') ; \
 	echo "[INFO] running cfn-policy-validator with region: [$$REGION] and parameters [$$PARAMETERS]" ; \
-	$(VIRTUALENV_BIN_DIR)/cfn-policy-validator validate \
+	$(VIRTUALENV_DEV_BIN_DIR)/cfn-policy-validator validate \
 		--template-path '$(TEMPLATE_FILE)' \
 		--region "$$REGION" \
 		--parameters $$PARAMETERS \
@@ -564,7 +604,7 @@ LAMBDA_PYLINT_TARGETS := $(patsubst \
 $(LAMBDA_PYLINT_TARGETS): $(LAMBDA_FUNCTIONS_PYTHON_SRC_FILES)
 $(LAMBDA_PYLINT_TARGETS): $(OUT_DIR)/lint-pylint-%.txt: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR)
 	@echo '[INFO] running pylint on dir: [$(<)]'
-	$(VIRTUALENV_BIN_DIR)/pylint \
+	$(VIRTUALENV_DEV_BIN_DIR)/pylint \
 		--max-line-length='$(PYTHON_LINTER_MAX_LINE_LENGTH)' \
 		'$(<)' \
 	| tee '$(@)'
@@ -583,7 +623,7 @@ LAMBDA_FLAKE8_TARGETS := $(patsubst \
 $(LAMBDA_FLAKE8_TARGETS): $(LAMBDA_FUNCTIONS_PYTHON_SRC_FILES)
 $(LAMBDA_FLAKE8_TARGETS): $(OUT_DIR)/lint-flake8-%.txt: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR)
 	@echo '[INFO] running flake8 on dir: [$(<)]'
-	$(VIRTUALENV_BIN_DIR)/flake8 \
+	$(VIRTUALENV_DEV_BIN_DIR)/flake8 \
 		--max-line-length='$(PYTHON_LINTER_MAX_LINE_LENGTH)' \
 		$(<) \
 	| tee '$(@)'
@@ -602,7 +642,7 @@ LAMBDA_MYPY_TARGETS := $(patsubst \
 $(LAMBDA_MYPY_TARGETS): $(LAMBDA_FUNCTIONS_PYTHON_SRC_FILES)
 $(LAMBDA_MYPY_TARGETS): $(OUT_DIR)/lint-mypy-%.txt: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR)
 	@echo '[INFO] running mypy on dir: [$(<)]'
-	$(VIRTUALENV_BIN_DIR)/mypy \
+	$(VIRTUALENV_DEV_BIN_DIR)/mypy \
 		$(<) \
 	| tee '$(@)'
 
@@ -620,7 +660,7 @@ LAMBDA_BLACK_TARGETS := $(patsubst \
 $(LAMBDA_BLACK_TARGETS): $(LAMBDA_FUNCTIONS_PYTHON_SRC_FILES)
 $(LAMBDA_BLACK_TARGETS): $(OUT_DIR)/lint-black-%.txt: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR)
 	@echo '[INFO] running black on dir: [$(<)]'
-	$(VIRTUALENV_BIN_DIR)/black \
+	$(VIRTUALENV_DEV_BIN_DIR)/black \
 		--check \
 		--diff \
 		--line-length='$(PYTHON_LINTER_MAX_LINE_LENGTH)' \
@@ -641,7 +681,7 @@ LAMBDA_BANDIT_TARGETS := $(patsubst \
 $(LAMBDA_BANDIT_TARGETS): $(LAMBDA_FUNCTIONS_PYTHON_SRC_FILES)
 $(LAMBDA_BANDIT_TARGETS): $(OUT_DIR)/lint-bandit-%.txt: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR)
 	@echo '[INFO] running bandit on dir: [$(<)]'
-	$(VIRTUALENV_BIN_DIR)/bandit \
+	$(VIRTUALENV_DEV_BIN_DIR)/bandit \
 		--recursive \
 		$(<) \
 	| tee '$(@)'

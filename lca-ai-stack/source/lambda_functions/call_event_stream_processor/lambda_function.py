@@ -7,6 +7,7 @@ import asyncio
 import logging
 from os import environ, getenv
 from typing import TYPE_CHECKING, Dict, List, TypedDict, Union
+from urllib.parse import urlparse
 
 # third-party imports from Lambda layer
 from aws_lambda_powertools import Logger, Metrics, Tracer
@@ -16,13 +17,14 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 import boto3
 from botocore.config import Config as BotoCoreConfig
 from gql.client import Client
+from gql.transport.aiohttp import AIOHTTPTransport
+from gql.transport.appsync_auth import AppSyncIAMAuthentication
 
 # local imports
 # pylint: disable=import-error
 from dynamodb_stream_event import DynamoDBDeserializedStreamEvent
 from mapping import is_call_event_record
 from call_event_handler import CallEventHandler
-from appsync import AIOAppSyncTransport
 from tumbling_window_state import CallState, CallStateManager
 
 # pylint: enable=import-error
@@ -86,7 +88,10 @@ async def handle_event(event: DynamoDBStreamEvent) -> EventHandlerResult:
     # pylint: disable=too-many-locals
     stream_deserialized_event = DynamoDBDeserializedStreamEvent(event)
     results: List[Union[Dict, Exception]] = []
-    appsync_transport = AIOAppSyncTransport(url=APPSYNC_GRAPHQL_URL, boto3_session=BOTO3_SESSION)
+
+    appsync_host = str(urlparse(APPSYNC_GRAPHQL_URL).netloc)
+    appsync_auth = AppSyncIAMAuthentication(host=appsync_host)
+    appsync_transport = AIOHTTPTransport(url=APPSYNC_GRAPHQL_URL, auth=appsync_auth)
     appsync_client = Client(transport=appsync_transport, fetch_schema_from_transport=True)
     async with appsync_client as appsync_session:
         call_event_handler_args = dict(
@@ -121,6 +126,10 @@ async def handle_event(event: DynamoDBStreamEvent) -> EventHandlerResult:
                 if isinstance(result, Exception):
                     event_error_count = event_error_count + 1
                     LOGGER.error("call event exception: %s", result)
+                    try:
+                        raise result
+                    except Exception:  # pylint: disable=broad-except
+                        LOGGER.exception("call event exception")
                 else:
                     event_insert_count = event_insert_count + 1
                     if LOGGER.isEnabledFor(logging.DEBUG):

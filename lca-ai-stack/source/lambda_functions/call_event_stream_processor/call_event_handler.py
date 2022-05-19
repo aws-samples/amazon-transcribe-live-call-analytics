@@ -12,7 +12,7 @@ from aws_lambda_powertools import Logger, Metrics
 import boto3
 from gql.client import AsyncClientSession
 from gql.transport.exceptions import TransportQueryError
-from gql.dsl import DSLMutation, DSLSchema, dsl_gql  # type: ignore
+from gql.dsl import DSLMutation, DSLSchema, dsl_gql
 from graphql.language.ast import DocumentNode
 from graphql.language.printer import print_ast
 
@@ -161,7 +161,7 @@ class CallEventHandler:
             )
 
         if not result:
-            error_message = "unable to match event"
+            error_message = f"unable to match event. Item: {item}"
             raise TypeError(error_message)
 
         return result
@@ -291,11 +291,12 @@ class CallEventHandler:
                     sentiment_response=sentiment_response
                 )
                 sentiment_weighted = sentiment["SentimentWeighted"]
-                self._metrics.add_metric(
-                    name="SentimentWeighted",
-                    unit=MetricUnit.Count,
-                    value=sentiment_weighted,
-                )
+                if sentiment_weighted is not None:
+                    self._metrics.add_metric(
+                        name="SentimentWeighted",
+                        unit=MetricUnit.Count,
+                        value=sentiment_weighted,
+                    )
 
             sentiment_value = sentiment["Sentiment"]
             # add sentiment metric with dimension based on sentiment value

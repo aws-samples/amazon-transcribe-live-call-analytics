@@ -662,7 +662,7 @@ Resources:
           PhoneNumber=$( aws ssm get-parameter --name /${AWS::StackName}/phoneNumber --region $REGION | jq -r '.Parameter.Value' )
           VoiceConnectorHost=$( aws ssm get-parameter --name /${AWS::StackName}/voiceConnector --region $REGION | jq -r '.Parameter.Value' )
           OutboundHostName=$( aws ssm get-parameter --name /${AWS::StackName}/outboundHostName --region $REGION | jq -r '.Parameter.Value' )
-          curl ${DemoAsteriskAgentAudioURL} --output /var/lib/asterisk/sounds/agent.wav
+          curl -L ${DemoAsteriskAgentAudioURL} --output /var/lib/asterisk/sounds/agent.wav
 
           echo "[udp]
           type=transport

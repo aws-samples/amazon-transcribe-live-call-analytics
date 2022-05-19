@@ -24,6 +24,8 @@ CALL_EVENT_RECORD_PK_PREFIX = f"ce{FACET_SEPARATOR}"
 CALL_EVENT_TYPE_TO_STATUS = {
     "START": "STARTED",
     "START_TRANSCRIPT": "TRANSCRIBING",
+    "CONTINUE_TRANSCRIPT": "TRANSCRIBING",
+    "CONTINUE": "TRANSCRIBING",
     "END_TRANSCRIPT": "ENDED",
     "TRANSCRIPT_ERROR": "ERRORED ",
     "ERROR": "ERRORED ",
@@ -49,6 +51,8 @@ def is_call_status_update(item: Dict) -> bool:
     """Checks if a dynamoDB Stream item is a call status update event"""
     return item.get("EventType") in [
         "START_TRANSCRIPT",
+        "CONTINUE_TRANSCRIPT",
+        "CONTINUE",
         "END_TRANSCRIPT",
         "TRANSCRIPT_ERROR",
         "ERROR",

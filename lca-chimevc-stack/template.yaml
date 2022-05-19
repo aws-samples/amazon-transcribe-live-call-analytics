@@ -49,6 +49,7 @@ Parameters:
 
   DemoAsteriskAgentAudioURL:
     Type: String
+    Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
 
 Metadata:
