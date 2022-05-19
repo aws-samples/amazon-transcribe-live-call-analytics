@@ -126,6 +126,10 @@ async def handle_event(event: DynamoDBStreamEvent) -> EventHandlerResult:
                 if isinstance(result, Exception):
                     event_error_count = event_error_count + 1
                     LOGGER.error("call event exception: %s", result)
+                    try:
+                        raise result
+                    except Exception:  # pylint: disable=broad-except
+                        LOGGER.exception("call event exception")
                 else:
                     event_insert_count = event_insert_count + 1
                     if LOGGER.isEnabledFor(logging.DEBUG):
