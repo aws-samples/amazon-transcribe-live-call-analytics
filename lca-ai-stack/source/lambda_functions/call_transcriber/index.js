@@ -280,7 +280,6 @@ const getStreamsFromDynamo = async function (callId, agentArn, callerArn) {
 
 
 const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
-  let timeToStop = false;
   let actuallyStop = false;
   let firstDecodeEbml = true;
 
@@ -424,7 +423,7 @@ const go = async function (
   };
 
   if (sessionId !== undefined) {
-    tsParams.sessionId = sessionId;
+    tsParams.SessionId = sessionId;
   }
 
   if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
