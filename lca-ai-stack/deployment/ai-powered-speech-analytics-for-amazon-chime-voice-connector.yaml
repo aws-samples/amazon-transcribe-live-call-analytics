@@ -770,6 +770,8 @@ Resources:
             reason: Customer can use VPC if desired
     Properties:
       CodeUri: ../source/lambda_functions/call_event_stream_processor
+      Architectures:
+        - arm64
       Description: >-
         Call Event DynamoDB Table Stream Processor
       Events:
@@ -798,7 +800,7 @@ Resources:
         - !Ref CallEventStreamProcessLayer
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16"
+        - !Sub "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension-Arm64:2"
       MemorySize: 2048
       # policy templates:
       # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
@@ -849,6 +851,8 @@ Resources:
       Description: >-
         Call Event DynamoDB Table Stream Processor Layer
       ContentUri: ../source/lambda_layers/call_event_stream_processor
+      CompatibleArchitectures:
+        - arm64
       CompatibleRuntimes:
         - python3.9
       RetentionPolicy: Delete
