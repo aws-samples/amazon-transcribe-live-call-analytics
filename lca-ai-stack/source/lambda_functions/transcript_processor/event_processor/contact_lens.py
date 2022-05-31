@@ -361,6 +361,8 @@ def add_contact_lens_agent_assistances(
             category_segment["Transcript"] = "[Matched Category] " + category_segment["Transcript"]
             transcript_segments.append(category_segment)
 
+        """BobS: Disable display of DetectedIssues"""
+        """
         issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
         for issue in issues_detected:
             issue_segment = transform_segment_to_issues_agent_assist(
@@ -369,6 +371,7 @@ def add_contact_lens_agent_assistances(
             )
             issue_segment["Transcript"] = "[Detected Issue] " + issue_segment["Transcript"]
             transcript_segments.append(issue_segment)
+        """
 
         for transcript_segment in transcript_segments:
             query = dsl_gql(
@@ -403,6 +406,8 @@ async def send_lex_agent_assist(
     schema = DSLSchema(appsync_session.client.schema)
 
     call_id = transcript_segment_args["CallId"]
+    
+    LOGGER.debug("Bot Request: %s", content)
 
     bot_response: RecognizeTextResponseTypeDef = await recognize_text_lex(
         text=content,
@@ -412,6 +417,8 @@ async def send_lex_agent_assist(
         bot_alias_id=LEX_BOT_ALIAS_ID,
         locale_id=LEX_BOT_LOCALE_ID,
     )
+    
+    LOGGER.debug("Bot Response: ", extra=bot_response)
 
     result = {}
     if not (
@@ -462,9 +469,41 @@ def add_lex_agent_assistances(
     send_lex_agent_assist_args = []
     for segment in message.get("Segments", []):
         # only send relevant segments to agent assist
-        if not ("Transcript" in segment or "Categories" in segment):
+        # BobS: Modified to process Utterance rather than Transcript events 
+        # to lower latency
+        if not ("Utterance" in segment or "Categories" in segment):
             continue
 
+        if (
+            "Utterance" in segment
+            and segment["Utterance"].get("ParticipantRole") == "CUSTOMER"
+        ):
+            is_partial = False
+            segment_item = segment["Utterance"]
+            content = segment_item["PartialContent"]
+            segment_id = str(uuid.uuid4())
+
+            created_at = datetime.utcnow().astimezone().isoformat()
+            start_time = segment_item["BeginOffsetMillis"] / 1000
+            end_time = segment_item["EndOffsetMillis"] / 1000
+
+            send_lex_agent_assist_args.append(
+                dict(
+                    content=content,
+                    transcript_segment_args=dict(
+                        CallId=call_id,
+                        Channel=channel,
+                        CreatedAt=created_at,
+                        EndTime=end_time,
+                        IsPartial=is_partial,
+                        SegmentId=segment_id,
+                        StartTime=start_time,
+                        Status=status,
+                    ),
+                )
+            )
+        # BobS - Issue detection code will not be invoked since we are not processing 
+        # Transcript events now.
         issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
         if (
             "Transcript" in segment
