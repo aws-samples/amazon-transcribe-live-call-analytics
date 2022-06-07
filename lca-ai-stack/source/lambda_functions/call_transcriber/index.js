@@ -15,18 +15,18 @@ const {
   StartStreamTranscriptionCommand,
 } = require('@aws-sdk/client-transcribe-streaming');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
-const { Worker } = require('worker_threads');
 const BlockStream = require('block-stream2');
 const fs = require('fs');
 const stream = require('stream');
 const { PassThrough } = require('stream');
 const interleave = require('interleave-stream');
-const mergeFiles = require('./mergeFiles');
 
 const { EbmlStreamDecoder, EbmlTagId, EbmlTagPosition } = require('ebml-stream');
 const { KinesisVideoClient, GetDataEndpointCommand } = require('@aws-sdk/client-kinesis-video');
 const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
 
+const mergeFiles = require('./mergeFiles');
+const { KinesisClient, PutRecordCommand } = require('@aws-sdk/client-kinesis');
 
 const REGION = process.env.REGION || 'us-east-1';
 const { EVENT_SOURCING_TABLE_NAME } = process.env;
@@ -44,6 +44,8 @@ const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
+const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
+const KINESIS_STREAM_ARN = process.env.KINESIS_STREAM_ARN || '';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -54,20 +56,21 @@ const EVENT_TYPE = {
 const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
 
 const s3Client = new S3Client({ region: REGION });
-const dynamoClient = new DynamoDBClient({ region: REGION });
 const lambdaClient = new LambdaClient({ region: REGION });
+const dynamoClient = new DynamoDBClient({ region: REGION });
+const kinesisClient = new KinesisClient({ region: REGION });
 
 let timeToStop = false;
 let stopTimer;
 let keepAliveTimer;
 let keepAliveChunk = Buffer.alloc(2, 0);
 
-const getExpiration = function (numberOfDays){
+const getExpiration = function (numberOfDays) {
   return Math.round(Date.now() / 1000) + numberOfDays * 24 * 3600;
 };
 
 const sleep = async function (msec) {
-    return new Promise(resolve => setTimeout(resolve, msec));
+  return new Promise((resolve) => setTimeout(resolve, msec));
 }
 
 const writeS3Url = async function (callId) {
@@ -78,21 +81,22 @@ const writeS3Url = async function (callId) {
   const eventType = 'ADD_S3_RECORDING_URL';
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
 
-  const putParams = {
-    TableName: EVENT_SOURCING_TABLE_NAME,
-    Item: {
-      PK: { S: `ce#${callId}` },
-      SK: { S: `ts#${now}#et#${eventType}` },
-      CallId: { S: callId },
-      RecordingUrl: { S: recordingUrl },
-      EventType: { S: eventType.toString() },
-      CreatedAt: { S: now },
-      ExpiresAfter: { N: expiration.toString() },
-    },
+  const putObj = {
+    PK: { S: `ce#${callId}` },
+    SK: { S: `ts#${now}#et#${eventType}` },
+    CallId: { S: callId },
+    RecordingUrl: { S: recordingUrl },
+    EventType: { S: eventType.toString() },
+    CreatedAt: { S: now },
+    ExpiresAfter: { N: expiration.toString() },
   };
-  const putCmd = new PutItemCommand(putParams);
+  const putParams = {
+    StreamName: KINESIS_STREAM_NAME,
+    Data: Buffer.from(JSON.stringify(putObj)).toString('base64'),
+  };
+  const putCmd = new PutRecordCommand(putParams);
   try {
-    await dynamoClient.send(putCmd);
+    await kinesisClient.send(putCmd);
   } catch (error) {
     console.error('Error writing S3 url to Dynamo', error);
   }
@@ -148,28 +152,30 @@ const writeTranscriptionSegment = async function (
   const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION) : getExpiration(EXPIRATION_IN_DAYS));
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
-  const putParams = {
-    TableName: EVENT_SOURCING_TABLE_NAME,
-    Item: {
-      PK: { S: `ce#${callId}` },
-      SK: { S: `ts#${now}#et#${eventType}#c#${channel}` },
-      Channel: { S: channel },
-      StreamArn: { S: streamArn },
-      TransactionId: { S: transactionId },
-      CallId: { S: callId },
-      SegmentId: { S: result.ResultId },
-      StartTime: { N: result.StartTime.toString() },
-      EndTime: { N: result.EndTime.toString() },
-      Transcript: { S: result.Alternatives[0].Transcript },
-      IsPartial: { BOOL: result.IsPartial },
-      EventType: { S: eventType.toString() },
-      CreatedAt: { S: now },
-      ExpiresAfter: { N: expiration.toString() },
-    },
+  const putObj = {
+    PK: { S: `ce#${callId}` },
+    SK: { S: `ts#${now}#et#${eventType}#c#${channel}` },
+    Channel: { S: channel },
+    StreamArn: { S: streamArn },
+    TransactionId: { S: transactionId },
+    CallId: { S: callId },
+    SegmentId: { S: result.ResultId },
+    StartTime: { N: result.StartTime.toString() },
+    EndTime: { N: result.EndTime.toString() },
+    Transcript: { S: result.Alternatives[0].Transcript },
+    IsPartial: { BOOL: result.IsPartial },
+    EventType: { S: eventType.toString() },
+    CreatedAt: { S: now },
+    ExpiresAfter: { N: expiration.toString() },
   };
-  const putCmd = new PutItemCommand(putParams);
+
+  const putParams = {
+    StreamName: KINESIS_STREAM_NAME,
+    Data: Buffer.from(JSON.stringify(putObj)).toString('base64'),
+  };
+  const putCmd = new PutRecordCommand(putParams);
   try {
-    await dynamoClient.send(putCmd);
+    await kinesisClient.send(putCmd);
   } catch (error) {
     console.error('Error writing transcription segment', error);
   }
@@ -182,25 +188,27 @@ const writeCallEventToDynamo = async function (callEvent) {
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
 
-  const putParams = {
-    TableName: EVENT_SOURCING_TABLE_NAME,
-    Item: {
-      PK: { S: `ce#${callEvent.detail.callId}` },
-      SK: { S: `ts#${callEvent.detail.startTime}#et#${eventType}#c#${channel}` },
-      CallId: { S: callEvent.detail.callId },
-      ExpiresAfter: { N: expiration.toString() },
-      CreatedAt: { S: now },
-      CustomerPhoneNumber: { S: callEvent.detail.fromNumber },
-      SystemPhoneNumber: { S: callEvent.detail.toNumber },
-      Channel: { S: channel },
-      EventType: { S: eventType },
-      StreamArn: { S: callEvent.detail.streamArn },
-    },
+  const putObj = {
+    PK: { S: `ce#${callEvent.detail.callId}` },
+    SK: { S: `ts#${callEvent.detail.startTime}#et#${eventType}#c#${channel}` },
+    CallId: { S: callEvent.detail.callId },
+    ExpiresAfter: { N: expiration.toString() },
+    CreatedAt: { S: now },
+    CustomerPhoneNumber: { S: callEvent.detail.fromNumber },
+    SystemPhoneNumber: { S: callEvent.detail.toNumber },
+    Channel: { S: channel },
+    EventType: { S: eventType },
+    StreamArn: { S: callEvent.detail.streamArn },
   };
-  console.log(putParams);
-  const putCmd = new PutItemCommand(putParams);
+  console.log(putObj);
+
+  const putParams = {
+    StreamName: KINESIS_STREAM_NAME,
+    Data: Buffer.from(JSON.stringify(putObj)).toString('base64'),
+  };
+  const putCmd = new PutRecordCommand(putParams);
   try {
-    await dynamoClient.send(putCmd);
+    await kinesisClient.send(putCmd);
   } catch (error) {
     console.error('Error writing event', error);
   }

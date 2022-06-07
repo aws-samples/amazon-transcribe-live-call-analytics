@@ -6,6 +6,7 @@
   "author": "Chris Lott",
   "license": "Apache-2.0",
   "dependencies": {
+    "@aws-sdk/client-kinesis":"^3.105.0",
     "@aws-sdk/client-dynamodb": "^3.92.0",
     "@aws-sdk/client-eventbridge": "^3.92.0",
     "@aws-sdk/client-kinesis-video": "^3.92.0",
