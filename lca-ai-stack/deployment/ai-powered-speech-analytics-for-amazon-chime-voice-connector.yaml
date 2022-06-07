@@ -691,6 +691,8 @@ Resources:
         Variables:
           BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
+          KINESIS_STREAM_NAME: !Ref CallDataStream
+          KINESIS_STREAM_ARN: !GetAtt CallDataStream.Arn
           EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTable
           EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           REGION: !Ref AWS::Region
