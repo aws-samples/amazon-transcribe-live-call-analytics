@@ -5,19 +5,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.3.0] - 2022-05-18
+### Added
+- Support for [Genesys AudioHook](https://help.mypurecloud.com/articles/audiohook-integration-overview/). You can now
+  stream call audio into the Live Call Analytics solution from a Genesys AudioHook. See the details in the
+  [README](https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/lca-genesys-audiohook-stack/README.md)
+  file
 ### Changed
-- Updated the Python GraphQL client in the Call Event Stream Processor Lambda function to the
-  recently released stable version [gql v3.0.0](https://github.com/graphql-python/gql/releases/tag/v3.0.0).
-  This version is now out of pre-release which removed the need for the Makefile based sam cli
-  build of the Lambda layer. The library also added direct support for AppSync which removed the
-  need for the custom AppSync transport and authentication code. The Makefile build and custom
+- Changed the audio stream consumer and transcriber component to run on AWS Lambda instead of AWS Fargate. This new Call
+  Transcriber provides the following benefits:
+    * Reduced Amazon Transcribe processing cost. The agent and caller audio streams are now automatically merged into a
+      single stereo stream.  Both the agent and caller audio streams are transcribed in a single session
+    * Longer call duration handling. The Fargate consumer had a timeout of 42 minutes. The new Lambda based transcriber
+      has a mechanism that allows to transparently handoff the call processing from one Lambda invocation to another
+    * Faster scaling on sudden call volume spikes
+    * Simplified stereo recording process. The stereo recordings are now produced by the Call Transcriber instead of
+      merging recording files after the call was done
+    * Serverless!
+- Additional language support
+- The Call Event Stream Processor Lambda function now runs on the arm64 architecture. The new Call Transcriber Lambda
+  function also runs on arm64. The build was updated to enable arm64 emulation when using the SAM CLI in Amazon Linux 2
+- Partial transcript events are now only persisted for 1 day in DynamoDB. Final transcript events are persisted for 90
+  days by default
+- Separated the build and development python virtual environments to avoid development dependencies interfere with the
+  SAM CLI
+- Updated the Python GraphQL client in the Call Event Stream Processor Lambda function to the released stable version
+  [gql v3.2.0](https://github.com/graphql-python/gql/releases/tag/v3.2.0). This version is now out of pre-release which
+  removed the need for the Makefile based SAM CLI build of the Lambda layer. The library also added direct support for
+  AppSync which removed the need for the custom AppSync transport and authentication code. The Makefile build and custom
   AppSync code has been deleted
 - Updated dependency versions of various components including:
     - Web UI
-    - KVS Transcribe Processor Fargate container
     - Call Event Processor Lambda function
-    - S3 Recording Trigger Lambda function
     - Project build and development
+- Updated nodejs and npm versions used in CodeBuild to build the UI
+- Fixed demo agent recording download issue
+### Removed
+- The resources associated with the Fargate consumer such as Fargate cluster/service/task definition, VPC, SQS queues
+  and autoscaling were removed in favor of the new Lambda based Call Transcriber
+- The resources associated with the creation of post call stereo recordings (including Lambda functions, S3 bucket and
+  SQS queue) were removed in favor of the new Call Transcriber that merges the audio into stereo recordings at call time
 
 ## [0.2.1] - 2022-02-02
 ### Fixed
@@ -61,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.1...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.3.0...develop
+[0.3.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/releases/tag/v0.1.0

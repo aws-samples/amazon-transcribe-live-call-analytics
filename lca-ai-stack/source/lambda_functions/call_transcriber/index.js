@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 // TODO: Add Metrics & Logger from Lambda Powertools
 // TODO: Retries and resiliency
 // TODO: Debug why sometimes it is now working twice
-// TODO: Decouple transcribe and lca
-
 
 const { DynamoDBClient, QueryCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -25,20 +23,27 @@ const { PassThrough } = require('stream');
 const interleave = require('interleave-stream');
 const mergeFiles = require('./mergeFiles');
 
+const { EbmlStreamDecoder, EbmlTagId, EbmlTagPosition } = require('ebml-stream');
+const { KinesisVideoClient, GetDataEndpointCommand } = require('@aws-sdk/client-kinesis-video');
+const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
+
+
 const REGION = process.env.REGION || 'us-east-1';
 const { EVENT_SOURCING_TABLE_NAME } = process.env;
 const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
-const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || '90');
-const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128');
+const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || '90', 10);
+const PARTIAL_EXPIRATION = parseInt(process.env.PARTIAL_EXPIRATION || '1', 10);
+const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || 'true') === 'true';
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
+const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -46,7 +51,7 @@ const EVENT_TYPE = {
   FAILED: 'ERROR',
   CONTINUE: 'CONTINUE',
 };
-const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT) || 720000;
+const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
 
 const s3Client = new S3Client({ region: REGION });
 const dynamoClient = new DynamoDBClient({ region: REGION });
@@ -54,12 +59,22 @@ const lambdaClient = new LambdaClient({ region: REGION });
 
 let timeToStop = false;
 let stopTimer;
+let keepAliveTimer;
+let keepAliveChunk = Buffer.alloc(2, 0);
+
+const getExpiration = function (numberOfDays){
+  return Math.round(Date.now() / 1000) + numberOfDays * 24 * 3600;
+};
+
+const sleep = async function (msec) {
+    return new Promise(resolve => setTimeout(resolve, msec));
+}
 
 const writeS3Url = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
 
   const now = new Date().toISOString();
-  const expiration = Math.round(Date.now() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = 'ADD_S3_RECORDING_URL';
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
 
@@ -130,7 +145,7 @@ const writeTranscriptionSegment = async function (
 
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
-  const expiration = Math.round(Date.now() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION) : getExpiration(EXPIRATION_IN_DAYS));
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putParams = {
@@ -162,7 +177,7 @@ const writeTranscriptionSegment = async function (
 
 const writeCallEventToDynamo = async function (callEvent) {
   const startTime = new Date(callEvent.detail.startTime);
-  const expiration = Math.round(startTime.getTime() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
@@ -193,7 +208,7 @@ const writeCallEventToDynamo = async function (callEvent) {
 
 const writeStatusToDynamo = async function (channel, status, callId, streamArn, transactionId) {
   const now = new Date().toISOString();
-  const expiration = Math.round(Date.now() / 1000) + EXPIRATION_IN_DAYS * 24 * 3600;
+  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const putParams = {
     TableName: EVENT_SOURCING_TABLE_NAME,
     Item: {
@@ -263,38 +278,98 @@ const getStreamsFromDynamo = async function (callId, agentArn, callerArn) {
   return resultArns;
 };
 
-// returns a promise, so we can await it
-const runKVSWorker = function (workerData, streamPipe) {
-  let newWorker;
 
-  const workerPromise = new Promise((resolve, reject) => {
-    console.log('instantiating worker');
-    newWorker = new Worker('./kvsWorker.js', { workerData });
-    console.log('done instantiating worker');
-    newWorker.on('message', (message) => {
-      if (message.type === 'chunk') {
-        // console.log('writing chunk to ffmpeg');
-        try {
-          streamPipe.write(message.chunk);
-        } catch (error) {
-          console.log('error writing to ffmpeg pipe', error);
+const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
+  let actuallyStop = false;
+  let firstDecodeEbml = true;
+
+  let lastMessageTime;
+
+  console.log('inside readKVS worker', REGION, streamName, streamArn);
+  const decoder = new EbmlStreamDecoder({
+    bufferTagIds: [EbmlTagId.SimpleTag, EbmlTagId.SimpleBlock],
+  });
+  decoder.on('error', (error) => {
+    console.log('Decoder Error:', JSON.stringify(error));
+  });
+  decoder.on('data', (chunk) => {
+    lastMessageTime = Date().now;
+    if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
+      // this is the end of a segment. Lets forcefully stop if needed.
+      if (timeToStop) actuallyStop = true;
+    }
+    if (!timeToStop) {
+      if (chunk.id === EbmlTagId.SimpleTag) {
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_FRAGMENT_NUMBER') {
+          lastFragment = chunk.Children[1].data;
         }
       }
-      if (message.type === 'lastFragment') {
-        console.log('last fragment:', message.streamName, message.lastFragment);
-        resolve(message.lastFragment);
+      if (chunk.id === EbmlTagId.SimpleBlock) {
+        if (firstDecodeEbml) {
+          firstDecodeEbml = false;
+          console.log(`decoded ebml, simpleblock size:${chunk.size} stream: ${streamName}`);
+        }
+        try {
+          streamPipe.write(chunk.payload);
+        } catch (error) {
+          console.error('Error posting payload chunk', error);
+        }
       }
-    });
-    newWorker.on('error', reject);
-    newWorker.on('exit', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Worker stopped with exit code ${code}`));
-      }
-    });
+    }
+  }); // use this to find last fragment tag we received
+  decoder.on('end', () => {
+    // close stdio
+    console.log(streamName, 'Finished');
+    console.log(`Last fragment for ${streamName} ${lastFragment} total size: ${totalSize}`);
   });
-  workerPromise.worker = newWorker;
-  return workerPromise;
+  console.log(`Starting stream ${streamName}`);
+  const kvClient = new KinesisVideoClient({ REGION });
+  const getDataCmd = new GetDataEndpointCommand({ APIName: 'GET_MEDIA', StreamARN: streamArn });
+  const response = await kvClient.send(getDataCmd);
+  const mediaClient = new KinesisVideoMedia({ REGION, endpoint: response.DataEndpoint });
+  let fragmentSelector = { StreamARN: streamArn, StartSelector: { StartSelectorType: 'NOW' } };
+  if (lastFragment && lastFragment.length > 0) {
+    fragmentSelector = {
+      StreamARN: streamArn,
+      StartSelector: {
+        StartSelectorType: 'FRAGMENT_NUMBER',
+        AfterFragmentNumber: lastFragment,
+      },
+    };
+  }
+  const result = await mediaClient.getMedia(fragmentSelector);
+  const streamReader = result.Payload;
+
+  const timeout = setTimeout(() => {
+    // Check every 10 seconds if 5 minutes have passed
+    if (Date.now() - lastMessageTime > 1000 * 60 * 5) {
+      clearInterval(timeout);
+      streamReader.destroy();
+    }
+  }, 10000);
+
+  let totalSize = 0;
+  let firstKvsChunk = true;
+  try {
+    for await (const chunk of streamReader) {
+      if (firstKvsChunk) {
+        firstKvsChunk = false;
+        console.log(`${streamName} received chunk size: ${chunk.length}`);
+      }
+      totalSize += chunk.length;
+      decoder.write(chunk);
+      if (actuallyStop) break;
+    }
+  } catch (error) {
+    console.error('error writing to decoder', error);
+  } finally {
+    console.log(`Closing buffers ${streamName}`);
+    decoder.end();
+  }
+
+  return lastFragment;
 };
+
 
 const readTranscripts = async function (tsStream, callId, callerStreamArn, sessionId) {
   try {
@@ -347,8 +422,8 @@ const go = async function (
     AudioStream: audioStream(),
   };
 
-  if(sessionId !== undefined) {
-    tsParams.sessionId = sessionId;
+  if (sessionId !== undefined) {
+    tsParams.SessionId = sessionId;
   }
 
   if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
@@ -364,8 +439,9 @@ const go = async function (
   const tsResponse = await tsClient.send(tsCmd);
   // console.log(tsResponse);
   sessionId = tsResponse.SessionId;
-  if (lastAgentFragment === undefined)
+  if (lastAgentFragment === undefined) {
     writeStatusToDynamo('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
+  }
   else writeStatusToDynamo('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
   console.log('creating readable from transcript stream');
   const tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
@@ -374,7 +450,7 @@ const go = async function (
   const agentBlock = new BlockStream(2);
   const callerBlock = new BlockStream(2);
   const combinedStream = new PassThrough();
-  const combinedStreamBlock = new BlockStream(4); // TODO: Calculate this size based on 250ms 'chunks'
+  const combinedStreamBlock = new BlockStream(4);
   combinedStream.pipe(combinedStreamBlock);
   combinedStreamBlock.on('data', (chunk) => {
     passthroughStream.write(chunk);
@@ -383,41 +459,31 @@ const go = async function (
 
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
-  const callerWorker = runKVSWorker(
-    {
-      region: REGION,
-      streamName: 'Caller',
-      streamArn: callerStreamArn,
-      lastFragment: lastCallerFragment,
-    },
-    callerBlock,
-  );
 
-  const agentWorker = runKVSWorker(
-    {
-      region: REGION,
-      streamName: 'Agent',
-      streamArn: agentStreamArn,
-      lastFragment: lastAgentFragment,
-    },
-    agentBlock,
-  );
+  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
+  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
 
   console.log('done starting workers');
 
   timeToStop = false;
   stopTimer = setTimeout(() => {
     timeToStop = true;
-    agentWorker.worker.postMessage('Agent, Time to stop!');
-    callerWorker.worker.postMessage('Caller, Time to stop!');
   }, TIMEOUT);
+
+  keepAliveTimer = setInterval(() => {
+    if (timeToStop === true) {
+      clearInterval(keepAliveTimer);
+    } else {
+      agentBlock.write(keepAliveChunk);
+      callerBlock.write(keepAliveChunk);
+    }
+  }, KEEP_ALIVE);
 
   const transcribePromise = readTranscripts(tsStream, callId, callerStreamArn, sessionId);
 
   const returnVals = await Promise.all([callerWorker, agentWorker]);
 
   // we are done with transcribe.
-  // passthroughStream.write(Buffer.alloc(0));
   passthroughStream.end();
 
   await transcribePromise;
@@ -472,10 +538,16 @@ const handler = async function (event, context) {
     let callerStreamArn;
 
     // save which stream we just received from event
-    if (event.detail.isCaller === true) callerStreamArn = event.detail.streamArn;
-    else agentStreamArn = event.detail.streamArn;
+    if (event.detail.isCaller === true) {
+      callerStreamArn = event.detail.streamArn;
+    }
+    else {
+      //agentStreamArn = event.detail.streamArn;
+      console.log("this is not the caller stream, so return.");
+      return;
+    }
 
-    const streamResults = await getStreamsFromDynamo(
+    let streamResults = await getStreamsFromDynamo(
       event.detail.callId,
       agentStreamArn,
       callerStreamArn,
@@ -483,10 +555,25 @@ const handler = async function (event, context) {
     console.log(`agent stream:${streamResults.agentStreamArn}`);
     console.log(`caller stream:${streamResults.callerStreamArn}`);
 
-    if (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
-      console.log('Agent or caller streams not yet available.');
-      return 'not done yet'; // TODO: Figure out what to return from Lambda
+    let loopCount = 0;
+
+    while (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
+      console.log(loopCount,'Agent or caller streams not yet available. Sleeping 100ms.');
+      await sleep(100);
+      streamResults = await getStreamsFromDynamo(
+        event.detail.callId,
+        agentStreamArn,
+        callerStreamArn,
+      );
+      console.log(`agent stream:${streamResults.agentStreamArn}`);
+      console.log(`caller stream:${streamResults.callerStreamArn}`);
+      loopCount = loopCount + 1;
+      if(loopCount == 100) {
+        console.log("Both KVS streams not active after 10 seconds. Exiting.");
+        return;
+      }
     }
+
     result = await go(
       event.detail.callId,
       0,
