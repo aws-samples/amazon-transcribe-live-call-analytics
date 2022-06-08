@@ -12,12 +12,21 @@
 // # See the License for the specific language governing permissions and
 // # limitations under the License.
 
-import { CallEvent, CallEventStatus, CallRecordingEvent } from './entities-lca';
+import { 
+    CallEvent, 
+    CallEventStatus, 
+    CallRecordingEvent 
+} from './entities-lca';
 import {
     DynamoDBClient,
     PutItemCommand
 } from '@aws-sdk/client-dynamodb';
 import { TranscriptEvent } from '@aws-sdk/client-transcribe-streaming';
+import { 
+    KinesisClient, 
+    PutRecordCommand 
+} from '@aws-sdk/client-kinesis';
+
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -25,8 +34,12 @@ const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
 const ddbTableName = process.env['EVENT_SOURCING_TABLE_NAME'] || null;
 const expireInDays = Number(process.env['EXPIRATION_IN_DAYS']) || 90;
 const savePartial = process.env['SAVE_PARTIAL_TRANSCRIPTS'] === 'true';
+const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
+
 
 const dynamoClient = new DynamoDBClient({ region: awsRegion });
+const kinesisClient = new KinesisClient({ region: awsRegion });
+
 export const writeCallEventToDynamo = async (callEvent: CallEvent ) => {
 
     const now = new Date().toISOString();
@@ -135,30 +148,33 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const now = new Date().toISOString();
             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
             const eventType = 'ADD_TRANSCRIPT_SEGMENT';
-            const putParams = {
-                TableName: ddbTableName ?? '',
-                Item : {
-                    PK: { 'S' : `ce#${callId}` },
-                    SK: { 'S' : `ts#${now}#et#${eventType}#c#${channel}` },
-                    Channel: { 'S' : channel },
-                    TransactionId: { 'S': transid },
-                    CallId: { 'S': callId },
-                    SegmentId: { 'S': resultId },
-                    StartTime: { 'N': startTime.toString() },
-                    EndTime: { 'N': endTime.toString() },
-                    Transcript: { 'S': transcript || '' },
-                    IsPartial: { 'BOOL': ispartial },
-                    EventType: { 'S': eventType.toString() },
-                    CreatedAt: { 'S': now },
-                    ExpiresAfter: { 'N': expiration.toString() }
-                }
+            const kdsObject = {
+                PK: { 'S' : `ce#${callId}` },
+                SK: { 'S' : `ts#${now}#et#${eventType}#c#${channel}` },
+                Channel: { 'S' : channel },
+                TransactionId: { 'S': transid },
+                CallId: { 'S': callId },
+                SegmentId: { 'S': resultId },
+                StartTime: { 'N': startTime.toString() },
+                EndTime: { 'N': endTime.toString() },
+                Transcript: { 'S': transcript || '' },
+                IsPartial: { 'BOOL': ispartial },
+                EventType: { 'S': eventType.toString() },
+                CreatedAt: { 'S': now },
+                ExpiresAfter: { 'N': expiration.toString() }
             };
             
-            const putCmd = new PutItemCommand(putParams);
+            const putParams = {
+                StreamName: kdsStreamName,
+                PartitionKey: callId,
+                Data: Buffer.from(JSON.stringify(kdsObject)),
+            };
+            
+            const putCmd = new PutRecordCommand(putParams);
             try {
-                await dynamoClient.send(putCmd);
+                await kinesisClient.send(putCmd);
             } catch (error) {
-                console.error(error);
+                console.error('Error writing transcription segment to KDS', error);
             }
         }
     }
