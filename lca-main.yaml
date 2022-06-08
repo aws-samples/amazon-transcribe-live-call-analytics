@@ -55,20 +55,38 @@ Parameters:
     Default: AWS QnABot with new Kendra Index (Developer Edition)
     AllowedValues:
       - Disabled
+      - Bring your own LexV2 bot
       - AWS QnABot with existing Kendra Index
       - AWS QnABot with new Kendra Index (Developer Edition)
       - AWS QnABot with new Kendra Index (Enterprise Edition)
     Description: >
-      Choose to enable optional Agent Assist capability, powered by a nested AWS QnABot stack. 
+      Choose to enable optional Agent Assist capability, powered by a nested AWS QnABot stack, or your own LexV2 bot. 
       AWS QnABot uses Amazon Lex and Amazon Kendra to provide real time agent assist messages based on intents, slots,
       FAQs, and general search index that you configure using the included ContentDesigner UI.
 
   AgentAssistExistingKendraIndexId:
     Default: ''
     Type: String
+    AllowedPattern: '^(|[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})$'
     Description: >
-      Used only when AgentAssistOption is set to 'AWS QnABot with existing Kendra Index. '
+      Used only when AgentAssistOption is set to 'AWS QnABot with existing Kendra Index'.
       Provide the index *id* (not name) of an existing Kendra index to be used for Agent Assist bot."
+
+  AgentAssistExistingLexV2BotId:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
+    Description: >
+      Used only when AgentAssistOption is set to 'Bring your own LexV2 bot'.
+      Provide the Lex V2 *Bot Id* (not name) of an existing LexV2 bot to be used for Agent Assist."
+
+  AgentAssistExistingLexV2BotAliasId:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
+    Description: >
+      Used only when AgentAssistOption is set to 'Bring your own LexV2 bot'.
+      Provide the Lex V2 *Bot Alias Id* (not name) of an existing LexV2 bot alias to be used for Agent Assist."
 
   S3BucketName:
     Type: String
@@ -207,6 +225,8 @@ Metadata:
         Parameters:
           - AgentAssistOption
           - AgentAssistExistingKendraIndexId
+          - AgentAssistExistingLexV2BotId
+          - AgentAssistExistingLexV2BotAliasId
       - Label:
           default: Web UI Authentication
         Parameters:
@@ -284,7 +304,9 @@ Conditions:
   ShouldInstallChimeVCsiprec: !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
   ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
-  ShouldInstallAWSQnaBot: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
+  ShouldEnableLexAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
+  ShouldBringYourOwnBot: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
+  ShouldInstallAWSQnaBot: !And [!Condition ShouldEnableLexAgentAssist, !Not [!Condition ShouldBringYourOwnBot]]
   ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Developer Edition)']
   ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Enterprise Edition)']
   ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
@@ -368,7 +390,7 @@ Resources:
       # yamllint enable rule:line-length
       Parameters:
         Email: !Ref AdminEmail
-        Username: "admin"
+        Username: "Admin"
         DefaultKendraIndexId:
           !If
             - ShouldCreateKendraIndex
@@ -403,19 +425,19 @@ Resources:
         CloudFrontAllowedGeos: !Ref CloudFrontAllowedGeos
         IsLexAgentAssistEnabled: 
           !If
-            - ShouldInstallAWSQnaBot
+            - ShouldEnableLexAgentAssist
             - true
             - false
         LexAgentAssistBotId:
           !If
             - ShouldInstallAWSQnaBot
             - !GetAtt QNABOT.Outputs.LexV2BotId
-            - ''         
+            - !Ref AgentAssistExistingLexV2BotId         
         LexAgentAssistAliasId:
           !If
             - ShouldInstallAWSQnaBot
             - !GetAtt QNABOT.Outputs.LexV2BotAliasId
-            - ''
+            - !Ref AgentAssistExistingLexV2BotId
         LexAgentAssistLocaleId:
           !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
 
