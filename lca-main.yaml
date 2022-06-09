@@ -291,6 +291,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        CallAudioSource: !Ref CallAudioSource
         S3BucketName: !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
         AdminEmail: !Ref AdminEmail

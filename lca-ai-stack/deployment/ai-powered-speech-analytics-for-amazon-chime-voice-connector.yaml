@@ -19,6 +19,17 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics - LCA AI Stack
 
 Parameters:
+  CallAudioSource:
+    Type: String
+    AllowedValues:
+      - Demo Asterisk PBX Server
+      - Chime Voice Connector (SIPREC)
+      - Genesys Cloud Audiohook Web Socket
+    Description: >
+      Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
+      Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
+      or a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center.
+
   S3BucketName:
     Type: String
     Default: ""
@@ -902,6 +913,7 @@ Resources:
           STATE_DYNAMODB_TABLE_NAME: !Ref EventSourcingTable
           COMPREHEND_LANGUAGE_CODE: !Ref ComprehendLanguageCode
           IS_SENTIMENT_ANALYSIS_ENABLED: !Ref IsSentimentAnalysisEnabled
+          CALL_AUDIO_SOURCE: !Ref CallAudioSource
           # Lex Agent Assist
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
           LEX_BOT_ID: !Ref LexAgentAssistBotId
