@@ -21,6 +21,7 @@ from transcript_batch_processor import TranscriptBatchProcessor
 # local imports
 from state_manager import TranscriptStateManager
 from event_processor import execute_process_contact_lens_event_api_mutation
+from event_processor import execute_process_transcribe_event_api_mutation
 
 # pylint: enable=import-error
 
@@ -60,11 +61,18 @@ LEX_BOT_ID = environ["LEX_BOT_ID"]
 LEX_BOT_ALIAS_ID = environ["LEX_BOT_ALIAS_ID"]
 LEX_BOT_LOCALE_ID = environ["LEX_BOT_LOCALE_ID"]
 
+CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
+MUTATION_FUNCTION_MAPPING = {
+    "Demo Asterisk PBX Server": "execute_process_transcribe_event_api_mutation",
+    "Chime Voice Connector (SIPREC)": "execute_process_transcribe_event_api_mutation",
+    "Genesys Cloud Audiohook Web Socket": "execute_process_transcribe_event_api_mutation",
+    "Amazon Connect Contact Lens": "execute_process_contact_lens_event_api_mutation"
+}
+MUTATION_FUNCTION_NAME = MUTATION_FUNCTION_MAPPING.get(CALL_AUDIO_SOURCE)
 
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 EVENT_LOOP = asyncio.get_event_loop()
-
 
 async def update_state(event, event_processor_results) -> Dict[str, object]:
     """Updates the Lambda Tumbling Window State"""
@@ -90,7 +98,7 @@ async def update_state(event, event_processor_results) -> Dict[str, object]:
 
 
 async def process_event(event) -> Dict[str, List]:
-    """Processes a Batch of Transcript Records"""
+    """Processes a Batch of Transcript Records""" 
     async with TranscriptBatchProcessor(
         appsync_client=APPSYNC_CLIENT,
         agent_assist_args=dict(
@@ -100,7 +108,7 @@ async def process_event(event) -> Dict[str, List]:
             lex_bot_locale_id=LEX_BOT_LOCALE_ID,
         ),
         # called for each record right before the context manager exits
-        api_mutation_fn=execute_process_contact_lens_event_api_mutation,
+        api_mutation_fn=MUTATION_FUNCTION_NAME,
     ) as processor:
         await processor.handle_event(event=event)
 

@@ -171,7 +171,7 @@ const writeTranscriptionSegment = async function (
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
-    Data: Buffer.from(JSON.stringify(putObj)).toString('base64'),
+    Data: Buffer.from(JSON.stringify(putObj).toString('base64')),
   };
   const putCmd = new PutRecordCommand(putParams);
   try {
