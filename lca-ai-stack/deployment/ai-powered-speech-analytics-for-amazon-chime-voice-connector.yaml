@@ -312,8 +312,8 @@ Outputs:
   
   CallDataStreamName:
       Description: >-
-      The Name of Kinesis Data Stream to write the call data to.
-    Value: !Ref CallDataStream
+        The Name of Kinesis Data Stream to write the call data to.
+      Value: !Ref CallDataStream
   
   S3BucketName:
     Description: Bucket which contains all the call recordings
