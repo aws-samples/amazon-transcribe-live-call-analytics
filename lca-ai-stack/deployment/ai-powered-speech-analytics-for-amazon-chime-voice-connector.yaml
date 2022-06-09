@@ -309,6 +309,12 @@ Outputs:
       The ARN of the DynamoDB table created to store events and the contact
       details used in this solution
     Value: !GetAtt EventSourcingTable.Arn
+  
+  CallDataStreamName:
+      Description: >-
+      The Name of Kinesis Data Stream to write the call data to.
+    Value: !Ref CallDataStream
+  
   S3BucketName:
     Description: Bucket which contains all the call recordings
     Value: !If

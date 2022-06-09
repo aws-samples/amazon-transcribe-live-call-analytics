@@ -46,6 +46,11 @@ Parameters:
     Type: String
     Description: >-
       Name of the dynamo db table used by LCA solution 
+  
+  CallDataStreamName:
+    Type: String
+    Description: >-
+      The Name of Kinesis Data Stream to write the call data to.
 
   CloudFrontPriceClass:
     Type: String
@@ -1067,6 +1072,8 @@ Resources:
               Value: '8080'
             - Name: EVENT_SOURCING_TABLE_NAME
               Value: !Ref EventSourcingTableName
+            - Name: KINESIS_STREAM_NAME
+              Value: !Ref CallDataStreamName
             - Name: EXPIRATION_IN_DAYS
               Value: !Ref DynamoDbExpirationInDays
             - Name: API_KEY_ARN
