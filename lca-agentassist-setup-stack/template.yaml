@@ -1,0 +1,210 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Amazon Transcribe Live Call Analytics - Agent Assist Setup
+
+Parameters:
+
+  # Required
+  AISTACK:
+    Type: String
+    Description: AISTACK Stack ARN
+
+  AISTACKTemplateURL:
+    Type: String
+    Description: AISTACK Template URL
+
+  # Optional: empty if user configured 'Bring your own bot' in main stack
+  QNABOTSTACK:
+    Default: ''
+    Type: String
+    Description: QNABOT Stack ARN  
+
+  # Required
+  KendraIndexId:
+    Type: String
+    AllowedPattern: '^(|[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})$'
+    Description: >
+      Provide the index *id* (not name) of an existing Kendra index to be used for Agent Assist bot.
+
+  # Required
+  LexAgentAssistBotId:
+    Type: String
+    Description: >-
+      Lex Bot Id used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
+    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
+
+  # Required
+  LexAgentAssistAliasId:
+    Type: String
+    Description: >-
+      Lex Bot Alias ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
+    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
+
+Conditions:
+  ShouldConfigureQnabot: !Not [!Equals [!Ref QNABOT, '']]
+
+Resources:
+
+  LambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns: !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+  LambdaCFPolicyAISTACK:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:DescribeStacks
+              - cloudformation:UpdateStack
+            Effect: Allow
+            Resource:
+              - !Ref AISTACK
+        Version: 2012-10-17
+      PolicyName: CFPolicyAISTACK
+      Roles:
+        - !Ref LambdaRole
+
+  LambdaCFPolicyQNABOT:
+    Type: "AWS::IAM::Policy"
+    Condition: ShouldConfigureQnabot
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:DescribeStacks
+            Effect: Allow
+            Resource:
+              - !Ref AISTACK
+        Version: 2012-10-17
+      PolicyName: CFPolicyQNABOT
+      Roles:
+        - !Ref LambdaRole
+
+
+  SetupFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Role: !Ref LambdaRole
+      Handler: index.handler
+      Runtime: python3.8
+      Timeout: 900
+      Code:
+        ZipFile: |
+          import boto3
+          import botocore
+          import cfnresponse
+          import json
+
+          cf = boto3.client('cloudformation')
+          ssm = boto3.client('ssm')
+          def addBotToAistack(event):
+            response = cf.describe_stacks(StackName=event["AISTACK"])
+            orig_params = [
+              p for p in response["Stacks"][0]["Parameters"] if p["ParameterKey"] not in ['LexAgentAssistBotId', 'LexAgentAssistBotAliasId'] 
+            ]
+            bot_params = [
+                  {
+                      'ParameterKey': 'LexAgentAssistBotId',
+                      'ParameterValue': event["LexAgentAssistBotId"]
+                  },
+                  {
+                      'ParameterKey': 'LexAgentAssistAliasId',
+                      'ParameterValue': event["LexAgentAssistAliasId"]
+                  }    
+              ]
+            try:
+              response = cf.update_stack(
+                StackName=event["AISTACK"],
+                UsePreviousTemplate=True,
+                Parameters=orig_params + bot_params,
+                Capabilities=['CAPABILITY_NAMED_IAM','CAPABILITY_AUTO_EXPAND']
+              )
+              waiter = cf.get_waiter('stack_update_complete')
+              print("...waiting for stack to be ready...")
+              waiter.wait(StackName=event["AISTACK"])
+              print("Stack updated")
+            except botocore.exceptions.ClientError as ex:
+                error_message = ex.response['Error']['Message']
+                if error_message == 'No updates are to be performed.':
+                    print("No changes in stack changeset")
+                else:
+                    raise
+
+          def configureQnabotSettings(event):
+            response = cf.describe_stacks(StackName=event["QNABOTSTACK"])
+            outputs = {}
+            for output in response["Stacks"][0]["Outputs"]:
+              outputs[output["OutputKey"]] = output["OutputValue"]
+            ssmParamName = outputs["DefaultSettingsSSMParameterName"]
+            value = ssm.get_parameter(Name=ssmParamName)
+            settings = json.loads(value["Parameter"]["Value"])
+            # modify settings
+            settings["ALT_SEARCH_KENDRA_INDEXES"] = event["KendraIndexId"]
+            settings["KENDRA_FAQ_INDEX"] = event["KendraIndexId"]
+            settings["ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE"] = "VERY HIGH"
+            settings["KENDRA_FAQ_ES_FALLBACK"] = "false"
+            settings["ALT_SEARCH_KENDRA_ANSWER_MESSAGE"] = "Amazon Kendra suggestions."
+            # save back to SSM
+            response = ssm.put_parameter(
+              Name=ssmParamName,
+              Value=json.dumps(settings),
+              Type='String',
+              Overwrite=True
+            )
+            print(f"Updated SSM parameter: {ssmParamName}")
+
+          def handler(event, context):
+            print(event)
+            status = cfnresponse.SUCCESS
+            responseData = {}
+            responseData['Data'] = "Success"
+            if event['RequestType'] != 'Delete':
+              try:
+                addBotToAistack(event)
+                if event["QNABOTSTACK"]:
+                  configureQnabotSettings(event)
+              except Exception as e:
+                print(e)
+                responseData["Error"] = f"Exception thrown: {e}"
+                status = cfnresponse.FAILED
+            cfnresponse.send(event, context, status, responseData)
+
+  # Trigger Lambda function to create Amazon Chime App & Asterisk Instance creation
+  SIPRECVoiceConnectorResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt CreateVCFunction.Arn
+      stackName:
+        Ref: AWS::StackName
+      CIDRBlocks: !If [CIDRBlockExists, !Ref CidrBlocks, !Ref "AWS::NoValue"]
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+
+Outputs:
+
+  KendraIndexId:
+    Description: LCA User Interface URL
+    Value: !GetAtt KendraIndex.Id
