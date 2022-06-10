@@ -392,11 +392,6 @@ Resources:
       Parameters:
         Email: !Ref AdminEmail
         Username: "Admin"
-        DefaultKendraIndexId:
-          !If
-            - ShouldCreateKendraIndex
-            - !GetAtt KENDRA.Outputs.KendraIndexId
-            - !Ref AgentAssistExistingKendraIndexId
         LexV2BotLocaleIds: !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
@@ -428,6 +423,30 @@ Resources:
             - ShouldEnableLexAgentAssist
             - true
             - false
+        LexAgentAssistLocaleId:
+          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+
+  AGENTASSISTSETUP:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldEnableLexAgentAssist
+    DependsOn: AISTACK
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        AISTACK: !Ref AISTACK
+        AISTACKTemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
+        QNABOTSTACK:
+          !If
+            - ShouldInstallAWSQnaBot
+            - !Ref QNABOT
+            - ""
+        KendraIndexId:
+          !If
+            - ShouldCreateKendraIndex
+            - !GetAtt KENDRA.Outputs.KendraIndexId
+            - !Ref AgentAssistExistingKendraIndexId
         LexAgentAssistBotId:
           !If
             - ShouldInstallAWSQnaBot
@@ -437,9 +456,8 @@ Resources:
           !If
             - ShouldInstallAWSQnaBot
             - !GetAtt QNABOT.Outputs.LexV2BotAliasId
-            - !Ref AgentAssistExistingLexV2BotId
-        LexAgentAssistLocaleId:
-          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+            - !Ref AgentAssistExistingLexV2BotId        
+        
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

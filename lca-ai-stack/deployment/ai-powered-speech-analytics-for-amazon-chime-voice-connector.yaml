@@ -1309,6 +1309,7 @@ Resources:
 
   AdminUser:
     Type: AWS::Cognito::UserPoolUser
+    DependsOn: CognitoUserPoolEmailDomainVerifyPermission
     Properties:
       DesiredDeliveryMediums:
         - EMAIL
