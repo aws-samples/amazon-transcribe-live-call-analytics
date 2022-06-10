@@ -218,7 +218,7 @@ def add_transcript_sentiment_analysis(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
 ) -> List[Coroutine]:
-    """Add Transcript Segment GraphQL Mutation"""
+    """Add Transcript Sentiment GraphQL Mutation"""
 
     tasks = []
 

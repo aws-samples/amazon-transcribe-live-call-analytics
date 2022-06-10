@@ -1038,6 +1038,13 @@ Resources:
             Effect: Allow
             Resource: "*"
           - Action:
+              - kinesis:PutRecord
+            Effect: Allow
+            Resource:  
+              - !Sub 
+                - "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${streamName}"
+                - streamName: !Ref CallDataStreamName
+          - Action:
               - logs:CreateLogStream
               - logs:PutLogEvents
             Effect: Allow

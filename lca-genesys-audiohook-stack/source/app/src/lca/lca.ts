@@ -60,6 +60,8 @@ export const writeCallEventToDynamo = async (callEvent: CallEvent ) => {
         }
     };
 
+    console.log('CallEventtoDynamo ', putParams);
+
     const putCmd = new PutItemCommand(putParams);
     try {
         await dynamoClient.send(putCmd);
@@ -89,7 +91,8 @@ export const writeRecordingUrlToDynamo = async (recordingEvent: CallRecordingEve
             EventType: { 'S' : recordingEvent.eventType },
         }
     };
-    
+    console.log('writeRecordingUrlToDynamo ', putParams);
+
     const putCmd = new PutItemCommand(putParams);
   
     try {
@@ -117,6 +120,7 @@ export const writeStatusToDynamo = async (status: CallEventStatus) => {
             ExpiresAfter: { 'N' : expiration.toString() },
         }
     };
+    console.log('writeStatusToDynamo ', putParams);
 
     const putCmd = new PutItemCommand(putParams);
     try {
@@ -169,7 +173,8 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 PartitionKey: callId,
                 Data: Buffer.from(JSON.stringify(kdsObject)),
             };
-            
+            console.log('KDS: writeTranscriptionSegment ', putParams);
+
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
