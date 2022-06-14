@@ -116,7 +116,7 @@ Resources:
                   - lambda:UpdateFunctionConfiguration
                 Effect: Allow
                 Resource:
-                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LCAStackName}*TranscriptProcessor*"
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LCAStackName}*"
               - !If
                 - ShouldConfigureQnabot
                 - Action:
@@ -142,7 +142,7 @@ Resources:
                     - s3:PutObject
                   Effect: Allow
                   Resource:
-                    - !Sub "arn:aws:s3:::${LowercaseStackName.OutputString}*qnabot*"
+                    - !Sub "arn:aws:s3:::${LowercaseStackName.OutputString}*"
                     - !Sub "arn:aws:s3:::${QnaAgentAssistDemoJson}"
                 - !Ref AWS::NoValue
               - !If 
@@ -151,7 +151,7 @@ Resources:
                     - lambda:InvokeFunction
                   Effect: Allow
                   Resource:
-                    - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LCAStackName}*LexBuildLambdaStart*"
+                    - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LCAStackName}*"
                 - !Ref AWS::NoValue
 
   SetupFunction:
