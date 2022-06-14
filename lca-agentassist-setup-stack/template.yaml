@@ -220,6 +220,7 @@ Resources:
             demoPath = props["QnaAgentAssistDemoJson"]
             demoFile = os.path.basename(demoPath)
             statusFile = f'status/{demoFile}'
+            s3.put_object(Bucket=importBucket, Key=f'{statusFile}', Body='{"status":"Starting"}')
             s3.copy_object(CopySource=demoPath, Bucket=importBucket, Key=f'data/{demoFile}')
             print(f"...waiting for {demoFile} import to be complete...")
             status = "Starting"
@@ -233,6 +234,7 @@ Resources:
             lexBuildLambdaStart = getStackResource(props["QNABOTSTACK"], "LexBuildLambdaStart")
             buildStatusBucket = getStackResource(props["QNABOTSTACK"], "BuildStatusBucket")
             statusFile = f'lexV2status.json'
+            s3.put_object(Bucket=buildStatusBucket, Key=f'{statusFile}', Body='{"status":"Starting"}')
             response = lam.invoke(FunctionName=lexBuildLambdaStart)
             status = "Starting"
             while status != "READY":
@@ -285,7 +287,7 @@ Resources:
             return obj_status_details["status"]
 
           def handler(event, context):
-            print(event)
+            print(json.dumps(event))
             status = cfnresponse.SUCCESS
             responseData = {}
             responseData['Data'] = "Success"
