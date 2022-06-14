@@ -25,6 +25,7 @@ Parameters:
       - Demo Asterisk PBX Server
       - Chime Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
+      - Amazon Connect Contact Lens
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
       Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
