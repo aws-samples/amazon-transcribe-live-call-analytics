@@ -435,8 +435,8 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        LCAStackName: !Ref AWS::StackName
         AISTACK: !Ref AISTACK
-        AISTACKTemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
         QNABOTSTACK:
           !If
             - ShouldInstallAWSQnaBot
@@ -456,7 +456,9 @@ Resources:
           !If
             - ShouldInstallAWSQnaBot
             - !GetAtt QNABOT.Outputs.LexV2BotAliasId
-            - !Ref AgentAssistExistingLexV2BotId        
+            - !Ref AgentAssistExistingLexV2BotId  
+        QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
+      
         
 
   CHIMEVCSTACK:
