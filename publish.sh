@@ -87,6 +87,7 @@ popd
 
 dir=submodule-aws-qnabot
 echo "PACKAGING $dir"
+git submodule init
 git submodule update
 pushd $dir
 mkdir -p build/templates/dev
