@@ -459,8 +459,6 @@ Resources:
             - !Ref AgentAssistExistingLexV2BotId  
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
       
-        
-
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallChimeVCStack
@@ -479,7 +477,6 @@ Resources:
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
 
-<<<<<<< HEAD
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallGenesysAudiohookStack
@@ -498,8 +495,6 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
-=======
->>>>>>> b26e7fc1046a54de8e83938b52b91332805d91d3
 
 Outputs:
 
@@ -529,15 +524,6 @@ Outputs:
       !If
       - ShouldInstallChimeVCStack
       - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXPhoneNumber
-      - "Demo Asterisk PBX not enabled"
-<<<<<<< HEAD
-
-  AsteriskInstanceId:
-    Description: Demo Asterisk Server EC2 instanceId
-    Value:
-      !If
-      - ShouldInstallChimeVCStack
-      - !GetAtt CHIMEVCSTACK.Outputs.AsteriskInstanceId
       - "Demo Asterisk PBX not enabled"
 
   WebSocketEndpoint:
@@ -576,20 +562,3 @@ Outputs:
   
 
 
-=======
-
-  QnaBotContentDesigner:
-    Description: Agent Assist Content Designer URL (AWS QnABot)
-    Value: 
-      !If
-      - ShouldInstallAWSQnaBot
-      - !GetAtt QNABOT.Outputs.ContentDesignerURL
-      - "Agent Assist AWS QnABot not enabled"    
-    
-  RecordingsS3Bucket:
-    Description: Bucket contains all the call recordings
-    Value: !GetAtt AISTACK.Outputs.S3BucketName
-  
-
-
->>>>>>> b26e7fc1046a54de8e83938b52b91332805d91d3
