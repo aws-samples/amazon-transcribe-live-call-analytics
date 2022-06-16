@@ -487,7 +487,6 @@ Resources:
       Parameters:
         S3BucketName: !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
-        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled

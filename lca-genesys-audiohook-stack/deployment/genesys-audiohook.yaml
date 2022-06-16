@@ -35,17 +35,6 @@ Parameters:
     Default: lca-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
-
-  DynamoDbExpirationInDays:
-    Type: Number
-    Default: 90
-    Description: >-
-      Number of days set in the time to live of event data stored in the DynamoDB table
-
-  EventSourcingTableName:
-    Type: String
-    Description: >-
-      Name of the dynamo db table used by LCA solution 
   
   CallDataStreamName:
     Type: String
@@ -168,8 +157,6 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
-      EventSourcingTableName:
-        default: DynamoDB Table Name
 
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
@@ -1007,13 +994,7 @@ Resources:
               - !Sub
                 - "arn:aws:s3:::${bucket}/*"
                 - bucket: !Ref RecordingsBucket
-          - Action:
-              - dynamodb:PutItem
-            Effect: Allow
-            Resource:
-              - !Sub 
-                - "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}"
-                - tableName: !Ref EventSourcingTableName
+
           - Action: 
               - secretsmanager:GetResourcePolicy
               - secretsmanager:GetSecretValue
@@ -1077,12 +1058,8 @@ Resources:
               Value: '0.0.0.0'
             - Name: SERVERPORT
               Value: '8080'
-            - Name: EVENT_SOURCING_TABLE_NAME
-              Value: !Ref EventSourcingTableName
             - Name: KINESIS_STREAM_NAME
               Value: !Ref CallDataStreamName
-            - Name: EXPIRATION_IN_DAYS
-              Value: !Ref DynamoDbExpirationInDays
             - Name: API_KEY_ARN
               Value: !Ref SecretsManagerAPIKey
             - Name: CLIENT_SECRET_ARN

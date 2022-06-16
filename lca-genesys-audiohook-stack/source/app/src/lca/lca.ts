@@ -17,10 +17,7 @@ import {
     CallEventStatus, 
     CallRecordingEvent 
 } from './entities-lca';
-import {
-    DynamoDBClient,
-    PutItemCommand
-} from '@aws-sdk/client-dynamodb';
+
 import { TranscriptEvent } from '@aws-sdk/client-transcribe-streaming';
 import { 
     KinesisClient, 
@@ -31,46 +28,45 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
-const ddbTableName = process.env['EVENT_SOURCING_TABLE_NAME'] || null;
-const expireInDays = Number(process.env['EXPIRATION_IN_DAYS']) || 90;
+const expireInDays = 90;
 const savePartial = process.env['SAVE_PARTIAL_TRANSCRIPTS'] === 'true';
 const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
 
-
-const dynamoClient = new DynamoDBClient({ region: awsRegion });
 const kinesisClient = new KinesisClient({ region: awsRegion });
 
-export const writeCallEventToDynamo = async (callEvent: CallEvent ) => {
+export const writeCallEventToKds = async (callEvent: CallEvent ) => {
 
     const now = new Date().toISOString();
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
 
+    const kdsObj =  {
+        PK: { 'S' : `ce#${callEvent.callId}` },
+        SK: { 'S' : `ts#${now}#et#${callEvent.eventStatus}#c#${callEvent.channel}` },
+        CallId: { 'S' : callEvent.callId },
+        EventType: { 'S' : callEvent.eventStatus },
+        Channel: { 'S' : callEvent.channel },
+        CustomerPhoneNumber: { 'S' : callEvent.fromNumber || '' },
+        SystemPhoneNumber: { 'S' : callEvent.toNumber || '' },
+        CreatedAt: { 'S' : now },
+        ExpiresAfter: { 'N' : expiration.toString() },
+    };
+    
     const putParams = {
-        TableName: ddbTableName ?? '',
-        Item: {
-            PK: { 'S' : `ce#${callEvent.callId}` },
-            SK: { 'S' : `ts#${now}#et#${callEvent.eventStatus}#c#${callEvent.channel}` },
-            CallId: { 'S' : callEvent.callId },
-            EventType: { 'S' : callEvent.eventStatus },
-            Channel: { 'S' : callEvent.channel },
-            CustomerPhoneNumber: { 'S' : callEvent.fromNumber || '' },
-            SystemPhoneNumber: { 'S' : callEvent.toNumber || '' },
-            CreatedAt: { 'S' : now },
-            ExpiresAfter: { 'N' : expiration.toString() },
-        }
+        StreamName: kdsStreamName,
+        PartitionKey: callEvent.callId,
+        Data: Buffer.from(JSON.stringify(kdsObj))
     };
 
-    console.log('CallEventtoDynamo ', putParams);
+    console.log('KDS: writeCallEventToKds ', putParams);
 
-    const putCmd = new PutItemCommand(putParams);
+    const putCmd = new PutRecordCommand(putParams);
     try {
-        await dynamoClient.send(putCmd);
-    } catch (err) {
-        console.error(err);
+        await kinesisClient.send(putCmd);
+    } catch (error) {
+        console.error('Error writing transcription segment to KDS', error);
     }
 };
-
-export const writeRecordingUrlToDynamo = async (recordingEvent: CallRecordingEvent) => {
+export const writeRecordingUrlToKds = async (recordingEvent: CallRecordingEvent) => {
 
     const url = new URL(recordingEvent.recordingsKeyPrefix+recordingEvent.recordingsKey, `https://${recordingEvent.recordingsBucket}.s3.${awsRegion}.amazonaws.com`);
     const recordingUrl = url.href;
@@ -79,55 +75,62 @@ export const writeRecordingUrlToDynamo = async (recordingEvent: CallRecordingEve
     const currentTimeStamp = now.toISOString();
     const expiresAfter = Math.ceil((Number(now) + expireInDays * 24 * 3600 * 1000) / 1000,);
   
-    const putParams = {
-        TableName: ddbTableName ?? '',
-        Item : {
-            PK: { 'S' : `ce#${recordingEvent.callId}` },  
-            SK: { 'S' : `ts#${currentTimeStamp}#et#${recordingEvent.eventType}` },
-            CallId: { 'S' : recordingEvent.callId },
-            ExpiresAfter: { 'N' : expiresAfter.toString() },
-            CreatedAt: { 'S' : currentTimeStamp },
-            RecordingUrl: { 'S' : recordingUrl },
-            EventType: { 'S' : recordingEvent.eventType },
-        }
+    const kdsObj =  {
+        PK: { 'S' : `ce#${recordingEvent.callId}` },  
+        SK: { 'S' : `ts#${currentTimeStamp}#et#${recordingEvent.eventType}` },
+        CallId: { 'S' : recordingEvent.callId },
+        ExpiresAfter: { 'N' : expiresAfter.toString() },
+        CreatedAt: { 'S' : currentTimeStamp },
+        RecordingUrl: { 'S' : recordingUrl },
+        EventType: { 'S' : recordingEvent.eventType },
     };
-    console.log('writeRecordingUrlToDynamo ', putParams);
 
-    const putCmd = new PutItemCommand(putParams);
-  
+    const putParams = {
+        StreamName: kdsStreamName,
+        PartitionKey: recordingEvent.callId,
+        Data: Buffer.from(JSON.stringify(kdsObj))
+    };
+
+    console.log('KDS: writeRecordingUrlToKds ', putParams);
+
+    const putCmd = new PutRecordCommand(putParams);
     try {
-        await dynamoClient.send(putCmd);
+        await kinesisClient.send(putCmd);
     } catch (error) {
-        console.error(error);  
+        console.error('Error writing transcription segment to KDS', error);
     }
 };
 
-export const writeStatusToDynamo = async (status: CallEventStatus) => {
+export const writeStatusToKds = async (status: CallEventStatus) => {
 
     const now = new Date().toISOString();
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
   
-    const putParams = {
-        TableName: ddbTableName ?? '',
-        Item: {
-            PK: { 'S' : `ce#${status.callId}` },
-            SK: { 'S' : `ts#${now}#et${status.eventStatus}#c#${status.channel}` },
-            CallId: { 'S' : status.callId },
-            EventType: { 'S' : status.eventStatus },
-            Channel: { 'S' : status.channel },
-            TransactionId: { 'S': status.transactionId || '' }, 
-            CreatedAt: { 'S' : now },
-            ExpiresAfter: { 'N' : expiration.toString() },
-        }
+    const kdsObj =  {
+        PK: { 'S' : `ce#${status.callId}` },
+        SK: { 'S' : `ts#${now}#et${status.eventStatus}#c#${status.channel}` },
+        CallId: { 'S' : status.callId },
+        EventType: { 'S' : status.eventStatus },
+        Channel: { 'S' : status.channel },
+        TransactionId: { 'S': status.transactionId || '' }, 
+        CreatedAt: { 'S' : now },
+        ExpiresAfter: { 'N' : expiration.toString() },
     };
-    console.log('writeStatusToDynamo ', putParams);
+    const putParams = {
+        StreamName: kdsStreamName,
+        PartitionKey: status.callId,
+        Data: Buffer.from(JSON.stringify(kdsObj))
+    };
 
-    const putCmd = new PutItemCommand(putParams);
+    console.log('KDS: writeStatusToKds ', putParams);
+
+    const putCmd = new PutRecordCommand(putParams);
     try {
-        await dynamoClient.send(putCmd);
-    } catch (err) {
-        console.error(err);
+        await kinesisClient.send(putCmd);
+    } catch (error) {
+        console.error('Error writing transcription segment to KDS', error);
     }
+
 };
 
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: string, transactionId:string | undefined) {

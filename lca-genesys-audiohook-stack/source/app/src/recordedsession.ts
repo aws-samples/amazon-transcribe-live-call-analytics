@@ -284,7 +284,7 @@ export class RecordedSession {
         }
         
         // All data moved to S3. Session complete for good.
-        // TODO: Update/add record in/to DynamoDB
+        // TODO: Update/add record in/to KDS
         
         activeSessions.delete(this.recordingId);
     }

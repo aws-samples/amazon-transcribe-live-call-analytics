@@ -63,10 +63,10 @@ LEX_BOT_LOCALE_ID = environ["LEX_BOT_LOCALE_ID"]
 
 CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
 MUTATION_FUNCTION_MAPPING = {
-    "Demo Asterisk PBX Server": "execute_process_transcribe_event_api_mutation",
-    "Chime Voice Connector (SIPREC)": "execute_process_transcribe_event_api_mutation",
-    "Genesys Cloud Audiohook Web Socket": "execute_process_transcribe_event_api_mutation",
-    "Amazon Connect Contact Lens": "execute_process_contact_lens_event_api_mutation"
+    "Demo Asterisk PBX Server": execute_process_transcribe_event_api_mutation,
+    "Chime Voice Connector (SIPREC)": execute_process_transcribe_event_api_mutation,
+    "Genesys Cloud Audiohook Web Socket": execute_process_transcribe_event_api_mutation,
+    "Amazon Connect Contact Lens": execute_process_contact_lens_event_api_mutation
 }
 MUTATION_FUNCTION_NAME = MUTATION_FUNCTION_MAPPING.get(CALL_AUDIO_SOURCE)
 

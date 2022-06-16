@@ -8,7 +8,7 @@ import { createMonoWavWriter, createWavWriter } from './wav-writer-demo';
 import { initiateRequestAuthentication } from './authenticator';
 import { queryCanonicalizedHeaderField } from './httpsignature';
 import { addStreamToLCA } from './stream-to-lca';
-import { writeRecordingUrlToDynamo } from './lca/lca';
+import { writeRecordingUrlToKds } from './lca/lca';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -145,7 +145,7 @@ server.get('/api/v1/audiohook/ws', { websocket: true }, (connection, request) =>
             fileLogRoot, 
             (filename, samplesWritten) => {
                 (async () => {
-                    await writeRecordingUrlToDynamo({
+                    await writeRecordingUrlToKds({
                         callId: recorder.session.id,
                         eventType: 'ADD_S3_RECORDING_URL',
                         recordingsBucket: recordingS3Bucket ?? '',

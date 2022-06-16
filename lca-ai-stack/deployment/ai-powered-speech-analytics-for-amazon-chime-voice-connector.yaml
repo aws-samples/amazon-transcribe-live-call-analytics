@@ -793,6 +793,13 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - !GetAtt EventSourcingTable.Arn
+
+              - Action:
+                  - kinesis:PutRecord
+                Effect: Allow
+                Resource:  
+                  - !GetAtt CallDataStream.Arn
+                  
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -899,6 +906,10 @@ Resources:
                 # XXX specific mutation - addEnrichment
                 - !Sub "${AppSyncApi.Arn}/types/Mutation/*"
                 - !Sub "${AppSyncApi.Arn}/types/Query/fields/__schema"
+            - Effect: Allow
+              Action:
+                - comprehend:DetectSentiment
+              Resource: "*"
             - Effect: Allow
               Action:
                 - lex:RecognizeText

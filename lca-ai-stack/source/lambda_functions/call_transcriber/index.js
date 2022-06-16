@@ -82,19 +82,17 @@ const writeS3Url = async function (callId) {
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
 
   const putObj = {
-    PK: { S: `ce#${callId}` },
-    SK: { S: `ts#${now}#et#${eventType}` },
-    CallId: { S: callId },
-    RecordingUrl: { S: recordingUrl },
-    EventType: { S: eventType.toString() },
-    CreatedAt: { S: now },
-    ExpiresAfter: { N: expiration.toString() },
+    CallId: callId,
+    RecordingUrl: recordingUrl,
+    EventType: eventType.toString(),
+    CreatedAt: now,
+    ExpiresAfter: expiration.toString(),
   };
 
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
-    Data: Buffer.from(JSON.stringify(putObj).toString('base64')),
+    Data: Buffer.from(JSON.stringify(putObj)),
   };
   const putCmd = new PutRecordCommand(putParams);
   try {
@@ -155,26 +153,24 @@ const writeTranscriptionSegment = async function (
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putObj = {
-    PK: { S: `ce#${callId}` },
-    SK: { S: `ts#${now}#et#${eventType}#c#${channel}` },
-    Channel: { S: channel },
-    StreamArn: { S: streamArn },
-    TransactionId: { S: transactionId },
-    CallId: { S: callId },
-    SegmentId: { S: result.ResultId },
-    StartTime: { N: result.StartTime.toString() },
-    EndTime: { N: result.EndTime.toString() },
-    Transcript: { S: result.Alternatives[0].Transcript },
-    IsPartial: { BOOL: result.IsPartial },
-    EventType: { S: eventType.toString() },
-    CreatedAt: { S: now },
-    ExpiresAfter: { N: expiration.toString() },
+    Channel: channel,
+    StreamArn: streamArn,
+    TransactionId: transactionId,
+    CallId: callId,
+    SegmentId: result.ResultId,
+    StartTime: result.StartTime.toString(),
+    EndTime: result.EndTime.toString(),
+    Transcript: result.Alternatives[0].Transcript,
+    IsPartial: result.IsPartial,
+    EventType: eventType.toString(),
+    CreatedAt: now,
+    ExpiresAfter: expiration.toString(),
   };
 
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
-    Data: Buffer.from(JSON.stringify(putObj).toString('base64')),
+    Data: Buffer.from(JSON.stringify(putObj)),
   };
   const putCmd = new PutRecordCommand(putParams);
   try {
@@ -184,7 +180,7 @@ const writeTranscriptionSegment = async function (
   }
 };
 
-const writeCallEventToDynamo = async function (callEvent) {
+const writeCallEventToKds = async function (callEvent) {
   const startTime = new Date(callEvent.detail.startTime);
   const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
@@ -192,21 +188,19 @@ const writeCallEventToDynamo = async function (callEvent) {
   const now = new Date().toISOString();
 
   const putObj = {
-    PK: { S: `ce#${callEvent.detail.callId}` },
-    SK: { S: `ts#${callEvent.detail.startTime}#et#${eventType}#c#${channel}` },
-    CallId: { S: callEvent.detail.callId },
-    ExpiresAfter: { N: expiration.toString() },
-    CreatedAt: { S: now },
-    CustomerPhoneNumber: { S: callEvent.detail.fromNumber },
-    SystemPhoneNumber: { S: callEvent.detail.toNumber },
-    Channel: { S: channel },
-    EventType: { S: eventType },
-    StreamArn: { S: callEvent.detail.streamArn },
+    CallId: callEvent.detail.callId,
+    ExpiresAfter: expiration.toString(),
+    CreatedAt: now,
+    CustomerPhoneNumber: callEvent.detail.fromNumber,
+    SystemPhoneNumber: callEvent.detail.toNumber,
+    Channel: channel,
+    EventType: eventType,
+    StreamArn: callEvent.detail.streamArn,
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
-    PartitionKey: callId,
-    Data: Buffer.from(JSON.stringify(putObj).toString('base64')),
+    PartitionKey: callEvent.detail.callId,
+    Data: Buffer.from(JSON.stringify(putObj)),
   };
   const putCmd = new PutRecordCommand(putParams);
   try {
@@ -216,24 +210,22 @@ const writeCallEventToDynamo = async function (callEvent) {
   }
 };
 
-const writeStatusToDynamo = async function (channel, status, callId, streamArn, transactionId) {
+const writeStatusToKds = async function (channel, status, callId, streamArn, transactionId) {
   const now = new Date().toISOString();
   const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const putObj = {
-    PK: { S: `ce#${callId}` },
-    SK: { S: `"ts#${now}#et${status}#c#${channel}` },
-    CallId: { S: callId },
-    Channel: { S: channel },
-    StreamArn: { S: streamArn },
-    TransactionId: { S: transactionId },
-    EventType: { S: status },
-    CreatedAt: { S: now },
-    ExpiresAfter: { N: expiration.toString() },
+    CallId: callId,
+    Channel: channel,
+    StreamArn: streamArn,
+    TransactionId: transactionId,
+    EventType: status,
+    CreatedAt: now,
+    ExpiresAfter: expiration.toString(),
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
-    Data: Buffer.from(JSON.stringify(putObj).toString('base64')),
+    Data: Buffer.from(JSON.stringify(putObj)),
   };
   const putCmd = new PutRecordCommand(putParams);
   try {
@@ -241,6 +233,36 @@ const writeStatusToDynamo = async function (channel, status, callId, streamArn, 
   } catch (error) {
     console.error('Error writing transcription segment', error);
   }
+};
+const writeCallEventToDynamo = async function (callEvent) {
+    const startTime = new Date(callEvent.detail.startTime);
+    const expiration = getExpiration(EXPIRATION_IN_DAYS);
+    const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
+    const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
+    const now = new Date().toISOString();
+  
+    const putParams = {
+      TableName: EVENT_SOURCING_TABLE_NAME,
+      Item: {
+        PK: { S: `ce#${callEvent.detail.callId}` },
+        SK: { S: `ts#${callEvent.detail.startTime}#et#${eventType}#c#${channel}` },
+        CallId: { S: callEvent.detail.callId },
+        ExpiresAfter: { N: expiration.toString() },
+        CreatedAt: { S: now },
+        CustomerPhoneNumber: { S: callEvent.detail.fromNumber },
+        SystemPhoneNumber: { S: callEvent.detail.toNumber },
+        Channel: { S: channel },
+        EventType: { S: eventType },
+        StreamArn: { S: callEvent.detail.streamArn },
+      },
+    };
+    console.log(putParams);
+    const putCmd = new PutItemCommand(putParams);
+    try {
+      await dynamoClient.send(putCmd);
+    } catch (error) {
+      console.error('Error writing event', error);
+    }
 };
 
 // Query KVS for START events for this callId
@@ -388,9 +410,9 @@ const readTranscripts = async function (tsStream, callId, callerStreamArn, sessi
     }
   } catch (error) {
     console.error('error writing transcription segment', JSON.stringify(error));
-    writeStatusToDynamo('STEREO', 'TRANSCRIPT_ERROR', callId, callerStreamArn, sessionId);
+    writeStatusToKds('STEREO', 'TRANSCRIPT_ERROR', callId, callerStreamArn, sessionId);
   } finally {
-    // writeStatusToDynamo('STEREO', 'END_TRANSCRIPT', callId, callerStreamArn, sessionId);
+    // writeStatusToKds('STEREO', 'END_TRANSCRIPT', callId, callerStreamArn, sessionId);
   }
 };
 
@@ -450,9 +472,9 @@ const go = async function (
   // console.log(tsResponse);
   sessionId = tsResponse.SessionId;
   if (lastAgentFragment === undefined) {
-    writeStatusToDynamo('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
+    writeStatusToKds('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
   }
-  else writeStatusToDynamo('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
+  else writeStatusToKds('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
   console.log('creating readable from transcript stream');
   const tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
 
@@ -528,7 +550,8 @@ const handler = async function (event, context) {
   }
 
   console.log(JSON.stringify(event));
-  await writeCallEventToDynamo(event);
+  await writeCallEventToKds(event);
+  if (EVENT_TYPE[event.detail.streamingStatus] == "START") await writeCallEventToDynamo(event);
 
   let result;
 
@@ -615,7 +638,7 @@ const handler = async function (event, context) {
       });
       await lambdaClient.send(invokeCmd);
     } else {
-      writeStatusToDynamo(
+      writeStatusToKds(
         'STEREO',
         'END_TRANSCRIPT',
         event.detail.callId,
