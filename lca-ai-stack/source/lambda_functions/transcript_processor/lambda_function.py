@@ -57,6 +57,8 @@ if IS_LEX_AGENT_ASSIST_ENABLED:
         "lexv2-runtime",
         config=CLIENT_CONFIG,
     )
+else:
+    LEXV2_CLIENT = None
 LEX_BOT_ID = environ["LEX_BOT_ID"]
 LEX_BOT_ALIAS_ID = environ["LEX_BOT_ALIAS_ID"]
 LEX_BOT_LOCALE_ID = environ["LEX_BOT_LOCALE_ID"]
