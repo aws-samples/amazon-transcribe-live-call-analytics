@@ -62,6 +62,12 @@ Parameters:
     Description: >-
       Location of QnABot agent assist sample/demo file (in JSON lines format) 
 
+  QnaAgentAssistDemoWebCrawlURLs:
+    Type: String
+    Default: https://www.barclays.co.uk/help/
+    Description: >-
+      Comma separated list of public web sites to crawl automatically - for Agent assist demo 
+
 Conditions:
   ShouldConfigureQnabot: !Not [!Equals [!Ref QNABOTSTACK, '']]
 
@@ -124,7 +130,7 @@ Resources:
                     - cloudformation:DescribeStackResource
                   Effect: Allow
                   Resource:
-                    - !Ref QNABOTSTACK
+                    - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${LCAStackName}-QNABOT*"
                 - !Ref AWS::NoValue
               - !If
                 - ShouldConfigureQnabot
@@ -195,6 +201,8 @@ Resources:
             loadQnABotSamplePackage(props)
             buildQnABotLexBot(props)
             syncQnABotSamplePackageToKendra(props)
+            if props["QnaAgentAssistDemoWebCrawlURLs"]:
+              startKendraCrawler(props)
 
           def configureQnabotSettings(props):
             ssmParamName = getStackResource(props["QNABOTSTACK"], "DefaultQnABotSettings")
@@ -206,6 +214,14 @@ Resources:
             settings["ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE"] = "VERY HIGH"
             settings["KENDRA_FAQ_ES_FALLBACK"] = "false"
             settings["ALT_SEARCH_KENDRA_ANSWER_MESSAGE"] = "Amazon Kendra suggestions."
+            settings["KENDRA_WEB_PAGE_INDEX"] = props["KendraIndexId"]
+            settings["KENDRA_INDEXER_CRAWL_DEPTH"] = "2"
+            settings["KENDRA_INDEXER_CRAWL_MODE"] = "HOST_ONLY"
+            settings["KENDRA_INDEXER_URLS"] = props["QnaAgentAssistDemoWebCrawlURLs"]
+            if props["QnaAgentAssistDemoWebCrawlURLs"]:
+              settings["ENABLE_KENDRA_WEB_INDEXER"] = "true"
+            else:
+              settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
             # save back to SSM
             response = ssm.put_parameter(
               Name=ssmParamName,
@@ -266,6 +282,12 @@ Resources:
                 print(f'Import Status: {status}')
             print("Import complete")
 
+          def startKendraCrawler(props):
+            exportStack = getStackResource(props["QNABOTSTACK"], "ExportStack")
+            kendraNativeCrawlerLambda	 = getStackResource(exportStack, "KendraNativeCrawlerLambda")
+            response = lam.invoke(FunctionName=kendraNativeCrawlerLambda)
+            print("Kendra crawler setup complete")
+
           def getStackResource(stackName, logicaResourceId):
             print(f"LogicalResourceId={logicaResourceId}")
             physicalResourceId = cf.describe_stack_resource(
@@ -314,6 +336,7 @@ Resources:
       LexAgentAssistAliasId: !Ref LexAgentAssistAliasId
       KendraIndexId: !Ref KendraIndexId
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
+      QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
