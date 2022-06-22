@@ -375,7 +375,7 @@ async def send_lex_agent_assist(
                 logger=LOGGER,
             )
 
-        return result
+    return result
 
 def add_lex_agent_assistances(
     message: Dict[str, Any],
@@ -385,18 +385,16 @@ def add_lex_agent_assistances(
     # pylint: disable=too-many-locals
     call_id: str = message["CallId"]
     channel: str = message["Channel"]
-    is_partial: bool = message("IsPartial")
+    is_partial: bool = message["IsPartial"]
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
     end_time: float = message["EndTime"]
     transcript: str = message["Transcript"]
     created_at = datetime.utcnow().astimezone().isoformat()
 
-
-
     send_lex_agent_assist_args = []
     if (channel == "CALLER" and not is_partial):
-         send_lex_agent_assist_args.append(
+        send_lex_agent_assist_args.append(
                 dict(
                     content=transcript,
                     transcript_segment_args=dict(
