@@ -222,6 +222,11 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
+          default: Web UI Authentication
+        Parameters:
+          - AdminEmail
+          - AllowedSignUpEmailDomain
+      - Label:
           default: Telephony Ingestion Options
         Parameters:
           - CallAudioSource
@@ -235,11 +240,6 @@ Metadata:
           - AgentAssistExistingKendraIndexId
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
-      - Label:
-          default: Web UI Authentication
-        Parameters:
-          - AdminEmail
-          - AllowedSignUpEmailDomain
       - Label:
           default: Amazon S3 Configuration
         Parameters:
