@@ -49,6 +49,13 @@ Parameters:
       Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
       Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
+  
+  ConnectInstanceArn:
+    Type: String
+    AllowedPattern: '^(|arn:aws:connect:.*)$'
+    Description: > 
+      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'
+      Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
 
   AgentAssistOption:
     Type: String
@@ -220,6 +227,7 @@ Metadata:
           - CallAudioSource
           - DemoSoftphoneAllowedCidr
           - SiprecAllowedCidrList
+          - ConnectInstanceArn
       - Label:
           default: Agent Assist Options
         Parameters:
@@ -274,6 +282,8 @@ Metadata:
         default: Allowed CIDR Block for Demo Softphone
       SiprecAllowedCidrList:
         default: Allowed CIDR List for Siprec Integration
+      ConnectInstanceArn:
+        default: Amazon Connect instance ARN (existing)
       AgentAssistOption:
         default: Enable Agent Assist
       AgentAssistExistingKendraIndexId:
@@ -304,6 +314,7 @@ Conditions:
   ShouldInstallChimeVCsiprec: !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
   ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
+  ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldEnableLexAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
   ShouldBringYourOwnBot: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
   ShouldInstallAWSQnaBot: !And [!Condition ShouldEnableLexAgentAssist, !Not [!Condition ShouldBringYourOwnBot]]
@@ -494,6 +505,17 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+
+  CONNECTINTEGRATIONSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallConnectIntegrationStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-integration-stack/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        ConnectInstanceArn: !Ref ConnectInstanceArn
 
 Outputs:
 

@@ -71,6 +71,12 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-genesys-audiohook-stack $VERSION $REGION || exit 1
 popd
 
+dir=lca-connect-integration-stack
+echo "PACKAGING $dir"
+pushd $dir
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-connect-integration-stack/template.yaml
+popd
+
 dir=lca-ai-stack
 echo "PACKAGING $dir"
 pushd $dir/deployment
