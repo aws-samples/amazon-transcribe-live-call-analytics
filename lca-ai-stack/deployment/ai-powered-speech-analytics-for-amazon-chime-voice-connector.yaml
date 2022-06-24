@@ -1344,7 +1344,7 @@ Resources:
 
   AdminUser:
     Type: AWS::Cognito::UserPoolUser
-    DependsOn: CognitoUserPoolEmailDomainVerifyPermission
+    DependsOn: CognitoUserPoolEmailDomainVerifyPermissionReady
     Properties:
       DesiredDeliveryMediums:
         - EMAIL
@@ -1353,6 +1353,11 @@ Resources:
           Value: !Ref AdminEmail
       Username: !Ref AdminEmail
       UserPoolId: !Ref UserPool
+
+  CognitoUserPoolEmailDomainVerifyPermissionReady:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      SecondaryCIDRready: !If [ ShouldAllowSignUpEmailDomain, !Ref CognitoUserPoolEmailDomainVerifyPermission, "" ]
 
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
