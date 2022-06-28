@@ -7,6 +7,7 @@ from datetime import datetime
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
+import boto3
 
 # third-party imports from Lambda layer
 from aws_lambda_powertools import Logger
@@ -39,13 +40,14 @@ LEX_BOT_ID: str
 LEX_BOT_ALIAS_ID: str
 LEX_BOT_LOCALE_ID: str
 
-# XXX these are hardcoded phone numbers - Contact Lens doesn't include call metadata
-# hardcoding for now. The values must be valid E.164 phone numbers
-# Alternatively, we can send the CDR records to Kinesis
-# https://docs.aws.amazon.com/connect/latest/adminguide/contact-events.html
-CUSTOMER_PHONE_NUMBER = getenv("CUSTOMER_PHONE_NUMBER", "+15714955828")
-SYSTEM_PHONE_NUMBER = getenv("SYSTEM_PHONE_NUMBER", "+15712235089")
-
+# Contact Lens doesn't include call metadata so we attempt to use API lookups 
+# to retrieve numbers from defined contact attributes on receipt of STARTED event.
+# Connect contact flow must set these (user defined) attributes using values of 
+# system attribute for Customer Number and Dialled Number. 
+DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+15715551111")
+DEFAULT_SYSTEM_PHONE_NUMBER = getenv("DEFAULT_SYSTEM_PHONE_NUMBER", "+15715559999")
+CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
+CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
 
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
@@ -69,16 +71,34 @@ SENTIMENT_WEIGHT = dict(POSITIVE=5, NEGATIVE=-5, NEUTRAL=0, MIXED=0)
 ##########################################################################
 # Call Status
 ##########################################################################
+def get_caller_and_system_phone_numbers_from_connect(instanceId, contactId):
+    client = boto3.client('connect')
+    response = client.get_contact_attributes(
+        InstanceId=instanceId,
+        InitialContactId=contactId
+    )
+    # Try to retrieve customer phone number from contact attribute
+    customer_phone_number = response["Attributes"].get(CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER)
+    if not customer_phone_number:
+        LOGGER.warning(f"Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER}'. Reverting to default.")
+        customer_phone_number = DEFAULT_CUSTOMER_PHONE_NUMBER
+    # Try to retrieve system phone number from contact attribute: "LCA System Phone Number"
+    system_phone_number = response["Attributes"].get(CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER)
+    if not system_phone_number:
+        LOGGER.warning("Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER}'. Reverting to default.")
+        system_phone_number = DEFAULT_SYSTEM_PHONE_NUMBER
+    LOGGER.info(f"Setting customer_phone_number={customer_phone_number}, system_phone_number={system_phone_number}")
+    return (customer_phone_number, system_phone_number)
+
 def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
     call_id = message.get("ContactId")
     event_type = message.get("EventType")
 
     if event_type == "STARTED":
-        # XXX hardcoded phone numbers since Contact Lens doesn't include it
-        # Need to stream contact records and get call metadata from it
-        customer_phone_number = CUSTOMER_PHONE_NUMBER
-        system_phone_number = SYSTEM_PHONE_NUMBER
+        instanceId = message.get("InstanceId")
+        contactId = message.get("ContactId")
+        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(instanceId, contactId)
         return dict(
             CallId=call_id,
             CustomerPhoneNumber=customer_phone_number,

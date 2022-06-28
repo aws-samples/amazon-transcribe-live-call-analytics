@@ -1,10 +1,7 @@
 # LCA Agent Assist Demo
 
-### 1. New demo script  - demo all features in one call.
-
--- Part 1: AgentAssist gathers some information for later use - eg credit card type and caller’s first name.
-
-
+### Part 1: AgentAssist gathers some information for later use - eg credit card type and caller’s first name.
+  
 **Agent**: Hello! Thanks for calling ACME Bank. My name is Oliver. How can i help you?
 **Caller**: Hi. I’m calling about my **Rewards** card. 
 **Agent**: Excellent.. give me a second to look up your customer account..  
@@ -19,17 +16,17 @@
 
 **Agent**:  It matches - perfect! Hi Bob. How can i help you with your rewards-card?*
 
-*-- Part 2: AgentAssist retrieves information using the information gathered earlier (eg card type).. in this case by running a filtered kendra query (but could also use other mechanisms)
-*
+### Part 2: AgentAssist retrieves information using the information gathered earlier (eg card type).. in this case by running a filtered kendra query (but could also use other mechanisms)
+
 
 **Caller**: I was wondering, what is the cash back rate for this card?
 **Agent**:  I’m looking that up for you now. It won’t take long.   
 
-*AGENTASSIST: ...Barclaycard ****Rewards**** ****card**** 0.25% ****cashback**** on your everyday spending No fees abroad – you’ll be able to withdraw cash... *[*https://www.barclays.co.uk/credit-cards/reward-cards*](https://www.barclays.co.uk/credit-cards/reward-cards/)  
+*AGENTASSIST: ...Barclaycard ****Rewards**** ****card**** 0.25% ****cashback**** on your everyday spending No fees abroad – you’ll be able to withdraw cash... *[*https://www.barclays.co.uk/credit-cards/reward-cards*](https://www.barclays.co.uk/credit-cards/reward-cards/)* 
   
 **Agent**: Yes, I see here that the rewards card has a 0.25% cashback rate on your everyday spending. Did that answer your question? Anything else I can help with today?
 
-*-- Part 3: AgentAssist can guide agent through an online transaction, prompting agent to collect the needed information. Potentially AgentAssist could fully automate transaction fulfillment.* 
+### Part 3: AgentAssist can guide agent through an online transaction, prompting agent to collect the needed information. Potentially AgentAssist could fully automate transaction fulfillment.
  
 **Caller**: Thanks, yes. Can i pay my card bill now while I’m on the phone?
 **Agent**:  Yes, absolutely, we can process your payment over the phone. Give me a second to set that up.  
@@ -56,17 +53,17 @@
   
 **Agent**: Great, so I’ve processed payment of $50 from your Checking account.  Is there anything else I can help you with?
 
-*-- Part 4: Caller asks a question that we have an Kendra FAQ answer for - in QnABot*
+### Part 4: Caller asks a question where we have an Kendra FAQ answer in QnABot
 
 **Caller**: Can you tell me what kinds of life insurance policies you have?  
 **Agent**:  Yes, of course. I’m just pulling up our latest life insurance policy information now.  
   
-*AGENT ASSIST: Open *[*https://www.barclays.co.uk/insurance/life-insurance/  Suggested response: We have two main plans - the Barclays Simple Life insurance plan, and Life Insurance for Mortgage protection, which is a great policy to have if you're thinking of applying for a mortgage.*](https://www.barclays.co.uk/insurance/life-insurance/)
+*AGENT ASSIST: Open *[*https://www.barclays.co.uk/insurance/life-insurance/  Suggested response: We have two main plans - the Barclays Simple Life insurance plan, and Life Insurance for Mortgage protection, which is a great policy to have if you're thinking of applying for a mortgage.*](https://www.barclays.co.uk/insurance/life-insurance/)*
   
 **Agent**:*We have two main plans - the Simple Life insurance plan, and Life Insurance for Mortgage protection, which is a great policy to have if you're thinking of applying for a mortgage.*
 
 
-*-- Part 5: Caller asks a question for which we don’t have an FAQ.. Demonstrates fallback to a Kendra query on unstructured docs from the index (in the case the crawled website)*
+### Part 5: Caller asks a question for which we don’t have an FAQ.. Demonstrates fallback to a Kendra query on unstructured docs from the index (in the case the crawled website)
 
 **Caller**: Actually I am thinking to apply for a mortgage. This would be my first time..
 **Agent**: Excellent. That must be very exciting! We’d love to help you with that.  
@@ -76,7 +73,7 @@
   
 **Agent**: We have mortgage solutions designed just for first time buyers like yourself, with down-payment options as low as 5%. Let me send you some information and let’s schedule a chat with one of our mortgage specialists. Does that sound OK?
 
-*-- Part 6: Wrapup*
+### Part 6: Wrapup
 
 **Caller**: That sounds great. Thanks. 
 **Agent**: Is there anything else I can help you with today?
