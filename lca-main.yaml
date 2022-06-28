@@ -321,6 +321,7 @@ Conditions:
   ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Developer Edition)']
   ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Enterprise Edition)']
   ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
+  ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -374,6 +375,30 @@ Mappings:
       Value: ko_KR
     zh-CN:
       Value: zh_CH
+
+Rules:
+  ConnectInstanceArn:
+    RuleCondition: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ConnectInstanceArn, '']]
+        AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens'
+
+  AgentAssistExistingKendraIndexId:
+    RuleCondition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AgentAssistExistingKendraIndexId, '']]
+        AssertDescription: AgentAssistExistingKendraIndexId is required when AgentAssistOption is 'AWS QnABot with existing Kendra Index'
+
+  AgentAssistExistingLexV2Bot:
+    RuleCondition: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AgentAssistExistingLexV2BotId, '']]
+        AssertDescription: AgentAssistExistingLexV2BotId is required when AgentAssistOption is 'Bring your own LexV2 bot'
+      - Assert: !Not [!Equals [!Ref AgentAssistExistingLexV2BotAliasId, '']]
+        AssertDescription: AgentAssistExistingLexV2BotAliasId is required when AgentAssistOption is 'Bring your own LexV2 bot'
+
+
+
 
 Resources:
 
