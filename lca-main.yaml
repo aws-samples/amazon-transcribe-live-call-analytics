@@ -397,9 +397,6 @@ Rules:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLexV2BotAliasId, '']]
         AssertDescription: AgentAssistExistingLexV2BotAliasId is required when AgentAssistOption is 'Bring your own LexV2 bot'
 
-
-
-
 Resources:
 
   KENDRA:
