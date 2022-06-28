@@ -29,6 +29,11 @@ Parameters:
     Description: >-
       The Name of AISTACK Kinesis Data Stream for transcript ingestion.
 
+  TranscriptProcessorFunctionRoleName:
+    Type: String
+    Description: >-
+      Name of the AISTACK TranscriptProcessorFunction IAM Role   
+
 
 Resources:
 
@@ -148,3 +153,17 @@ Resources:
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
+  # Add policy allowing IASTACK TranscriptProcessorFunction Lambda to invoke Connect API 
+  TranscriptProcessorConnectPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: ConnectPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - connect:GetContactAttributes
+            Resource: !Sub "${ConnectInstanceArn}/contact/*"
+      Roles:
+        - !Ref TranscriptProcessorFunctionRoleName

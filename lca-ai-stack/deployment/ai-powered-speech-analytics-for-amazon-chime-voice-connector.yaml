@@ -334,6 +334,9 @@ Outputs:
   EventSourcingTableName:
     Description: The Name for the DynamoDB that is used to store transcriptions and events
     Value: !Ref EventSourcingTable
+  TranscriptProcessorFunctionRoleName:
+    Description: The Name of the IAM role used by TranscriptProcessorFunction
+    Value: !Ref TranscriptProcessorFunctionRole
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS

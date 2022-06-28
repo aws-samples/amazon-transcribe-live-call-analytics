@@ -1,1 +1,271 @@
-{"modules":[{"id":"7061cfdc-b6fc-4252-b88f-bd1e379a7d6d","type":"SetLoggingBehavior","branches":[{"condition":"Success","transition":"1867b065-4085-4fda-8fb1-9246b8ab55ac"}],"parameters":[{"name":"LoggingBehavior","value":"Enable"}],"metadata":{"position":{"x":134,"y":21}}},{"id":"4684af58-6395-4ba5-96cc-e9195dcab461","type":"Transfer","branches":[{"condition":"AtCapacity","transition":"49400335-39f1-43de-9fe1-d4edf3221826"},{"condition":"Error","transition":"99f9b680-3ace-4022-b8e0-dbd3bc4b8784"}],"parameters":[],"metadata":{"position":{"x":878,"y":385},"useDynamic":false,"queue":null},"target":"Queue"},{"id":"af6c5b96-263d-4537-aa00-941baa7e758d","type":"SetQueue","branches":[{"condition":"Success","transition":"4684af58-6395-4ba5-96cc-e9195dcab461"},{"condition":"Error","transition":"99f9b680-3ace-4022-b8e0-dbd3bc4b8784"}],"parameters":[{"name":"Queue","value":"arn:aws:connect:us-east-1:242955039810:instance/c0ccb54b-de30-459b-9866-ecc6907dde93/queue/1df52520-e1b7-4f81-ab83-a5c6dcf6fba6","namespace":null,"resourceName":"BasicQueue"}],"metadata":{"position":{"x":641,"y":471},"useDynamic":false,"queue":{"id":"arn:aws:connect:us-east-1:242955039810:instance/c0ccb54b-de30-459b-9866-ecc6907dde93/queue/1df52520-e1b7-4f81-ab83-a5c6dcf6fba6","text":"BasicQueue"}}},{"id":"49400335-39f1-43de-9fe1-d4edf3221826","type":"PlayPrompt","branches":[{"condition":"Success","transition":"99f9b680-3ace-4022-b8e0-dbd3bc4b8784"},{"condition":"Error","transition":"99f9b680-3ace-4022-b8e0-dbd3bc4b8784"}],"parameters":[{"name":"AudioPrompt","value":"arn:aws:connect:us-east-1:242955039810:instance/c0ccb54b-de30-459b-9866-ecc6907dde93/prompt/3d517305-0dc1-4853-a06e-8222bd097056","namespace":null,"resourceName":"Auto_Repairs_49_UTC_agent.wav"}],"metadata":{"position":{"x":1106,"y":15},"useDynamic":false,"promptName":"Auto_Repairs_49_UTC_agent.wav"}},{"id":"99f9b680-3ace-4022-b8e0-dbd3bc4b8784","type":"Disconnect","branches":[],"parameters":[],"metadata":{"position":{"x":1356,"y":196}}},{"id":"1867b065-4085-4fda-8fb1-9246b8ab55ac","type":"SetRecordingBehavior","branches":[{"condition":"Success","transition":"6ba7a1af-064e-4c76-a059-acfeb98c9d73"}],"parameters":[{"name":"RecordingBehaviorOption","value":"Enable"},{"name":"RecordingParticipantOption","value":"Both"},{"name":"AnalyticsBehaviorOption","value":"Enable"},{"name":"AnalyticsLanguageLocaleCode","value":"en-US","namespace":null},{"name":"AnalyticsCustomVocabulary","value":"None"},{"name":"AnalyticsRedactionOption","value":"Enable"},{"name":"AnalyticsRedactionPolicy","value":"RedactedAndOriginal","namespace":null},{"name":"AnalyticsMode","value":"RealTime"}],"metadata":{"position":{"x":383,"y":166}}},{"id":"6ba7a1af-064e-4c76-a059-acfeb98c9d73","type":"CheckStaffing","branches":[{"condition":"True","transition":"af6c5b96-263d-4537-aa00-941baa7e758d"},{"condition":"False","transition":"49400335-39f1-43de-9fe1-d4edf3221826"},{"condition":"Error","transition":"99f9b680-3ace-4022-b8e0-dbd3bc4b8784"}],"parameters":[{"name":"Status","value":"Available"},{"name":"Agent","value":"arn:aws:connect:us-east-1:242955039810:instance/c0ccb54b-de30-459b-9866-ecc6907dde93/agent/6d90b80c-123b-4b9f-9be3-a391874fc292","namespace":null,"resourceName":"agent-smit (agent smith)"}],"metadata":{"position":{"x":616,"y":39},"useDynamic":false,"queue":{"id":"arn:aws:connect:us-east-1:242955039810:instance/c0ccb54b-de30-459b-9866-ecc6907dde93/agent/6d90b80c-123b-4b9f-9be3-a391874fc292","text":"agent-smit (agent smith)","arn":"arn:aws:connect:us-east-1:242955039810:instance/c0ccb54b-de30-459b-9866-ecc6907dde93/queue/agent/6d90b80c-123b-4b9f-9be3-a391874fc292","metricDetail":null,"resourceId":"6d90b80c-123b-4b9f-9be3-a391874fc292"}}}],"version":"1","start":"7061cfdc-b6fc-4252-b88f-bd1e379a7d6d","metadata":{"entryPointPosition":{"x":20,"y":20},"snapToGrid":false,"name":"to-lca-kvs","description":null,"type":"contactFlow","status":"published","hash":"e9971acc1581cbc73dbcd5c388d8971de6240f623ed956d024b44ae618d0f02f"},"type":"contactFlow"}
+{
+    "modules": [
+        {
+            "id": "4684af58-6395-4ba5-96cc-e9195dcab461",
+            "type": "Transfer",
+            "branches": [
+                {
+                    "condition": "AtCapacity",
+                    "transition": "49400335-39f1-43de-9fe1-d4edf3221826"
+                },
+                {
+                    "condition": "Error",
+                    "transition": "99f9b680-3ace-4022-b8e0-dbd3bc4b8784"
+                }
+            ],
+            "parameters": [],
+            "metadata": {
+                "position": {
+                    "x": 873,
+                    "y": 385
+                },
+                "useDynamic": false,
+                "queue": null
+            },
+            "target": "Queue"
+        },
+        {
+            "id": "af6c5b96-263d-4537-aa00-941baa7e758d",
+            "type": "SetQueue",
+            "branches": [
+                {
+                    "condition": "Success",
+                    "transition": "4684af58-6395-4ba5-96cc-e9195dcab461"
+                },
+                {
+                    "condition": "Error",
+                    "transition": "99f9b680-3ace-4022-b8e0-dbd3bc4b8784"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "Queue",
+                    "value": "arn:aws:connect:us-east-1:912625584728:instance/c9b5b91b-448a-4ba3-955c-579f7c71e043/queue/8643bf68-2360-45b3-b761-4d29ef31d966",
+                    "namespace": null,
+                    "resourceName": "BasicQueue"
+                }
+            ],
+            "metadata": {
+                "position": {
+                    "x": 636,
+                    "y": 471
+                },
+                "useDynamic": false,
+                "queue": {
+                    "id": "arn:aws:connect:us-east-1:912625584728:instance/c9b5b91b-448a-4ba3-955c-579f7c71e043/queue/8643bf68-2360-45b3-b761-4d29ef31d966",
+                    "text": "BasicQueue"
+                }
+            }
+        },
+        {
+            "id": "49400335-39f1-43de-9fe1-d4edf3221826",
+            "type": "PlayPrompt",
+            "branches": [
+                {
+                    "condition": "Success",
+                    "transition": "99f9b680-3ace-4022-b8e0-dbd3bc4b8784"
+                },
+                {
+                    "condition": "Error",
+                    "transition": "99f9b680-3ace-4022-b8e0-dbd3bc4b8784"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "AudioPrompt",
+                    "value": "arn:aws:connect:us-east-1:912625584728:instance/c9b5b91b-448a-4ba3-955c-579f7c71e043/prompt/91179dbe-b4fa-4889-bc7f-ceb268936adc",
+                    "namespace": null,
+                    "resourceName": "CustomerQueue.wav"
+                }
+            ],
+            "metadata": {
+                "position": {
+                    "x": 1101,
+                    "y": 15
+                },
+                "useDynamic": false,
+                "promptName": "CustomerQueue.wav"
+            }
+        },
+        {
+            "id": "99f9b680-3ace-4022-b8e0-dbd3bc4b8784",
+            "type": "Disconnect",
+            "branches": [],
+            "parameters": [],
+            "metadata": {
+                "position": {
+                    "x": 1351,
+                    "y": 196
+                }
+            }
+        },
+        {
+            "id": "6ba7a1af-064e-4c76-a059-acfeb98c9d73",
+            "type": "CheckStaffing",
+            "branches": [
+                {
+                    "condition": "True",
+                    "transition": "af6c5b96-263d-4537-aa00-941baa7e758d"
+                },
+                {
+                    "condition": "False",
+                    "transition": "49400335-39f1-43de-9fe1-d4edf3221826"
+                },
+                {
+                    "condition": "Error",
+                    "transition": "99f9b680-3ace-4022-b8e0-dbd3bc4b8784"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "Status",
+                    "value": "Available"
+                },
+                {
+                    "name": "Queue",
+                    "value": "arn:aws:connect:us-east-1:912625584728:instance/c9b5b91b-448a-4ba3-955c-579f7c71e043/queue/8643bf68-2360-45b3-b761-4d29ef31d966",
+                    "namespace": null,
+                    "resourceName": "BasicQueue"
+                }
+            ],
+            "metadata": {
+                "position": {
+                    "x": 611,
+                    "y": 39
+                },
+                "useDynamic": false,
+                "queue": {
+                    "id": "arn:aws:connect:us-east-1:912625584728:instance/c9b5b91b-448a-4ba3-955c-579f7c71e043/queue/8643bf68-2360-45b3-b761-4d29ef31d966",
+                    "text": "BasicQueue"
+                }
+            }
+        },
+        {
+            "id": "1867b065-4085-4fda-8fb1-9246b8ab55ac",
+            "type": "SetRecordingBehavior",
+            "branches": [
+                {
+                    "condition": "Success",
+                    "transition": "6ba7a1af-064e-4c76-a059-acfeb98c9d73"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "RecordingBehaviorOption",
+                    "value": "Enable"
+                },
+                {
+                    "name": "RecordingParticipantOption",
+                    "value": "Both"
+                },
+                {
+                    "name": "AnalyticsBehaviorOption",
+                    "value": "Enable"
+                },
+                {
+                    "name": "AnalyticsLanguageLocaleCode",
+                    "value": "en-US",
+                    "namespace": null
+                },
+                {
+                    "name": "AnalyticsCustomVocabulary",
+                    "value": "None"
+                },
+                {
+                    "name": "AnalyticsRedactionOption",
+                    "value": "Enable"
+                },
+                {
+                    "name": "AnalyticsRedactionPolicy",
+                    "value": "RedactedAndOriginal",
+                    "namespace": null
+                },
+                {
+                    "name": "AnalyticsMode",
+                    "value": "RealTime"
+                }
+            ],
+            "metadata": {
+                "position": {
+                    "x": 378,
+                    "y": 166
+                }
+            }
+        },
+        {
+            "id": "7061cfdc-b6fc-4252-b88f-bd1e379a7d6d",
+            "type": "SetLoggingBehavior",
+            "branches": [
+                {
+                    "condition": "Success",
+                    "transition": "4b7ef0e4-394e-4f58-8ce5-78d7f632244d"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "LoggingBehavior",
+                    "value": "Enable"
+                }
+            ],
+            "metadata": {
+                "position": {
+                    "x": 129,
+                    "y": 21
+                }
+            }
+        },
+        {
+            "id": "4b7ef0e4-394e-4f58-8ce5-78d7f632244d",
+            "type": "SetAttributes",
+            "branches": [
+                {
+                    "condition": "Success",
+                    "transition": "1867b065-4085-4fda-8fb1-9246b8ab55ac"
+                },
+                {
+                    "condition": "Error",
+                    "transition": "1867b065-4085-4fda-8fb1-9246b8ab55ac"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "Attribute",
+                    "value": "Customer Number",
+                    "key": "LCA Caller Phone Number",
+                    "namespace": "System"
+                },
+                {
+                    "name": "Attribute",
+                    "value": "Dialed Number",
+                    "key": "LCA System Phone Number",
+                    "namespace": "System"
+                }
+            ],
+            "metadata": {
+                "position": {
+                    "x": 152.0034637451172,
+                    "y": 272.8958435058594
+                },
+                "dynamicParams": [
+                    "LCA Caller Phone Number",
+                    "LCA System Phone Number"
+                ]
+            }
+        }
+    ],
+    "version": "1",
+    "start": "7061cfdc-b6fc-4252-b88f-bd1e379a7d6d",
+    "metadata": {
+        "entryPointPosition": {
+            "x": 15,
+            "y": 20
+        },
+        "snapToGrid": false,
+        "name": "LCA-EXAMPLE",
+        "description": null,
+        "type": "contactFlow",
+        "status": "saved",
+        "hash": "16503c2796c369e0d28e50d1bd7cc99590b7da4251a534ca06bb0b29d5fcce60"
+    },
+    "type": "contactFlow"
+}
