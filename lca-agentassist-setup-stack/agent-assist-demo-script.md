@@ -16,15 +16,15 @@
 
 **Agent**:  It matches - perfect! Hi Bob. How can i help you with your rewards-card?*
 
-### Part 2: AgentAssist retrieves information using the information gathered earlier (eg card type).. in this case by running a filtered kendra query (but could also use other mechanisms)
+### Part 2: AgentAssist retrieves information using the information gathered earlier (eg card type).. in this case by using conditional answer in QnAbot, but other mechanisms -  such as kendra redirect query filters or custom logic with Lambda hooks - could also be used.
 
 
 **Caller**: I was wondering, what is the cash back rate for this card?
 **Agent**:  I’m looking that up for you now. It won’t take long.   
 
-*AGENTASSIST: ...Barclaycard ****Rewards**** ****card**** 0.25% ****cashback**** on your everyday spending No fees abroad – you’ll be able to withdraw cash... *[*https://www.barclays.co.uk/credit-cards/reward-cards*](https://www.barclays.co.uk/credit-cards/reward-cards/)* 
+*AGENTASSIST: Suggested response: Yes, I see here that the rewards card has a 2% cashback rate on your everyday spending. Did that answer your question? Anything else I can help with today?*
   
-**Agent**: Yes, I see here that the rewards card has a 0.25% cashback rate on your everyday spending. Did that answer your question? Anything else I can help with today?
+**Agent**: Yes, I see here that the rewards card has a 2% cashback rate on your everyday spending. Did that answer your question? Anything else I can help with today?
 
 ### Part 3: AgentAssist can guide agent through an online transaction, prompting agent to collect the needed information. Potentially AgentAssist could fully automate transaction fulfillment.
  
@@ -58,9 +58,9 @@
 **Caller**: Can you tell me what kinds of life insurance policies you have?  
 **Agent**:  Yes, of course. I’m just pulling up our latest life insurance policy information now.  
   
-*AGENT ASSIST: Open *[*https://www.barclays.co.uk/insurance/life-insurance/  Suggested response: We have two main plans - the Barclays Simple Life insurance plan, and Life Insurance for Mortgage protection, which is a great policy to have if you're thinking of applying for a mortgage.*](https://www.barclays.co.uk/insurance/life-insurance/)*
+*AGENT ASSIST: Open *[*https://www.barclays.co.uk/insurance/life-insurance/  Suggested response: We offer two main types of life insurance - Permanent life insurance, and Term life insurance which includes a plan designed for anyone thinking of applying for a mortgage.*
   
-**Agent**:*We have two main plans - the Simple Life insurance plan, and Life Insurance for Mortgage protection, which is a great policy to have if you're thinking of applying for a mortgage.*
+**Agent**: We offer two main types of life insurance - Permanent life insurance, and Term life insurance which includes a plan designed for anyone thinking of applying for a mortgage.
 
 
 ### Part 5: Caller asks a question for which we don’t have an FAQ.. Demonstrates fallback to a Kendra query on unstructured docs from the index (in the case the crawled website)
