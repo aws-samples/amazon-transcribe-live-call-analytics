@@ -40,15 +40,13 @@ export const writeCallEventToKds = async (callEvent: CallEvent ) => {
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
 
     const kdsObj =  {
-        PK: { 'S' : `ce#${callEvent.callId}` },
-        SK: { 'S' : `ts#${now}#et#${callEvent.eventStatus}#c#${callEvent.channel}` },
-        CallId: { 'S' : callEvent.callId },
-        EventType: { 'S' : callEvent.eventStatus },
-        Channel: { 'S' : callEvent.channel },
-        CustomerPhoneNumber: { 'S' : callEvent.fromNumber || '' },
-        SystemPhoneNumber: { 'S' : callEvent.toNumber || '' },
-        CreatedAt: { 'S' : now },
-        ExpiresAfter: { 'N' : expiration.toString() },
+        CallId: callEvent.callId,
+        EventType: callEvent.eventStatus,
+        Channel: callEvent.channel,
+        CustomerPhoneNumber: callEvent.fromNumber || '',
+        SystemPhoneNumber: callEvent.toNumber || '',
+        CreatedAt: now,
+        ExpiresAfter: expiration.toString(),
     };
     
     const putParams = {
@@ -76,13 +74,11 @@ export const writeRecordingUrlToKds = async (recordingEvent: CallRecordingEvent)
     const expiresAfter = Math.ceil((Number(now) + expireInDays * 24 * 3600 * 1000) / 1000,);
   
     const kdsObj =  {
-        PK: { 'S' : `ce#${recordingEvent.callId}` },  
-        SK: { 'S' : `ts#${currentTimeStamp}#et#${recordingEvent.eventType}` },
-        CallId: { 'S' : recordingEvent.callId },
-        ExpiresAfter: { 'N' : expiresAfter.toString() },
-        CreatedAt: { 'S' : currentTimeStamp },
-        RecordingUrl: { 'S' : recordingUrl },
-        EventType: { 'S' : recordingEvent.eventType },
+        CallId: recordingEvent.callId,
+        ExpiresAfter: expiresAfter.toString(),
+        CreatedAt: currentTimeStamp,
+        RecordingUrl: recordingUrl,
+        EventType: recordingEvent.eventType,
     };
 
     const putParams = {
@@ -107,14 +103,12 @@ export const writeStatusToKds = async (status: CallEventStatus) => {
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
   
     const kdsObj =  {
-        PK: { 'S' : `ce#${status.callId}` },
-        SK: { 'S' : `ts#${now}#et${status.eventStatus}#c#${status.channel}` },
-        CallId: { 'S' : status.callId },
-        EventType: { 'S' : status.eventStatus },
-        Channel: { 'S' : status.channel },
-        TransactionId: { 'S': status.transactionId || '' }, 
-        CreatedAt: { 'S' : now },
-        ExpiresAfter: { 'N' : expiration.toString() },
+        CallId: status.callId,
+        EventType: status.eventStatus,
+        Channel: status.channel,
+        TransactionId: status.transactionId || '', 
+        CreatedAt: now,
+        ExpiresAfter: expiration.toString(),
     };
     const putParams = {
         StreamName: kdsStreamName,
@@ -156,19 +150,18 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
             const eventType = 'ADD_TRANSCRIPT_SEGMENT';
             const kdsObject = {
-                PK: { 'S' : `ce#${callId}` },
-                SK: { 'S' : `ts#${now}#et#${eventType}#c#${channel}` },
-                Channel: { 'S' : channel },
-                TransactionId: { 'S': transid },
-                CallId: { 'S': callId },
-                SegmentId: { 'S': resultId },
-                StartTime: { 'N': startTime.toString() },
-                EndTime: { 'N': endTime.toString() },
-                Transcript: { 'S': transcript || '' },
-                IsPartial: { 'BOOL': ispartial },
-                EventType: { 'S': eventType.toString() },
-                CreatedAt: { 'S': now },
-                ExpiresAfter: { 'N': expiration.toString() }
+                Channel: channel,
+                TransactionId: transid,
+                CallId: callId,
+                SegmentId: resultId,
+                StartTime: startTime.toString(),
+                EndTime: endTime.toString(),
+                Transcript: transcript || '',
+                IsPartial: ispartial,
+                EventType: eventType.toString(),
+                CreatedAt: now,
+                ExpiresAfter: expiration.toString(),
+                StreamArn: '' 
             };
             
             const putParams = {
