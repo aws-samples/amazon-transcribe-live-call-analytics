@@ -16,7 +16,7 @@
 
 **Agent**:  It matches - perfect! Hi Bob. How can i help you with your rewards-card?*
 
-### Part 2: AgentAssist retrieves information using the information gathered earlier (eg card type).. in this case by using conditional answer in QnAbot, but other mechanisms -  such as kendra redirect query filters or custom logic with Lambda hooks - could also be used.
+### Part 2: AgentAssist retrieves information using the information gathered earlier (eg card type).. in this case by using conditional answer in QnAbot, but other mechanisms -  such as Kendra redirect query filters or custom logic with Lambda hooks - could also be used.
 
 
 **Caller**: I was wondering, what is the cash back rate for this card?
@@ -58,20 +58,20 @@
 **Caller**: Can you tell me what kinds of life insurance policies you have?  
 **Agent**:  Yes, of course. I’m just pulling up our latest life insurance policy information now.  
   
-*AGENT ASSIST: Open *[*https://www.barclays.co.uk/insurance/life-insurance/  Suggested response: We offer two main types of life insurance - Permanent life insurance, and Term life insurance which includes a plan designed for anyone thinking of applying for a mortgage.*
+*AGENT ASSIST: Open https://en.wikipedia.org/wiki/Life_insurance.  Suggested response: We offer two main types of life insurance - Permanent life insurance, and Term life insurance which includes a plan designed for anyone thinking of applying for a mortgage.*
   
-**Agent**: We offer two main types of life insurance - Permanent life insurance, and Term life insurance which includes a plan designed for anyone thinking of applying for a mortgage.
+**Agent**: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more. 
 
 
 ### Part 5: Caller asks a question for which we don’t have an FAQ.. Demonstrates fallback to a Kendra query on unstructured docs from the index (in the case the crawled website)
 
-**Caller**: Actually I am thinking to apply for a mortgage. This would be my first time..
-**Agent**: Excellent. That must be very exciting! We’d love to help you with that.  
+**Caller**: Interesting! What types of accidents are covered by accidental death insurance?
+**Agent**: I'll tell you in one second!  
   
-*AGENT ASSIST: Amazon Kendra suggestions....you want to borrow as a deposit – but some of our **mortgages** are designed to help if you’re struggling to save up that amount. For example, you could **apply** for a **mortgage** with a minimum 5% deposit using the **mortgage** guarantee scheme. More **first**-**time** **mortgage** questions...*
+*AGENT ASSIST: Amazon Kendra suggestions....Accidental death insurance is a type of limited life insurance that is designed to cover the insured should they die as the result of an accident. "Accidents" run the gamut from abrasions to catastrophes but normally do not include deaths resulting from non-accident-related health problems or suicide. Because they only cover accidents, these policies are much less expensive than other life insurance policies. Such insurance can also be accidental death and dismemberment insurance or AD&D. In an AD&D policy, benefits are available not only for accidental death but also for the loss of limbs or body functions such as sight and hearing.
 *Source Link: https://www.barclays.co.uk/mortgages/first-time-buyers/*
   
-**Agent**: We have mortgage solutions designed just for first time buyers like yourself, with down-payment options as low as 5%. Let me send you some information and let’s schedule a chat with one of our mortgage specialists. Does that sound OK?
+**Agent**: "Accidents" run the gamut from abrasions to catastrophes but normally do not include deaths resulting from non-accident-related health problems or suicide. Because they only cover accidents, these policies are much less expensive than other life insurance policies. We also offer  accidental death and dismemberment insurance or AD&D, where benefits are available not only for accidental death but also for the loss of limbs or body functions such as sight and hearing. Let me send you some information and let’s schedule a chat with one of our insurance specialists. Does that sound OK?
 
 ### Part 6: Wrapup
 
