@@ -244,6 +244,8 @@ Resources:
                 time.sleep(2)
                 status = get_status(bucket=importBucket, statusFile=statusFile)
                 print(f'Import Status: {status}')
+                if status.startswith("FAILED"):
+                  raise ValueError(status)
             print("Import complete")
 
           def buildQnABotLexBot(props):
@@ -257,6 +259,8 @@ Resources:
                 time.sleep(5)
                 status = get_status(bucket=buildStatusBucket, statusFile=statusFile)
                 print(f'Bot Status: {status}')
+                if status.startswith("FAILED"):
+                  raise ValueError(status)
 
           def syncQnABotSamplePackageToKendra(props):
             exportBucket = getStackResource(props["QNABOTSTACK"], "ExportBucket")
@@ -280,6 +284,8 @@ Resources:
                 time.sleep(5)
                 status = get_status(bucket=exportBucket, statusFile=statusFile)
                 print(f'Import Status: {status}')
+                if status.startswith("FAILED"):
+                  raise ValueError(status)
             print("Import complete")
 
           def startKendraCrawler(props):
