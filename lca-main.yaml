@@ -489,7 +489,7 @@ Resources:
           !If
             - ShouldInstallAWSQnaBot
             - !GetAtt QNABOT.Outputs.LexV2BotAliasId
-            - !Ref AgentAssistExistingLexV2BotId  
+            - !Ref AgentAssistExistingLexV2BotAliasId  
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
       
   CHIMEVCSTACK:
