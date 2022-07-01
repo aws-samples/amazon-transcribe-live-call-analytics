@@ -65,7 +65,7 @@
 **Caller**: Can you tell me what kinds of life insurance policies you have?   
 **Agent**:  Yes, of course. I’m just pulling up our latest life insurance policy information now.   
   
-<span style="color:blue">**AGENTASSIST**: Open https://en.wikipedia.org/wiki/Life_insurance.  Suggested response: We offer two main types of life insurance - Permanent life insurance, and Term life insurance which includes a plan designed for anyone thinking of applying for a mortgage.</span>
+<span style="color:blue">**AGENTASSIST**: Open https://en.wikipedia.org/wiki/Life_insurance: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more.</span>
   
 **Agent**: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more.  
 
@@ -77,7 +77,7 @@
 **Agent**: I'll tell you in one second!   
   
 <span style="color:blue">**AGENTASSIST**: Amazon Kendra suggestions....Accidental death insurance is a type of limited life insurance that is designed to cover the insured should they die as the result of an accident. "Accidents" run the gamut from abrasions to catastrophes but normally do not include deaths resulting from non-accident-related health problems or suicide. Because they only cover accidents, these policies are much less expensive than other life insurance policies. Such insurance can also be accidental death and dismemberment insurance or AD&D. In an AD&D policy, benefits are available not only for accidental death but also for the loss of limbs or body functions such as sight and hearing.
-Source Link: https://www.barclays.co.uk/mortgages/first-time-buyers/ </span>
+Source Link: https://en.wikipedia.org/wiki/Life_insurance </span>
   
 **Agent**: "Accidents" run the gamut from abrasions to catastrophes but normally do not include deaths resulting from non-accident-related health problems or suicide. Because they only cover accidents, these policies are much less expensive than other life insurance policies. We also offer  accidental death and dismemberment insurance or AD&D, where benefits are available not only for accidental death but also for the loss of limbs or body functions such as sight and hearing. Let me send you some information and let’s schedule a chat with one of our insurance specialists. Does that sound OK?  
 
