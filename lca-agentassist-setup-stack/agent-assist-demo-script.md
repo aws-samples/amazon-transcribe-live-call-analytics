@@ -73,13 +73,13 @@
 ### Part 5: Caller asks a question for which we don’t have an FAQ.. Demonstrates fallback to a Kendra query on unstructured docs from the index (in the case the crawled website)
 ***
 
-**Caller**: Interesting! What types of accidents are covered by accidental death insurance?  
+**Caller**: Interesting. What is an endowment policy?  
 **Agent**: I'll tell you in one second!   
   
-<span style="color:blue">**AGENTASSIST**: Amazon Kendra suggestions....Accidental death insurance is a type of limited life insurance that is designed to cover the insured should they die as the result of an accident. "Accidents" run the gamut from abrasions to catastrophes but normally do not include deaths resulting from non-accident-related health problems or suicide. Because they only cover accidents, these policies are much less expensive than other life insurance policies. Such insurance can also be accidental death and dismemberment insurance or AD&D. In an AD&D policy, benefits are available not only for accidental death but also for the loss of limbs or body functions such as sight and hearing.
+<span style="color:blue">**AGENTASSIST**: Amazon Kendra suggestions. If the cash value grows over time, the death benefits do too. If the cash value declines, the death benefit also declines. Option B policies normally feature higher premiums than option A policies. Endowments[edit] Main article: Endowment policy The endowment policy is a life insurance contract designed to pay a lump sum after a specific term (on its 'maturity') or on death. Typical maturities are ten, fifteen or twenty years up to a certain age limit.
 Source Link: https://en.wikipedia.org/wiki/Life_insurance </span>
   
-**Agent**: "Accidents" run the gamut from abrasions to catastrophes but normally do not include deaths resulting from non-accident-related health problems or suicide. Because they only cover accidents, these policies are much less expensive than other life insurance policies. We also offer  accidental death and dismemberment insurance or AD&D, where benefits are available not only for accidental death but also for the loss of limbs or body functions such as sight and hearing. Let me send you some information and let’s schedule a chat with one of our insurance specialists. Does that sound OK?  
+**Agent**: It's a life insurance contract designed to pay a lump sum after a specific term (on its 'maturity') or on death. Typical maturities are ten, fifteen or twenty years up to a certain age limit. Let me send you some information and let’s schedule a chat with one of our insurance specialists. Does that sound OK?  
 
 ***
 ### Part 6: Wrapup
