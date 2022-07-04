@@ -322,6 +322,32 @@ async def execute_add_s3_recording_mutation(
 
     return result
 
+##########################################################################
+# Lex Agent Assist
+##########################################################################
+def is_qnabot_noanswer(bot_response):
+    if (
+        bot_response["sessionState"]["dialogAction"]["type"] == "Close"
+        and (
+            bot_response["sessionState"]
+            .get("sessionAttributes", {})
+            .get("qnabot_gotanswer")
+            == "false"
+        )
+    ):
+        return True
+    return False
+
+def get_agent_assist_message(bot_response):
+    message = ""
+    if is_qnabot_noanswer(bot_response):
+        # ignore 'noanswer' responses from QnABot
+        LOGGER.debug("QnABot \"Dont't know\" response - ignoring")
+        return ""
+    if "messages" in bot_response and bot_response["messages"]:
+        message = bot_response["messages"][0]["content"]
+    return message
+
 async def send_lex_agent_assist(
     transcript_segment_args: Dict[str, Any],
     content: str,
@@ -348,32 +374,23 @@ async def send_lex_agent_assist(
     LOGGER.debug("Bot Response: ", extra=bot_response)
 
     result = {}
-    if not (
-        bot_response["sessionState"]["dialogAction"]["type"] == "Close"
-        and (
-            bot_response["sessionState"]
-            .get("sessionAttributes", {})
-            .get("qnabot_gotanswer", "false")
-            == "false"
-        )
-    ):
-        if "messages" in bot_response and bot_response["messages"]:
-            transcript = bot_response["messages"][0]["content"]
-            transcript_segment = {**transcript_segment_args, "Transcript": transcript}
+    transcript = get_agent_assist_message(bot_response)
+    if transcript:
+        transcript_segment = {**transcript_segment_args, "Transcript": transcript}
 
-            query = dsl_gql(
-                DSLMutation(
-                    schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
-                        *transcript_segment_fields(schema),
-                    )
+        query = dsl_gql(
+            DSLMutation(
+                schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                    *transcript_segment_fields(schema),
                 )
             )
+        )
 
-            result = await execute_gql_query_with_retries(
-                query,
-                client_session=appsync_session,
-                logger=LOGGER,
-            )
+        result = await execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+        )
 
     return result
 
