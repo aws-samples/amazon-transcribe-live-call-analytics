@@ -416,6 +416,7 @@ def add_lex_agent_assistances(
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
     end_time: float = message["EndTime"]
+    end_time = float(end_time) + 0.001 # UI sort order
     transcript: str = message["Transcript"]
     created_at = datetime.utcnow().astimezone().isoformat()
 
@@ -525,6 +526,7 @@ def add_lambda_agent_assistances(
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
     end_time: float = message["EndTime"]
+    end_time = float(end_time) + 0.001 # UI sort order
     transcript: str = message["Transcript"]
     created_at = datetime.utcnow().astimezone().isoformat()
 

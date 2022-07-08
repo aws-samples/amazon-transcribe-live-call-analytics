@@ -344,6 +344,7 @@ def transform_segment_to_issues_agent_assist(
     issue_transcript = transcript[begin_offset:end_offset]
     start_time: float = segment_item["BeginOffsetMillis"] / 1000
     end_time: float = segment_item["EndOffsetMillis"] / 1000
+    end_time = end_time + 0.001 # UI sort order
 
     return dict(
         CallId=call_id,
@@ -531,6 +532,7 @@ def add_lex_agent_assistances(
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
             end_time = segment_item["EndOffsetMillis"] / 1000
+            end_time = end_time + 0.001 # UI sort order
 
             send_lex_agent_assist_args.append(
                 dict(
@@ -563,6 +565,7 @@ def add_lex_agent_assistances(
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
             end_time = segment_item["EndOffsetMillis"] / 1000
+            end_time = end_time + 0.001 # UI sort order
 
             send_lex_agent_assist_args.append(
                 dict(
@@ -716,6 +719,7 @@ def add_lambda_agent_assistances(
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
             end_time = segment_item["EndOffsetMillis"] / 1000
+            end_time = end_time + 0.001 # UI sort order
 
             send_lambda_agent_assist_args.append(
                 dict(
@@ -747,7 +751,8 @@ def add_lambda_agent_assistances(
 
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
-            end_time = segment_item["EndOffsetMillis"] / 1000
+            end_time = segment_item["EndOffsetMillis"] / 1000 
+            end_time = end_time + 0.001 # UI sort order
 
             send_lambda_agent_assist_args.append(
                 dict(
@@ -833,7 +838,8 @@ async def execute_process_event_api_mutation(
     event_type_map = dict(
         COMPLETED="ENDED", FAILED="ERRORED", SEGMENTS="TRANSCRIBING", STARTED="STARTED"
     )
-    event_type = event_type_map.get(message.get("EventType", ""), "")
+    msg_event_type = message.get("EventType", "")
+    event_type = event_type_map.get(msg_event_type, "")
     message_normalized = {**message, "EventType": event_type}
 
     if event_type == "TRANSCRIBING":
@@ -864,7 +870,7 @@ async def execute_process_event_api_mutation(
                     appsync_session=appsync_session,
                 )
             )
-        
+
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_contact_lens_agent_assist_tasks,
@@ -885,6 +891,6 @@ async def execute_process_event_api_mutation(
             appsync_session=appsync_session,
         )
     else:
-        LOGGER.warning("unknown event type")
+        LOGGER.warning("unknown event type [%s] (message event type [%s])", event_type, msg_event_type)
 
     return return_value
