@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ---
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 
 Description: Amazon Transcribe Live Call Analytics - LCA (v0.3.0)
 
 Parameters:
-
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
@@ -34,7 +33,7 @@ Parameters:
 
   DemoSoftphoneAllowedCidr:
     Type: String
-    AllowedPattern: "( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))"
+    AllowedPattern: '( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))'
     Description: >
       Used only when CallAudioSource is set to 'Demo Asterisk PBX Server'
       CIDR block allowed by demo Asterisk server for soft phone registration.
@@ -43,17 +42,17 @@ Parameters:
   SiprecAllowedCidrList:
     Type: String
     # yamllint disable rule:line-length
-    AllowedPattern: "( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*"
+    AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
     # yamllint enable rule:line-length
     Description: >
       Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
       Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
-  
+
   ConnectInstanceArn:
     Type: String
     AllowedPattern: '^(|arn:aws:connect:.*)$'
-    Description: > 
+    Description: >
       Required when CallAudioSource is set to 'Amazon Connect Contact Lens'
       Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
 
@@ -186,7 +185,7 @@ Parameters:
 
   DemoAsteriskDownloadUrl:
     Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-16-current.tar.gz
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-18-current.tar.gz
     Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
 
   DemoAsteriskAgentAudioURL:
@@ -310,18 +309,45 @@ Metadata:
         default: CloudFront Allowed Geographies
 
 Conditions:
-  ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
-  ShouldInstallChimeVCsiprec: !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
-  ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
-  ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
-  ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
-  ShouldEnableLexAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
-  ShouldBringYourOwnBot: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
-  ShouldInstallAWSQnaBot: !And [!Condition ShouldEnableLexAgentAssist, !Not [!Condition ShouldBringYourOwnBot]]
-  ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Developer Edition)']
-  ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Enterprise Edition)']
-  ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
-  ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
+  ShouldInstallDemoAsteriskServer:
+    !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
+  ShouldInstallChimeVCsiprec:
+    !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
+  ShouldInstallChimeVCStack:
+    !Or [
+      !Condition ShouldInstallDemoAsteriskServer,
+      !Condition ShouldInstallChimeVCsiprec,
+    ]
+  ShouldInstallGenesysAudiohookStack:
+    !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
+  ShouldInstallConnectIntegrationStack:
+    !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+  ShouldEnableLexAgentAssist:
+    !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
+  ShouldBringYourOwnBot:
+    !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
+  ShouldInstallAWSQnaBot:
+    !And [
+      !Condition ShouldEnableLexAgentAssist,
+      !Not [!Condition ShouldBringYourOwnBot],
+    ]
+  ShouldCreateKendraIndexDeveloperEdition:
+    !Equals [
+      !Ref AgentAssistOption,
+      'AWS QnABot with new Kendra Index (Developer Edition)',
+    ]
+  ShouldCreateKendraIndexEnterpriseEdition:
+    !Equals [
+      !Ref AgentAssistOption,
+      'AWS QnABot with new Kendra Index (Enterprise Edition)',
+    ]
+  ShouldCreateKendraIndex:
+    !Or [
+      !Condition ShouldCreateKendraIndexDeveloperEdition,
+      !Condition ShouldCreateKendraIndexEnterpriseEdition,
+    ]
+  ShouldUseExistingKendraIndex:
+    !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -384,7 +410,8 @@ Rules:
         AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens'
 
   AgentAssistExistingKendraIndexId:
-    RuleCondition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
+    RuleCondition:
+      !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingKendraIndexId, '']]
         AssertDescription: AgentAssistExistingKendraIndexId is required when AgentAssistOption is 'AWS QnABot with existing Kendra Index'
@@ -398,7 +425,6 @@ Rules:
         AssertDescription: AgentAssistExistingLexV2BotAliasId is required when AgentAssistOption is 'Bring your own LexV2 bot'
 
 Resources:
-
   KENDRA:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldCreateKendraIndex
@@ -408,8 +434,7 @@ Resources:
       # yamllint enable rule:line-length
       Parameters:
         IndexName: !Join ['', [!Ref 'AWS::StackName', '-Index']]
-        IndexEdition:
-          !If
+        IndexEdition: !If
           - ShouldCreateKendraIndexDeveloperEdition
           - 'DEVELOPER_EDITION'
           - 'ENTERPRISE_EDITION'
@@ -423,12 +448,17 @@ Resources:
       # yamllint enable rule:line-length
       Parameters:
         Email: !Ref AdminEmail
-        Username: "Admin"
-        LexV2BotLocaleIds: !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+        Username: 'Admin'
+        LexV2BotLocaleIds:
+          !FindInMap [
+            TranscribeToLexLocaleId,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
-        InstallLexResponseBots: "false"
-  
+        InstallLexResponseBots: 'false'
+
   AISTACK:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -447,17 +477,24 @@ Resources:
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         ComprehendLanguageCode:
-          !FindInMap [TranscribeToComprehendLanguage, !Ref TranscribeLanguageCode, Value]
+          !FindInMap [
+            TranscribeToComprehendLanguage,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         CloudFrontAllowedGeos: !Ref CloudFrontAllowedGeos
-        IsLexAgentAssistEnabled: 
-          !If
-            - ShouldEnableLexAgentAssist
-            - true
-            - false
+        IsLexAgentAssistEnabled: !If
+          - ShouldEnableLexAgentAssist
+          - true
+          - false
         LexAgentAssistLocaleId:
-          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+          !FindInMap [
+            TranscribeToLexLocaleId,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -470,28 +507,24 @@ Resources:
       Parameters:
         LCAStackName: !Ref AWS::StackName
         AISTACK: !Ref AISTACK
-        QNABOTSTACK:
-          !If
-            - ShouldInstallAWSQnaBot
-            - !Ref QNABOT
-            - ""
-        KendraIndexId:
-          !If
-            - ShouldCreateKendraIndex
-            - !GetAtt KENDRA.Outputs.KendraIndexId
-            - !Ref AgentAssistExistingKendraIndexId
-        LexAgentAssistBotId:
-          !If
-            - ShouldInstallAWSQnaBot
-            - !GetAtt QNABOT.Outputs.LexV2BotId
-            - !Ref AgentAssistExistingLexV2BotId         
-        LexAgentAssistAliasId:
-          !If
-            - ShouldInstallAWSQnaBot
-            - !GetAtt QNABOT.Outputs.LexV2BotAliasId
-            - !Ref AgentAssistExistingLexV2BotAliasId  
+        QNABOTSTACK: !If
+          - ShouldInstallAWSQnaBot
+          - !Ref QNABOT
+          - ''
+        KendraIndexId: !If
+          - ShouldCreateKendraIndex
+          - !GetAtt KENDRA.Outputs.KendraIndexId
+          - !Ref AgentAssistExistingKendraIndexId
+        LexAgentAssistBotId: !If
+          - ShouldInstallAWSQnaBot
+          - !GetAtt QNABOT.Outputs.LexV2BotId
+          - !Ref AgentAssistExistingLexV2BotId
+        LexAgentAssistAliasId: !If
+          - ShouldInstallAWSQnaBot
+          - !GetAtt QNABOT.Outputs.LexV2BotAliasId
+          - !Ref AgentAssistExistingLexV2BotAliasId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
-      
+
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallChimeVCStack
@@ -500,8 +533,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        InstallDemoAsteriskServer:
-          !If
+        InstallDemoAsteriskServer: !If
           - ShouldInstallDemoAsteriskServer
           - true
           - false
@@ -541,68 +573,57 @@ Resources:
         TranscriptProcessorFunctionRoleName: !GetAtt AISTACK.Outputs.TranscriptProcessorFunctionRoleName
 
 Outputs:
-
   ApplicationCloudfrontEndpoint:
     Description: LCA User Interface URL
     Value: !GetAtt AISTACK.Outputs.CloudfrontEndpoint
 
   AsteriskInstanceId:
     Description: Demo Asterisk Server EC2 instanceId
-    Value:
-      !If
+    Value: !If
       - ShouldInstallChimeVCStack
       - !GetAtt CHIMEVCSTACK.Outputs.AsteriskInstanceId
-      - "Demo Asterisk PBX not enabled"
+      - 'Demo Asterisk PBX not enabled'
 
   DemoPBXIPAddress:
     Description: Demo Asterisk Server IP Address
-    Value:
-      !If
+    Value: !If
       - ShouldInstallChimeVCStack
       - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXIPAddress
-      - "Demo Asterisk PBX not enabled"
+      - 'Demo Asterisk PBX not enabled'
 
   DemoPBXPhoneNumber:
     Description: Demo Asterisk Server Phone Number
-    Value:
-      !If
+    Value: !If
       - ShouldInstallChimeVCStack
       - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXPhoneNumber
-      - "Demo Asterisk PBX not enabled"
+      - 'Demo Asterisk PBX not enabled'
 
   WebSocketEndpoint:
     Description: Websocket endpoint for Genesys Cloud Audiohook integration
-    Value:
-      !If
+    Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
-      - "Genesys Cloud Audiohook Web Socket not enabled"
+      - 'Genesys Cloud Audiohook Web Socket not enabled'
 
   WebSocketAPIKey:
-    Value:
-      !If
+    Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIKey
-      - "Genesys Cloud Audiohook Web Socket not enabled"
+      - 'Genesys Cloud Audiohook Web Socket not enabled'
 
   WebSocketAPIClientSecret:
-    Value:
-      !If
+    Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
-      - "Genesys Cloud Audiohook Web Socket not enabled"
+      - 'Genesys Cloud Audiohook Web Socket not enabled'
 
   QnaBotContentDesigner:
     Description: Agent Assist Content Designer URL (AWS QnABot)
-    Value: 
-      !If
+    Value: !If
       - ShouldInstallAWSQnaBot
       - !GetAtt QNABOT.Outputs.ContentDesignerURL
-      - "Agent Assist AWS QnABot not enabled"    
-    
+      - 'Agent Assist AWS QnABot not enabled'
+
   RecordingsS3Bucket:
     Description: Bucket contains all the call recordings
     Value: !GetAtt AISTACK.Outputs.S3BucketName
-  
-
-
