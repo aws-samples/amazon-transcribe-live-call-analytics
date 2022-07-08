@@ -231,6 +231,24 @@ Parameters:
       - pt_BR
       - pt_PT
       - zh_CN
+  
+  IsLambdaAgentAssistEnabled:
+    Type: String
+    Default: 'false'
+    Description: >-
+      Enables the Lambda Agent Assist feature. The AgentAssistExistingLambdaFunctionArn
+      parameters should have values if this is set to 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  AgentAssistExistingLambdaFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      Used only if IsLambdaAgentAssistEnabled is set to "true".
+      Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
 
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
@@ -303,6 +321,7 @@ Conditions:
     - !Equals [!Ref IsContentRedactionEnabled, 'true']
     - !Equals [!Ref TranscribeLanguageCode, 'en-US']
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
+  ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
 
 Outputs:
   EventSourcingTableArn:
@@ -922,6 +941,15 @@ Resources:
               Resource:
                 # XXX make specific to bot passed in parameter
                 "*"
+            - !If 
+              - ShouldEnableLambdaAgentAssist
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
+              - Ref: AWS::NoValue
+
+
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -943,6 +971,9 @@ Resources:
           LEX_BOT_ID: !Ref LexAgentAssistBotId
           LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
           LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
+          # Lambda Agent Assist
+          IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
+          LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers
