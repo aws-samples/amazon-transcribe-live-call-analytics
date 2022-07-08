@@ -28,12 +28,14 @@ from event_processor import execute_process_transcribe_event_api_mutation
 if TYPE_CHECKING:
     from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource, Table as DynamoDbTable
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
+    from mypy_boto3_lambda.client import LambdaClient
     from boto3 import Session as Boto3Session
 else:
     Boto3Session = object
     DynamoDBServiceResource = object
     DynamoDbTable = object
     LexRuntimeV2Client = object
+    LambdaClient = object
 
 
 APPSYNC_GRAPHQL_URL = environ["APPSYNC_GRAPHQL_URL"]
@@ -62,6 +64,17 @@ else:
 LEX_BOT_ID = environ["LEX_BOT_ID"]
 LEX_BOT_ALIAS_ID = environ["LEX_BOT_ALIAS_ID"]
 LEX_BOT_LOCALE_ID = environ["LEX_BOT_LOCALE_ID"]
+
+IS_LAMBDA_AGENT_ASSIST_ENABLED = getenv("IS_LAMBDA_AGENT_ASSIST_ENABLED", "true").lower() == "true"
+if IS_LAMBDA_AGENT_ASSIST_ENABLED:
+    LAMBDA_CLIENT: LambdaClient = BOTO3_SESSION.client(
+        "lambda",
+        config=CLIENT_CONFIG,
+    )
+else:
+    LAMBDA_CLIENT = None
+LAMBDA_AGENT_ASSIST_FUNCTION_ARN = environ["LAMBDA_AGENT_ASSIST_FUNCTION_ARN"]
+
 
 CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
 MUTATION_FUNCTION_MAPPING = {
@@ -108,6 +121,8 @@ async def process_event(event) -> Dict[str, List]:
             lex_bot_id=LEX_BOT_ID,
             lex_bot_alias_id=LEX_BOT_ALIAS_ID,
             lex_bot_locale_id=LEX_BOT_LOCALE_ID,
+            lambda_client=LAMBDA_CLIENT,
+            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN
         ),
         # called for each record right before the context manager exits
         api_mutation_fn=MUTATION_FUNCTION_NAME,

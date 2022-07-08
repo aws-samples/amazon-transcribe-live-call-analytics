@@ -8,6 +8,7 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import boto3
+import json
 
 # third-party imports from Lambda layer
 from aws_lambda_powertools import Logger
@@ -23,6 +24,7 @@ from graphql_helpers import (
     transcript_segment_sentiment_fields,
 )
 from lex_utils import recognize_text_lex
+from lambda_utils import invoke_lambda
 
 
 # pylint: enable=import-error
@@ -30,15 +32,23 @@ from lex_utils import recognize_text_lex
 if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.type_defs import RecognizeTextResponseTypeDef
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
+    from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
+    from mypy_boto3_lambda.client import LambdaClient
 else:
     LexRuntimeV2Client = object
     RecognizeTextResponseTypeDef = object
+    LambdaClient = object
+    InvocationResponseTypeDef = object
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
 LEXV2_CLIENT: Optional[LexRuntimeV2Client] = None
 LEX_BOT_ID: str
 LEX_BOT_ALIAS_ID: str
 LEX_BOT_LOCALE_ID: str
+
+IS_LAMBDA_AGENT_ASSIST_ENABLED = False
+LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
+LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
 
 # Contact Lens doesn't include call metadata so we attempt to use API lookups 
 # to retrieve numbers from defined contact attributes on receipt of STARTED event.
@@ -429,7 +439,7 @@ def is_qnabot_noanswer(bot_response):
         return True
     return False
 
-def get_agent_assist_message(bot_response):
+def get_lex_agent_assist_message(bot_response):
     message = ""
     if is_qnabot_noanswer(bot_response):
         # ignore 'noanswer' responses from QnABot
@@ -465,7 +475,7 @@ async def send_lex_agent_assist(
     LOGGER.debug("Bot Response: ", extra=bot_response)
 
     result = {}
-    transcript = get_agent_assist_message(bot_response)
+    transcript = get_lex_agent_assist_message(bot_response)
     if transcript:
         transcript_segment = {**transcript_segment_args, "Transcript": transcript}
 
@@ -604,6 +614,190 @@ def add_lex_agent_assistances(
 
     return tasks
 
+##########################################################################
+# Lambda Agent Assist
+##########################################################################
+
+def get_lambda_agent_assist_message(lambda_response):
+    message = ""
+    try:
+        payload = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+        # Lambda result payload should include field 'message'
+        message = payload["message"]
+    except Exception as error:
+        LOGGER.error(
+            "Agent assist Lambda result payload parsing exception. Lambda must return object with key 'message'",
+            extra=error,
+        )
+    return message
+
+async def send_lambda_agent_assist(
+    transcript_segment_args: Dict[str, Any],
+    content: str,
+    appsync_session: AppsyncAsyncClientSession,
+):
+    """Sends Lambda Agent Assist Requests"""
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    call_id = transcript_segment_args["CallId"]
+    
+    payload = {
+        'text': content,
+        'call_id': call_id,
+        'transcript_segment_args': transcript_segment_args
+    }
+    
+    LOGGER.debug("Agent Assist Lambda Request: %s", content)
+
+    lambda_response: InvocationResponseTypeDef = await invoke_lambda(
+        payload=payload,
+        lambda_client=LAMBDA_CLIENT,
+        lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
+    )
+    
+    LOGGER.debug("Agent Assist Lambda Response: ", extra=lambda_response)
+
+    result = {}
+    transcript = get_lambda_agent_assist_message(lambda_response)
+    if transcript:
+        transcript_segment = {**transcript_segment_args, "Transcript": transcript}
+
+        query = dsl_gql(
+            DSLMutation(
+                schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                    *transcript_segment_fields(schema),
+                )
+            )
+        )
+
+        result = await execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+        )
+
+    return result
+
+
+def add_lambda_agent_assistances(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+    """Add Lambda Agent Assist GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    call_id: str = message["ContactId"]
+    channel: str = "AGENT_ASSISTANT"
+    status: str = "TRANSCRIBING"
+    is_partial: bool = False
+
+    created_at: str
+    start_time: float
+    end_time: float
+
+    send_lambda_agent_assist_args = []
+    for segment in message.get("Segments", []):
+        # only send relevant segments to agent assist
+        # BobS: Modified to process Utterance rather than Transcript events 
+        # to lower latency
+        if not ("Utterance" in segment or "Categories" in segment):
+            continue
+
+        if (
+            "Utterance" in segment
+            and segment["Utterance"].get("ParticipantRole") == "CUSTOMER"
+        ):
+            is_partial = False
+            segment_item = segment["Utterance"]
+            content = segment_item["PartialContent"]
+            segment_id = str(uuid.uuid4())
+
+            created_at = datetime.utcnow().astimezone().isoformat()
+            start_time = segment_item["BeginOffsetMillis"] / 1000
+            end_time = segment_item["EndOffsetMillis"] / 1000
+
+            send_lambda_agent_assist_args.append(
+                dict(
+                    content=content,
+                    transcript_segment_args=dict(
+                        CallId=call_id,
+                        Channel=channel,
+                        CreatedAt=created_at,
+                        EndTime=end_time,
+                        IsPartial=is_partial,
+                        SegmentId=segment_id,
+                        StartTime=start_time,
+                        Status=status,
+                    ),
+                )
+            )
+        # BobS - Issue detection code will not be invoked since we are not processing 
+        # Transcript events now - only Utterance events - for latency reasons.
+        issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
+        if (
+            "Transcript" in segment
+            and segment["Transcript"].get("ParticipantRole") == "CUSTOMER"
+            and not issues_detected
+        ):
+            is_partial = False
+            segment_item = segment["Transcript"]
+            content = segment_item["Content"]
+            segment_id = str(uuid.uuid4())
+
+            created_at = datetime.utcnow().astimezone().isoformat()
+            start_time = segment_item["BeginOffsetMillis"] / 1000
+            end_time = segment_item["EndOffsetMillis"] / 1000
+
+            send_lambda_agent_assist_args.append(
+                dict(
+                    content=content,
+                    transcript_segment_args=dict(
+                        CallId=call_id,
+                        Channel=channel,
+                        CreatedAt=created_at,
+                        EndTime=end_time,
+                        IsPartial=is_partial,
+                        SegmentId=segment_id,
+                        StartTime=start_time,
+                        Status=status,
+                    ),
+                )
+            )
+        for issue in issues_detected:
+            issue_segment = transform_segment_to_issues_agent_assist(
+                segment={**segment, "CallId": call_id},
+                issue=issue,
+            )
+            send_lambda_agent_assist_args.append(
+                dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
+            )
+
+        categories = segment.get("Categories", {})
+        for category in categories.get("MatchedCategories", []):
+            category_details = categories["MatchedDetails"][category]
+            category_segment = transform_segment_to_categories_agent_assist(
+                category=category,
+                category_details=category_details,
+                call_id=call_id,
+            )
+            send_lambda_agent_assist_args.append(
+                dict(
+                    content=category_segment["Transcript"],
+                    transcript_segment_args=category_segment,
+                ),
+            )
+
+    tasks = []
+    for agent_assist_args in send_lambda_agent_assist_args:
+        task = send_lambda_agent_assist(
+            appsync_session=appsync_session,
+            **agent_assist_args,
+        )
+        tasks.append(task)
+
+    return tasks
+
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
@@ -617,6 +811,8 @@ async def execute_process_event_api_mutation(
     global LEX_BOT_ID
     global LEX_BOT_ALIAS_ID
     global LEX_BOT_LOCALE_ID
+    global LAMBDA_CLIENT
+    global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
     # pylint: enable=global-statement
 
     LEXV2_CLIENT = agent_assist_args.get("lex_client")
@@ -624,6 +820,9 @@ async def execute_process_event_api_mutation(
     LEX_BOT_ID = agent_assist_args.get("lex_bot_id", "")
     LEX_BOT_ALIAS_ID = agent_assist_args.get("lex_bot_alias_id", "")
     LEX_BOT_LOCALE_ID = agent_assist_args.get("lex_bot_locale_id", "")
+    LAMBDA_CLIENT = agent_assist_args.get("lambda_client")
+    IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
+    LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "") 
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],
@@ -657,10 +856,20 @@ async def execute_process_event_api_mutation(
                 )
             )
 
+        add_lambda_agent_assists_tasks = []
+        if IS_LAMBDA_AGENT_ASSIST_ENABLED:
+            add_lambda_agent_assists_tasks.extend(
+                add_lambda_agent_assistances(
+                    message=message_normalized,
+                    appsync_session=appsync_session,
+                )
+            )
+        
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_contact_lens_agent_assist_tasks,
             *add_lex_agent_assists_tasks,
+            *add_lambda_agent_assists_tasks,
             return_exceptions=True,
         )
 

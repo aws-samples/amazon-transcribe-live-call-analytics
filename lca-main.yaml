@@ -66,6 +66,7 @@ Parameters:
       - AWS QnABot with existing Kendra Index
       - AWS QnABot with new Kendra Index (Developer Edition)
       - AWS QnABot with new Kendra Index (Enterprise Edition)
+      - Bring your own Lambda function
     Description: >
       Choose to enable optional Agent Assist capability, powered by a nested AWS QnABot stack, or your own LexV2 bot. 
       AWS QnABot uses Amazon Lex and Amazon Kendra to provide real time agent assist messages based on intents, slots,
@@ -94,6 +95,14 @@ Parameters:
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own LexV2 bot'.
       Provide the Lex V2 *Bot Alias Id* (not name) of an existing LexV2 bot alias to be used for Agent Assist."
+  
+  AgentAssistExistingLambdaFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
+      Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
 
   S3BucketName:
     Type: String
@@ -240,6 +249,7 @@ Metadata:
           - AgentAssistExistingKendraIndexId
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
+          - AgentAssistExistingLambdaFunctionArn
       - Label:
           default: Amazon S3 Configuration
         Parameters:
@@ -315,7 +325,9 @@ Conditions:
   ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
-  ShouldEnableLexAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
+  ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
+  ShouldEnableLambdaAgentAssist: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
+  ShouldEnableLexAgentAssist: !And [!Condition ShouldEnableAgentAssist, !Not [!Condition ShouldEnableLambdaAgentAssist]]
   ShouldBringYourOwnBot: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
   ShouldInstallAWSQnaBot: !And [!Condition ShouldEnableLexAgentAssist, !Not [!Condition ShouldBringYourOwnBot]]
   ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Developer Edition)']
@@ -397,6 +409,12 @@ Rules:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLexV2BotAliasId, '']]
         AssertDescription: AgentAssistExistingLexV2BotAliasId is required when AgentAssistOption is 'Bring your own LexV2 bot'
 
+  AgentAssistExistingLambdaFunctionArn:
+    RuleCondition: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AgentAssistExistingLambdaFunctionArn, '']]
+        AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
+
 Resources:
 
   KENDRA:
@@ -458,6 +476,12 @@ Resources:
             - false
         LexAgentAssistLocaleId:
           !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+        IsLambdaAgentAssistEnabled: 
+          !If
+            - ShouldEnableLambdaAgentAssist
+            - true
+            - false
+        AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
