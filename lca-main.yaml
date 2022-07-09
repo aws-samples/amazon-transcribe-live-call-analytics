@@ -416,6 +416,7 @@ Rules:
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
 
 Resources:
+
   KENDRA:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldCreateKendraIndex
@@ -480,6 +481,13 @@ Resources:
           - ShouldEnableLexAgentAssist
           - true
           - false
+        LexAgentAssistLocaleId:
+          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+        IsLambdaAgentAssistEnabled: 
+          !If
+            - ShouldEnableLambdaAgentAssist
+            - true
+            - false
         LexAgentAssistLocaleId:
           !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         IsLambdaAgentAssistEnabled: 
