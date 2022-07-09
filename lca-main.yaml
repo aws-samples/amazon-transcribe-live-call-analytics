@@ -481,13 +481,6 @@ Resources:
           - true
           - false
         LexAgentAssistLocaleId:
-<<<<<<< HEAD
-          !FindInMap [
-            TranscribeToLexLocaleId,
-            !Ref TranscribeLanguageCode,
-            Value,
-          ]
-=======
           !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         IsLambdaAgentAssistEnabled: 
           !If
@@ -495,7 +488,6 @@ Resources:
             - true
             - false
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
->>>>>>> 1e6ea0e (Add Agent Assist option for 'Bring your own Lambda' - to simplify integration options with 3rd party agent assist logic)
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
