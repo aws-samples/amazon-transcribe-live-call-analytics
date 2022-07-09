@@ -140,7 +140,7 @@ Resources:
               except Exception as e:
                 print(e)
                 responseData["Error"] = f"Exception thrown: {e}"
-                status = cfnresponse.FAILED              
+                status = cfnresponse.SUCCESS # don't fail a rollback              
             cfnresponse.send(event, context, status, responseData)
 
   # Trigger Lambda function
