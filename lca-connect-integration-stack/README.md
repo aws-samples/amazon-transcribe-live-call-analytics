@@ -9,7 +9,7 @@ The integration includes the following:
 2. Real time Agent Assist based on caller utterance transcriptions
 
 ## Architecture
-![Architecture Diagram](../images/lca_connect.png)
+![Architecture Diagram](../images/lca-connect-architecture.png)
 
 ## Pre-requisites
 1. Existing Connect instance and administrator access
