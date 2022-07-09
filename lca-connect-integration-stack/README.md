@@ -25,23 +25,24 @@ The integration includes the following:
   
 Use these steps to quickly deploy a new Connect instance and/or example contact flow. *Skip the first few steps if you already have a Connect instance and just need to create an example contact flow.*  
 
-⁣1. [Launch Amazon Connect](https://docs.aws.amazon.com/connect/latest/adminguide/tutorial1-login-aws.html)
-⁣2. [Create an instance](https://docs.aws.amazon.com/connect/latest/adminguide/tutorial1-create-instance.html)
-⁣3. [Claim a phone number](https://docs.aws.amazon.com/connect/latest/adminguide/tutorial1-claim-phone-number.html)
-4. Choose the Instance Alias you created
-   a. *Copy the Instance ARN shown lower left, and paste into a scratch pad. You'll need it when deploying LCA in the next section.*
-⁣6. Choose the URL **Log in for emergency access**. It will take you the Amazon Connect Administration App
-⁣7. In the Routing menu on the left, choose **Contact flows**
-⁣8. On Contact Flow screen choose **Create contact flow**
-9. Download [LCA example contact flow](./example-contact-flow.json)
-10. Choose the dropdown on the top right and choose **Import Flow (beta)**
-⁣11. Choose the `example-contact-flow.json` file, that you downloaded from step 9, and choose Import
-12. Choose **Save**
-⁣13. Choose **Publish**
-⁣14. From the **Routing** menu on the left, choose **Phone numbers**
-⁣15. Choose the Phone Number created in step 3
-⁣16. In the **Contact Flow / IVR** dropdown, select the Contact Flow you created (`LCA-EXAMPLE`), and choose **Save**  
-The example contact flow is now published. Open the Connect Contact Control Panel (CCP) application (📞), set it to 'Online'. Make a test call to the  associated phone number, and answer the incoming test call using the CCP application.
+1. [Launch Amazon Connect](https://docs.aws.amazon.com/connect/latest/adminguide/tutorial1-login-aws.html)  
+2. [Create an instance](https://docs.aws.amazon.com/connect/latest/adminguide/tutorial1-create-instance.html)  
+3. [Claim a phone number](https://docs.aws.amazon.com/connect/latest/adminguide/tutorial1-claim-phone-number.html)  
+4. Choose the Instance Alias you created  
+    a. *Copy the Instance ARN shown lower left, and paste into a scratch pad. You'll need it when deploying LCA in the next section.*  
+5. Choose the URL **Log in for emergency access**. It will take you the Amazon Connect Administration App  
+6. In the Routing menu on the left, choose **Contact flows**  
+7. On Contact Flow screen choose **Create contact flow**  
+8. Download [LCA example contact flow](./example-contact-flow.json)  
+9. Choose the dropdown on the top right and choose **Import Flow (beta)**  
+10. Choose the `example-contact-flow.json` file, that you downloaded from step 9, and choose Import  
+11. Choose **Save**  
+12. Choose **Publish**  
+13. From the **Routing** menu on the left, choose **Phone numbers**  
+14. Choose the Phone Number created in step 3  
+15. In the **Contact Flow / IVR** dropdown, select the Contact Flow you created (`LCA-EXAMPLE`), and choose **Save**   
+  
+The example contact flow is now published. Open the Connect Contact Control Panel (CCP) application (📞), set it to 'Online'. Make a test call to the  associated phone number, and answer the incoming test call using the CCP application.  
 
 ### Cloudformation Deployment
 Connect Contact Lens is an optional Audio Source component for the LCA sample solution. 
