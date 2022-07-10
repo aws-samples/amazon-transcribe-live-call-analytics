@@ -30,7 +30,7 @@ Now let’s examine at an example of a multi-turn Agent Assist scenario.  If a c
 
 Agent Assist uses the AWS QnABot solution to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra.  To learn more about AWS QnABot, see here: https://aws.amazon.com/solutions/implementations/aws-qnabot/
 
-![Agent Assist Architecture](../images/lca-agentassist-arch.png)
+![Agent Assist Architecture](../images/lca-chimevc-architecture.png)
 ## How to enable Agent Assist in Live Call Analytics
 
 Agent Assist can be enabled within Live Call Analytics during deployment or with a stack update by providing values for the **Agent Assist Options** CloudFormation parameters as seen in the image below:
