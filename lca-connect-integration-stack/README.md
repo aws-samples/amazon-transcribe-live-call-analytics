@@ -38,7 +38,7 @@ Use these steps to quickly deploy a new Connect instance and/or example contact 
 10. Choose the `example-contact-flow.json` file, that you downloaded from step 9, and choose Import  
 11. Choose **Save**  
 12. Choose **Publish**  
-13. From the **Routing** menu on the left, choose **Phone numbers**  
+13. From the **Channels** menu on the left, choose **Phone numbers**  
 14. Choose the Phone Number created in step 3  
 15. In the **Contact Flow / IVR** dropdown, select the Contact Flow you created (`LCA-EXAMPLE`), and choose **Save**   
   

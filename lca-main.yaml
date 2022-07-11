@@ -14,7 +14,7 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Amazon Transcribe Live Call Analytics - LCA (v0.3.0)
+Description: Amazon Transcribe Live Call Analytics - LCA (v0.4.0)
 
 Parameters:
   CallAudioSource:
@@ -58,17 +58,17 @@ Parameters:
 
   AgentAssistOption:
     Type: String
-    Default: AWS QnABot with new Kendra Index (Developer Edition)
+    Default: QnABot on AWS with new Kendra Index (Developer Edition)
     AllowedValues:
       - Disabled
       - Bring your own LexV2 bot
-      - AWS QnABot with existing Kendra Index
-      - AWS QnABot with new Kendra Index (Developer Edition)
-      - AWS QnABot with new Kendra Index (Enterprise Edition)
+      - QnABot on AWS with existing Kendra Index
+      - QnABot on AWS with new Kendra Index (Developer Edition)
+      - QnABot on AWS with new Kendra Index (Enterprise Edition)
       - Bring your own Lambda function
     Description: >
-      Choose to enable optional Agent Assist capability, powered by a nested AWS QnABot stack, or your own LexV2 bot. 
-      AWS QnABot uses Amazon Lex and Amazon Kendra to provide real time agent assist messages based on intents, slots,
+      Choose to enable optional Agent Assist capability, powered by a nested QnABot stack, or your own LexV2 bot. 
+      QnABot uses Amazon Lex and Amazon Kendra to provide real time agent assist messages based on intents, slots,
       FAQs, and general search index that you configure using the included ContentDesigner UI.
 
   AgentAssistExistingKendraIndexId:
@@ -76,7 +76,7 @@ Parameters:
     Type: String
     AllowedPattern: '^(|[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})$'
     Description: >
-      Used only when AgentAssistOption is set to 'AWS QnABot with existing Kendra Index'.
+      Used only when AgentAssistOption is set to 'QnABot on AWS with existing Kendra Index'.
       Provide the index *id* (not name) of an existing Kendra index to be used for Agent Assist bot."
 
   AgentAssistExistingLexV2BotId:
@@ -329,10 +329,10 @@ Conditions:
   ShouldEnableLexAgentAssist: !And [!Condition ShouldEnableAgentAssist, !Not [!Condition ShouldEnableLambdaAgentAssist]]
   ShouldBringYourOwnBot: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
   ShouldInstallAWSQnaBot: !And [!Condition ShouldEnableLexAgentAssist, !Not [!Condition ShouldBringYourOwnBot]]
-  ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Developer Edition)']
-  ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'AWS QnABot with new Kendra Index (Enterprise Edition)']
+  ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with new Kendra Index (Developer Edition)']
+  ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with new Kendra Index (Enterprise Edition)']
   ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
-  ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
+  ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -396,10 +396,10 @@ Rules:
 
   AgentAssistExistingKendraIndexId:
     RuleCondition:
-      !Equals [!Ref AgentAssistOption, 'AWS QnABot with existing Kendra Index']
+      !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingKendraIndexId, '']]
-        AssertDescription: AgentAssistExistingKendraIndexId is required when AgentAssistOption is 'AWS QnABot with existing Kendra Index'
+        AssertDescription: AgentAssistExistingKendraIndexId is required when AgentAssistOption is 'QnABot on AWS with existing Kendra Index'
 
   AgentAssistExistingLexV2Bot:
     RuleCondition: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
@@ -619,11 +619,11 @@ Outputs:
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
   QnaBotContentDesigner:
-    Description: Agent Assist Content Designer URL (AWS QnABot)
+    Description: Agent Assist Content Designer URL (QnABot on AWS)
     Value: !If
       - ShouldInstallAWSQnaBot
       - !GetAtt QNABOT.Outputs.ContentDesignerURL
-      - 'Agent Assist AWS QnABot not enabled'
+      - 'Agent Assist QnABot on AWS not enabled'
 
   RecordingsS3Bucket:
     Description: Bucket contains all the call recordings
