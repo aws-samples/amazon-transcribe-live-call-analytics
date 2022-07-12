@@ -28,7 +28,7 @@ Agent Assist works by sending the phrases spoken (utterance) by the caller to an
 
 Now let’s examine at an example of a multi-turn Agent Assist scenario.  If a caller says “I’m calling about my card”, but does not specify the type of card, Amazon Lex can identify what the intent is (which is calling about a card), but it still needs more information (the slot value, which is the type of card). In this case, the Agent Assist suggested response would be “What type of card are you interested in? A rewards card or purchase card?”. The caller then can reply with “rewards card”, which will “fulfill” the intent. This means all the required slots have been collected.
 
-Agent Assist uses the AWS QnABot solution to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra.  To learn more about AWS QnABot, see here: https://aws.amazon.com/solutions/implementations/aws-qnabot/
+Agent Assist uses the QnABot on AWS solution to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra.  To learn more about QnABot on AWS, see here: https://aws.amazon.com/solutions/implementations/aws-qnabot/
 
 ![Agent Assist Architecture](../images/lca-chimevc-architecture.png)
 ## How to enable Agent Assist in Live Call Analytics
@@ -43,11 +43,12 @@ The main parameter to enable Agent Assist is the “**Enable Agent Assist**” p
 |---	|---	|
 |Disabled	|Selecting this value will disable Agent Assist	|
 |Bring your own LexV2 Bot	|Select this value if you already have a pre-configured LexV2 bot. You must provide LCA with the existing Lex Bot ID and Bot Alias in the **AgentAssistExistingLexV2BotId** and **AgentAssistExistingLexV2BotAliasId,** and an existing Kendra index in the **AgentAssistKendraIndexId** CloudFormation parameters.	|
-|AWS QnABot with existing Kendra Index	|This deploys a new AWS QnABot with an existing Kendra Index. If you select this value, you are required to provide LCA with an existing Kendra index in the **AgentAssistKendraIndexId** CloudFormation parameters.	|
-|AWS QnABot with new Kendra Index (Developer Edition)	|This deploys a new AWS QnABot with a new Amazon Kendra  Developer Edition Index	|
-|AWS QnABot with new Kendra Index (Enterprise Edition)	|This deploys a new AWS QnABot with a new Amazon Kendra Enterprise Edition Index	|
+|QnABot on AWS with existing Kendra Index	|This deploys a new QnABot on AWS with an existing Kendra Index. If you select this value, you are required to provide LCA with an existing Kendra index in the **AgentAssistKendraIndexId** CloudFormation parameters.	|
+|QnABot on AWS with new Kendra Index (Developer Edition)	|This deploys a new QnABot on AWS with a new Amazon Kendra  Developer Edition Index	|
+|QnABot on AWS with new Kendra Index (Enterprise Edition)	|This deploys a new QnABot on AWS with a new Amazon Kendra Enterprise Edition Index	|
+|Bring your own Lambda function	|This will send the customer's speech to a Lambda function. This will allow you to build your own custom Agent Assist integrations, for example, look up responses in a 3rd party knowledge base or API.	|
 
-All the values with “AWS QnABot” will deploy a new AWS QnABot into your account, pre-configured with example Agent Assist suggested responses. 
+All the values with “QnABot on AWS” will deploy a new QnABot on AWS into your account, pre-configured with example Agent Assist suggested responses. 
 
 Once you have filled out the Agent Assist CloudFormation parameters, finish deploying or updating the LCA stack.  
 
@@ -92,7 +93,7 @@ Agent Assist responses can be categorized into 5 types:
 |Dynamic - Context aware response	|This is a response that requires more information (slots) before it can provide an appropriate suggested answer.  Agent Assist may ask for the values of the slots before providing the final suggested response. Responses can be dynamic and formatted with [handlebars](https://catalog.us-east-1.prod.workshops.aws/workshops/20c56f9e-9c0a-4174-a661-9f40d9f063ac/en-US/qna/handlebars).	|
 |Dynamic - knowledge base query response	|This will look up a response from Amazon Kendra with a specified Query. Queries can be simple static text or dynamic text with handlebars. Queries also support Amazon Kendra Query Arguments, such as AttributeFilters. 	|
 |Dynamic - custom business logic response	|This will call an AWS Lambda function, along with the entire context, so that you can write custom business logic in the function, such as look up information in a 3rd party database or API.	|
-|Amazon Kendra fallback response	|If no response from the above is found, the caller's utterance is directly sent to Amazon Kendra. If the Amazon Kendra confidence score returns `HIGH` or `VERY_HIGH`, the response is sent to the agent. The confidence score threshold can be configured in the AWS QnABot settings.	|
+|Amazon Kendra fallback response	|If no response from the above is found, the caller's utterance is directly sent to Amazon Kendra. If the Amazon Kendra confidence score returns `HIGH` or `VERY_HIGH`, the response is sent to the agent. The confidence score threshold can be configured in the QnABot on AWS settings.	|
 
 The first four types, static and dynamic responses, are synced to Amazon Kendra FAQs. This provides a semantic aware search for any of the utterances and responses in these items.  
 
@@ -163,11 +164,11 @@ The last parameter, Kendra Query Arguments, allows for more fine grained search 
 
 ### Dynamic, Custom Business Logic
 
-Custom business logic is accomplished by writing a custom AWS Lambda Function. This provides the capability for looking up information from almost any 3rd party data source, or building other custom integrations. For an example of calling an AWS Lambda function from an Agent Assist response, see the [AWS QnABot Lambda Hooks README](https://github.com/aws-solutions/aws-qnabot/tree/main/docs/lambda_hooks). 
+Custom business logic is accomplished by writing a custom AWS Lambda Function. This provides the capability for looking up information from almost any 3rd party data source, or building other custom integrations. For an example of calling an AWS Lambda function from an Agent Assist response, see the [QnABot on AWS Lambda Hooks README](https://github.com/aws-solutions/aws-qnabot/tree/main/docs/lambda_hooks). 
 
 ### Amazon Kendra Fallback Response
 
-If all else fails, and there are no matching Agent Assist responses found, the user’s utterance will be sent to Amazon Kendra. The Amazon Kendra confidence threshold for Kendra Fallback responses can be configured in the AWS QnABot settings, under the setting name `ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE.`
+If all else fails, and there are no matching Agent Assist responses found, the user’s utterance will be sent to Amazon Kendra. The Amazon Kendra confidence threshold for Kendra Fallback responses can be configured in the QnABot on AWS settings, under the setting name `ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE.`
 
 
 ### Rebuild Lex & Kendra
@@ -179,3 +180,18 @@ Once all the Agent Assist responses have been defined, the last step is to rebui
 After rebuilding Lex, also resync Kendra FAQs, which will sync all the items to Kendra.
 
 ![Sync Kendra FAQ](../images/lca-agentassist-qnabot-syncfaq.png)
+
+
+## Bring your own Lambda function
+
+If you would like to bypass Lex entirely, select the `Bring your own Lambda function` option in the Enable Agent Assist. You must also put a Lambda ARN of the function that will be invoked. When invoked, LCA will  send the customer's utterance in the event object.  
+
+LCA will expect a JSON response from the Lambda function, with one key named `message` and the value containing the Agent Assist response message.
+
+Example:
+
+``
+        {
+          "message": "This is the Agent Assist suggested response message."
+        }
+``
