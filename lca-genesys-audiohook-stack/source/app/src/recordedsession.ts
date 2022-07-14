@@ -5,9 +5,10 @@ import { unlink, stat } from 'fs/promises';
 import { S3 } from 'aws-sdk';
 import { Session, StatisticsInfo } from './session';
 import { createSession, SessionWebSocket } from './sessionimpl';
+import { writeRecordingUrlToKds } from './lca/lca';
+
 import { 
     StreamDuration, 
-    MediaDataFrame, 
     ServerMessage, 
     ClientMessage, 
     JsonObject, 
@@ -15,7 +16,6 @@ import {
     Uuid
 } from './audiohook';
 import { normalizeError, uuid } from './utils';
-import { WavFileWriter } from './audio';
 import { Logger } from './types';
 import path from 'path';
 
@@ -37,7 +37,7 @@ const moveFileToBucket = async (srcpath: string, bucket: RecordingBucket, key: s
 
     const request: S3.Types.PutObjectRequest = {
         Bucket: bucket.name,
-        Key: bucket.keyprefix+'/'+key,
+        Key: bucket.keyprefix+key,
         Body: createReadStream(srcpath)
     };
     await bucket.service.putObject(request).promise();
@@ -188,8 +188,6 @@ export class RecordedSession {
         this.session.addFiniHandler(async () => this.onSessionFini());
         activeSessions.set(this.recordingId, this);
 
-        this.addAudioWriter();
-
         this.unregister = (() => {
             const handleStatistics = (info: StatisticsInfo) => this.onStatisticsUpdate(info);
             const handleClientMessage = (message: ClientMessage) => this.onClientMessage(message);
@@ -210,29 +208,6 @@ export class RecordedSession {
         sidecar.writeHttpRequestInfo(config.requestHeader, config.requestUri);
         const session = createSession(config.ws, config.sessionId, sidecar.logger);
         return new RecordedSession(session, sidecar, config);
-    }
-
-    addAudioWriter(): void {
-        this.session.addOpenHandler(
-            async (session, selectedMedia) => {
-                if (!selectedMedia) {
-                    return; // If we don't have media we don't create a WAV file
-                }
-                this.filePathWav = `${this.sidecar.filepath.slice(0, -4)}wav`;
-                session.logger.info(`Creating WAV file: "${this.filePathWav}"`);
-                const writer = await WavFileWriter.create(this.filePathWav, selectedMedia.format, selectedMedia.rate, selectedMedia.channels.length);
-                const listener = (frame: MediaDataFrame): void => {
-                    writer.writeAudio(frame.audio.data);
-                };
-                session.on('audio', listener);
-                return async () => {
-                    // Close handler
-                    session.off('audio', listener);
-                    const samples = await writer.close();
-                    session.logger.info(`Closed WAV file "${this.filePathWav}", SamplesWritten: ${samples} (${samples/selectedMedia.rate}s)`);
-                };
-            }
-        );
     }
 
     onClientMessage(message: ClientMessage): void {
@@ -262,13 +237,25 @@ export class RecordedSession {
             const keybase = `${iso8601.substring(0, 10)}/${this.sidecar.id}`;
 
             if(this.filePathWav) {
+                const key = path.basename(this.filePathWav);
                 try {
-                    const { uri, size } = await moveFileToBucket(this.filePathWav, this.recordingBucket, `${keybase}.wav`);
+                    const { uri, size } = await moveFileToBucket(this.filePathWav, this.recordingBucket, key);
                     s3UriWav = uri;
                     outerLogger.info(`Moved ${this.filePathWav} to ${s3UriWav}. Size: ${size}`);
+                    
                 } catch(err) {
-                    outerLogger.warn(`Error copying "${this.filePathWav}" to bucket=${this.recordingBucket.name}, key=${keybase}.wav: ${normalizeError(err).message}`);
+                    outerLogger.warn(`Error copying "${this.filePathWav}" to bucket=${this.recordingBucket.name}, key=${key}: ${normalizeError(err).message}`);
                 }
+                const callid = path.parse(this.filePathWav).name;
+
+                await writeRecordingUrlToKds({
+                    callId: callid,
+                    eventType: 'ADD_S3_RECORDING_URL',
+                    recordingsBucket: this.recordingBucket.name ?? '',
+                    recordingsKeyPrefix: this.recordingBucket.keyprefix ?? '',
+                    recordingsKey: key
+                }); 
+                outerLogger.info('Successfully written to KDS');
             }
 
             try {
@@ -284,8 +271,7 @@ export class RecordedSession {
         }
         
         // All data moved to S3. Session complete for good.
-        // TODO: Update/add record in/to KDS
-        
+
         activeSessions.delete(this.recordingId);
     }
 }

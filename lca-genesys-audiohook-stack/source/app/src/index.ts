@@ -8,7 +8,6 @@ import { createMonoWavWriter, createWavWriter } from './wav-writer-demo';
 import { initiateRequestAuthentication } from './authenticator';
 import { queryCanonicalizedHeaderField } from './httpsignature';
 import { addStreamToLCA } from './stream-to-lca';
-import { writeRecordingUrlToKds } from './lca/lca';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -143,16 +142,10 @@ server.get('/api/v1/audiohook/ws', { websocket: true }, (connection, request) =>
     recorder.session.addOpenHandler(
         createWavWriter(
             fileLogRoot, 
-            (filename, samplesWritten) => {
-                (async () => {
-                    await writeRecordingUrlToKds({
-                        callId: recorder.session.id,
-                        eventType: 'ADD_S3_RECORDING_URL',
-                        recordingsBucket: recordingS3Bucket ?? '',
-                        recordingsKeyPrefix: recordingKeyPrefix ?? '',
-                        recordingsKey: filename
-                    }); 
-                })(); 
+            async (filename, samplesWritten) => {
+
+                recorder.filePathWav = filename;
+
                 logger.info(`Wrote ${samplesWritten} samples to ${filename}`);
             },
             'L16'

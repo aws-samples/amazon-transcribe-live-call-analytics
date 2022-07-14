@@ -22,10 +22,8 @@ Parameters:
 
   S3BucketName:
     Type: String
-    Default: ""
     Description: >
-      (Optional) Existing bucket where call recording files will be stored.
-      Leave blank to automatically create new bucket.
+      Existing bucket where call recording files will be stored. 
     # yamllint disable rule:line-length
     AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
     # yamllint enable rule:line-length
@@ -159,8 +157,6 @@ Metadata:
         default: Transcription Custom Vocabulary Name
 
 Conditions:
-  ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
-  ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
   ShouldEnableContentRedaction: !And
     - !Equals [!Ref IsContentRedactionEnabled, 'true']
     - !Equals [!Ref TranscribeLanguageCode, 'en-US']
@@ -168,10 +164,8 @@ Conditions:
 Outputs:
   S3BucketName:
     Description: Bucket which contains all the call recordings
-    Value: !If
-      - ShouldCreateRecordingBucket
-      - !Ref RecordingsBucket
-      - !Ref S3BucketName
+    Value: !Ref S3BucketName
+
   WebSocketEndpoint:
     Description: Websocket endpoint for Audiohook integration
     Value: !Join
@@ -185,44 +179,6 @@ Outputs:
     Value: !Ref SecretsManagerAPIClientSecret
 
 Resources:
-## BUCKET TO STORE STEREO RECORDINGS
-  RecordingsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Condition: ShouldCreateRecordingBucket
-    Properties:
-      AccessControl: LogDeliveryWrite
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: True
-        BlockPublicPolicy: True
-        IgnorePublicAcls: True
-        RestrictPublicBuckets: True
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-
-  RecordingsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: ShouldCreateRecordingBucket
-    Properties:
-      Bucket: !Ref RecordingsBucket
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Action:
-              - "s3:*"
-            Effect: "Deny"
-            Principal: "*"
-            Resource:
-              - !GetAtt RecordingsBucket.Arn
-              - !Sub "${RecordingsBucket.Arn}/*"
-            Condition:
-              Bool:
-                "aws:SecureTransport": false
   ##########################################################################
   # CodeBuild
   ##########################################################################
@@ -990,10 +946,10 @@ Resources:
             Resource:
               - !Sub
                 - "arn:aws:s3:::${bucket}"
-                - bucket: !Ref RecordingsBucket
+                - bucket: !Ref S3BucketName
               - !Sub
                 - "arn:aws:s3:::${bucket}/*"
-                - bucket: !Ref RecordingsBucket
+                - bucket: !Ref S3BucketName
 
           - Action: 
               - secretsmanager:GetResourcePolicy
@@ -1051,7 +1007,7 @@ Resources:
             - Name: NODE_ENV
               Value: 'Production'
             - Name: RECORDINGS_BUCKET_NAME
-              Value: !Ref RecordingsBucket
+              Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX
               Value: !Ref AudioFilePrefix
             - Name: SERVERHOST

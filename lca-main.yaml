@@ -551,7 +551,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-genesys-audiohook-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        S3BucketName: !Ref S3BucketName
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         CloudFrontPriceClass: !Ref CloudFrontPriceClass

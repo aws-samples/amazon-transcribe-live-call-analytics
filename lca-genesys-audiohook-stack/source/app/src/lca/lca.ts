@@ -55,8 +55,6 @@ export const writeCallEventToKds = async (callEvent: CallEvent ) => {
         Data: Buffer.from(JSON.stringify(kdsObj))
     };
 
-    console.log('KDS: writeCallEventToKds ', putParams);
-
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
@@ -87,8 +85,6 @@ export const writeRecordingUrlToKds = async (recordingEvent: CallRecordingEvent)
         Data: Buffer.from(JSON.stringify(kdsObj))
     };
 
-    console.log('KDS: writeRecordingUrlToKds ', putParams);
-
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
@@ -115,8 +111,6 @@ export const writeStatusToKds = async (status: CallEventStatus) => {
         PartitionKey: status.callId,
         Data: Buffer.from(JSON.stringify(kdsObj))
     };
-
-    console.log('KDS: writeStatusToKds ', putParams);
 
     const putCmd = new PutRecordCommand(putParams);
     try {
@@ -169,7 +163,6 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 PartitionKey: callId,
                 Data: Buffer.from(JSON.stringify(kdsObject)),
             };
-            console.log('KDS: writeTranscriptionSegment ', putParams);
 
             const putCmd = new PutRecordCommand(putParams);
             try {
