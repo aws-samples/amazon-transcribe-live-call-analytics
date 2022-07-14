@@ -271,7 +271,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.3.0
+    Default: 0.4.0
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -1255,10 +1255,10 @@ Resources:
           - false
           - true
         InviteMessageTemplate:
-          EmailSubject: Welcome to Live Call Analytics!
+          EmailSubject: Welcome to Live Call Analytics with Agent Assist!
           EmailMessage: !Sub |-
             <p>Hello {username},
-            <p>Welcome to Live Call Analytics! Your temporary password is:
+            <p>Welcome to Live Call Analytics with Agent Assist! Your temporary password is:
             <p>     {####}
             <p>
             <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
@@ -1266,7 +1266,7 @@ Resources:
             <p>     https://${WebAppCloudFrontDistribution.DomainName}/
             <p>
             <p>Good luck!
-            <p>Live Call Analytics (amazon.com/live-call-analytics)
+            <p>Live Call Analytics with Agent Assist (amazon.com/live-call-analytics)
       AutoVerifiedAttributes:
         - email
       EmailConfiguration:
