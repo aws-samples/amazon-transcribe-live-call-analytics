@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2022-07-15
 ### Added
-- Introducing support for real time Agent Assist - see [Agent Assist README](lca-agentassist-setup-stack/README.md). 
+- Introducing support for real time Agent Assist features - see [Agent Assist README](lca-agentassist-setup-stack/README.md). 
 - Added support for Amazon Connect Contact Lens as an optional call source - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) 
 ### Changed
 - Latest Asterisk version (18) for demo PBX

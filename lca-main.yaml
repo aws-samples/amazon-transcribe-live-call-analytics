@@ -54,7 +54,7 @@ Parameters:
     AllowedPattern: '^(|arn:aws:connect:.*)$'
     Description: >
       Required when CallAudioSource is set to 'Amazon Connect Contact Lens'
-      Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
+      Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
 
   AgentAssistOption:
     Type: String
