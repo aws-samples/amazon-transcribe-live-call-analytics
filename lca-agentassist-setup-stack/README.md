@@ -4,8 +4,8 @@
 
 1. [Introduction to Agent Assist](#introduction)  
   a. [Amazon Lex and Amazon Kendra using QnABot](#amazon-lex-and-amazon-kendra-using-qnabot)  
-  b. [Option: Bring your own Lex Bot](#option:-bring-your-own-lex-bot)  
-  c. [Option: Bring your own Lambda function](#option:-bring-your-own-lambda-function)  
+  b. [Option: Bring your own Lex Bot](#option-bring-your-own-lex-bot)  
+  c. [Option: Bring your own Lambda function](#option-bring-your-own-lambda-function)  
 2. [How it works](#how-it-works)  
 3. [How to enable Agent Assist](#how-to-enable-agent-assist)
 4. [Testing Agent Assist](#testing-agent-assist)
