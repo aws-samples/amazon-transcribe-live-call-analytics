@@ -7,27 +7,27 @@
   b. [Option: Bring your own Lex Bot](#option:-bring-your-own-lex-bot)  
   v. [Option: Bring your own Lambda function](#option:-bring-your-own-lambda-function)  
 2. [How it works](#how-it-works)  
-* How to enable Agent Assist in the LCA solution
-* Testing Agent Assist
-* Customizing Agent Assist responses
-  * Question and Answer Response
-    * Static responses
-    * Dynamic responses
-      * Conditional answers using QnABot Handlebars 
-      * Knowledge-base lookup using Amazon Kendra redirect and optional query parameters
-      * Custom business logic using Lambda hooks
-  * Amazon Kendra fallback responses
-  * Rebuild Lex
+3. [How to enable Agent Assist](#how-to-enable-agent-assist)
+4. [Testing Agent Assist](#testing-agent-assist)
+5. [Configuring Agent Assist Responses](#configuring-agent-assist-responses)
+  a. [Static FAQ response](#static-faq-response)  
+  b. [Dynamic response](#dynamic-response)  
+      * [Context aware response](#context-aware-response)  
+      * [Dynamic Knowledge Base Query](#dynamic-knowledge-base-query)  
+      * [Dynamic Custom Business Logic](#dynamic-custom-business-logic)  
+  c. [Amazon Kendra Fallback Response](#amazon-kendra-fallback-response)  
+  d. [Rebuild Lex and Sync FAQs to Kendra](#rebuild-lex--sync-faqs-to-kendra)  
 
 ## Introduction
 
 Live Call Analytics with Agent Assist is a solution for contact centers, providing in-line messages to help agents respond to callers’ needs. 
 
-Before continuing, please read the blog post [Live call analytics and agent assist for your contact center with Amazon language AI services](https://amazon.com/live-call-analytics).
+Before continuing, please read the blog post [Live call analytics and agent assist for your contact center with Amazon language AI services](https://amazon.com/live-call-analytics), deploy LCA, and follow the tutorial to experience the Agent Assist demo. This is prerequisite context for the rest of this document.
+
 
 ### Amazon Lex and Amazon Kendra using QnABot
 
-The default configuration works by sending the transcription of a caller’s utterances to a chatbot, powered by Amazon Lex and Amazon Kendra, using the [QnABot on AWS solution](http://amazon.com/qnabot) to simplify configuration and orchestration. Lex tracks the callers intents and can advise the agent to elicit additional information as needed to fulfil an intent, while Kendra is used to query frequently asked questions and knowledge base documents. Bot responses are shown in real time to the agent, along with the transcription of the conversation. It is easily configured to support customized intents, FAQs, and knowledgebase content.
+The default agent assist configuration works by sending the transcription of a caller’s utterances to a chatbot, powered by Amazon Lex and Amazon Kendra, using the [QnABot on AWS solution](https://aws.amazon.com/solutions/implementations/aws-qnabot/) to simplify configuration and orchestration. Lex tracks the callers intents and can advise the agent to elicit additional information as needed to fulfil an intent, while Kendra is used to query frequently asked questions and knowledge base documents. Bot responses are shown in real time to the agent, along with the transcription of the conversation. It is easily configured to support customized intents, FAQs, and knowledgebase content.
 
 This body of this README describes how to use and customise this default configuration. 
 
@@ -52,34 +52,38 @@ If your function returns an empty message, or no message, in the response, then 
 
 ## How it works
 
+Here is the LCA architecture overview showing how Agent Assist fits into the overall real time processing flow.  
+  
+<img src="../images/lca-chimevc-architecture.png" alt="Agent Assist Architecture" width="800"/>
+
 The default LCA Agent Assist configuration uses the QnABot on AWS solution (v5.2.0 or later) to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra. The QnABot provides a single administrative interface, the Content Designer, which is used to create Lex Intents, and Kendra FAQs. 
 Learn about QnABot on AWS by reviewing the solution [Landing page](https://aws.amazon.com/solutions/implementations/aws-qnabot/) and [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/welcome.html). 
 
-LCA sends the spoken phrases (utterances) transcribed from the caller (it ignores the agent) to an **Amazon Lex** bot, in real-time. Amazon Lex is an AWS service for building conversational interfaces - see https://aws.amazon.com/lex to learn about Lex.
+QnABot uses **Amazon Lex** to manage conversational requests and reponses. 
 
-Typically, a Lex bot is used in a contact center to automate a conversation with a caller, where the caller and the bot communicate directly. However, in the Agent Assist scenario, we are using Lex differently! In this application the caller and the human agent communicate directly. Here, the bot 'listens in' to the caller and based on what the caller says, it provides advice to the agent helping the agent to guide the conversation with the caller.
+Amazon Lex is an AWS service for building conversational interfaces - see [Amazon Lex features](https://aws.amazon.com/lex/features/) to to learn about the key concepts, such as Intents, Utterances, Slots, etc. 
 
-QnABot uses Lex to manage conversational requests and reponses. TBC
+Typically, a Lex bot is used in a contact center to automate a conversation with a caller, where the caller and the bot communicate directly. However, in the Agent Assist scenario we use Lex differently. Here, the caller and the agent communicate directly. The bot 'listens in' but does not directly interact with the caller. Instead, based on what the caller says, the bot provides advice to the agent, to help them guide the conversation. You've already seen this in action in the [LCA blog post tutorial](www.amazon.com/live-call-analytics).
 
+QnABot also uses **Amazon Kendra** as an integrated knowledge base and ML powered intelligent search service that finds the best response to a caller's enquiry from either a list of prepopulated FAQs, or from other 'unstructured' documements such as crawled web pages, word documents, or other sources that have been ingested into a Kendra search index using a Kendra data source connector. See [Amazon Kendra features](https://aws.amazon.com/kendra/features/) to to learn about the key concepts, such as Indexes, FAQs, Connectors, etc.  
 
-Amazon Lex works by identifying the intent of an input based on pre-defined, customer intents.  Intents can have variable parameters, which are called slots, that can be used to provide a tailored response. For example, if a caller says “I’m calling about my rewards card.”, the intent is that they’re calling about a card, and the slot is the type of card, a “rewards card” in this example. The Agent Assist suggested response can be a detailed marketing message specifically about rewards cards.  Once an intent has been identified, Amazon Lex will look for an answer in **Amazon Kendra,** which **** is a highly accurate and easy to use enterprise search service that's powered by machine learning.
+Now that you are familiar with the main concepts related to Lex and Kendra, read the following QnABot Implementation Guide chapters to learn how QnABot uses Kendra to answer questions:
+ - [Populate the chatbot with your questions and answers](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/create-chatbot-content-and-load-sample-qanda-data.html)
+ - [Integrate Amazon Kendra](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/integrate-amazon-kendra.html)
+  
+Also read the QnABot Implementation Guide at [Configure intent and slot matching](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/intent-and-slot-matching.html) to learn how QnABot (v5.2.0 and later) creates Lex intents and slots directly from the ContentDesigner UI. LCA agent assist uses this feature to identify caller intents and to guide the agent to ask for additional information (slots) when needed. 
 
-Now let’s examine at an example of a multi-turn Agent Assist scenario.  If a caller says “I’m calling about my card”, but does not specify the type of card, Amazon Lex can identify what the intent is (which is calling about a card), but it still needs more information (the slot value, which is the type of card). In this case, the Agent Assist suggested response would be “What type of card are you interested in? A rewards card or purchase card?”. The caller then can reply with “rewards card”, which will “fulfill” the intent. This means all the required slots have been collected.
+Now, recall the example from the [agent assist demo script](lca-agentassist-setup-stack/agent-assist-demo-script.md) that you used already when you installed LCA and followed the tutorial. If a caller says “I’m calling about my card”, but does not specify the type of card, Amazon Lex can identify what the intent is (which is calling about a card), but it still needs more information (the slot value, which is the type of card). In this case, the Agent Assist suggested response would be “What type of card are you interested in? A rewards card or purchase card?”. The caller then can reply with “rewards card”, which will “fulfill” the intent. This means all the required slots have been collected.
 
-<<<<<<< HEAD
-Agent Assist uses the QnABot on AWS solution to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra.  To learn more about QnABot on AWS, see here: https://aws.amazon.com/solutions/implementations/aws-qnabot/
-=======
+## How to enable Agent Assist
 
->>>>>>> dcfc3b4 (doc updates - work in progress)
+By following the tutorial in the [LCA blog post](www.amazon.com/live-call-analytics) you have already installed and configured Agent Assist with the the default option: `QnABot on AWS with new Kendra Index (Developer Edition)`.
 
-![Agent Assist Architecture](../images/lca-chimevc-architecture.png)
-## How to enable Agent Assist in Live Call Analytics
+Other Agent Assist options can be specified during stack deployment or update by providing values for the **Agent Assist Options** CloudFormation parameters as shown below.
 
-Agent Assist can be enabled within Live Call Analytics during deployment or with a stack update by providing values for the **Agent Assist Options** CloudFormation parameters as seen in the image below:
+<img src="../images/lca-agentassist-options.png" alt="Agent Assist CloudFormation Parameters" width="800"/>
 
-![Agent Assist CloudFormation Parameters](../images/lca-agentassist-options.png)
-
-The main parameter to enable Agent Assist is the “**Enable Agent Assist**” parameter. Any value other than Disabled will enable Agent Assist.  Here is a description of the parameters:
+The main parameter to enable Agent Assist is the “**Enable Agent Assist**” parameter. Here is a description of the parameter options:
 
 |Value	|Description	|
 |---	|---	|
@@ -96,36 +100,33 @@ Once you have filled out the Agent Assist CloudFormation parameters, finish depl
 
 ## Testing Agent Assist
 
-Login to the Live Call Analytics main screen and make a phone call. You can use the standard agent recording, or have a live agent.  
+Follow the tutorial in the [LCA blog post](www.amazon.com/live-call-analytics), using the provided demo script as your guide.
 
-When the call starts, click on the call to see the live transcript, and ask the question **“Do you offer life insurance policies?”.**  If Agent Assist is working, you should see the AGENT_ASSISTANT response in blue, similar to the screenshot below:
+Ask the question **“What life insurance policies do you offer?”.**  If Agent Assist is working, you should see the AGENT_ASSISTANT response in blue, similar to the screenshot below:
 
-![Agent Assist Screenshot](../images/lca-agentassist-screenshot.png)
+<img src="../images/lca-agentassist-screenshot.png" alt="Agent Assist Screenshot" width="800"/>
+
+Vary the question a little. Try **"Do you offer life insurance policies?"** or **"Can you tell me what kinds of life insurance policies you have?"**, and other variations to see if you still get the same result.
 
 Some other example phrases you can ask as the caller are below.  See more on response types in the next section.
 
 |Phrase	|Response Type	|Details	|
 |---	|---	|---	|
-|My credit card was stolen.	|Static response	|Simple paragraph response the agent can read to the user, directing them to report their card on a website.	|
 |I want to pay my credit card bill.	|Dynamic, context aware response	|3 slots required:  Account Number, Account Type, and Amount to pay. Agent Assist suggested responses will ask for these values if necessary.	|
-|I’m calling about my rewards card.	|Dynamic, knowledge base response	|2 slots required: Card Type and First Name.  Agent Assist suggested responses will ask for these values if necessary.  
-
-Note: In the phrase, it already says the card type, "rewards card", so Agent Assist knows not to ask for it again. If the caller says 'I'm calling about my card', then Agent Assist will ask which type of card.	|
-|What is the cash back rate for this card?	|Dynamic, context aware response	|1 slot required: Card Type.  
-
-Note: Agent Assist can share the value of slots between different intents, so it may already have the Card Type from the previous phrase and will not ask for it again.	|
+|I’m calling about my rewards card.	|Dynamic, knowledge base response	|2 slots required: Card Type and First Name.  Agent Assist suggested responses will ask for these values if necessary. Note: In the phrase, it already says the card type, "rewards card", so Agent Assist knows not to ask for it again. If the caller says 'I'm calling about my card', then Agent Assist will ask which type of card.	|
+|What is the cash back rate for this card?	|Dynamic, context aware response	|1 slot required: Card Type. Note: Agent Assist can share the value of slots between different intents, so it may already have the Card Type from the previous phrase and will not ask for it again.|
 |What types of accidents are covered by accidental death insurance?	|Amazon Kendra fallback response	|There is no preconfigured response for this question, so the utterance is sent to Amazon Kendra to see if there is any relevant information in the knowledge base.	|
 |That’s all I need for now.	|Static response	|Many companies require agents to wrap up a call with very specific messaging. This response is tailored to the caller, including the caller's name. 	|
 
-The Agent Assist testing script can be found here: <PUT LINK TO SCRIPT MARKDOWN>
+The Agent Assist testing script can be found here: [agent assist demo script](lca-agentassist-setup-stack/agent-assist-demo-script.md)
 
 ## Configuring Agent Assist Responses 
 
-When deploying Agent Assist, you should have received an email titled “QnABot Signup Verification Code” with a temporary password and a link to the QnABot Content Designer. 
+When deploying Agent Assist, you received an email titled “QnABot Signup Verification Code” with a temporary password and a link to the QnABot Content Designer. 
 
-![QnABot Signup Email](../images/lca-agentassist-qnabot-email.png)
+<img src="../images/lca-agentassist-qnabot-email.png" alt="QnABot Signup Email" width="500"/>
 
-Click the link to login to the QnABot Content Designer.  The login is ‘Agent’, and the temporary password is in the email.  You will be required to change the password the first time you login.
+Click the link to login to the QnABot Content Designer.  The login is **Admin**, and the temporary password is in the email. Be careful not to copy any trailing spaces as you copy/paste the temporary password. You will set a new permanent password the first time you login.
 
 Agent Assist responses can be categorized into 5 types: 
 
@@ -139,31 +140,30 @@ Agent Assist responses can be categorized into 5 types:
 
 The first four types, static and dynamic responses, are synced to Amazon Kendra FAQs. This provides a semantic aware search for any of the utterances and responses in these items.  
 
-### **Static Response**
+### **Static FAQ Response**
 
 To begin configuring a new static response inside QnABot Designer, select the **Add** button in the upper right.  A popup will appear similar to the following screenshot:
 
-![Add new item](../images/lca-agentassist-qnabot-addnewitem.png)
+<img src="../images/lca-agentassist-qnabot-addnewitem.png" alt="Add new item" width="400"/>
 
-* Select **qid** as the document type
-* Fill in an **Item ID**, this should be unique per response
-* Add one or more **Question/Utterance**. These are phrases that a caller may say to the agent.
-* Add the suggested agent response in the **Answer** text box.  This will appear as the AGENT_ASSISTANT message inside of Live Call Analytics.
+* Select **qna** as the document type
+* Fill in a unique **Item ID**
+* Add one or more **Question/Utterance** values. These are examples of phrases that a caller may say to the agent.
+* Add the suggested agent response in the **Answer** text box.  This will appear as the AGENT_ASSISTANT message inside of LCA.
 * Select **Create** to save your new Agent Assist response.
-* Select the menu icon in the top right of the QnABot Designer (it is 3 dots), then select **Sync Kendra FAQ**
+* Select the menu icon in the top right of the QnABot Designer (⋮), then select **Sync Kendra FAQ**
 
+<img src="../images/lca-agentassist-qnabot-syncfaq.png" alt="Sync Kendra FAQ" width="200"/>
 
-![3 dots](../images/lca-agentassist-qnabot-3dots.png)
+### **Dynamic Response**
 
-![Sync Kendra FAQ](../images/lca-agentassist-qnabot-syncfaq.png)
-
-### **Dynamic, Context Aware Response**
+#### ***Context aware response***
 
 Responses that have inputs, also called slots, require you to first configure the SlotType. There are two example slot types in the examples, SlotType.ACCOUNTTYPE and SlotType.CARDTYPE. You may also skip creating your own slot type if you want to use any of the built-in Amazon Lex V2 slot types, such as Amazon.FirstName, Amazon.City, etc.  The full list of built-in slot types can be found here: https://docs.aws.amazon.com/lexv2/latest/dg/howitworks-builtins-slots.html
 
 To create a new slot type, select the same **Add** button in the upper right of QnABot Designer, and choose the **slottype** document type. Expand the Advanced section and it will look like the screenshot below:
 
-![New Slot Type](../images/lca-agentassist-qnabot-newslottype.png)
+<img src="../images/lca-agentassist-qnabot-newslottype.png" alt="New Slot Type" width="400"/>
 
 * Fill in the **Slot type name**.  This should be something like SlotType.XYZ
 * Fill in the optional **Description**. 
@@ -176,12 +176,12 @@ Once you have completed creating your slot types (or have skipped because you wi
 * Select the same **New** button and choose **qid** as the document type.
 * Fill in a unique **Item ID** for this response.
 * Fill in one or more **utterances**, or phrases that a user may say where you want to provide the recommended agent response. These utterances may contain a slot type’s value, for example, ‘I’m calling about my rewards card’, where the word rewards is a SlotType.CARDTYPE.  To add these utterances, replace the word rewards with {cardtype}, for example, ‘I’m calling about my {cardtype} card.’  
-*  Fill in the **Answer**.  You can use QnABot’s support for **Handlebars** (https://github.com/aws-solutions/aws-qnabot/blob/main/docs/Handlebars_README.md) to build complex, dynamic answers based on the value of the slots. If you need to programmatically provide an answer based on a lookup to a database or 3rd party API, you can use a **Lambda Hook** (https://github.com/aws-solutions/aws-qnabot/tree/main/docs/lambda_hooks)
+*  Fill in the **Answer**.  You can use QnABot’s support for [Handlebars](https://github.com/aws-solutions/aws-qnabot/blob/main/docs/Handlebars_README.md) to build complex, dynamic answers based on the value of the slots. If you need to programmatically provide an answer based on a lookup to a database or 3rd party API, you can use a **Lambda Hook** (https://github.com/aws-solutions/aws-qnabot/tree/main/docs/lambda_hooks)
 * Select **Advanced** to expose the advanced section.
 * Scroll down to ‘**Create a dedicated bot intent for this item during LEX REBUILD**’, and **check** it. 
-    * ![Rebuild Lex Checkbox](../images/lca-agentassist-qnabot-rebuildlexcheck.png)
+    * <img src="../images/lca-agentassist-qnabot-rebuildlexcheck.png" alt="Rebuild Lex Checkbox" width="400"/>
 * Scroll down to the Slot section and fill out the following information for each slot used by this qid.
-    * ![Slot Details](../images/lca-agentassist-qnabot-slotdetails.png)
+    * <img src="../images/lca-agentassist-qnabot-slotdetails.png" alt="Slot Details" width="500"/>
     * **Slot required checkbox** - This will force the customer to provide the slot value before a suggested answer will be provided to the agent
     * **Cache slot value checkbox** - This will allow Agent Assist responses (qids) to share the value of this slot with other responses
     * **Slot name** - This value is used in the utterance (for example, {cardtype} above), as well as sets as sets a Lex session attribute with the same key/name.
@@ -192,48 +192,33 @@ Once you have completed creating your slot types (or have skipped because you wi
         **Second Note**: Slot sample utterances are not required for the built-in LexV2 responses.
 * When complete with entering in all slots, scroll to the very bottom and select **Create** to save your new slot-based Agent Assist suggested response. 
 
-### Dynamic, Knowledge Base Query 
+#### ***Dynamic Knowledge Base Query***
 
 Agent Assist responses can look up answers with an Amazon Kendra query to provide a dynamic answer. After configuring the response’s utterances, slots and a default answer, expand the ‘Advanced’ section and scroll down to the Amazon Kendra section, seen in the following screenshot:
 
-![Kendra Query Details](../images/lca-agentassist-quabot-kendraquery.png)
+<img src="../images/lca-agentassist-quabot-kendraquery.png" alt="Kendra Query Details" width="500"/>
 
-The first parameter is ‘Kendra Redirect:QueryText’, which is passed as the query string to Amazon Kendra. This query can be a static string such as ‘What is the APR on the rewards card?’ or it also supports handlebars.
+The first parameter is ‘Kendra Redirect:QueryText’, which is passed as the query string to Amazon Kendra. This query can be a static string such as ‘What is the APR on the rewards card?’. Optionally use [Handlebars](https://github.com/aws-solutions/aws-qnabot/blob/main/docs/Handlebars_README.md) to create dynamic queries using substituted slot or session attribute values.
 
 The second parameter is the Kendra Confidence Score Threshold.  Every search result from Amazon Kendra contains a confidence score of LOW, MEDIUM, HIGH, or VERY_HIGH.  This parameter will only return results equal to or higher than the value.
 
-The last parameter, Kendra Query Arguments, allows for more fine grained search with Amazon Kendra. These query arguments are passed in to the Kendra query. These arguments can be [AttributeFilters](https://docs.aws.amazon.com/kendra/latest/dg/filtering.html#search-filtering), [Facets](https://docs.aws.amazon.com/kendra/latest/dg/filtering.html#search-facets), [UserContexts](https://docs.aws.amazon.com/kendra/latest/dg/user-context-filter.html), and [more](https://docs.aws.amazon.com/kendra/latest/dg/API_Query.html).
+The last parameter, Kendra Query Arguments, allows for more fine grained search with Amazon Kendra. These query arguments are passed in to the Kendra query. These arguments can be [AttributeFilters](https://docs.aws.amazon.com/kendra/latest/dg/filtering.html#search-filtering), [Facets](https://docs.aws.amazon.com/kendra/latest/dg/filtering.html#search-facets), [UserContexts](https://docs.aws.amazon.com/kendra/latest/dg/user-context-filter.html), and [more](https://docs.aws.amazon.com/kendra/latest/dg/API_Query.html). Optionally use [Handlebars](https://github.com/aws-solutions/aws-qnabot/blob/main/docs/Handlebars_README.md) to create dynamic query arguments using substituted slot or session attribute values.
 
-### Dynamic, Custom Business Logic
+#### ***Dynamic Custom Business Logic***
 
 Custom business logic is accomplished by writing a custom AWS Lambda Function. This provides the capability for looking up information from almost any 3rd party data source, or building other custom integrations. For an example of calling an AWS Lambda function from an Agent Assist response, see the [QnABot on AWS Lambda Hooks README](https://github.com/aws-solutions/aws-qnabot/tree/main/docs/lambda_hooks). 
 
-### Amazon Kendra Fallback Response
+### **Amazon Kendra Fallback Response**
 
 If all else fails, and there are no matching Agent Assist responses found, the user’s utterance will be sent to Amazon Kendra. The Amazon Kendra confidence threshold for Kendra Fallback responses can be configured in the QnABot on AWS settings, under the setting name `ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE.`
 
 
-### Rebuild Lex & Kendra
+### **Rebuild Lex & Sync FAQs to Kendra**
 
-Once all the Agent Assist responses have been defined, the last step is to rebuild the Lex bot and sync Amazon Kendra.  Choose the 3 dot menu in the upper right corner, and select the **Rebuild Lex** menu option.
+Once all the Agent Assist responses have been defined, the last step is to rebuild the Lex bot and sync Amazon Kendra.  Choose the menu in the upper right corner (⋮), and choose **Rebuild Lex**.
 
-![Rebuild Lex](../images/lca-agentassist-qnabot-lexrebuild.png)
+<img src="../images/lca-agentassist-qnabot-lexrebuild.png" alt="Rebuild Lex" width="200"/>
 
-After rebuilding Lex, also resync Kendra FAQs, which will sync all the items to Kendra.
+After rebuilding Lex, also resync Kendra FAQs, which will sync all the FAQ items to Kendra.
 
-![Sync Kendra FAQ](../images/lca-agentassist-qnabot-syncfaq.png)
-
-
-## Bring your own Lambda function
-
-If you would like to bypass Lex entirely, select the `Bring your own Lambda function` option in the Enable Agent Assist. You must also put a Lambda ARN of the function that will be invoked. When invoked, LCA will  send the customer's utterance in the event object.  
-
-LCA will expect a JSON response from the Lambda function, with one key named `message` and the value containing the Agent Assist response message.
-
-Example:
-
-``
-        {
-          "message": "This is the Agent Assist suggested response message."
-        }
-``
+<img src="../images/lca-agentassist-qnabot-syncfaq.png" alt="Sync Kendra FAQ" width="200"/>
