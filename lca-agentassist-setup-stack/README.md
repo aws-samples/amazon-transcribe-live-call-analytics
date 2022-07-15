@@ -5,7 +5,7 @@
 1. [Introduction to Agent Assist](#introduction)  
   a. [Amazon Lex and Amazon Kendra using QnABot](#amazon-lex-and-amazon-kendra-using-qnabot)  
   b. [Option: Bring your own Lex Bot](#option:-bring-your-own-lex-bot)  
-  v. [Option: Bring your own Lambda function](#option:-bring-your-own-lambda-function)  
+  c. [Option: Bring your own Lambda function](#option:-bring-your-own-lambda-function)  
 2. [How it works](#how-it-works)  
 3. [How to enable Agent Assist](#how-to-enable-agent-assist)
 4. [Testing Agent Assist](#testing-agent-assist)
@@ -15,8 +15,8 @@
       * [Context aware response](#context-aware-response)  
       * [Dynamic Knowledge Base Query](#dynamic-knowledge-base-query)  
       * [Dynamic Custom Business Logic](#dynamic-custom-business-logic)  
-  c. [Amazon Kendra Fallback Response](#amazon-kendra-fallback-response)  
-  d. [Rebuild Lex and Sync FAQs to Kendra](#rebuild-lex--sync-faqs-to-kendra)  
+  c. [Amazon Kendra Fallback Response](#amazon-kendra-fallback-response)   
+  d. [Rebuild Lex and Sync FAQs to Kendra](#rebuild-lex--sync-faqs-to-kendra)   
 
 ## Introduction
 
