@@ -1,18 +1,18 @@
-# Amazon Transcribe Live Call Analytics (LCA) Sample Solution
-*Companion AWS blog post: [Livecall analytics for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
+# Amazon Transcribe Live Call Analytics (LCA) with Agent Assist Sample Solution
+*Companion AWS blog post: [Live call analytics and agent assist for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
 ## Overview
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
 
 Naturally, you want to do what you can to ensure that your callers have a good experience. There are two aspects to this:
 
-- Help supervisors assess the quality of your caller’s experiences in real time – For example, your supervisors need to know if initially unhappy callers become happier as the call progresses. And if not, why? What actions can be taken, before the call ends, to assist the agent to improve the customer experience for calls that aren’t going well?
-- Help agents optimize the quality of your caller’s experiences – For example, can you deploy live call transcription or AI powered Agent Assistance? This removes the need for your agents to take notes, and provides them with contextually relevant information and guidance during calls, freeing them to focus more attention on providing positive customer interactions.
+- **Help supervisors assess the quality of your caller’s experiences in real time** – For example, your supervisors need to know if initially unhappy callers become happier as the call progresses. And if not, why? What actions can be taken, before the call ends, to assist the agent to improve the customer experience for calls that aren’t going well?
+- **Help agents optimize the quality of your caller’s experiences** – For example, can you deploy live call transcription or AI powered Agent Assistance? This removes the need for your agents to take notes, and provides them with contextually relevant information and guidance during calls, freeing them to focus more attention on providing positive customer interactions.
 
 Amazon machine learning services like Amazon Transcribe and Amazon Comprehend provide feature-rich APIs that you can use to transcribe and extract insights from your contact center audio at scale. Amazon Lex provides conversational AI capabilities that can capture intents and context from conversations, and Amazon Kendra offers intelligent search features that can provide useful information to agents based on callers' needs. Although you could build your own custom call analytics solution using these services, that requires time and resources. You figure that someone must have done this before, and that with luck you’ll find a solution that you can re-use.
 
-You’ve heard that Contact Lens for Amazon Connect provides real time supervisor and agent assist features that sound like they are just what you need, but you are not yet using Amazon Connect. You need a solution that will work with your existing contact center.
+Contact Lens for Amazon Connect provides real-time supervisor and agent assist features that could be just what you need, but you may not yet be using Amazon Connect. You need a solution that will also work with your existing contact center.
 
-Live Call Analytics, or LCA, does most of the heavy lifting associated with providing an end-to-end sample solution that can plug into your contact center and provide the intelligent insights that you need.
+Our sample solution, Live Call Analytics with Agent Assist (LCA), does most of the heavy lifting associated with providing an end-to-end solution that can plug into your contact center and provide the intelligent insights that you need.
 
 ## Architecture
 ![lca-architecture](./images/lca-chimevc-architecture.png)
@@ -122,7 +122,7 @@ You can test this solution if you installed the demo asterisk server during depl
 
 
 ## Conclusion
-The Live Call Analytics (LCA) sample solution offers a scalable, cost-effective approach to provide live call analysis with features to assist supervisors and agents to improve focus on your callers’ experience. It uses Amazon machine learning services like Amazon Transcribe and Amazon Comprehend to transcribe and extract real time insights from your contact center audio.
+The Live Call Analytics (LCA) with Agent Assist sample solution offers a scalable, cost-effective approach to provide live call analysis with features to assist supervisors and agents to improve focus on your callers’ experience. It uses Amazon ML services like Amazon Transcribe, Amazon Comprehend, Amazon Lex and Amazon Kendra to transcribe and extract real-time insights from your contact center audio.
 The sample LCA application is provided as open source—use it as a starting point for your own solution, and help us make it better by contributing back fixes and features via GitHub pull requests. For expert assistance, [AWS Professional Services](https://aws.amazon.com/professional-services/) and other [AWS Partners](https://aws.amazon.com/partners/) are here to help.
 
 ## Clean Up

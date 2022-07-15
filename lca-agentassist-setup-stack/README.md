@@ -1,34 +1,76 @@
-# Agent Assist
+# LCA Agent Assist
 
 ## Table of Contents
 
-* Introduction
-* How it works
-* How to enable Agent Assist in Live Call Analytics
+1. [Introduction to Agent Assist](#introduction)  
+  a. [Amazon Lex and Amazon Kendra using QnABot](#amazon-lex-and-amazon-kendra-using-qnabot)  
+  b. [Option: Bring your own Lex Bot](#option:-bring-your-own-lex-bot)  
+  v. [Option: Bring your own Lambda function](#option:-bring-your-own-lambda-function)  
+2. [How it works](#how-it-works)  
+* How to enable Agent Assist in the LCA solution
 * Testing Agent Assist
-* Configuring custom Agent Assist responses (configuration)
+* Customizing Agent Assist responses
   * Question and Answer Response
-    * Static response
-    * Dynamic responses (also talk about why to use Lex Intent before going into response types)
-      * Context-aware (QID w/ Handlebars, variables and if statements)
-      * Knowledge-base query (Amazon Kendra redirect, optional query parameters)
-      * Custom business logic (Lambda hook, backend integration, lookups, etc)
-  * Amazon Kendra fallback response
+    * Static responses
+    * Dynamic responses
+      * Conditional answers using QnABot Handlebars 
+      * Knowledge-base lookup using Amazon Kendra redirect and optional query parameters
+      * Custom business logic using Lambda hooks
+  * Amazon Kendra fallback responses
   * Rebuild Lex
 
 ## Introduction
 
-**Agent Assist** is a feature that provides **relevant knowledge**, **suggested responses,** or **automation** for call center agents in real-time during a phone call, in order more effectively respond to the needs of the caller. The Agent Assist responses can be a response to a single input spoken by a caller, or can be based on a multiple, turn by turn inputs from the caller to complete a task. 
+Live Call Analytics with Agent Assist is a solution for contact centers, providing in-line messages to help agents respond to callers’ needs. 
 
-This document assumes the reader is familiar with Amazon Live Call Analytics (https://amazon.com/live-call-analytics) and has successfully deployed it before. 
+Before continuing, please read the blog post [Live call analytics and agent assist for your contact center with Amazon language AI services](https://amazon.com/live-call-analytics).
+
+### Amazon Lex and Amazon Kendra using QnABot
+
+The default configuration works by sending the transcription of a caller’s utterances to a chatbot, powered by Amazon Lex and Amazon Kendra, using the [QnABot on AWS solution](http://amazon.com/qnabot) to simplify configuration and orchestration. Lex tracks the callers intents and can advise the agent to elicit additional information as needed to fulfil an intent, while Kendra is used to query frequently asked questions and knowledge base documents. Bot responses are shown in real time to the agent, along with the transcription of the conversation. It is easily configured to support customized intents, FAQs, and knowledgebase content.
+
+This body of this README describes how to use and customise this default configuration. 
+
+### Option: Bring your own Lex Bot
+
+Alternatively, you can plug-in your own Amazon LexV2 chat bot to provide Agent Assist logic. Choose `Bring your own LexV2 bot` for `Enable Agent Assist` when deploying or updating the LCA stack. Identify your bot using the parameters `AgentAssistExistingLexV2BotId` and `AgentAssistExistingLexV2BotAliasId`
+
+Your bot provide intents, slots, and integration with backend data and knowledge systems as needed to provide contextually appropriate messages that assist the agent as they guide the conversation with the caller. LCA interacts with your bot using the LexV2 RecognizeText API, passing each caller utterance to the bot, and expecting an Agent Assist message in a response. Use slot elicitation prompts, intent confirmation prompts, intent fulfillment messages and more as agent assist messages. If your bot returns an empty message, or no message, in the response, then no agent assist message is displayed for that turn of the conversation. 
+
+### Option: Bring your own Lambda function
+
+A second alternative allows you to implement your own Agent Assist logic using an AWS Lambda function instead of a Lex bot. Choose `Bring your own AWS Lambda function` when deploying or updating the LCA stack. Identify your Lambda function using the parameter `AgentAssistExistingLambdaFunctionArn`.
+
+LCA interacts uses the Lambda Invoke API to synchronously invoke your function (request mode), passing each caller utterance along with additional call metadata in the event payload, and expecting an Agent Assist message in the Lambda response, in the following JSON format. 
+```
+{
+  "message": "<agent assist message>"
+}
+```
+If your function returns an empty message, or no message, in the response, then no agent assist message is displayed for that turn of the conversation.
+
 
 ## How it works
 
-Agent Assist works by sending the phrases spoken (utterance) by the caller to an **Amazon Lex** bot, in real-time. Amazon Lex is an AWS service for building conversational interfaces for applications using voice and text.  Amazon Lex works by identifying the intent of an input based on pre-defined, customer intents.  Intents can have variable parameters, which are called slots, that can be used to provide a tailored response. For example, if a caller says “I’m calling about my rewards card.”, the intent is that they’re calling about a card, and the slot is the type of card, a “rewards card” in this example. The Agent Assist suggested response can be a detailed marketing message specifically about rewards cards.  Once an intent has been identified, Amazon Lex will look for an answer in **Amazon Kendra,** which **** is a highly accurate and easy to use enterprise search service that's powered by machine learning.
+The default LCA Agent Assist configuration uses the QnABot on AWS solution (v5.2.0 or later) to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra. The QnABot provides a single administrative interface, the Content Designer, which is used to create Lex Intents, and Kendra FAQs. 
+Learn about QnABot on AWS by reviewing the solution [Landing page](https://aws.amazon.com/solutions/implementations/aws-qnabot/) and [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/welcome.html). 
+
+LCA sends the spoken phrases (utterances) transcribed from the caller (it ignores the agent) to an **Amazon Lex** bot, in real-time. Amazon Lex is an AWS service for building conversational interfaces - see https://aws.amazon.com/lex to learn about Lex.
+
+Typically, a Lex bot is used in a contact center to automate a conversation with a caller, where the caller and the bot communicate directly. However, in the Agent Assist scenario, we are using Lex differently! In this application the caller and the human agent communicate directly. Here, the bot 'listens in' to the caller and based on what the caller says, it provides advice to the agent helping the agent to guide the conversation with the caller.
+
+QnABot uses Lex to manage conversational requests and reponses. TBC
+
+
+Amazon Lex works by identifying the intent of an input based on pre-defined, customer intents.  Intents can have variable parameters, which are called slots, that can be used to provide a tailored response. For example, if a caller says “I’m calling about my rewards card.”, the intent is that they’re calling about a card, and the slot is the type of card, a “rewards card” in this example. The Agent Assist suggested response can be a detailed marketing message specifically about rewards cards.  Once an intent has been identified, Amazon Lex will look for an answer in **Amazon Kendra,** which **** is a highly accurate and easy to use enterprise search service that's powered by machine learning.
 
 Now let’s examine at an example of a multi-turn Agent Assist scenario.  If a caller says “I’m calling about my card”, but does not specify the type of card, Amazon Lex can identify what the intent is (which is calling about a card), but it still needs more information (the slot value, which is the type of card). In this case, the Agent Assist suggested response would be “What type of card are you interested in? A rewards card or purchase card?”. The caller then can reply with “rewards card”, which will “fulfill” the intent. This means all the required slots have been collected.
 
+<<<<<<< HEAD
 Agent Assist uses the QnABot on AWS solution to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra.  To learn more about QnABot on AWS, see here: https://aws.amazon.com/solutions/implementations/aws-qnabot/
+=======
+
+>>>>>>> dcfc3b4 (doc updates - work in progress)
 
 ![Agent Assist Architecture](../images/lca-chimevc-architecture.png)
 ## How to enable Agent Assist in Live Call Analytics

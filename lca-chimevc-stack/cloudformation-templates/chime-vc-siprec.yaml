@@ -14,7 +14,7 @@
 
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Amazon Transcribe Live Call Analytics - Chime Voice Connector with SIPREC
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with SIPREC
 
 Parameters:
   CidrBlocks:

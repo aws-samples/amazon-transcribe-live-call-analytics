@@ -14,7 +14,7 @@
 
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Amazon Transcribe Live Call Analytics - Chime Voice Connector with Asterisk demo server
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with Asterisk demo server
 
 Parameters:
   InstanceType:
