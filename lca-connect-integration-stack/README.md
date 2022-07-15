@@ -1,7 +1,7 @@
 # Integrating the LCA solution with Amazon Connect
 
 ## Introduction
-
+  
 LCA integrates with Amazon Connect using Contact Lens [real time contact analysis segment streams](https://aws.amazon.com/blogs/contact-center/provide-call-sentiment-analytics-to-agents-using-real-time-contact-analysis-segment-streams-in-amazon-connect-contact-lens/). 
   
 The integration includes the following: 

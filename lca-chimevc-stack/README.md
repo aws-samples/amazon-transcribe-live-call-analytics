@@ -8,13 +8,13 @@ Alternatively, an Amazon Chime Voice Connector can be built that will allow you 
 
 ![Diagram](images/Asterisk-Overview.png)
 
-For more [information](Asterisk.md) on using the Asterisk server with Live Call Analytics.
+For more [information](Asterisk.md) on using the Asterisk server with LCA.
 
 ### With Existing SBC and SIPREC
 
 ![Diagram](images/SIPREC-Overview.png)
 
-For more [information](SIPREC.md) on using SIPREC with Live Call Analytics
+For more [information](SIPREC.md) on using SIPREC with LCA.
 
 ### Notes
 

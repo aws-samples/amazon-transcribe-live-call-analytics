@@ -1,6 +1,7 @@
 # Amazon Transcribe Live Call Analytics (LCA) with Agent Assist Sample Solution
 *Companion AWS blog post: [Live call analytics and agent assist for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
 ## Overview
+
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
 
 Naturally, you want to do what you can to ensure that your callers have a good experience. There are two aspects to this:

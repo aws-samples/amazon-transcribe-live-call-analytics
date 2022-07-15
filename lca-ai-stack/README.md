@@ -1,5 +1,5 @@
-# Amazon Transcribe Live Call Analytics (LCA) Sample Solution
-The Amazon Transcribe Live Call Analytics (LCA) Sample Solution provides the combination of speech to text transcription and insights for agents and supervisors all in real-time. This enables agents to better understand customer needs and drive resolution using the insights the solution provides while they are still interacting with their customer.
+# Amazon Transcribe Live Call Analytics with Agent Assist (LCA) Sample Solution
+The Amazon Transcribe Live Call Analytics with Agent Assist (LCA) Sample Solution provides the combination of speech to text transcription and insights for agents and supervisors all in real-time. This enables agents to better understand customer needs and drive resolution using the insights the solution provides while they are still interacting with their customer.
 
 This sample solution deploys resources that consume audio from any producer that streams to Amazon Kinesis Video Streams (KVS), uses Amazon Transcribe real-time streaming for transcription, Amazon Comprehend for sentiment analysis, and provides a demo website to demonstrate live call analytics capabilities.
 

@@ -4,7 +4,7 @@
 This repo contains code to showcase a sample service that implements the [Genesys Audiohook](https://help.mypurecloud.com/articles/audiohook-integration-overview/) protocol. The implementation includes the following: 
 1. ingestion of audio stream from Genesys Cloud via Audiohook protocol
 2. transcription of audio stream to text using Amazon Transcribe streaming SDK
-3. integration of transcriptions with Live Call Analytics (LCA) sample solution 
+3. integration of transcriptions into the Live Call Analytics with Agent Assist (LCA) sample solution 
 
 > **IMPORTANT**
 > 
