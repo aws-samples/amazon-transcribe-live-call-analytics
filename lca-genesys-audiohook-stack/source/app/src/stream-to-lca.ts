@@ -16,7 +16,7 @@
 import pEvent from 'p-event';
 import { MediaDataFrame } from './audiohook/mediadata';
 import { Session } from './session';
-import { writeCallEventToDynamo, writeStatusToDynamo, writeTranscriptionSegment } from './lca/lca';
+import { writeCallEventToKds, writeStatusToKds, writeTranscriptionSegment } from './lca/lca';
 import { 
     StartStreamTranscriptionCommand, 
     TranscribeStreamingClient, 
@@ -42,7 +42,7 @@ export const addStreamToLCA = (session: Session) => {
         session.logger.info(`Channels supported: ${selectedMedia?.channels}`);
         session.logger.info('Call Participant: ');
 
-        await writeCallEventToDynamo({
+        await writeCallEventToKds({
             callId: openparms.conversationId,
             eventStatus: 'START',
             channel: 'STEREO',
@@ -84,7 +84,7 @@ export const addStreamToLCA = (session: Session) => {
         session.logger.info(
             `=== Received Initial response. Session Id: ${sid} ===`
         );
-        await writeStatusToDynamo({
+        await writeStatusToKds({
             callId: openparms.conversationId,
             eventStatus: 'START_TRANSCRIPT',
             channel: 'STEREO',
@@ -112,14 +112,14 @@ export const addStreamToLCA = (session: Session) => {
         
         return async () => {
             
-            await writeStatusToDynamo({
+            await writeStatusToKds({
                 callId: openparms.conversationId,
                 eventStatus: 'END_TRANSCRIPT',
                 channel: 'STEREO',
                 transactionId: sid
             });      
             
-            await writeCallEventToDynamo({
+            await writeCallEventToKds({
                 callId: openparms.conversationId,
                 eventStatus: 'END',
                 channel: 'STEREO',

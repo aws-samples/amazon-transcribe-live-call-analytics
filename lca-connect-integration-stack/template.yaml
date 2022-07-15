@@ -1,0 +1,161 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Connect Integration Stack
+
+Parameters:
+
+  # Required
+  ConnectInstanceArn:
+    Type: String
+    Description: Amazon Connect instance ARN 
+
+  CallDataStreamArn:
+    Type: String
+    Description: >-
+      The Name of AISTACK Kinesis Data Stream for transcript ingestion.
+
+  TranscriptProcessorFunctionRoleName:
+    Type: String
+    Description: >-
+      Name of the AISTACK TranscriptProcessorFunction IAM Role   
+
+
+Resources:
+
+  LambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns: 
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: InlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - connect:AssociateInstanceStorageConfig
+                  - connect:ListInstanceStorageConfigs
+                  - connect:DisassociateInstanceStorageConfig
+                Effect: Allow
+                Resource:
+                  - !Ref ConnectInstanceArn
+              - Action:
+                  - kinesis:DescribeStream
+                Effect: Allow
+                Resource:
+                  - !Ref CallDataStreamArn
+              - Action:
+                  - iam:PutRolePolicy
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/connect.amazonaws.com/AWSServiceRoleForAmazonConnect_*"
+
+  AssociateInstanceFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Handler: index.handler
+      Runtime: python3.8
+      Timeout: 900
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          connect = boto3.client('connect')
+          def associateConnectInstance(props):
+            print("Associating connect instance to LCA Kinesis stream")
+            response = connect.associate_instance_storage_config(
+              InstanceId=props["ConnectInstanceArn"],
+              ResourceType="REAL_TIME_CONTACT_ANALYSIS_SEGMENTS",
+              StorageConfig={
+                "StorageType": "KINESIS_STREAM",
+                "KinesisStreamConfig": {
+                  "StreamArn": props["CallDataStreamArn"]
+                }
+              }
+            )
+            print(f"associate_instance_storage_config: {response}")
+            print("Configured Connect instance to integrate with LCA Kinesis Data Stream")
+
+          def disassociateConnectInstance(props):
+            response = connect.list_instance_storage_configs(
+              InstanceId=props["ConnectInstanceArn"],
+              ResourceType="REAL_TIME_CONTACT_ANALYSIS_SEGMENTS"
+            )
+            print(f"list_instance_storage_configs: {response}")
+            associationId=None
+            for storageConfig in response["StorageConfigs"]:
+              if storageConfig["StorageType"] == "KINESIS_STREAM":
+                associationId = storageConfig["AssociationId"]
+            if associationId:
+              print(f"Existing storage config found for KINESIS_STREAM. Disassociating associationId: {associationId}" )
+              response = connect.disassociate_instance_storage_config(
+                InstanceId=props["ConnectInstanceArn"],
+                AssociationId=associationId,
+                ResourceType="REAL_TIME_CONTACT_ANALYSIS_SEGMENTS"
+              )
+            print(f"Done deleting storage associations")
+
+          def handler(event, context):
+            print(json.dumps(event))
+            status = cfnresponse.SUCCESS
+            responseData = {}
+            responseData['Data'] = "Success"
+            props = event["ResourceProperties"]
+            if event['RequestType'] != 'Delete':
+              try:
+                disassociateConnectInstance(props)
+                associateConnectInstance(props)
+              except Exception as e:
+                print(e)
+                responseData["Error"] = f"Exception thrown: {e}"
+                status = cfnresponse.FAILED              
+            cfnresponse.send(event, context, status, responseData)
+
+  # Trigger Lambda function
+  AssociateInstanceFunctionResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt AssociateInstanceFunction.Arn
+      ConnectInstanceArn: !Ref ConnectInstanceArn
+      CallDataStreamArn: !Ref CallDataStreamArn
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+
+  # Add policy allowing IASTACK TranscriptProcessorFunction Lambda to invoke Connect API 
+  TranscriptProcessorConnectPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: ConnectPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - connect:GetContactAttributes
+            Resource: !Sub "${ConnectInstanceArn}/contact/*"
+      Roles:
+        - !Ref TranscriptProcessorFunctionRoleName

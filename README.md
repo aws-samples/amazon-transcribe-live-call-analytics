@@ -1,32 +1,38 @@
-# Amazon Transcribe Live Call Analytics (LCA) Sample Solution
-*Companion AWS blog post: [Livecall analytics for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
+# Amazon Transcribe Live Call Analytics (LCA) with Agent Assist Sample Solution
+*Companion AWS blog post: [Live call analytics and agent assist for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
 ## Overview
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
 
 Naturally, you want to do what you can to ensure that your callers have a good experience. There are two aspects to this:
 
-- Help supervisors assess the quality of your caller’s experiences in real time – For example, your supervisors need to know if initially unhappy callers become happier as the call progresses. And if not, why? What actions can be taken, before the call ends, to assist the agent to improve the customer experience for calls that aren’t going well?
-- Help agents optimize the quality of your caller’s experiences – For example, can you deploy live call transcription? This removes the need for your agents to take notes during calls, freeing them to focus more attention on providing positive customer interactions.
+- **Help supervisors assess the quality of your caller’s experiences in real time** – For example, your supervisors need to know if initially unhappy callers become happier as the call progresses. And if not, why? What actions can be taken, before the call ends, to assist the agent to improve the customer experience for calls that aren’t going well?
+- **Help agents optimize the quality of your caller’s experiences** – For example, can you deploy live call transcription or AI powered Agent Assistance? This removes the need for your agents to take notes, and provides them with contextually relevant information and guidance during calls, freeing them to focus more attention on providing positive customer interactions.
 
-Amazon machine learning services like Amazon Transcribe and Amazon Comprehend provide feature-rich APIs that you can use to transcribe and extract insights from your contact center audio at scale. Although you could build your own custom call analytics solution using these services, that requires time and resources. You figure that someone must have done this before, and that with luck you’ll find a solution that you can re-use.
+Amazon machine learning services like Amazon Transcribe and Amazon Comprehend provide feature-rich APIs that you can use to transcribe and extract insights from your contact center audio at scale. Amazon Lex provides conversational AI capabilities that can capture intents and context from conversations, and Amazon Kendra offers intelligent search features that can provide useful information to agents based on callers' needs. Although you could build your own custom call analytics solution using these services, that requires time and resources. You figure that someone must have done this before, and that with luck you’ll find a solution that you can re-use.
 
-You’ve heard that Contact Lens for Amazon Connect provides real time supervisor and agent assist features that sound like they are just what you need, but you are not yet using Amazon Connect. You need a solution that will work with your existing contact center.
+Contact Lens for Amazon Connect provides real-time supervisor and agent assist features that could be just what you need, but you may not yet be using Amazon Connect. You need a solution that will also work with your existing contact center.
 
-Live Call Analytics, or LCA, does most of the heavy lifting associated with providing an end-to-end sample solution that can plug into your contact center and provide the intelligent insights that you need.
+Our sample solution, Live Call Analytics with Agent Assist (LCA), does most of the heavy lifting associated with providing an end-to-end solution that can plug into your contact center and provide the intelligent insights that you need.
 
 ## Architecture
-![lca-architecture](./images/architecture-diagram.png)
-The demo Asterisk server is configured to use Amazon Voice Connector, which provides the phone number and SIP trunking needed to route inbound and outbound calls. When you configure LCA to integrate with your contact center using the Chime Voice Connector (SIPREC) option, instead of the demo Asterisk server, Voice Connector is configured to integrate instead with your existing contact center using SIP-based media recording (SIPREC) or network-based recording (NBR). In both cases, Voice Connector streams audio to Kinesis Video Streams using two streams per call, one for the caller and one for the agent. (The new Genesys Cloud AudioHook integration option uses a different architecture for call ingestion and call processing – see the [Genesys AudioHook README](/lca-genesys-audiohook-stack/README.md) for details.)
-
-When a new caller or agent Kinesis Video stream is initiated, an event is fired using EventBridge. This event triggers the Call Processing Lambda function. When both the caller and agent streams have been established, the function starts consuming real time audio fragments from both input streams and combines them to create a new stereo audio stream. The stereo audio is streamed to an Amazon Transcribe session, and the transcription results are written in real time to a DynamoDB table.
+![lca-architecture](./images/lca-chimevc-architecture.png)
+The demo Asterisk server is configured to use Amazon Voice Connector, which provides the phone number and SIP trunking needed to route inbound and outbound calls. When you configure LCA to integrate with your contact center using the Chime Voice Connector (SIPREC) option, instead of the demo Asterisk server, Voice Connector is configured to integrate instead with your existing contact center using SIP-based media recording (SIPREC) or network-based recording (NBR). In both cases, Voice Connector streams audio to Kinesis Video Streams using two streams per call, one for the caller and one for the agent.  
+  
+LCA also now also supports two additional input sources, using different architectures for ingestion: 
+- The Genesys Cloud AudioHook integration option - see [Genesys AudioHook Integration README](/lca-genesys-audiohook-stack/README.md) for details.
+- The new Connect Contact Lens integration option - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) for details.
+  
+When a new caller or agent Kinesis Video stream is initiated, an event is fired using EventBridge. This event triggers the Call Processing Lambda function. When both the caller and agent streams have been established, the function starts consuming real time audio fragments from both input streams and combines them to create a new stereo audio stream. The stereo audio is streamed to an Amazon Transcribe session, and the transcription results are written in real time to Kinesis Data Streams.
 
 Each call processing session runs until the call ends. Any session that lasts longer than the maximum duration of an AWS Lambda function invocation (15 minutes) is automatically and seamlessly transitioned to a new ‘chained’ invocation of the same function, while maintaining a continuous transcription session with Amazon Transcribe. This function chaining repeats as needed until the call ends. At the end of the call the function creates a stereo recording file in Amazon S3.
 
-Another Lambda function, the Call Event Stream Processor, fed by DynamoDB streams, processes and enriches call metadata and transcription segments. The event processor function interfaces with AWS AppSync to persist changes (mutations) in DynamoDB and to send real-time updates to logged in web clients.
+Another Lambda function, the call Transcript Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Transcript Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics).  
+  
+The Transcript Processor function interfaces with AWS AppSync to persist changes (mutations) in DynamoDB and to send real-time updates to logged in web clients.
 
 The LCA web UI assets are hosted on Amazon S3 and served via Amazon CloudFront. Authentication is provided by Amazon Cognito. In demo mode, user identities are configured in an Amazon Cognito user pool. In a production setting, you would likely configure Amazon Cognito to integrate with your existing identity provider (IdP) so authorized users can log in with their corporate credentials.
 
-When the user is authenticated, the web application establishes a secure GraphQL connection to the AWS AppSync API, and subscribes to receive real-time events such as new calls and call status changes for the calls list page, and new or updated transcription segments and computed analytics for the call details page.
+When the user is authenticated, the web application establishes a secure GraphQL connection to the AWS AppSync API, and subscribes to receive real-time events such as new calls and call status changes for the calls list page, and new or updated transcription segments, agent assist messages, and computed analytics for the call details page.
 
 The entire processing flow, from ingested speech to live webpage updates, is event driven, and so the end-to-end latency is small—typically just a few seconds.
 
@@ -78,24 +84,27 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
 3. On the CloudFormation `Create Stack` page, click `Next`
 4. Enter the following parameters:
     1. `Stack Name`: Name your stack, e.g. LiveCallAnalyticsStack
-    2. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testing Chime Voice Connector streaming
-    3. `Allowed CIDR Block for Demo Softphone` - Ignored if `Call Audio Source` is not set to `Demo Asterisk PBX Server`. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24'
-    4. `Allowed CIDR List for Siprec Integration` - Ignored if `Call Audio Source ` is not set to `Demo Asterisk PBX Server`. Comma delimited list of CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24'
-    5. `Admin Email Address` - Enter the email address of the admin user to be used to log into the web UI. An initial temporary password will be automatically sent via email. This email also includes the link to the web UI
-    6. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI
-    7. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
-    8. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
-    9. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
-    10. `Language for Transcription` - Language code to be used for Amazon Transcribe
-    11. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
-    12. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.
-    13. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
-    14. `Enable Sentiment Analysis using Amazon Comprehend` - Enable sentiment analysis using Amazon Comprehend
-    15. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
-    16. `Demo Asterisk Agent Audio URL` - (Optional)
+    2. `Admin Email Address` - Enter the email address of the admin user to be used to log into the web UI. An initial temporary password will be automatically sent via email. This email also includes the link to the web UI
+    3. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI
+    4. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testing Chime Voice Connector streaming
+    5. `Allowed CIDR Block for Demo Softphone` - Ignored if `Call Audio Source` is not set to `Demo Asterisk PBX Server`. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24'
+    6. `Allowed CIDR List for Siprec Integration` - Ignored if `Call Audio Source ` is not set to `Demo Asterisk PBX Server`. Comma delimited list of CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24'
+    7. `Amazon Connect instance ARN (existing)` - Ignored if `Call Audio Source ` is not set to `Amazon Connect Contact Lens`. Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md).
+    8. `Enable Agent Assist` - Choose `QnABot on AWS with new Kendra Index (Developer Edition)` to automatically install all the components and demo configuration needed to experiment with the new Agent Assist capabilities of LCA. See [Agent Assist README](/lca-agentassist-setup-stack/README.md). If you want to integrate LCA with your own agent assist bots or knowledge bases using either Amazon Lex or your own custom implementations, choose `Bring your own LexV2 bot` or `Bring your own AWS Lambda function`. Or choose `Disable` if you do not want any agent assistant capabilities.
+    9. `AgentAssistExistingKendraIndexId`, `AgentAssistExistingLexV2BotId`, `AgentAssistExistingLexV2BotAliasId`, and `AgentAssistExistingLambdaFunctionArn` - empty by default, but must be populated as described depending on the option chosen for `Enable Agent Assist`.
+    10. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
+    11. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
+    12. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
+    13. `Language for Transcription` - Language code to be used for Amazon Transcribe
+    14. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
+    15. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.
+    16. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+    17. `Enable Sentiment Analysis using Amazon Comprehend` - Enable sentiment analysis using Amazon Comprehend
+    18. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
+    19. `Demo Asterisk Agent Audio URL` - (Optional)
     URL for audio (agent.wav) file download for demo Asterisk server. Audio file is automatically played when an agent is not connected with a softphone
-    17. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
-    18. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
+    20. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
+    21. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**.  This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
@@ -109,10 +118,11 @@ You can test this solution if you installed the demo asterisk server during depl
 2. Once installed, log in to the web app created in the [deploy](#deploy) section by opening the Cloudfront URL provided in you CloudFormation outputs (`CloudfrontEndpoint`)
 3. Once logged in, place a phone call using an external phone to the number provided in the CloudFormation outputs (`DemoPBXPhoneNumber`)
 4. You will see the phone call show up on the LCA web page as follows ![lca-demo](./images/demo.png)
+5. Try the built-in agent assist demo using the [agent assist demo script](lca-agentassist-setup-stack/agent-assist-demo-script.md). For more detail and tutorials on Agent Assist, see [Agent Assist README](lca-agentassist-setup-stack/README.md)
 
 
 ## Conclusion
-The Live Call Analytics (LCA) sample solution offers a scalable, cost-effective approach to provide live call analysis with features to assist supervisors and agents to improve focus on your callers’ experience. It uses Amazon machine learning services like Amazon Transcribe and Amazon Comprehend to transcribe and extract real time insights from your contact center audio.
+The Live Call Analytics (LCA) with Agent Assist sample solution offers a scalable, cost-effective approach to provide live call analysis with features to assist supervisors and agents to improve focus on your callers’ experience. It uses Amazon ML services like Amazon Transcribe, Amazon Comprehend, Amazon Lex and Amazon Kendra to transcribe and extract real-time insights from your contact center audio.
 The sample LCA application is provided as open source—use it as a starting point for your own solution, and help us make it better by contributing back fixes and features via GitHub pull requests. For expert assistance, [AWS Professional Services](https://aws.amazon.com/professional-services/) and other [AWS Partners](https://aws.amazon.com/partners/) are here to help.
 
 ## Clean Up

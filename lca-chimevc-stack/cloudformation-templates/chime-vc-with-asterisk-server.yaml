@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Amazon Transcribe Live Call Analytics - Chime Voice Connector with Asterisk demo server
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with Asterisk demo server
 
 Parameters:
   InstanceType:
     Description: Instance type to launch EC2 instances.
     Type: String
-    Default: t4g.large
-    AllowedValues: [t4g.micro, t4g.small, t4g.medium, t4g.large]
+    Default: c6g.large
+    AllowedValues: [c6g.medium, c6g.large, c6g.xlarge, c6g.2xlarge]
   LatestImageId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
@@ -32,10 +32,11 @@ Parameters:
     ConstraintDescription: Must be a valid public CIDR block in the form x.x.x.x/y
   DemoAsteriskDownloadUrl:
     Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-16-current.tar.gz
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-18-current.tar.gz
     Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
   DemoAsteriskAgentAudioURL:
     Type: String
+    Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
   Ec2Troubleshoot:
     Description: >
@@ -47,7 +48,7 @@ Parameters:
       - true
       - false
 Conditions:
-  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, ""]]
+  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
 Resources:
   AsteriskVPC:
     Type: AWS::EC2::VPC
@@ -58,7 +59,7 @@ Resources:
       InstanceTenancy: default
       Tags:
         - Key: Name
-          Value: Ec2CdkStack/VPC
+          Value: LCAAsterisk/VPC
   AsteriskSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -68,7 +69,7 @@ Resources:
       AvailabilityZone:
         Fn::Select:
           - 0
-          - Fn::GetAZs: ""
+          - Fn::GetAZs: ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: aws-cdk:subnet-name
@@ -76,7 +77,7 @@ Resources:
         - Key: aws-cdk:subnet-type
           Value: Public
         - Key: Name
-          Value: Ec2CdkStack/VPC/asteriskSubnet1
+          Value: LCAAsterisk/VPC/asteriskSubnet1
   AsteriskSubnet1RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -84,7 +85,7 @@ Resources:
         Ref: AsteriskVPC
       Tags:
         - Key: Name
-          Value: Ec2CdkStack/VPC/asteriskSubnet1
+          Value: LCAAsterisk/VPC/asteriskSubnet1
   AsteriskSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -111,7 +112,7 @@ Resources:
       AvailabilityZone:
         Fn::Select:
           - 1
-          - Fn::GetAZs: ""
+          - Fn::GetAZs: ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: aws-cdk:subnet-name
@@ -119,7 +120,7 @@ Resources:
         - Key: aws-cdk:subnet-type
           Value: Public
         - Key: Name
-          Value: Ec2CdkStack/VPC/asteriskSubnet2
+          Value: LCAAsterisk/VPC/asteriskSubnet2
   AsteriskSubnet2RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -127,7 +128,7 @@ Resources:
         Ref: AsteriskVPC
       Tags:
         - Key: Name
-          Value: Ec2CdkStack/VPC/asteriskSubnet2
+          Value: LCAAsterisk/VPC/asteriskSubnet2
   AsteriskSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -150,7 +151,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: Ec2CdkStack/VPC
+          Value: LCAAsterisk/VPC
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -165,7 +166,7 @@ Resources:
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           Description: Allow all outbound traffic by default
-          IpProtocol: "-1"
+          IpProtocol: '-1'
       SecurityGroupIngress:
         - CidrIp: 3.80.16.0/23
           Description: Allow Chime Voice Connector Signaling Access
@@ -218,9 +219,9 @@ Resources:
           IpProtocol: udp
           ToPort: 65535
         - CidrIp:
-            !If [SoftPhoneCIDRExists, !Ref SoftPhoneCIDR, !Ref "AWS::NoValue"]
+            !If [SoftPhoneCIDRExists, !Ref SoftPhoneCIDR, !Ref 'AWS::NoValue']
           Description: Soft Phone CIDR
-          IpProtocol: "-1"
+          IpProtocol: '-1'
       VpcId:
         Ref: AsteriskVPC
   InstanceRole:
@@ -233,14 +234,14 @@ Resources:
             Principal:
               Service:
                 Fn::Join:
-                  - ""
+                  - ''
                   - - ec2.
                     - Ref: AWS::URLSuffix
-        Version: "2012-10-17"
+        Version: '2012-10-17'
       ManagedPolicyArns:
         - Fn::Join:
-            - ""
-            - - "arn:"
+            - ''
+            - - 'arn:'
               - Ref: AWS::Partition
               - :iam::aws:policy/AmazonSSMManagedInstanceCore
   InstanceDefaultPolicy:
@@ -256,12 +257,12 @@ Resources:
             Effect: Allow
             Resource:
               Fn::Join:
-                - ""
-                - - "arn:"
+                - ''
+                - - 'arn:'
                   - Ref: AWS::Partition
-                  - ":ssm:"
+                  - ':ssm:'
                   - Ref: AWS::Region
-                  - ":"
+                  - ':'
                   - Ref: AWS::AccountId
                   - :parameter
                   - Ref: SSMPhoneNumber
@@ -273,12 +274,12 @@ Resources:
             Effect: Allow
             Resource:
               Fn::Join:
-                - ""
-                - - "arn:"
+                - ''
+                - - 'arn:'
                   - Ref: AWS::Partition
-                  - ":ssm:"
+                  - ':ssm:'
                   - Ref: AWS::Region
-                  - ":"
+                  - ':'
                   - Ref: AWS::AccountId
                   - :parameter
                   - Ref: SSMvoiceConnector
@@ -290,16 +291,16 @@ Resources:
             Effect: Allow
             Resource:
               Fn::Join:
-                - ""
-                - - "arn:"
+                - ''
+                - - 'arn:'
                   - Ref: AWS::Partition
-                  - ":ssm:"
+                  - ':ssm:'
                   - Ref: AWS::Region
-                  - ":"
+                  - ':'
                   - Ref: AWS::AccountId
                   - :parameter
                   - Ref: SSMOutboundHostname
-        Version: "2012-10-17"
+        Version: '2012-10-17'
       PolicyName: InstanceDefaultPolicy
       Roles:
         - Ref: InstanceRole
@@ -331,11 +332,11 @@ Resources:
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
+        Version: '2012-10-17'
       ManagedPolicyArns:
         - Fn::Join:
-            - ""
-            - - "arn:"
+            - ''
+            - - 'arn:'
               - Ref: AWS::Partition
               - :iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
@@ -358,8 +359,8 @@ Resources:
                   - iam:CreateServiceLinkedRole
                   - iam:PutRolePolicy
                 Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
+                Resource: '*'
+            Version: '2012-10-17'
           PolicyName: chimePolicy
   createVCLambda:
     Type: AWS::Lambda::Function
@@ -595,7 +596,7 @@ Resources:
       AvailabilityZone:
         Fn::Select:
           - 0
-          - Fn::GetAZs: ""
+          - Fn::GetAZs: ''
       IamInstanceProfile:
         Ref: InstanceProfile
       ImageId: !Ref LatestImageId
@@ -608,7 +609,7 @@ Resources:
         Ref: AsteriskSubnet1
       Tags:
         - Key: Name
-          Value: !Sub "AsteriskInstance-${AWS::StackName}"
+          Value: !Sub 'AsteriskInstance-${AWS::StackName}'
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -638,8 +639,8 @@ Resources:
           yum -y install make gcc gcc-c++ make subversion libxml2-devel ncurses-devel openssl-devel vim-enhanced man glibc-devel autoconf libnewt kernel-devel kernel-headers linux-headers openssl-devel zlib-devel libsrtp libsrtp-devel uuid libuuid-devel mariadb-server jansson-devel libsqlite3x libsqlite3x-devel epel-release.noarch bash-completion bash-completion-extras unixODBC unixODBC-devel libtool-ltdl libtool-ltdl-devel mysql-connector-odbc mlocate libiodbc sqlite sqlite-devel sql-devel.i686 sqlite-doc.noarch sqlite-tcl.x86_64 patch libedit-devel jq
           cd /tmp
           wget ${DemoAsteriskDownloadUrl}
-          tar xvzf asterisk-16-current.tar.gz 
-          cd asterisk-16*/
+          tar xvzf asterisk-18-current.tar.gz 
+          cd asterisk-18*/
           ./configure --libdir=/usr/lib64 --with-jansson-bundled
           make menuselect.makeopts
           menuselect/menuselect \
@@ -656,6 +657,9 @@ Resources:
           touch /etc/redhat-release
           make config
           ldconfig
+          echo '0 1 * * * /sbin/asterisk -rx "core reload"' > /etc/asterisk/crontab.txt
+          crontab /etc/asterisk/crontab.txt
+
           PASSWORD=$( curl http://169.254.169.254/latest/meta-data/instance-id)
           IP=$( curl http://169.254.169.254/latest/meta-data/public-ipv4 )
           REGION=$( curl http://169.254.169.254/latest/meta-data/placement/region )
@@ -671,6 +675,7 @@ Resources:
           external_media_address=$IP
           external_signaling_address=$IP
           allow_reload=yes
+
           [VoiceConnector]
           type=endpoint
           context=from-voiceConnector
@@ -681,13 +686,16 @@ Resources:
           direct_media=no
           ice_support=yes
           force_rport=yes
+
           [VoiceConnector]
           type=identify
           endpoint=VoiceConnector
           match=$OutboundHostName
+
           [VoiceConnector]
           type=aor
           contact=sip:$OutboundHostName
+
           [$PhoneNumber]
           type=endpoint
           context=from-phone
@@ -701,11 +709,13 @@ Resources:
           rewrite_contact=yes
           ice_support=yes
           force_rport=yes
+
           [$PhoneNumber]
           type=auth
           auth_type=userpass
           password=$PASSWORD
           username=$PhoneNumber
+
           [$PhoneNumber]
           type=aor
           max_contacts=5" > /etc/asterisk/pjsip.conf
@@ -716,6 +726,7 @@ Resources:
           static=yes
           writeprotect=no
           clearglobalvars=no
+
           [catch-all]
           exten => _[+0-9].,1,Answer()
           exten => _[+0-9].,n,Wait(1)
@@ -724,15 +735,19 @@ Resources:
           exten => _[+0-9].,n,echo()
           exten => _[+0-9].,n,Wait(1)
           exten => _[+0-9].,n,Hangup()
+
           [from-phone]
           include => outbound_phone
+
           [outbound_phone]
           exten => _+X.,1,NoOP(Outbound Normal)
           same => n,Dial(PJSIP/\${!EXTEN}@VoiceConnector,20)
           same => n,Congestion
+
           [from-voiceConnector]
           include => phones
           include => catch-all
+
           [phones]
           exten => $PhoneNumber,1,Dial(PJSIP/$PhoneNumber)" > /etc/asterisk/extensions.conf
 
@@ -762,15 +777,14 @@ Resources:
 
   InstanceInitWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
-    DependsOn: 
-      voiceConnectorResource
+    DependsOn: voiceConnectorResource
 
   # Allow 30 minutes max to receive signal from instance
   InstanceInitWaitCondition:
     Type: AWS::CloudFormation::WaitCondition
     Properties:
       Handle: !Ref InstanceInitWaitHandle
-      Timeout: "1800"
+      Timeout: '1800'
 
   EIPAssociation:
     Type: AWS::EC2::EIPAssociation

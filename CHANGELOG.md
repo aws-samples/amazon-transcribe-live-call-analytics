@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2022-07-15
+### Added
+- Introducing support for real time Agent Assist - see [Agent Assist README](lca-agentassist-setup-stack/README.md). 
+- Added support for Amazon Connect Contact Lens as an optional call source - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) 
+### Changed
+- Latest Asterisk version (18) for demo PBX
+- Solution title is now "Live Call Analytics with Agent Assist"
+
 ## [0.3.0] - 2022-05-18
 ### Added
 - Support for [Genesys AudioHook](https://help.mypurecloud.com/articles/audiohook-integration-overview/). You can now
@@ -89,7 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.3.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.0...develop
+[0.4.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.1.0...v0.2.0

@@ -4,7 +4,7 @@
 # You may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-    # http://www.apache.org/licenses/LICENSE-2.0
+# http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,23 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Amazon Transcribe Live Call Analytics - Chime Voice Connector
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector
 
 Parameters:
-
   InstallDemoAsteriskServer:
     Type: String
     Default: true
     AllowedValues:
-        - true
-        - false
+      - true
+      - false
     Description: Set to true to automatically install a demo Asterisk server for testing Chime Voice Connector streaming.
 
   DemoSoftphoneAllowedCidr:
     Type: String
-    AllowedPattern: "( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))"
+    AllowedPattern: '( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))'
     Description: >
       Ignored if Install Demo Asterisk Server is false.
       CIDR block allowed by demo Asterisk server for soft phone registration.
@@ -36,7 +35,7 @@ Parameters:
 
   SiprecAllowedCidrList:
     Type: String
-    AllowedPattern: "( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*"
+    AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
     Description: >
       Ignored if Install Demo Asterisk Server is true.
       Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
@@ -44,7 +43,7 @@ Parameters:
 
   DemoAsteriskDownloadUrl:
     Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-16-current.tar.gz
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-18-current.tar.gz
     Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
 
   DemoAsteriskAgentAudioURL:
@@ -53,22 +52,21 @@ Parameters:
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
 
 Metadata:
-    AWS::CloudFormation::Interface:
-        ParameterGroups:
-            - Label:
-                default: Options
-              Parameters:
-                  - InstallDemoAsteriskServer
-                  - DemoSoftphoneAllowedCidr
-                  - SiprecAllowedCidrList
-
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Options
+        Parameters:
+          - InstallDemoAsteriskServer
+          - DemoSoftphoneAllowedCidr
+          - SiprecAllowedCidrList
 
 Conditions:
-  ShouldInstallDemoAsteriskServer: !Equals [!Ref InstallDemoAsteriskServer, 'true']
+  ShouldInstallDemoAsteriskServer:
+    !Equals [!Ref InstallDemoAsteriskServer, 'true']
   ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
 
 Resources:
-
   DeployChimeVCAsteriskDemo:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallDemoAsteriskServer
@@ -88,24 +86,20 @@ Resources:
         CidrBlocks: !Ref SiprecAllowedCidrList
 
 Outputs:
-
   DemoPBXIPAddress:
-    Value:
-      !If
+    Value: !If
       - ShouldInstallDemoAsteriskServer
       - !GetAtt DeployChimeVCAsteriskDemo.Outputs.IPAddress
-      - "Demo PBX not enabled"
+      - 'Demo PBX not enabled'
 
   DemoPBXPhoneNumber:
-    Value:
-      !If
+    Value: !If
       - ShouldInstallDemoAsteriskServer
       - !GetAtt DeployChimeVCAsteriskDemo.Outputs.PhoneNumber
-      - "Demo PBX not enabled"
+      - 'Demo PBX not enabled'
 
   AsteriskInstanceId:
-    Value:
-      !If
+    Value: !If
       - ShouldInstallDemoAsteriskServer
       - !GetAtt DeployChimeVCAsteriskDemo.Outputs.InstanceID
-      - "Demo PBX not enabled"
+      - 'Demo PBX not enabled'

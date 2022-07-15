@@ -16,16 +16,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics - Genesys Audiohook
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Genesys Audiohook
 
 Parameters:
 
   S3BucketName:
     Type: String
-    Default: ""
     Description: >
-      (Optional) Existing bucket where call recording files will be stored.
-      Leave blank to automatically create new bucket.
+      Existing bucket where call recording files will be stored. 
     # yamllint disable rule:line-length
     AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
     # yamllint enable rule:line-length
@@ -35,17 +33,11 @@ Parameters:
     Default: lca-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
-
-  DynamoDbExpirationInDays:
-    Type: Number
-    Default: 90
-    Description: >-
-      Number of days set in the time to live of event data stored in the DynamoDB table
-
-  EventSourcingTableName:
+  
+  CallDataStreamName:
     Type: String
     Description: >-
-      Name of the dynamo db table used by LCA solution 
+      The Name of Kinesis Data Stream to write the call data to.
 
   CloudFrontPriceClass:
     Type: String
@@ -163,12 +155,8 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
-      EventSourcingTableName:
-        default: DynamoDB Table Name
 
 Conditions:
-  ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
-  ShouldNotCreateRecordingBucket: !Not [!Equals [!Ref S3BucketName, ""]]
   ShouldEnableContentRedaction: !And
     - !Equals [!Ref IsContentRedactionEnabled, 'true']
     - !Equals [!Ref TranscribeLanguageCode, 'en-US']
@@ -176,10 +164,8 @@ Conditions:
 Outputs:
   S3BucketName:
     Description: Bucket which contains all the call recordings
-    Value: !If
-      - ShouldCreateRecordingBucket
-      - !Ref RecordingsBucket
-      - !Ref S3BucketName
+    Value: !Ref S3BucketName
+
   WebSocketEndpoint:
     Description: Websocket endpoint for Audiohook integration
     Value: !Join
@@ -193,44 +179,6 @@ Outputs:
     Value: !Ref SecretsManagerAPIClientSecret
 
 Resources:
-## BUCKET TO STORE STEREO RECORDINGS
-  RecordingsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Condition: ShouldCreateRecordingBucket
-    Properties:
-      AccessControl: LogDeliveryWrite
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: True
-        BlockPublicPolicy: True
-        IgnorePublicAcls: True
-        RestrictPublicBuckets: True
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-
-  RecordingsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: ShouldCreateRecordingBucket
-    Properties:
-      Bucket: !Ref RecordingsBucket
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Action:
-              - "s3:*"
-            Effect: "Deny"
-            Principal: "*"
-            Resource:
-              - !GetAtt RecordingsBucket.Arn
-              - !Sub "${RecordingsBucket.Arn}/*"
-            Condition:
-              Bool:
-                "aws:SecureTransport": false
   ##########################################################################
   # CodeBuild
   ##########################################################################
@@ -998,17 +946,11 @@ Resources:
             Resource:
               - !Sub
                 - "arn:aws:s3:::${bucket}"
-                - bucket: !Ref RecordingsBucket
+                - bucket: !Ref S3BucketName
               - !Sub
                 - "arn:aws:s3:::${bucket}/*"
-                - bucket: !Ref RecordingsBucket
-          - Action:
-              - dynamodb:PutItem
-            Effect: Allow
-            Resource:
-              - !Sub 
-                - "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}"
-                - tableName: !Ref EventSourcingTableName
+                - bucket: !Ref S3BucketName
+
           - Action: 
               - secretsmanager:GetResourcePolicy
               - secretsmanager:GetSecretValue
@@ -1032,6 +974,13 @@ Resources:
               - transcribe:StartTranscriptionJob
             Effect: Allow
             Resource: "*"
+          - Action:
+              - kinesis:PutRecord
+            Effect: Allow
+            Resource:  
+              - !Sub 
+                - "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${streamName}"
+                - streamName: !Ref CallDataStreamName
           - Action:
               - logs:CreateLogStream
               - logs:PutLogEvents
@@ -1058,17 +1007,15 @@ Resources:
             - Name: NODE_ENV
               Value: 'Production'
             - Name: RECORDINGS_BUCKET_NAME
-              Value: !Ref RecordingsBucket
+              Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX
               Value: !Ref AudioFilePrefix
             - Name: SERVERHOST
               Value: '0.0.0.0'
             - Name: SERVERPORT
               Value: '8080'
-            - Name: EVENT_SOURCING_TABLE_NAME
-              Value: !Ref EventSourcingTableName
-            - Name: EXPIRATION_IN_DAYS
-              Value: !Ref DynamoDbExpirationInDays
+            - Name: KINESIS_STREAM_NAME
+              Value: !Ref CallDataStreamName
             - Name: API_KEY_ARN
               Value: !Ref SecretsManagerAPIKey
             - Name: CLIENT_SECRET_ARN

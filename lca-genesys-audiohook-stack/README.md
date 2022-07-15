@@ -13,7 +13,7 @@ This repo contains code to showcase a sample service that implements the [Genesy
 > 
 
 ## Architecture
-![Architecture Diagram](../images/lca_with_audiohook.png)
+![Architecture Diagram](../images/lca-genesys-architecture.png)
 
 
 ## Genesys Audiohook - Deployment and Configuration instructions

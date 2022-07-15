@@ -7,12 +7,12 @@ import path from 'path';
 export type WavWriterCompletionHandler = (filename: string, samplesWritten: number, session: Session) => MaybePromise<void>;
 
 export const createMonoWavWriter = (outDir: string, onCompleted: WavWriterCompletionHandler, channel: MediaChannel, format?: MediaFormat): OpenHandler => {
-    return async (session, selectedMedia) => {
+    return async (session, selectedMedia, openParms) => {
         if(!selectedMedia?.channels.includes(channel)) {
             return;
         }
         const fmt = format ?? selectedMedia.format;
-        const writer = await WavFileWriter.create(path.join(outDir, `${session.id}-${fmt.toLowerCase()}-${channel}.wav`), fmt, 8000, 1);
+        const writer = await WavFileWriter.create(path.join(outDir, `${openParms.conversationId}-${fmt.toLowerCase()}-${channel}.wav`), fmt, 8000, 1);
         const handler = (frame: MediaDataFrame) => {
             const external = frame.getChannelView(channel, fmt);
             writer.writeAudio(external.data);
@@ -29,12 +29,13 @@ export const createMonoWavWriter = (outDir: string, onCompleted: WavWriterComple
 };
 
 export const createWavWriter = (outDir: string, onCompleted: WavWriterCompletionHandler, format?: MediaFormat): OpenHandler => {
-    return async (session, selectedMedia) => {
+    return async (session, selectedMedia, openParms) => {
         if(!selectedMedia) {
             return;
         }
+        
         const fmt = format ?? selectedMedia.format;
-        const writer = await WavFileWriter.create(path.join(outDir, `${session.id}-${fmt.toLowerCase()}.wav`), fmt, 8000, selectedMedia?.channels.length ?? 0);
+        const writer = await WavFileWriter.create(path.join(outDir, `${openParms.conversationId}.wav`), fmt, 8000, selectedMedia?.channels.length ?? 0);
 
         const handler = (frame: MediaDataFrame) => {
             writer.writeAudio(frame.as(fmt).audio.data);
