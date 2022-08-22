@@ -21,9 +21,9 @@ type Call implements DynamoDbBase @aws_cognito_user_pools
 	UpdatedAt: AWSDateTime!
 	ExpiresAfter: AWSDateTime
 	CallId: ID!
-	CustomerPhoneNumber: AWSPhone
+	CustomerPhoneNumber: String
 	Sentiment: SentimentAggregation
-	SystemPhoneNumber: AWSPhone
+	SystemPhoneNumber: String
 	Status: CallStatus
 	RecordingUrl: String
 	TotalConversationDurationMillis: Float
@@ -60,8 +60,8 @@ enum Channel {
 
 input CreateCallInput {
 	CallId: ID!
-	CustomerPhoneNumber: AWSPhone
-	SystemPhoneNumber: AWSPhone
+	CustomerPhoneNumber: String
+	SystemPhoneNumber: String
 }
 
 type CreateCallOutput @aws_iam {
