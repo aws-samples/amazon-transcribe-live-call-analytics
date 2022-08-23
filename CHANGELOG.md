@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2022-07-15
+### Changed
+- Remove E.164 type enforcement on CustomerPhoneNumber and SystemPhoneNumber. Any string value is now allowed, enabling calls to be processed when either/both CustomerPhoneNumber and SystemPhoneNumber fields are non E.164 strings.
+
 ## [0.4.0] - 2022-07-15
 ### Added
 - Introducing support for real time Agent Assist features - see [Agent Assist README](lca-agentassist-setup-stack/README.md). 
@@ -97,7 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.1...develop
+[0.4.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.0...v0.2.1
