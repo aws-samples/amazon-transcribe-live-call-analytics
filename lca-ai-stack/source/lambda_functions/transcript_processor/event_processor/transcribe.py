@@ -8,7 +8,6 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
-import phonenumbers
 
 # third-party imports from Lambda layer
 import boto3
@@ -564,25 +563,6 @@ def add_lambda_agent_assistances(
 
     return tasks
     
-def is_valid_phone_number(phone_number):
-    is_valid = False
-    try:
-        x = phonenumbers.parse(phone_number, None)
-        is_valid = phonenumbers.is_valid_number(x)
-    except:
-        pass
-    return is_valid
-
-def enforce_valid_phone_number(message):
-    customer_phone_number = message.get("CustomerPhoneNumber")
-    if not is_valid_phone_number(customer_phone_number):
-        LOGGER.warning("Invalid customer phone number [%s]. Replacing with placeholder [%s]", 
-            customer_phone_number, 
-            DEFAULT_CUSTOMER_PHONE_NUMBER
-        )
-        message["CustomerPhoneNumber"] = DEFAULT_CUSTOMER_PHONE_NUMBER
-    return message
-
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -625,8 +605,6 @@ async def execute_process_event_api_mutation(
     if event_type == "START":
         # CREATE CALL
         LOGGER.debug("CREATE CALL") 
-
-        message = enforce_valid_phone_number(message)
 
         response = await execute_create_call_mutation(
                             message=message, 
