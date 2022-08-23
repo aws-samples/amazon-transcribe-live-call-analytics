@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.1] - 2022-07-15
+## [0.4.1] - 2022-08-22
 ### Changed
 - Remove E.164 type enforcement on CustomerPhoneNumber and SystemPhoneNumber. Any string value is now allowed, enabling calls to be processed when either/both CustomerPhoneNumber and SystemPhoneNumber fields are non E.164 strings.
 
