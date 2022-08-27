@@ -1,7 +1,7 @@
 #set( $PK = "trs#${ctx.args.input.CallId}" )
-#set( $CreatedAt = $util.defaultIfNullOrBlank($ctx.args.input.CreatedAt, $util.time.nowISO8601()) )
-#set( $SK = "ts#${CreatedAt}#c#${ctx.args.input.Channel}" )
+#set( $SK = "s#${ctx.args.input.SegmentId}" )
 
+#set( $CreatedAt = $util.defaultIfNullOrBlank($ctx.args.input.CreatedAt, $util.time.nowISO8601()) )
 $util.qr($ctx.args.input.put("CreatedAt", ${CreatedAt}))
 
 {
@@ -12,10 +12,14 @@ $util.qr($ctx.args.input.put("CreatedAt", ${CreatedAt}))
     "SK": $util.dynamodb.toDynamoDBJson($SK),
   },
   "attributeValues": $util.dynamodb.toMapValuesJson($ctx.args.input),
+
+## Conditional block to prevent partial segments from overwriting final segments if they are mutated out of sequence.
+#if(${ctx.args.input.IsPartial})
   "condition": {
-    "expression": "attribute_not_exists(#PK)",
-    "expressionNames": {
-      "#PK": "PK",
-    },
+      "expression" : "attribute_not_exists(IsPartial) OR IsPartial = :true",
+      "expressionValues" : {
+          ":true" : { "BOOL" : true }
+      },
   },
+#end
 }
