@@ -727,7 +727,7 @@ Resources:
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
       Role: !GetAtt CallTranscriberFunctionRole.Arn
       Runtime: nodejs14.x
-      MemorySize: 2048
+      MemorySize: 768
       Timeout: 900
       Tracing: Active
       Environment:
