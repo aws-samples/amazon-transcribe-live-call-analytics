@@ -573,7 +573,7 @@ Resources:
       Parameters:
         CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         ConnectInstanceArn: !Ref ConnectInstanceArn
-        TranscriptProcessorFunctionRoleName: !GetAtt AISTACK.Outputs.TranscriptProcessorFunctionRoleName
+        CallEventProcessorFunctionRoleName: !GetAtt AISTACK.Outputs.CallEventProcessorFunctionRoleName
 
 Outputs:
   ApplicationCloudfrontEndpoint:
