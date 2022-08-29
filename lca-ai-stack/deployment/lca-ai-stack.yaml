@@ -897,7 +897,7 @@ Resources:
         - arm64
       CodeUri: ../source/lambda_functions/call_event_processor
       Description: !Sub >-
-        Call Transcript Processor for stack: ${AWS::StackName}
+        Call Event and Transcript Processor for stack: ${AWS::StackName}
       Events:
         TranscriptKds:
           Type: Kinesis
