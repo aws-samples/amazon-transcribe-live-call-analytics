@@ -145,7 +145,7 @@ Resources:
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
-  # Add policy allowing IASTACK CallEventProcessorFunction Lambda to invoke Connect API 
+  # Add policy allowing AISTACK CallEventProcessorFunction Lambda to invoke Connect API 
   TranscriptProcessorConnectPolicy:
     Type: 'AWS::IAM::Policy'
     Properties:
