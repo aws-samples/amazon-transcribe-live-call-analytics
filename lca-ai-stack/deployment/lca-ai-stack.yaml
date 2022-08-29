@@ -883,7 +883,7 @@ Resources:
       Principal: !GetAtt CallTranscriberFunctionRole.Arn
 
   ##########################################################################
-  # Transcript Processor
+  # Call Event Processor
   ##########################################################################
   CallEventProcessorFunction:
     Type: AWS::Serverless::Function
