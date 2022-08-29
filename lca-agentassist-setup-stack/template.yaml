@@ -185,16 +185,16 @@ Resources:
           lam = boto3.client('lambda')
 
           def addBotToAistack(props):
-            transcriptProcessorFunction = getStackResource(props["AISTACK"], "TranscriptProcessorFunction")
-            response = lam.get_function_configuration(FunctionName=transcriptProcessorFunction)
+            callEventProcessorFunction = getStackResource(props["AISTACK"], "CallEventProcessorFunction")
+            response = lam.get_function_configuration(FunctionName=callEventProcessorFunction)
             envVars = response["Environment"]["Variables"]
             envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
             envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
             response = lam.update_function_configuration(
-              FunctionName=transcriptProcessorFunction,
+              FunctionName=callEventProcessorFunction,
               Environment={"Variables":envVars}
               )
-            print("Updated TranscriptProcessorFunction Environment variable to add Lex bot.")
+            print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
 
           def setupQnABot(props):
             configureQnabotSettings(props)

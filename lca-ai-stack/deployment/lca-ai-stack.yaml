@@ -353,9 +353,9 @@ Outputs:
   EventSourcingTableName:
     Description: The Name for the DynamoDB that is used to store transcriptions and events
     Value: !Ref EventSourcingTable
-  TranscriptProcessorFunctionRoleName:
-    Description: The Name of the IAM role used by TranscriptProcessorFunction
-    Value: !Ref TranscriptProcessorFunctionRole
+  CallEventProcessorFunctionRoleName:
+    Description: The Name of the IAM role used by CallEventProcessorFunction
+    Value: !Ref CallEventProcessorFunctionRole
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
@@ -883,9 +883,9 @@ Resources:
       Principal: !GetAtt CallTranscriberFunctionRole.Arn
 
   ##########################################################################
-  # Transcript Processor
+  # Call Event Processor
   ##########################################################################
-  TranscriptProcessorFunction:
+  CallEventProcessorFunction:
     Type: AWS::Serverless::Function
     Metadata:
       cfn_nag:
@@ -895,9 +895,9 @@ Resources:
     Properties:
       Architectures:
         - arm64
-      CodeUri: ../source/lambda_functions/transcript_processor
+      CodeUri: ../source/lambda_functions/call_event_processor
       Description: !Sub >-
-        Call Transcript Processor for stack: ${AWS::StackName}
+        Call Event and Transcript Processor for stack: ${AWS::StackName}
       Events:
         TranscriptKds:
           Type: Kinesis
