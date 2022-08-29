@@ -43,7 +43,7 @@ Parameters:
 
   DemoAsteriskDownloadUrl:
     Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-18-current.tar.gz
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
     Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
 
   DemoAsteriskAgentAudioURL:
