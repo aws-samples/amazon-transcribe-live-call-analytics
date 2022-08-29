@@ -144,11 +144,13 @@ def add_transcript_segments(
                 )
             )
         )
+        ignore_exception_fn = lambda e: True if (e["message"] == 'item put condition failure') else False
         tasks.append(
             execute_gql_query_with_retries(
                 query,
                 client_session=appsync_session,
                 logger=LOGGER,
+                should_ignore_exception_fn = ignore_exception_fn, 
             ),
         )
 

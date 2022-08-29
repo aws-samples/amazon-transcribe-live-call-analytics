@@ -550,7 +550,7 @@ const handler = async function (event, context) {
   }
 
   console.log(JSON.stringify(event));
-  await writeCallEventToKds(event);
+
   if (EVENT_TYPE[event.detail.streamingStatus] == "START") await writeCallEventToDynamo(event);
 
   let result;
@@ -606,6 +606,8 @@ const handler = async function (event, context) {
         return;
       }
     }
+
+    await writeCallEventToKds(event);
 
     result = await go(
       event.detail.callId,
