@@ -462,14 +462,9 @@ Resources:
       Parameters:
         CallAudioSource: !Ref CallAudioSource
         S3BucketName: !Ref S3BucketName
-        AudioFilePrefix: !Ref AudioFilePrefix
         AdminEmail: !Ref AdminEmail
         AllowedSignUpEmailDomain: !Ref AllowedSignUpEmailDomain
-        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
-        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
-        TranscribeLanguageCode: !Ref TranscribeLanguageCode
-        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
-        CustomVocabularyName: !Ref CustomVocabularyName
+
         ComprehendLanguageCode:
           !FindInMap [
             TranscribeToComprehendLanguage,
@@ -483,13 +478,6 @@ Resources:
           - ShouldEnableLexAgentAssist
           - true
           - false
-        LexAgentAssistLocaleId:
-          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
-        IsLambdaAgentAssistEnabled: 
-          !If
-            - ShouldEnableLambdaAgentAssist
-            - true
-            - false
         LexAgentAssistLocaleId:
           !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         IsLambdaAgentAssistEnabled: 
@@ -544,6 +532,19 @@ Resources:
         SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
+
+        AudioFilePrefix: !Ref AudioFilePrefix
+        KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
+        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack

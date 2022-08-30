@@ -63,6 +63,8 @@ pushd $dir
 ./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
 popd
 
+exit
+
 dir=lca-genesys-audiohook-stack
 echo "PACKAGING $dir"
 pushd $dir/deployment

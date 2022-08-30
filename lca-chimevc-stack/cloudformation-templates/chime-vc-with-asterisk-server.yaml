@@ -983,7 +983,7 @@ Resources:
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
-      CodeUri: ../source/lambda_functions/call_transcriber
+      CodeUri: ../lambda_functions/call_transcriber
     Metadata:
       cfn_nag:
         rules_to_suppress:
