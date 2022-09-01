@@ -9,6 +9,7 @@ const mapCallsAttributes = (calls) => {
   return calls.map((item) => {
     const {
       CallId: callId,
+      AgentId: agentId,
       CreatedAt: callTimestamp,
       CustomerPhoneNumber: callerPhoneNumber,
       SystemPhoneNumber: systemPhoneNumber,
@@ -31,6 +32,7 @@ const mapCallsAttributes = (calls) => {
 
     return {
       callId,
+      agentId,
       callerPhoneNumber,
       systemPhoneNumber,
       updatedAt,

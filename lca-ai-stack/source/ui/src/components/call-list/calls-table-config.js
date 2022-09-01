@@ -26,6 +26,12 @@ export const COLUMN_DEFINITIONS_MAIN = [
     width: 325,
   },
   {
+    id: 'agentId',
+    header: 'Agent',
+    cell: (item) => item.agentId,
+    sortingField: 'agentId',
+  },
+  {
     id: 'initiationTimeStamp',
     header: 'Initiation Timestamp',
     cell: (item) => item.initiationTimeStamp,
@@ -102,6 +108,7 @@ const VISIBLE_CONTENT_OPTIONS = [
     label: 'Call list properties',
     options: [
       { id: 'callId', label: 'Call ID', editable: false },
+      { id: 'agentId', label: 'Agent' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
       { id: 'recordingStatus', label: 'Status' },
@@ -115,6 +122,7 @@ const VISIBLE_CONTENT_OPTIONS = [
 ];
 
 const VISIBLE_CONTENT = [
+  'agentId',
   'initiationTimeStamp',
   'callerPhoneNumber',
   'recordingStatus',
