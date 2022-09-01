@@ -13,6 +13,7 @@
 # limitations under the License.
 
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with SIPREC
 
@@ -21,11 +22,7 @@ Parameters:
     Type: CommaDelimitedList
     Description: Comma Delimited list of CIDR blocks that will be allow listed to send traffic to the Chime Voice Connector.  CIDR blocks must be between /27 and /32 in length and use public IP ranges.  Example 203.0.113.128/27, 198.51.100.76/32
 
-Conditions:
-  CIDRBlockExists: !Not
-    - !Equals
-      - !Join ["", !Ref CidrBlocks]
-      - ""
+
 Resources:
   CreateVCFunctionRole:
     Type: "AWS::IAM::Role"
@@ -167,6 +164,13 @@ Resources:
       CIDRBlocks: !If [CIDRBlockExists, !Ref CidrBlocks, !Ref "AWS::NoValue"]
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
+
+Conditions:
+  CIDRBlockExists: !Not
+    - !Equals
+      - !Join ["", !Ref CidrBlocks]
+      - ""
+
 Outputs:
   VoiceConnector:
     Value:

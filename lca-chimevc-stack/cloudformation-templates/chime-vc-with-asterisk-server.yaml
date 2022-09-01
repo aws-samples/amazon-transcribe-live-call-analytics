@@ -13,6 +13,7 @@
 # limitations under the License.
 
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with Asterisk demo server
 
@@ -47,8 +48,7 @@ Parameters:
     AllowedValues:
       - true
       - false
-Conditions:
-  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
+
 Resources:
   AsteriskVPC:
     Type: AWS::EC2::VPC
@@ -844,6 +844,9 @@ Resources:
         Ref: EIP
       InstanceId:
         Ref: AsteriskInstance
+
+Conditions:
+  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
 
 Outputs:
   IPAddress:
