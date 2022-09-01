@@ -170,18 +170,6 @@ Resources:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
-        AudioFilePrefix: !Ref AudioFilePrefix
-        KinesisDataStreamName: !Ref KinesisDataStreamName
-        KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        EventSourcingTableName: !Ref EventSourcingTableName
-        EventSourcingTableArn: !Ref EventSourcingTableArn
-        S3BucketName: !Ref S3BucketName
-
-        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
-        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
-        TranscribeLanguageCode: !Ref TranscribeLanguageCode
-        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
-        CustomVocabularyName: !Ref CustomVocabularyName
 
   DeployChimeVCsiprec:
     Type: AWS::CloudFormation::Stack
@@ -190,19 +178,24 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
       Parameters:
         CidrBlocks: !Ref SiprecAllowedCidrList
+  
+  DeployCallTranscriber:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./cloudformation-templates/chime-vc-call-transcriber.yaml
+      Parameters:
         AudioFilePrefix: !Ref AudioFilePrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
         EventSourcingTableName: !Ref EventSourcingTableName
         EventSourcingTableArn: !Ref EventSourcingTableArn
         S3BucketName: !Ref S3BucketName
-
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
-        
+
 Outputs:
   DemoPBXIPAddress:
     Value: !If
