@@ -339,6 +339,39 @@ async def execute_add_s3_recording_mutation(
 
     return result
 
+async def execute_update_agent_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    agentId = message.get("AgentId")
+    if not agentId:
+        error_message = "AgentId doesn't exist in UPDATE_AGENT event"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateAgent.args(
+                input={**message, "AgentId": agentId}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
+
 ##########################################################################
 # Lex Agent Assist
 ##########################################################################
@@ -671,7 +704,6 @@ async def execute_process_event_api_mutation(
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
-            # *add_contact_lens_agent_assist_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
             return_exceptions=True,
@@ -687,6 +719,18 @@ async def execute_process_event_api_mutation(
         # ADD S3 RECORDING URL 
         LOGGER.debug("Add recording url")
         response = await execute_add_s3_recording_mutation(
+                                message=message,
+                                appsync_session=appsync_session
+                        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
+
+    elif event_type == "UPDATE_AGENT":
+        # UPDATE AGENT 
+        LOGGER.debug("Update AgentId for call")
+        response = await execute_update_agent_mutation(
                                 message=message,
                                 appsync_session=appsync_session
                         )

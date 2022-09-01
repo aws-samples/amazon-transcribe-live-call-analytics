@@ -14,6 +14,7 @@ import json
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
 from gql.dsl import DSLMutation, DSLSchema, dsl_gql
+from graphql.language.printer import print_ast
 
 # imports from Lambda layer
 # pylint: disable=import-error
@@ -169,6 +170,38 @@ async def update_call_status(
 
     return return_value
 
+async def execute_update_agent_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    agentId = message.get("AgentId")
+    if not agentId:
+        error_message = "AgentId doesn't exist in UPDATE_AGENT event"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateAgent.args(
+                input={**message, "AgentId": agentId}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
 
 ##########################################################################
 # Transcripts
@@ -836,7 +869,7 @@ async def execute_process_event_api_mutation(
 
     # maps from Contact Lens event status to LCA status
     event_type_map = dict(
-        COMPLETED="ENDED", FAILED="ERRORED", SEGMENTS="TRANSCRIBING", STARTED="STARTED"
+        COMPLETED="ENDED", FAILED="ERRORED", SEGMENTS="TRANSCRIBING", STARTED="STARTED", UPDATE_AGENT="UPDATE_AGENT"
     )
     msg_event_type = message.get("EventType", "")
     event_type = event_type_map.get(msg_event_type, "")
@@ -890,6 +923,13 @@ async def execute_process_event_api_mutation(
             message=message_normalized,
             appsync_session=appsync_session,
         )
+    
+    elif event_type in ["UPDATE_AGENT"]:
+        return_value = await execute_update_agent_mutation(
+            message=message_normalized,
+            appsync_session=appsync_session,
+        )
+
     else:
         LOGGER.warning("unknown event type [%s] (message event type [%s])", event_type, msg_event_type)
 
