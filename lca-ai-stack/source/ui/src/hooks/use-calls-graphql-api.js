@@ -311,12 +311,22 @@ const useCallsGraphQlApi = ({ initialPeriodsToLoad = CALL_LIST_SHARDS_PER_DAY * 
       );
 
       // get contact Ids by hour on residual hours outside of the lower shard date/hour boundary
-      const baseDate = new Date(now - periodsToLoad * hoursInShard * 3600 * 1000);
+      // or just last n hours when periodsToLoad is less than 1 shard period
+      let baseDate;
+      let residualHours;
+      if (periodsToLoad < 1) {
+        baseDate = new Date(now);
+        const numHours = parseInt(periodsToLoad * hoursInShard, 10);
+        residualHours = [...Array(numHours).keys()].map((h) => baseDate.getUTCHours() - h);
+      } else {
+        baseDate = new Date(now - periodsToLoad * hoursInShard * 3600 * 1000);
+        const residualBaseHour = baseDate.getUTCHours() % hoursInShard;
+        residualHours = [...Array(hoursInShard - residualBaseHour).keys()].map(
+          (h) => baseDate.getUTCHours() + h,
+        );
+      }
       const baseDateString = baseDate.toISOString().split('T')[0];
-      const residualBaseHour = baseDate.getUTCHours() % hoursInShard;
-      const residualHours = [...Array(hoursInShard - residualBaseHour).keys()].map(
-        (h) => baseDate.getUTCHours() + h,
-      );
+
       const residualDateHours = { date: baseDateString, hours: residualHours };
       logger.debug('call list date hours', residualDateHours);
       const callIdsDateHourPromise = listCallIdsByDateHours(residualDateHours);
