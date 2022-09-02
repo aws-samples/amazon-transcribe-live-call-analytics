@@ -285,7 +285,7 @@ const useCallsGraphQlApi = ({ initialPeriodsToLoad = CALL_LIST_SHARDS_PER_DAY * 
       // e.g. 2 periods to on load 2021-01-01T:20:00:00.000Z ->
       // [ [ '2021-01-01', 3 ], [ '2021-01-01', 4 ] ]
       const hoursInShard = 24 / CALL_LIST_SHARDS_PER_DAY;
-      const dateShardPairs = [...Array(periodsToLoad).keys()].map((p) => {
+      const dateShardPairs = [...Array(parseInt(periodsToLoad, 10)).keys()].map((p) => {
         const deltaInHours = p * hoursInShard;
         const relativeDate = new Date(now - deltaInHours * 3600 * 1000);
 

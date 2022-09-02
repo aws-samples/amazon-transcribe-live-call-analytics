@@ -170,6 +170,7 @@ export const CallsPreferences = ({
 // number of shards per day used by the list calls API
 export const CALL_LIST_SHARDS_PER_DAY = 6;
 const TIME_PERIOD_DROPDOWN_CONFIG = {
+  'refresh-2h': { count: 0.5, text: '2 hrs' },
   'refresh-4h': { count: 1, text: '4 hrs' },
   'refresh-8h': { count: CALL_LIST_SHARDS_PER_DAY / 3, text: '8 hrs' },
   'refresh-1d': { count: CALL_LIST_SHARDS_PER_DAY, text: '1 day' },
