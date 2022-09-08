@@ -179,6 +179,12 @@ Parameters:
       Used only if IsLambdaAgentAssistEnabled is set to "true".
       Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
 
+  DynamoDbExpirationInDays:
+    Type: Number
+    Default: 90
+    Description: >-
+      Number of days set in the time to live of event data stored in the DynamoDB table
+
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
     Type: String
@@ -707,6 +713,7 @@ Resources:
           # Lambda Agent Assist
           IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
           LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
+          DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers
@@ -881,6 +888,7 @@ Resources:
                 "CallId": $util.dynamodb.toDynamoDBJson($ctx.args.input.CallId),
                 "CreatedAt": $util.dynamodb.toDynamoDBJson($ctx.args.input.CreatedAt),
                 "UpdatedAt": $util.dynamodb.toDynamoDBJson($ctx.args.input.UpdatedAt),
+                "ExpiresAfter": $util.dynamodb.toDynamoDBJson($ctx.args.input.ExpiresAfter)
               },
             },
           ],
