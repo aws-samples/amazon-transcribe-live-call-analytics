@@ -171,7 +171,8 @@ async def update_call_status(
             client_session=appsync_session,
             logger=LOGGER,
         )
-        LOGGER.debug("appsync mutation response", extra=dict(response=response))
+        query_string = print_ast(query)
+        LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
         return_value["successes"].append(response)
     except Exception as error:  # pylint: disable=broad-except
         return_value["errors"].append(error)
@@ -200,16 +201,16 @@ async def execute_update_agent_mutation(
         )
     )
     
-    result = await execute_gql_query_with_retries(
+    response = await execute_gql_query_with_retries(
                         query,
                         client_session=appsync_session,
                         logger=LOGGER,
                     )
 
     query_string = print_ast(query)
-    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+    LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
 
-    return result
+    return response
 
 ##########################################################################
 # Transcripts
