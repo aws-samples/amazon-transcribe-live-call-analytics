@@ -641,7 +641,7 @@ async def execute_process_event_api_mutation(
     # event_type = event_type_map.get(message.get("EventType", ""), "")
     # message_normalized = {**message, "EventType": event_type}
 
-    message_normalized["ExpiresAt"] = get_ttl(),
+    message_normalized["ExpiresAfter"] = get_ttl(),
     event_type = message.get("EventType", "")
 
     if event_type == "START":
