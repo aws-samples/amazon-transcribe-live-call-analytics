@@ -228,6 +228,12 @@ Parameters:
     ConstraintDescription: >-
       Comma separated list of uppercase two letter country codes or empty
 
+  DynamoDbExpirationInDays:
+    Type: Number
+    Default: 90
+    Description: >-
+      Number of days set in the time to live of event data stored in the DynamoDB table
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -486,6 +492,7 @@ Resources:
             - true
             - false
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+        DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -532,19 +539,18 @@ Resources:
         SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
-
         AudioFilePrefix: !Ref AudioFilePrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
-
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack
@@ -572,9 +578,12 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-integration-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         ConnectInstanceArn: !Ref ConnectInstanceArn
         CallEventProcessorFunctionRoleName: !GetAtt AISTACK.Outputs.CallEventProcessorFunctionRoleName
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
+        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn        
 
 Outputs:
   ApplicationCloudfrontEndpoint:
