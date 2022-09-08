@@ -89,7 +89,7 @@ export const COLUMN_DEFINITIONS_MAIN = [
   },
 ];
 
-export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[1];
+export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[2];
 
 export const SELECTION_LABELS = {
   itemSelectionLabel: (data, row) => `select ${row.callId}`,
