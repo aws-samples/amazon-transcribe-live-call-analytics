@@ -8,6 +8,7 @@ input AddTranscriptSegmentInput {
 	IsPartial: Boolean!
 	Channel: Channel!
 	CreatedAt: AWSDateTime
+	ExpiresAfter: AWSTimestamp
 	Sentiment: Sentiment
 	SentimentScore: SentimentScoreInput
 	SentimentWeighted: Float
@@ -19,7 +20,7 @@ type Call implements DynamoDbBase @aws_cognito_user_pools
 	SK: ID!
 	CreatedAt: AWSDateTime!
 	UpdatedAt: AWSDateTime!
-	ExpiresAfter: AWSDateTime
+	ExpiresAfter: AWSTimestamp
 	CallId: ID!
 	CustomerPhoneNumber: String
 	Sentiment: SentimentAggregation
@@ -42,7 +43,7 @@ type CallListItem implements DynamoDbBase @aws_cognito_user_pools
 	SK: ID!
 	CreatedAt: AWSDateTime!
 	UpdatedAt: AWSDateTime!
-	ExpiresAfter: AWSDateTime
+	ExpiresAfter: AWSTimestamp
 	CallId: ID!
 }
 
@@ -63,6 +64,7 @@ input CreateCallInput {
 	CallId: ID!
 	CustomerPhoneNumber: String
 	SystemPhoneNumber: String
+	ExpiresAfter: AWSTimestamp
 }
 
 type CreateCallOutput @aws_iam {
@@ -74,7 +76,7 @@ interface DynamoDbBase {
 	SK: ID!
 	CreatedAt: AWSDateTime!
 	UpdatedAt: AWSDateTime
-	ExpiresAfter: AWSDateTime
+	ExpiresAfter: AWSTimestamp
 }
 
 type Mutation @aws_iam {
@@ -187,7 +189,7 @@ type TranscriptSegment implements DynamoDbBase @aws_cognito_user_pools
 	SK: ID!
 	CreatedAt: AWSDateTime!
 	UpdatedAt: AWSDateTime
-	ExpiresAfter: AWSDateTime
+	ExpiresAfter: AWSTimestamp
 	CallId: ID!
 	SegmentId: ID!
 	StartTime: Float!
