@@ -3,7 +3,7 @@
 """ Transcribe API Mutation Processor
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
@@ -89,6 +89,11 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
 
+# Get value for DynamboDB TTL field
+DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
+def get_ttl():
+    return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
+
 ##########################################################################
 # Transcripts
 ##########################################################################
@@ -118,6 +123,7 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
         Transcript=transcript,
         IsPartial=is_partial,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         Status="TRANSCRIBING",
     )
 
@@ -635,6 +641,7 @@ async def execute_process_event_api_mutation(
     # event_type = event_type_map.get(message.get("EventType", ""), "")
     # message_normalized = {**message, "EventType": event_type}
 
+    message_normalized["ExpiresAt"] = get_ttl(),
     event_type = message.get("EventType", "")
 
     if event_type == "START":

@@ -3,7 +3,7 @@
 """ Contact Lens API Mutation Processor
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
@@ -60,6 +60,11 @@ DEFAULT_SYSTEM_PHONE_NUMBER = getenv("DEFAULT_SYSTEM_PHONE_NUMBER", "+1800555111
 CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
 CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
 
+# Get value for DynamboDB TTL field
+DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
+def get_ttl():
+    return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
+
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 EVENT_LOOP = asyncio.get_event_loop()
@@ -112,6 +117,7 @@ def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
         (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(instanceId, contactId)
         return dict(
             CallId=call_id,
+            ExpiresAfter=get_ttl(),
             CustomerPhoneNumber=customer_phone_number,
             SystemPhoneNumber=system_phone_number,
         )
@@ -122,6 +128,7 @@ def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
         CallId=call_id,
         Status=event_type,
         UpdatedAt=updated_at,
+        ExpiresAfter=get_ttl(),
     )
 
 
@@ -145,6 +152,7 @@ async def update_call_status(
     }
 
     if event_type == "STARTED":
+        LOGGER.debug("CREATE CALL") 
         query = dsl_gql(
             DSLMutation(
                 schema.Mutation.createCall.args(input=status).select(schema.CreateCallOutput.CallId)
@@ -257,6 +265,7 @@ def transform_segment_to_add_transcript(segment: Dict) -> Dict[str, object]:
         CallId=call_id,
         Channel=channel,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         EndTime=end_time,
         IsPartial=is_partial,
         SegmentId=segment_id,
@@ -345,6 +354,7 @@ def transform_segment_to_categories_agent_assist(
         CallId=call_id,
         Channel=channel,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         EndTime=end_time,
         IsPartial=is_partial,
         SegmentId=segment_id,
@@ -383,6 +393,7 @@ def transform_segment_to_issues_agent_assist(
         CallId=call_id,
         Channel=channel,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         EndTime=end_time,
         IsPartial=is_partial,
         SegmentId=segment_id,
@@ -761,6 +772,7 @@ def add_lambda_agent_assistances(
                         CallId=call_id,
                         Channel=channel,
                         CreatedAt=created_at,
+                        ExpiresAfter=get_ttl(),
                         EndTime=end_time,
                         IsPartial=is_partial,
                         SegmentId=segment_id,
@@ -794,6 +806,7 @@ def add_lambda_agent_assistances(
                         CallId=call_id,
                         Channel=channel,
                         CreatedAt=created_at,
+                        ExpiresAfter=get_ttl(),
                         EndTime=end_time,
                         IsPartial=is_partial,
                         SegmentId=segment_id,
