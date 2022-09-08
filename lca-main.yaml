@@ -39,15 +39,23 @@ Parameters:
       CIDR block allowed by demo Asterisk server for soft phone registration.
       Example: '198.51.100.36/32'
 
+  SiprecLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or
+      'Demo Asterisk PBX Server'. If present, the specified Lambda function is invoked at the start of each 
+      call. The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
+      The function must return a True/False flag to indicate if the call should be processed or ignored, 
+      a mapped CallId, an AgentId, and may be extended to support additional features in future. 
+
   SiprecAllowedCidrList:
     Type: String
     # yamllint disable rule:line-length
     AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
     # yamllint enable rule:line-length
     Description: >
-      Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
-      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
-      Example: '198.51.100.0/27, 203.0.113.128/27'
 
   ConnectInstanceArn:
     Type: String
@@ -248,6 +256,7 @@ Metadata:
           - CallAudioSource
           - DemoSoftphoneAllowedCidr
           - SiprecAllowedCidrList
+          - SiprecLambdaHookFunctionArn
           - ConnectInstanceArn
       - Label:
           default: Agent Assist Options
@@ -298,7 +307,9 @@ Metadata:
       DemoSoftphoneAllowedCidr:
         default: Allowed CIDR Block for Demo Softphone
       SiprecAllowedCidrList:
-        default: Allowed CIDR List for Siprec Integration
+        default: Allowed CIDR List for SIPREC Integration
+      SiprecLambdaHookFunctionArn:
+        default: Lambda function ARN for SIPREC (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
       AgentAssistOption:
@@ -551,6 +562,7 @@ Resources:
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+        SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack

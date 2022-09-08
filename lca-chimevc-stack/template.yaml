@@ -41,6 +41,17 @@ Parameters:
       Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
+  SiprecLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
+      If present, the specified Lambda function is invoked at the start of each call. 
+      The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
+      The function must return a True/False flag to indicate if the call should be processed or ignored, 
+      a mapped CallId, an AgentId, and may be extended to support additional features in future.
+
   DemoAsteriskDownloadUrl:
     Type: String
     Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
@@ -196,6 +207,7 @@ Resources:
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+        SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
 Outputs:
   DemoPBXIPAddress:

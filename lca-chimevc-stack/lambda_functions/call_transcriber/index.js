@@ -27,6 +27,7 @@ const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
 
 const mergeFiles = require('./mergeFiles');
 const { KinesisClient, PutRecordCommand } = require('@aws-sdk/client-kinesis');
+const { createHook } = require('async_hooks');
 
 const REGION = process.env.REGION || 'us-east-1';
 const { EVENT_SOURCING_TABLE_NAME } = process.env;
@@ -46,6 +47,7 @@ const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
 const KINESIS_STREAM_ARN = process.env.KINESIS_STREAM_ARN || '';
+const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -605,6 +607,78 @@ const handler = async function (event, context) {
         console.log("Both KVS streams not active after 10 seconds. Exiting.");
         return;
       }
+    }
+
+    // Call customer LambdaHook, if present
+    if (LAMBDA_HOOK_FUNCTION_ARN) {
+      // invoke lambda function
+      // if it fails, just throw an exception and exit
+      console.log(`Invoking LambdaHook: ${LAMBDA_HOOK_FUNCTION_ARN}`);
+      const invokeCmd = new InvokeCommand({
+        FunctionName: LAMBDA_HOOK_FUNCTION_ARN,
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify(event),
+      });
+      const lambdaResponse = await lambdaClient.send(invokeCmd);
+      const payload = JSON.parse(Buffer.from(data.Payload));
+      console.log(`LambdaHook response: ${JSON.stringify(payload)}`);
+      if (lambdaResponse.FunctionError) {
+        console.log('Lambda failed to run, throwing an exception');
+        throw new Error(lambdaResponse.Payload);
+      }
+      /* Process the response. Payload looks like this:
+          {
+            // all fields optional
+            originalCallId: <string>,
+            shouldProcessCall: <boolean>,
+            isCaller: <boolean>
+            callId: <string>
+            agentId: <string>,
+            fromNumber: <string>,
+            toNumber: <string>
+          }
+      */
+
+      // Should we process this call?
+      if (payload.shouldProcessCall === false) {
+        console.log('Lambda hook returned shouldProcessCall=false, exiting.');
+        return;
+      }
+      if (payload.shouldProcessCall === true) {
+        console.log('Lambda hook returned shouldProcessCall=true, continuing.');
+      }
+
+      // New CallId?
+      if (payload.callId) {
+        console.log(`Lambda hook returned new callId: "${payload.callId}"`);
+        event.detail.callId = payload.callId;
+      }
+
+      // Swap caller and agent channels?
+      if (payload.isCaller === false) {
+        console.log(`Lambda hook returned isCaller=false, swapping caller/agent streams`);
+        [streamResults.agentStreamArn, streamResults.callerStreamArn] = [streamResults.callerStreamArn, streamResults.agentStreamArn];
+      }
+      if (payload.isCaller === true) {
+        console.log(`Lambda hook returned isCaller=true, caller/agent streams not swapped`);
+      }
+
+      // AgentId?
+      if (payload.agentId) {
+        console.log(`Lambda hook returned agentId: "${payload.agentId}"`);
+        event.detail.agentId = payload.agentId;
+      }
+
+      // New 'to' or 'from' phone numbers?
+      if (payload.fromNumber) {
+        console.log(`Lambda hook returned fromNumber: "${payload.fromNumber}"`);
+        event.detail.fromNumber = payload.fromNumber;
+      }
+      if (payload.toNumber) {
+        console.log(`Lambda hook returned toNumber: "${payload.toNumber}"`);
+        event.detail.toNumber = payload.toNumber;
+      }
+
     }
 
     await writeCallEventToKds(event);
