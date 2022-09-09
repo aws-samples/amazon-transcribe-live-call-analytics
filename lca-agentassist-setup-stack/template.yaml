@@ -184,25 +184,44 @@ Resources:
           s3 = boto3.client('s3')
           lam = boto3.client('lambda')
 
-          def addBotToAistack(props):
-            callEventProcessorFunction = getStackResource(props["AISTACK"], "CallEventProcessorFunction")
-            response = lam.get_function_configuration(FunctionName=callEventProcessorFunction)
-            envVars = response["Environment"]["Variables"]
-            envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
-            envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
-            response = lam.update_function_configuration(
-              FunctionName=callEventProcessorFunction,
-              Environment={"Variables":envVars}
-              )
-            print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
+          def propsChanged(props, oldprops, fields):
+            for field in fields:
+              if props.get(field) != oldprops.get(field):
+                 print(f"Prop {field} value changed. Old: {oldprops.get(field)}, New: {props.get(field)}")
+                 return True
+            return False
+            
+          def addBotToAistack(props, oldprops):
+            if propsChanged(props, oldprops, ["AISTACK", "LexAgentAssistBotId", "LexAgentAssistAliasId"]):
+              callEventProcessorFunction = getStackResource(props["AISTACK"], "CallEventProcessorFunction")
+              response = lam.get_function_configuration(FunctionName=callEventProcessorFunction)
+              envVars = response["Environment"]["Variables"]
+              envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
+              envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
+              response = lam.update_function_configuration(
+                FunctionName=callEventProcessorFunction,
+                Environment={"Variables":envVars}
+                )
+              print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
+            else:
+              print("Lex info unchanged - skipping CallEventProcessorFunction Environment variable update.")
 
-          def setupQnABot(props):
-            configureQnabotSettings(props)
-            loadQnABotSamplePackage(props)
-            buildQnABotLexBot(props)
-            syncQnABotSamplePackageToKendra(props)
-            if props["QnaAgentAssistDemoWebCrawlURLs"]:
-              startKendraCrawler(props)
+          def setupQnABot(props, oldprops):
+            if propsChanged(props, oldprops, ["QNABOTSTACK", "KendraIndexId", "QnaAgentAssistDemoWebCrawlURLs"]):
+              configureQnabotSettings(props)
+            else:
+              print("Kendra info unchanged - skipping QnABot settings update.")
+            if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoJson"]):
+              loadQnABotSamplePackage(props)
+              buildQnABotLexBot(props)
+              syncQnABotSamplePackageToKendra(props)
+            else:
+              print("QnaBot demo data unchanged - skipping QnABot sample data update.")
+            if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoWebCrawlURLs"]):
+              if props["QnaAgentAssistDemoWebCrawlURLs"]:
+                startKendraCrawler(props)
+            else:
+              print("Kendra web crawl URLs unchanged - skipping web crawler update.")
 
           def configureQnabotSettings(props):
             ssmParamName = getStackResource(props["QNABOTSTACK"], "DefaultQnABotSettings")
@@ -284,7 +303,7 @@ Resources:
                 time.sleep(5)
                 status = get_status(bucket=exportBucket, statusFile=statusFile)
                 print(f'Import Status: {status}')
-                if status.startswith("FAILED"):
+                if status.startswith("FAILED") or status.startswith("Error"):
                   raise ValueError(status)
             print("Import complete")
 
@@ -321,10 +340,11 @@ Resources:
             responseData['Data'] = "Success"
             if event['RequestType'] != 'Delete':
               props = event["ResourceProperties"]
+              oldprops = event.get("OldResourceProperties",{})
               try:
-                addBotToAistack(props)
+                addBotToAistack(props, oldprops)
                 if props["QNABOTSTACK"]:
-                  setupQnABot(props)
+                  setupQnABot(props, oldprops)
               except Exception as e:
                 print(e)
                 responseData["Error"] = f"Exception thrown: {e}"
