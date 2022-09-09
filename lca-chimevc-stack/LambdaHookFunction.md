@@ -5,7 +5,8 @@
 LCA v0.5.0 and later offers optional custom logic via a user-provided Lambda function, to support the following features:
 1. Selectively choose whether to process a call, or to ignore it
 2. Reverse the default assignment of caller and agent audio streams
-3. Assign an Agent identifier string for display, search, and sort on the LCA UI
+3. Assign an Agent identifier string for display, search, and sort on the LCA UI.  
+   *NOTE see [SettingAgentId.md](./SettingAgentId.md) if you need to provide an AgentID after the call has started.*
 4. Override the default CallId with another unique value for the call
 5. Override the default toNumber (System Phone number)
 6. Override the default fromNumber (Caller Phone number)
