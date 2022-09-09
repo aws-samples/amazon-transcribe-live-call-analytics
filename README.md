@@ -65,7 +65,7 @@ CF Launch URL: https://us-east-1.console.aws.amazon.com/cloudformation/home?regi
 CLI Deploy: aws cloudformation deploy --region us-east-1 --template-file /tmp/lca/lca-main.yaml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AdminEmail='jdoe@example.com' installDemoAsteriskServer=true
 ```
 
-### Deploy
+### Deploy a new stack
 
 Start your LCA experience by using AWS CloudFormation to deploy the sample solution with the built-in demo mode enabled.
 
@@ -112,6 +112,25 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     1. The admin user will receive a temporary password and the link to the CloudFront URL of the web UI (this can take a few minutes). The output of the CloudFormation stack creation will also provide a CloudFront URL (in the **Outputs** table of the stack details page). Click the link or copy and paste the CloudFront URL into your browser. **NOTE:** this page may not be available while the stack is completing the deployment
     2. You can sign into your application using the admin email address as the username and the temporary password you received via email. The web UI will prompt you to provide your permanent password. The user registration/login experience is run in your AWS account, and the supplied credentials are stored in Amazon Cognito. *Note: given that this is a demo application, we highly suggest that you do not use an email and password combination that you use for other purposes (such as an AWS account, email, or e-commerce site).*.
     3. Once you provide your credentials, you will be prompted to verify the email address. You can verify your account at a later time by clicking the Skip link. Otherwise, you will receive a verification code at the email address you provided (this can take a few minutes). Upon entering this verification code in the web UI, you will be signed into the application.
+
+### Update an existing stack
+
+1. Log into the [AWS console](https://console.aws.amazon.com/) if you are not already.
+*Note: If you are logged in as an IAM user, ensure your account has permissions to create and manage the necessary resources and components for this application.*
+2. Select your existing LiveCallAnaytics stack
+3. Choose **Update**
+4. Choose **Replace current template**
+5. Use one of the **published template** below for your region, or use the **Template URL** output of the publish.sh script if you have build your own artifacts from the repository:
+
+Region name | Region code | Template URL
+--- | --- | ---
+US East (N. Virginia) | us-east-1 | https://s3.us-east-1.amazonaws.com/aws-ml-blog-us-east-1/artifacts/lca/lca-main.yaml
+US West (Oregon) |	us-west-2 | https://s3.us-west-2.amazonaws.com/aws-ml-blog-us-west-2/artifacts/lca/lca-main.yaml
+
+6. Choose **Next** and review the stack parameters. 
+7. Chose **Next** two more times.
+8. Check the blue boxes for creating IAM resources, and choose **Update stack** to start the update.
+
 
 ## Testing
 You can test this solution if you installed the demo asterisk server during deployment. To test, perform the following steps:
