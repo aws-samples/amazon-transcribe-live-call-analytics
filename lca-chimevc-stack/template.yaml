@@ -46,11 +46,10 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
-      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
-      If present, the specified Lambda function is invoked at the start of each call. 
-      The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
-      The function must return a True/False flag to indicate if the call should be processed or ignored, 
-      a mapped CallId, an AgentId, and may be extended to support additional features in future.
+      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or
+      'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively
+      choose calls to process, toggle agent/caller streams, assign AgentId, and/or modify values
+      for CallId and displayed phone numbers.
 
   DemoAsteriskDownloadUrl:
     Type: String

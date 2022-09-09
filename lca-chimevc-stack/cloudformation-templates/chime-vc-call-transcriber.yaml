@@ -153,7 +153,7 @@ Resources:
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
-          LAMBDA_HOOK_FUNCTION_ARN: SiprecLambdaHookFunctionArn
+          LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
       CodeUri: ../lambda_functions/call_transcriber
     Metadata:
       cfn_nag:

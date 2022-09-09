@@ -62,6 +62,7 @@ enum Channel {
 
 input CreateCallInput {
 	CallId: ID!
+	AgentId: String
 	CustomerPhoneNumber: String
 	SystemPhoneNumber: String
 	ExpiresAfter: AWSTimestamp

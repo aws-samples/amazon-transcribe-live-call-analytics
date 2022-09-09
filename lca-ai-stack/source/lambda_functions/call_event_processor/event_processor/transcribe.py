@@ -635,13 +635,7 @@ async def execute_process_event_api_mutation(
         "errors": [],
     }
 
-    # event_type_map = dict(
-    #     COMPLETED="ENDED", FAILED="ERRORED", ADD_TRANSCRIPT_SEGMENT="TRANSCRIBING", STARTED="STARTED"
-    # )
-    # event_type = event_type_map.get(message.get("EventType", ""), "")
-    # message_normalized = {**message, "EventType": event_type}
-
-    message_normalized["ExpiresAfter"] = get_ttl(),
+    message["ExpiresAfter"] = get_ttl()
     event_type = message.get("EventType", "")
 
     if event_type == "START":

@@ -195,6 +195,7 @@ const writeCallEventToKds = async function (callEvent) {
     CreatedAt: now,
     CustomerPhoneNumber: callEvent.detail.fromNumber,
     SystemPhoneNumber: callEvent.detail.toNumber,
+    AgentId: callEvent.detail.agentId,
     Channel: channel,
     EventType: eventType,
     StreamArn: callEvent.detail.streamArn,
@@ -620,19 +621,19 @@ const handler = async function (event, context) {
         Payload: JSON.stringify(event),
       });
       const lambdaResponse = await lambdaClient.send(invokeCmd);
-      const payload = JSON.parse(Buffer.from(data.Payload));
+      const payload = JSON.parse(Buffer.from(lambdaResponse.Payload));
       console.log(`LambdaHook response: ${JSON.stringify(payload)}`);
       if (lambdaResponse.FunctionError) {
         console.log('Lambda failed to run, throwing an exception');
-        throw new Error(lambdaResponse.Payload);
+        throw new Error(payload);
       }
       /* Process the response. Payload looks like this:
           {
             // all fields optional
             originalCallId: <string>,
             shouldProcessCall: <boolean>,
-            isCaller: <boolean>
-            callId: <string>
+            isCaller: <boolean>,
+            callId: <string>,
             agentId: <string>,
             fromNumber: <string>,
             toNumber: <string>
