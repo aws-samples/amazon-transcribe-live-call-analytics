@@ -560,7 +560,6 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
-        DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
   GENESYSAUDIOHOOKSTACK:

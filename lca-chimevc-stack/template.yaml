@@ -72,13 +72,7 @@ Parameters:
     Default: lca-mono-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
-
-  DynamoDbExpirationInDays:
-    Type: Number
-    Default: 90
-    Description: >-
-      Number of days set in the time to live of event data stored in the DynamoDB table
-    
+   
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -205,7 +199,6 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
-        DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
 Outputs:

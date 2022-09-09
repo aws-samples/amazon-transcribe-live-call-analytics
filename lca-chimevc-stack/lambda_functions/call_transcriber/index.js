@@ -35,8 +35,6 @@ const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
-const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || '90', 10);
-const PARTIAL_EXPIRATION = parseInt(process.env.PARTIAL_EXPIRATION || '1', 10);
 const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || 'true') === 'true';
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
@@ -79,7 +77,6 @@ const writeS3Url = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
 
   const now = new Date().toISOString();
-  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = 'ADD_S3_RECORDING_URL';
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
 
@@ -88,7 +85,6 @@ const writeS3Url = async function (callId) {
     RecordingUrl: recordingUrl,
     EventType: eventType.toString(),
     CreatedAt: now,
-    ExpiresAfter: expiration.toString(),
   };
 
   const putParams = {
@@ -151,7 +147,6 @@ const writeTranscriptionSegment = async function (
 
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
-  const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION) : getExpiration(EXPIRATION_IN_DAYS));
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putObj = {
@@ -166,7 +161,6 @@ const writeTranscriptionSegment = async function (
     IsPartial: result.IsPartial,
     EventType: eventType.toString(),
     CreatedAt: now,
-    ExpiresAfter: expiration.toString(),
   };
 
   const putParams = {
@@ -184,14 +178,12 @@ const writeTranscriptionSegment = async function (
 
 const writeCallEventToKds = async function (callEvent) {
   const startTime = new Date(callEvent.detail.startTime);
-  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
 
   const putObj = {
     CallId: callEvent.detail.callId,
-    ExpiresAfter: expiration.toString(),
     CreatedAt: now,
     CustomerPhoneNumber: callEvent.detail.fromNumber,
     SystemPhoneNumber: callEvent.detail.toNumber,
@@ -215,7 +207,6 @@ const writeCallEventToKds = async function (callEvent) {
 
 const writeStatusToKds = async function (channel, status, callId, streamArn, transactionId) {
   const now = new Date().toISOString();
-  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const putObj = {
     CallId: callId,
     Channel: channel,
@@ -223,7 +214,6 @@ const writeStatusToKds = async function (channel, status, callId, streamArn, tra
     TransactionId: transactionId,
     EventType: status,
     CreatedAt: now,
-    ExpiresAfter: expiration.toString(),
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
@@ -239,7 +229,7 @@ const writeStatusToKds = async function (channel, status, callId, streamArn, tra
 };
 const writeCallEventToDynamo = async function (callEvent) {
     const startTime = new Date(callEvent.detail.startTime);
-    const expiration = getExpiration(EXPIRATION_IN_DAYS);
+    const expiration = getExpiration(1);
     const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
     const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
     const now = new Date().toISOString();
