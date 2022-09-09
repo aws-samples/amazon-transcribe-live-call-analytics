@@ -607,6 +607,11 @@ Outputs:
       - !GetAtt CHIMEVCSTACK.Outputs.AsteriskInstanceId
       - 'Demo Asterisk PBX not enabled'
 
+  CallDataStreamArn:
+    Description: >-
+      The ARN of Kinesis Data Stream for sending Call and Transcription events.
+    Value: !GetAtt AISTACK.Outputs.CallDataStreamArn
+
   DemoPBXIPAddress:
     Description: Demo Asterisk Server IP Address
     Value: !If
