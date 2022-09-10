@@ -75,7 +75,7 @@ If your function response sets `shouldProcessCall` to `false` the CallTranscribe
 
 ## Register the Lambda function with LCA
 
-Use the LCA CloudFormation template parameter **Lambda function ARN for SIPREC (existing)** to the ARN value for your custom Lambda hook function when ceating a new LCA stack, or when updating an existing one. You find the ARN for your Lambda in the AWS Lambda console - it has this format:
+Use the LCA CloudFormation template parameter **Lambda function ARN for SIPREC (existing)** to set the ARN value for your custom Lambda hook function when ceating a new LCA stack, or when updating an existing one. You find the ARN for your Lambda in the AWS Lambda console - it has this format:
 ```
 arn:aws:lambda:us-east-1:<accountId>:function:<functionName>
 ```
