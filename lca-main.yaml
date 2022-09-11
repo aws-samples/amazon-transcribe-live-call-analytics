@@ -239,7 +239,7 @@ Parameters:
     Type: Number
     Default: 90
     Description: >-
-      Number of days set in the time to live of event data stored in the DynamoDB table
+      Number of days to retain call records. Records will be automatically deleted from LCA after this time.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -292,6 +292,10 @@ Metadata:
         Parameters:
           - CloudFrontPriceClass
           - CloudFrontAllowedGeos
+      - Label:
+          default: Record retention
+        Parameters:
+          - DynamoDbExpirationInDays
     ParameterLabels:
       S3BucketName:
         default: Call Audio Recordings Bucket Name
@@ -308,13 +312,19 @@ Metadata:
       SiprecAllowedCidrList:
         default: Allowed CIDR List for SIPREC Integration
       SiprecLambdaHookFunctionArn:
-        default: Lambda function ARN for SIPREC (existing)
+        default: Lambda Hook Function ARN for SIPREC Call Initialization (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
       AgentAssistOption:
         default: Enable Agent Assist
       AgentAssistExistingKendraIndexId:
         default: Agent Assist Kendra IndexId (existing)
+      AgentAssistExistingLexV2BotId:
+        default: Agent Assist LexV2 BotId (existing)
+      AgentAssistExistingLexV2BotAliasId:
+        default: Agent Assist LexV2 Bot AliasId (existing)
+      AgentAssistExistingLambdaFunctionArn:
+        default: Agent Assist Lambda Function ARN (existing)
       IsContentRedactionEnabled:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
@@ -335,6 +345,8 @@ Metadata:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
         default: CloudFront Allowed Geographies
+      DynamoDbExpirationInDays:
+        default: Record Expiration In Days
 
 Conditions:
   ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
