@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2022-09-11
+### Added
+- AgentID call attribute and associated API support for setting, displaying, sorting, and filtering calls by Agent. See [Setting AgentId](./lca-chimevc-stack/SettingAgentId.md).
+- AgentId field automatically assigned from Amazon Connect contact events when using `Amazon Connect Contact Lens` as the Call Audo Source.
+- Support for custom logic via a user provided Lambda function to selectively choose which calls to process, toggle agent/caller streams, assign AgentId to call, and/or modify values for CallId and displayed phone numbers. See [Lambda Hook Function for SIPREC Call Initialization](./lca-chimevc-stack/LambdaHookFunction.md).
+- Configurable retention period for call records (default 90 days). Records and transcripts that are older than this number of days are permanently deleted.
+- UI supports new 'Load: 2 hrs' option for improved performance in high volume contact centers.
+### Changed
+- Moved transcriber Lambda out of AI stack and into ChimeVC stack.
+- Remove code for call event stream processing lambda no longer used since LCA v0.4.0.
+- Rename TranscriptProcessorLambda to CallEventProcessorLambda to reflect that it will process call analytics and contact metadata events in addition to transcripts.
+- Rename lca-ai-stack CF template.
+- Asterisk demo server reinstalled on instance reboot such as during stack updates containing Asterisk configuration or version changes.
+- Asterisk demo installation script is no longer dependent on hardcoded Asterisk version.
+- Asterisk demo server is reloaded each hour to resolve observed busy tones in previous releases.
+- Default Asterisk demo server version is now v19.
+- DynamoDB event sourcing table now maintains only one item per transcript segment and no longer maintains partial segments.
+- ChimeVC CallTranscriber Lambda function now emits one Call START event when both call streams are ready (as opposed to one per call stream), eliminating 'item already exists' errors in the CallEventProcessorLambda lambda
+- ChimeVC CallTranscriber Lambda function memory footprint reduced to 768MB to improve cost efficiency with minimal latency tradeoff.
+- README updates
+
 ## [0.4.1] - 2022-07-15
 ### Changed
 - Remove E.164 type enforcement on CustomerPhoneNumber and SystemPhoneNumber. Any string value is now allowed, enabling calls to be processed when either/both CustomerPhoneNumber and SystemPhoneNumber fields are non E.164 strings.
@@ -101,7 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.1...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...develop
+[0.5.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.2.1...v0.3.0
