@@ -65,7 +65,7 @@ CF Launch URL: https://us-east-1.console.aws.amazon.com/cloudformation/home?regi
 CLI Deploy: aws cloudformation deploy --region us-east-1 --template-file /tmp/lca/lca-main.yaml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AdminEmail='jdoe@example.com' installDemoAsteriskServer=true
 ```
 
-### Deploy
+### Deploy a new stack
 
 Start your LCA experience by using AWS CloudFormation to deploy the sample solution with the built-in demo mode enabled.
 
@@ -89,10 +89,11 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     3. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI
     4. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testing Chime Voice Connector streaming
     5. `Allowed CIDR Block for Demo Softphone` - Ignored if `Call Audio Source` is not set to `Demo Asterisk PBX Server`. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24'
-    6. `Allowed CIDR List for Siprec Integration` - Ignored if `Call Audio Source ` is not set to `Demo Asterisk PBX Server`. Comma delimited list of CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24'
+    6. `Allowed CIDR List for SIPREC Integration` - Ignored if `Call Audio Source ` is not set to `Demo Asterisk PBX Server`. Comma delimited list of CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24'
+    7. `Lambda Hook Function ARN for SIPREC Call Initialization (existing)` - Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or 'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively choose calls to process, toggle agent/caller streams, assign AgentId, and/or modify values for CallId and displayed phone numbers. See [LambdaHookFunction.md](./lca-chimevc-stack/LambdaHookFunction.md).
     7. `Amazon Connect instance ARN (existing)` - Ignored if `Call Audio Source ` is not set to `Amazon Connect Contact Lens`. Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md).
     8. `Enable Agent Assist` - Choose `QnABot on AWS with new Kendra Index (Developer Edition)` to automatically install all the components and demo configuration needed to experiment with the new Agent Assist capabilities of LCA. See [Agent Assist README](/lca-agentassist-setup-stack/README.md). If you want to integrate LCA with your own agent assist bots or knowledge bases using either Amazon Lex or your own custom implementations, choose `Bring your own LexV2 bot` or `Bring your own AWS Lambda function`. Or choose `Disable` if you do not want any agent assistant capabilities.
-    9. `AgentAssistExistingKendraIndexId`, `AgentAssistExistingLexV2BotId`, `AgentAssistExistingLexV2BotAliasId`, and `AgentAssistExistingLambdaFunctionArn` - empty by default, but must be populated as described depending on the option chosen for `Enable Agent Assist`.
+    9. `Agent Assist Kendra IndexId (existing)`, `Agent Assist LexV2 BotId (existing)`, `Agent Assist LexV2 Bot AliasId (existing)`, and `Agent Assist Lambda Function ARN (existing)` - empty by default, but must be populated as described depending on the option chosen for `Enable Agent Assist`.
     10. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
     11. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
     12. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
@@ -106,12 +107,32 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     URL for audio (agent.wav) file download for demo Asterisk server. Audio file is automatically played when an agent is not connected with a softphone
     20. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
     21. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
+    22. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**.  This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
     1. The admin user will receive a temporary password and the link to the CloudFront URL of the web UI (this can take a few minutes). The output of the CloudFormation stack creation will also provide a CloudFront URL (in the **Outputs** table of the stack details page). Click the link or copy and paste the CloudFront URL into your browser. **NOTE:** this page may not be available while the stack is completing the deployment
     2. You can sign into your application using the admin email address as the username and the temporary password you received via email. The web UI will prompt you to provide your permanent password. The user registration/login experience is run in your AWS account, and the supplied credentials are stored in Amazon Cognito. *Note: given that this is a demo application, we highly suggest that you do not use an email and password combination that you use for other purposes (such as an AWS account, email, or e-commerce site).*.
     3. Once you provide your credentials, you will be prompted to verify the email address. You can verify your account at a later time by clicking the Skip link. Otherwise, you will receive a verification code at the email address you provided (this can take a few minutes). Upon entering this verification code in the web UI, you will be signed into the application.
+
+### Update an existing stack
+
+1. Log into the [AWS console](https://console.aws.amazon.com/) if you are not already.
+*Note: If you are logged in as an IAM user, ensure your account has permissions to create and manage the necessary resources and components for this application.*
+2. Select your existing LiveCallAnaytics stack
+3. Choose **Update**
+4. Choose **Replace current template**
+5. Use one of the **published template** below for your region, or use the **Template URL** output of the publish.sh script if you have build your own artifacts from the repository:
+
+Region name | Region code | Template URL
+--- | --- | ---
+US East (N. Virginia) | us-east-1 | https://s3.us-east-1.amazonaws.com/aws-ml-blog-us-east-1/artifacts/lca/lca-main.yaml
+US West (Oregon) |	us-west-2 | https://s3.us-west-2.amazonaws.com/aws-ml-blog-us-west-2/artifacts/lca/lca-main.yaml
+
+6. Choose **Next** and review the stack parameters. 
+7. Chose **Next** two more times.
+8. Check the blue boxes for creating IAM resources, and choose **Update stack** to start the update.
+
 
 ## Testing
 You can test this solution if you installed the demo asterisk server during deployment. To test, perform the following steps:

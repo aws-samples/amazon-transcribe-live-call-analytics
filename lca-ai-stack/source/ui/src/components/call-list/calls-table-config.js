@@ -26,6 +26,12 @@ export const COLUMN_DEFINITIONS_MAIN = [
     width: 325,
   },
   {
+    id: 'agentId',
+    header: 'Agent',
+    cell: (item) => item.agentId,
+    sortingField: 'agentId',
+  },
+  {
     id: 'initiationTimeStamp',
     header: 'Initiation Timestamp',
     cell: (item) => item.initiationTimeStamp,
@@ -83,7 +89,7 @@ export const COLUMN_DEFINITIONS_MAIN = [
   },
 ];
 
-export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[1];
+export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[2];
 
 export const SELECTION_LABELS = {
   itemSelectionLabel: (data, row) => `select ${row.callId}`,
@@ -102,6 +108,7 @@ const VISIBLE_CONTENT_OPTIONS = [
     label: 'Call list properties',
     options: [
       { id: 'callId', label: 'Call ID', editable: false },
+      { id: 'agentId', label: 'Agent' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
       { id: 'recordingStatus', label: 'Status' },
@@ -115,6 +122,7 @@ const VISIBLE_CONTENT_OPTIONS = [
 ];
 
 const VISIBLE_CONTENT = [
+  'agentId',
   'initiationTimeStamp',
   'callerPhoneNumber',
   'recordingStatus',
@@ -162,6 +170,7 @@ export const CallsPreferences = ({
 // number of shards per day used by the list calls API
 export const CALL_LIST_SHARDS_PER_DAY = 6;
 const TIME_PERIOD_DROPDOWN_CONFIG = {
+  'refresh-2h': { count: 0.5, text: '2 hrs' },
   'refresh-4h': { count: 1, text: '4 hrs' },
   'refresh-8h': { count: CALL_LIST_SHARDS_PER_DAY / 3, text: '8 hrs' },
   'refresh-1d': { count: CALL_LIST_SHARDS_PER_DAY, text: '1 day' },

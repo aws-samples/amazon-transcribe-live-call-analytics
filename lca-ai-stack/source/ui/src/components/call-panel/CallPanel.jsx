@@ -64,6 +64,15 @@ const CallAttributes = ({ item, setToolsOpen }) => (
       <SpaceBetween size="xs">
         <div>
           <Box margin={{ bottom: 'xxxs' }} color="text-label">
+            <strong>Agent</strong>
+          </Box>
+          <div>{item.agentId}</div>
+        </div>
+      </SpaceBetween>
+
+      <SpaceBetween size="xs">
+        <div>
+          <Box margin={{ bottom: 'xxxs' }} color="text-label">
             <strong>Initiation Timestamp</strong>
           </Box>
           <div>{item.initiationTimeStamp}</div>

@@ -15,12 +15,6 @@ Parameters:
     Default: lca-mono-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
-
-  DynamoDbExpirationInDays:
-    Type: Number
-    Default: 90
-    Description: >-
-      Number of days set in the time to live of event data stored in the DynamoDB table
     
   KinesisDataStreamName:
     Type: String
@@ -95,6 +89,17 @@ Parameters:
     Description: >-
       The name of the vocabulary to use when processing the transcription job. Leave blank if no
       custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+
+  SiprecLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
+      If present, the specified Lambda function is invoked at the start of each call. 
+      The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
+      The function must return a True/False flag to indicate if the call should be processed or ignored, 
+      a mapped CallId, an AgentId, and may be extended to support additional features in future.
         
 Resources:
   ##########################################################################
@@ -126,7 +131,6 @@ Resources:
           LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTableName
-          EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
           RECORDING_FILE_PREFIS3BucketNameX: !Ref AudioFilePrefix
@@ -142,6 +146,7 @@ Resources:
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
+          LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
       CodeUri: ../lambda_functions/call_transcriber
     Metadata:
       cfn_nag:
@@ -224,6 +229,13 @@ Resources:
                   - !Sub
                     - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName
+              - !If 
+                - ShouldEnableLambdaHook
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource: !Sub "${SiprecLambdaHookFunctionArn}"
+                - Ref: AWS::NoValue
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -291,3 +303,4 @@ Conditions:
   ShouldEnableContentRedaction: !And
   - !Equals [!Ref IsContentRedactionEnabled, 'true']
   - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+  ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]

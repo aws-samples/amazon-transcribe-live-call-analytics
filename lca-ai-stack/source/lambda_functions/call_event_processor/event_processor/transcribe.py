@@ -3,7 +3,7 @@
 """ Transcribe API Mutation Processor
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
@@ -89,6 +89,11 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
 
+# Get value for DynamboDB TTL field
+DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
+def get_ttl():
+    return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
+
 ##########################################################################
 # Transcripts
 ##########################################################################
@@ -118,6 +123,7 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
         Transcript=transcript,
         IsPartial=is_partial,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         Status="TRANSCRIBING",
     )
 
@@ -324,6 +330,39 @@ async def execute_add_s3_recording_mutation(
         DSLMutation(
             schema.Mutation.updateRecordingUrl.args(
                 input={**message, "RecordingUrl": recording_url}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
+
+async def execute_update_agent_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    agentId = message.get("AgentId")
+    if not agentId:
+        error_message = "AgentId doesn't exist in UPDATE_AGENT event"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateAgent.args(
+                input={**message, "AgentId": agentId}
             ).select(*call_fields(schema))
         )
     )
@@ -596,12 +635,7 @@ async def execute_process_event_api_mutation(
         "errors": [],
     }
 
-    # event_type_map = dict(
-    #     COMPLETED="ENDED", FAILED="ERRORED", ADD_TRANSCRIPT_SEGMENT="TRANSCRIBING", STARTED="STARTED"
-    # )
-    # event_type = event_type_map.get(message.get("EventType", ""), "")
-    # message_normalized = {**message, "EventType": event_type}
-
+    message["ExpiresAfter"] = get_ttl()
     event_type = message.get("EventType", "")
 
     if event_type == "START":
@@ -671,7 +705,6 @@ async def execute_process_event_api_mutation(
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
-            # *add_contact_lens_agent_assist_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
             return_exceptions=True,
@@ -687,6 +720,18 @@ async def execute_process_event_api_mutation(
         # ADD S3 RECORDING URL 
         LOGGER.debug("Add recording url")
         response = await execute_add_s3_recording_mutation(
+                                message=message,
+                                appsync_session=appsync_session
+                        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
+
+    elif event_type == "UPDATE_AGENT":
+        # UPDATE AGENT 
+        LOGGER.debug("Update AgentId for call")
+        response = await execute_update_agent_mutation(
                                 message=message,
                                 appsync_session=appsync_session
                         )
