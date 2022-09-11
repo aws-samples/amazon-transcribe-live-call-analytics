@@ -192,19 +192,16 @@ Resources:
             return False
             
           def addBotToAistack(props, oldprops):
-            if propsChanged(props, oldprops, ["AISTACK", "LexAgentAssistBotId", "LexAgentAssistAliasId"]):
-              callEventProcessorFunction = getStackResource(props["AISTACK"], "CallEventProcessorFunction")
-              response = lam.get_function_configuration(FunctionName=callEventProcessorFunction)
-              envVars = response["Environment"]["Variables"]
-              envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
-              envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
-              response = lam.update_function_configuration(
-                FunctionName=callEventProcessorFunction,
-                Environment={"Variables":envVars}
-                )
-              print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
-            else:
-              print("Lex info unchanged - skipping CallEventProcessorFunction Environment variable update.")
+            callEventProcessorFunction = getStackResource(props["AISTACK"], "CallEventProcessorFunction")
+            response = lam.get_function_configuration(FunctionName=callEventProcessorFunction)
+            envVars = response["Environment"]["Variables"]
+            envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
+            envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
+            response = lam.update_function_configuration(
+              FunctionName=callEventProcessorFunction,
+              Environment={"Variables":envVars}
+              )
+            print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
 
           def setupQnABot(props, oldprops):
             if propsChanged(props, oldprops, ["QNABOTSTACK", "KendraIndexId", "QnaAgentAssistDemoWebCrawlURLs"]):
