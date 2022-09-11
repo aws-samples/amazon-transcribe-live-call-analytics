@@ -107,7 +107,7 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     URL for audio (agent.wav) file download for demo Asterisk server. Audio file is automatically played when an agent is not connected with a softphone
     20. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
     21. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
-    22. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and trasncripts that are older than this number of days are permanently deleted.
+    22. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**.  This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
