@@ -27,6 +27,7 @@ const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
 
 const mergeFiles = require('./mergeFiles');
 const { KinesisClient, PutRecordCommand } = require('@aws-sdk/client-kinesis');
+const { createHook } = require('async_hooks');
 
 const REGION = process.env.REGION || 'us-east-1';
 const { EVENT_SOURCING_TABLE_NAME } = process.env;
@@ -34,8 +35,6 @@ const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
-const EXPIRATION_IN_DAYS = parseInt(process.env.EXPIRATION_IN_DAYS || '90', 10);
-const PARTIAL_EXPIRATION = parseInt(process.env.PARTIAL_EXPIRATION || '1', 10);
 const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || 'true') === 'true';
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
@@ -46,6 +45,7 @@ const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
 const KINESIS_STREAM_ARN = process.env.KINESIS_STREAM_ARN || '';
+const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -77,7 +77,6 @@ const writeS3Url = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
 
   const now = new Date().toISOString();
-  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = 'ADD_S3_RECORDING_URL';
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
 
@@ -86,7 +85,6 @@ const writeS3Url = async function (callId) {
     RecordingUrl: recordingUrl,
     EventType: eventType.toString(),
     CreatedAt: now,
-    ExpiresAfter: expiration.toString(),
   };
 
   const putParams = {
@@ -149,7 +147,6 @@ const writeTranscriptionSegment = async function (
 
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
-  const expiration = (result.IsPartial === true ? getExpiration(PARTIAL_EXPIRATION) : getExpiration(EXPIRATION_IN_DAYS));
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putObj = {
@@ -164,7 +161,6 @@ const writeTranscriptionSegment = async function (
     IsPartial: result.IsPartial,
     EventType: eventType.toString(),
     CreatedAt: now,
-    ExpiresAfter: expiration.toString(),
   };
 
   const putParams = {
@@ -182,17 +178,16 @@ const writeTranscriptionSegment = async function (
 
 const writeCallEventToKds = async function (callEvent) {
   const startTime = new Date(callEvent.detail.startTime);
-  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
 
   const putObj = {
     CallId: callEvent.detail.callId,
-    ExpiresAfter: expiration.toString(),
     CreatedAt: now,
     CustomerPhoneNumber: callEvent.detail.fromNumber,
     SystemPhoneNumber: callEvent.detail.toNumber,
+    AgentId: callEvent.detail.agentId,
     Channel: channel,
     EventType: eventType,
     StreamArn: callEvent.detail.streamArn,
@@ -212,7 +207,6 @@ const writeCallEventToKds = async function (callEvent) {
 
 const writeStatusToKds = async function (channel, status, callId, streamArn, transactionId) {
   const now = new Date().toISOString();
-  const expiration = getExpiration(EXPIRATION_IN_DAYS);
   const putObj = {
     CallId: callId,
     Channel: channel,
@@ -220,7 +214,6 @@ const writeStatusToKds = async function (channel, status, callId, streamArn, tra
     TransactionId: transactionId,
     EventType: status,
     CreatedAt: now,
-    ExpiresAfter: expiration.toString(),
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
@@ -236,7 +229,7 @@ const writeStatusToKds = async function (channel, status, callId, streamArn, tra
 };
 const writeCallEventToDynamo = async function (callEvent) {
     const startTime = new Date(callEvent.detail.startTime);
-    const expiration = getExpiration(EXPIRATION_IN_DAYS);
+    const expiration = getExpiration(1);
     const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
     const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
     const now = new Date().toISOString();
@@ -550,7 +543,7 @@ const handler = async function (event, context) {
   }
 
   console.log(JSON.stringify(event));
-  await writeCallEventToKds(event);
+
   if (EVENT_TYPE[event.detail.streamingStatus] == "START") await writeCallEventToDynamo(event);
 
   let result;
@@ -606,6 +599,80 @@ const handler = async function (event, context) {
         return;
       }
     }
+
+    // Call customer LambdaHook, if present
+    if (LAMBDA_HOOK_FUNCTION_ARN) {
+      // invoke lambda function
+      // if it fails, just throw an exception and exit
+      console.log(`Invoking LambdaHook: ${LAMBDA_HOOK_FUNCTION_ARN}`);
+      const invokeCmd = new InvokeCommand({
+        FunctionName: LAMBDA_HOOK_FUNCTION_ARN,
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify(event),
+      });
+      const lambdaResponse = await lambdaClient.send(invokeCmd);
+      const payload = JSON.parse(Buffer.from(lambdaResponse.Payload));
+      console.log(`LambdaHook response: ${JSON.stringify(payload)}`);
+      if (lambdaResponse.FunctionError) {
+        console.log('Lambda failed to run, throwing an exception');
+        throw new Error(payload);
+      }
+      /* Process the response. Payload looks like this:
+          {
+            // all fields optional
+            originalCallId: <string>,
+            shouldProcessCall: <boolean>,
+            isCaller: <boolean>,
+            callId: <string>,
+            agentId: <string>,
+            fromNumber: <string>,
+            toNumber: <string>
+          }
+      */
+
+      // Should we process this call?
+      if (payload.shouldProcessCall === false) {
+        console.log('Lambda hook returned shouldProcessCall=false, exiting.');
+        return;
+      }
+      if (payload.shouldProcessCall === true) {
+        console.log('Lambda hook returned shouldProcessCall=true, continuing.');
+      }
+
+      // New CallId?
+      if (payload.callId) {
+        console.log(`Lambda hook returned new callId: "${payload.callId}"`);
+        event.detail.callId = payload.callId;
+      }
+
+      // Swap caller and agent channels?
+      if (payload.isCaller === false) {
+        console.log(`Lambda hook returned isCaller=false, swapping caller/agent streams`);
+        [streamResults.agentStreamArn, streamResults.callerStreamArn] = [streamResults.callerStreamArn, streamResults.agentStreamArn];
+      }
+      if (payload.isCaller === true) {
+        console.log(`Lambda hook returned isCaller=true, caller/agent streams not swapped`);
+      }
+
+      // AgentId?
+      if (payload.agentId) {
+        console.log(`Lambda hook returned agentId: "${payload.agentId}"`);
+        event.detail.agentId = payload.agentId;
+      }
+
+      // New 'to' or 'from' phone numbers?
+      if (payload.fromNumber) {
+        console.log(`Lambda hook returned fromNumber: "${payload.fromNumber}"`);
+        event.detail.fromNumber = payload.fromNumber;
+      }
+      if (payload.toNumber) {
+        console.log(`Lambda hook returned toNumber: "${payload.toNumber}"`);
+        event.detail.toNumber = payload.toNumber;
+      }
+
+    }
+
+    await writeCallEventToKds(event);
 
     result = await go(
       event.detail.callId,

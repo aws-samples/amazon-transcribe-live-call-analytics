@@ -3,7 +3,7 @@
 """ Contact Lens API Mutation Processor
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
@@ -14,6 +14,7 @@ import json
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
 from gql.dsl import DSLMutation, DSLSchema, dsl_gql
+from graphql.language.printer import print_ast
 
 # imports from Lambda layer
 # pylint: disable=import-error
@@ -58,6 +59,11 @@ DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+180055
 DEFAULT_SYSTEM_PHONE_NUMBER = getenv("DEFAULT_SYSTEM_PHONE_NUMBER", "+18005551111")
 CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
 CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
+
+# Get value for DynamboDB TTL field
+DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
+def get_ttl():
+    return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
 
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
@@ -111,6 +117,7 @@ def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
         (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(instanceId, contactId)
         return dict(
             CallId=call_id,
+            ExpiresAfter=get_ttl(),
             CustomerPhoneNumber=customer_phone_number,
             SystemPhoneNumber=system_phone_number,
         )
@@ -121,6 +128,7 @@ def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
         CallId=call_id,
         Status=event_type,
         UpdatedAt=updated_at,
+        ExpiresAfter=get_ttl(),
     )
 
 
@@ -144,6 +152,7 @@ async def update_call_status(
     }
 
     if event_type == "STARTED":
+        LOGGER.debug("CREATE CALL") 
         query = dsl_gql(
             DSLMutation(
                 schema.Mutation.createCall.args(input=status).select(schema.CreateCallOutput.CallId)
@@ -162,13 +171,46 @@ async def update_call_status(
             client_session=appsync_session,
             logger=LOGGER,
         )
-        LOGGER.debug("appsync mutation response", extra=dict(response=response))
+        query_string = print_ast(query)
+        LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
         return_value["successes"].append(response)
     except Exception as error:  # pylint: disable=broad-except
         return_value["errors"].append(error)
 
     return return_value
 
+async def execute_update_agent_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    agentId = message.get("AgentId")
+    if not agentId:
+        error_message = "AgentId doesn't exist in UPDATE_AGENT event"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateAgent.args(
+                input={**message, "AgentId": agentId}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    response = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
+
+    return response
 
 ##########################################################################
 # Transcripts
@@ -224,6 +266,7 @@ def transform_segment_to_add_transcript(segment: Dict) -> Dict[str, object]:
         CallId=call_id,
         Channel=channel,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         EndTime=end_time,
         IsPartial=is_partial,
         SegmentId=segment_id,
@@ -312,6 +355,7 @@ def transform_segment_to_categories_agent_assist(
         CallId=call_id,
         Channel=channel,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         EndTime=end_time,
         IsPartial=is_partial,
         SegmentId=segment_id,
@@ -350,6 +394,7 @@ def transform_segment_to_issues_agent_assist(
         CallId=call_id,
         Channel=channel,
         CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
         EndTime=end_time,
         IsPartial=is_partial,
         SegmentId=segment_id,
@@ -728,6 +773,7 @@ def add_lambda_agent_assistances(
                         CallId=call_id,
                         Channel=channel,
                         CreatedAt=created_at,
+                        ExpiresAfter=get_ttl(),
                         EndTime=end_time,
                         IsPartial=is_partial,
                         SegmentId=segment_id,
@@ -761,6 +807,7 @@ def add_lambda_agent_assistances(
                         CallId=call_id,
                         Channel=channel,
                         CreatedAt=created_at,
+                        ExpiresAfter=get_ttl(),
                         EndTime=end_time,
                         IsPartial=is_partial,
                         SegmentId=segment_id,
@@ -836,7 +883,7 @@ async def execute_process_event_api_mutation(
 
     # maps from Contact Lens event status to LCA status
     event_type_map = dict(
-        COMPLETED="ENDED", FAILED="ERRORED", SEGMENTS="TRANSCRIBING", STARTED="STARTED"
+        COMPLETED="ENDED", FAILED="ERRORED", SEGMENTS="TRANSCRIBING", STARTED="STARTED", UPDATE_AGENT="UPDATE_AGENT"
     )
     msg_event_type = message.get("EventType", "")
     event_type = event_type_map.get(msg_event_type, "")
@@ -890,6 +937,13 @@ async def execute_process_event_api_mutation(
             message=message_normalized,
             appsync_session=appsync_session,
         )
+    
+    elif event_type in ["UPDATE_AGENT"]:
+        return_value = await execute_update_agent_mutation(
+            message=message_normalized,
+            appsync_session=appsync_session,
+        )
+
     else:
         LOGGER.warning("unknown event type [%s] (message event type [%s])", event_type, msg_event_type)
 

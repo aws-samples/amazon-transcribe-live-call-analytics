@@ -13,6 +13,7 @@
 # limitations under the License.
 
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with Asterisk demo server
 
@@ -32,7 +33,7 @@ Parameters:
     ConstraintDescription: Must be a valid public CIDR block in the form x.x.x.x/y
   DemoAsteriskDownloadUrl:
     Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-18-current.tar.gz
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
     Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
   DemoAsteriskAgentAudioURL:
     Type: String
@@ -47,8 +48,7 @@ Parameters:
     AllowedValues:
       - true
       - false
-Conditions:
-  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
+
 Resources:
   AsteriskVPC:
     Type: AWS::EC2::VPC
@@ -610,11 +610,35 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'AsteriskInstance-${AWS::StackName}'
+      # Use Multi-part MIME user data so we can set config to run userdata always on instance reboot.
+      # See: https://aws.amazon.com/premiumsupport/knowledge-center/execute-user-data-ec2/
       UserData:
         Fn::Base64: !Sub |
-          #!/bin/bash -xe
+          Content-Type: multipart/mixed; boundary="//"
+          MIME-Version: 1.0
 
-          # trap errors and handle cfn signals
+          --//
+          Content-Type: text/cloud-config; charset="us-ascii"
+          MIME-Version: 1.0
+          Content-Transfer-Encoding: 7bit
+          Content-Disposition: attachment; filename="cloud-config.txt"
+
+          #cloud-config
+          cloud_final_modules:
+          - [scripts-user, always]
+
+          --//
+          Content-Type: text/x-shellscript; charset="us-ascii"
+          MIME-Version: 1.0
+          Content-Transfer-Encoding: 7bit
+          Content-Disposition: attachment; filename="userdata.txt"
+
+          #!/bin/bash -xe
+          echo "remove old userdata for upgraded servers, if it exists"
+          rm -f /var/lib/cloud/instance/scripts/part-001 
+          echo ====================================
+          echo trap errors and handle cfn signals
+          echo ====================================
           completed=0
           function error_exit
           {
@@ -623,24 +647,38 @@ Resources:
               local exit_code=${!2:-1}
               local troubleshoot=${Ec2Troubleshoot}
               [[ $troubleshoot == 'false' ]] && {
-                /opt/aws/bin/cfn-signal -e $exit_code -r "$error_reason" '${InstanceInitWaitHandle}'
+                /opt/aws/bin/cfn-signal -e $exit_code -r "$error_reason" '${InstanceInitWaitHandle}' || true
                 exit $exit_code
               }
             fi
-            /opt/aws/bin/cfn-signal --success true '${InstanceInitWaitHandle}'
+            /opt/aws/bin/cfn-signal --success true '${InstanceInitWaitHandle}' || true
           }
           trap error_exit EXIT
 
+          echo ================================
+          echo install OS updates and packages
+          echo ================================
           HOMEDIR=/home/ec2-user
           yum update -y
           yum install -y aws-cfn-bootstrap
           yum install net-tools -y
           yum install wget -y
           yum -y install make gcc gcc-c++ make subversion libxml2-devel ncurses-devel openssl-devel vim-enhanced man glibc-devel autoconf libnewt kernel-devel kernel-headers linux-headers openssl-devel zlib-devel libsrtp libsrtp-devel uuid libuuid-devel mariadb-server jansson-devel libsqlite3x libsqlite3x-devel epel-release.noarch bash-completion bash-completion-extras unixODBC unixODBC-devel libtool-ltdl libtool-ltdl-devel mysql-connector-odbc mlocate libiodbc sqlite sqlite-devel sql-devel.i686 sqlite-doc.noarch sqlite-tcl.x86_64 patch libedit-devel jq
-          cd /tmp
-          wget ${DemoAsteriskDownloadUrl}
-          tar xvzf asterisk-18-current.tar.gz 
-          cd asterisk-18*/
+
+          echo ================================
+          echo Download and extract asterisk
+          echo ================================
+          tmpdir=/tmp/asterisk
+          rm -fr $tmpdir
+          mkdir -p $tmpdir
+          cd $tmpdir
+          wget -O asterisk.tar.gz ${DemoAsteriskDownloadUrl}
+          tar xvzf asterisk.tar.gz
+
+          echo ================================
+          echo Build and install asterisk
+          echo ================================
+          cd asterisk-*
           ./configure --libdir=/usr/lib64 --with-jansson-bundled
           make menuselect.makeopts
           menuselect/menuselect \
@@ -657,9 +695,16 @@ Resources:
           touch /etc/redhat-release
           make config
           ldconfig
-          echo '0 1 * * * /sbin/asterisk -rx "core reload"' > /etc/asterisk/crontab.txt
+
+          echo =========================================
+          echo Create crontab to reload asterisk hourly
+          echo =========================================
+          echo '0 * * * * /sbin/asterisk -rx "core reload"' > /etc/asterisk/crontab.txt # every hour (doesn't disrupt in-progress calls)
           crontab /etc/asterisk/crontab.txt
 
+          echo ================================
+          echo Create asterisk configuration
+          echo ================================
           PASSWORD=$( curl http://169.254.169.254/latest/meta-data/instance-id)
           IP=$( curl http://169.254.169.254/latest/meta-data/public-ipv4 )
           REGION=$( curl http://169.254.169.254/latest/meta-data/placement/region )
@@ -760,17 +805,23 @@ Resources:
           console = verbose,notice,warning,error
           messages = notice,warning,error" > /etc/asterisk/logger.conf
 
-          groupadd asterisk
-          useradd -r -d /var/lib/asterisk -g asterisk asterisk
+          groupadd asterisk || echo "Group already exists"
+          useradd -r -d /var/lib/asterisk -g asterisk asterisk || echo "User already exists"
           usermod -aG audio,dialout asterisk
           chown -R asterisk.asterisk /etc/asterisk
           chown -R asterisk.asterisk /var/lib/asterisk
           chown -R asterisk.asterisk /var/log/asterisk
           chown -R asterisk.asterisk /var/spool/asterisk
 
-          systemctl start asterisk
+          echo ================================
+          echo Start asterisk and exit
+          echo ================================
+          systemctl restart asterisk
           completed=1
           exit
+
+          --//--
+
     DependsOn:
       - InstanceDefaultPolicy
       - InstanceRole
@@ -793,6 +844,9 @@ Resources:
         Ref: EIP
       InstanceId:
         Ref: AsteriskInstance
+
+Conditions:
+  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
 
 Outputs:
   IPAddress:

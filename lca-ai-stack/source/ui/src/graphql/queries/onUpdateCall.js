@@ -8,6 +8,7 @@ export default gql`
       PK
       SK
       CallId
+      AgentId
       Status
       UpdatedAt
       CreatedAt

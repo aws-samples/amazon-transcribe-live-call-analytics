@@ -41,15 +41,113 @@ Parameters:
       Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
+  SiprecLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or
+      'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively
+      choose calls to process, toggle agent/caller streams, assign AgentId, and/or modify values
+      for CallId and displayed phone numbers.
+
   DemoAsteriskDownloadUrl:
     Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-18-current.tar.gz
+    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
     Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
 
   DemoAsteriskAgentAudioURL:
     Type: String
     Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
+
+  AudioFilePrefix:
+    Type: String
+    Default: lca-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
+
+  MonoAudioFilePrefix:
+    Type: String
+    Default: lca-mono-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
+   
+  KinesisDataStreamName:
+    Type: String
+    Description: >-
+      Name of Kinesis Data Stream to publish events to
+
+  KinesisDataStreamArn:
+    Type: String
+    Description: >-
+      Arn of Kinesis Data Stream to publish events to
+  EventSourcingTableName:
+    Type: String
+    Description: >-
+      DynamoDB Event Table name
+  EventSourcingTableArn:
+    Type: String
+    Description: >-
+      DynamoDB Event Table Arn  
+  S3BucketName:
+    Type: String
+    Description: >-
+      S3 Bucket name for recordings
+
+  IsContentRedactionEnabled:
+    Type: String
+    Default: "false"
+    Description: >-
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
+    AllowedValues:
+      - "true"
+      - "false"
+
+  TranscribeContentRedactionType:
+    Type: String
+    Default: PII
+    Description: >-
+      Type of content redaction from Amazon Transcribe transcription output
+    AllowedValues:
+      - PII
+
+  TranscribeLanguageCode:
+    Type: String
+    Description: >-
+      Language code to be used for Amazon Transcribe
+    Default: en-US
+    AllowedValues:
+      - en-US
+      - es-US
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
+
+  TranscribePiiEntityTypes:
+    Type: String
+    # yamllint disable rule:line-length
+    Default: BANK_ACCOUNT_NUMBER,BANK_ROUTING,CREDIT_DEBIT_NUMBER,CREDIT_DEBIT_CVV,CREDIT_DEBIT_EXPIRY,PIN,EMAIL,ADDRESS,NAME,PHONE,SSN
+    # yamllint enable rule:line-length
+    Description: >-
+      Select the PII entity types you want to identify or redact. Remove the values that you don't
+      want to redact from the default.  DO NOT ADD CUSTOM VALUES HERE.
+
+  CustomVocabularyName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the vocabulary to use when processing the transcription job. Leave blank if no
+      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -84,6 +182,24 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
       Parameters:
         CidrBlocks: !Ref SiprecAllowedCidrList
+  
+  DeployCallTranscriber:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./cloudformation-templates/chime-vc-call-transcriber.yaml
+      Parameters:
+        AudioFilePrefix: !Ref AudioFilePrefix
+        KinesisDataStreamName: !Ref KinesisDataStreamName
+        KinesisDataStreamArn: !Ref KinesisDataStreamArn
+        EventSourcingTableName: !Ref EventSourcingTableName
+        EventSourcingTableArn: !Ref EventSourcingTableArn
+        S3BucketName: !Ref S3BucketName
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
 Outputs:
   DemoPBXIPAddress:

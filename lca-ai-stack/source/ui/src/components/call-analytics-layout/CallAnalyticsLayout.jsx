@@ -39,8 +39,8 @@ const CallAnalyticsLayout = () => {
   const [selectedItems, setSelectedItems] = useState([]);
 
   const getInitialPeriodsToLoad = () => {
-    // default to 2 days
-    let periods = 2 * CALL_LIST_SHARDS_PER_DAY;
+    // default to 2 hours - half of one (4hr) shard period
+    let periods = 0.5;
     try {
       const periodsFromStorage = Math.abs(
         JSON.parse(localStorage.getItem(PERIODS_TO_LOAD_STORAGE_KEY)),

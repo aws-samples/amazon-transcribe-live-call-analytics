@@ -6,6 +6,7 @@ export default gql`
   query Query($callId: ID!) {
     getCall(CallId: $callId) {
       CallId
+      AgentId
       CreatedAt
       CustomerPhoneNumber
       Status
