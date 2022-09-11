@@ -17,7 +17,7 @@ To use this feature:
 
 ## Lambda function requirements
 
-You Lambda function will be invoked by the LCA ChimeVC CallTranscriber function when a new call is received. The full call START event from ChimeVC, which includes the SIPREC invite headers, is passed as the input event to your Lambda. 
+Your Lambda function will be invoked by the LCA ChimeVC CallTranscriber function when both agent and caller streams for a new call are received. The full call START event for the caller stream (isCaller=true) from ChimeVC, which includes the SIPREC invite headers, is passed as the input event to your Lambda. 
 
 Your Lambda implements your required business logic, and returns a simple JSON structure with one or more of the fields shown below:
 ```
