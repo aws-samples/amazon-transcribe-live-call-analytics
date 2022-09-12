@@ -9,7 +9,7 @@ Either:
 1. Assign agent ID when the call starts, OR
 2. Assign agent ID after the call has started
 
-## Assign agent name when call starts
+## Assign agent ID when call starts
 
 If known, the AgentID can be provided when the call is started using a ChimeVC CallTranscriber Lambda Hook function - see [./LambdaHookFunction.md](./LambdaHookFunction.md). Your Lambda hook function might retrieve the Agent identifier from the SIPREC invite headers, or (more likely) it might interact with your IVR or some other external system that associates agent with CallId. 
 
