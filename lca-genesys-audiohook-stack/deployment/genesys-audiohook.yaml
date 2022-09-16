@@ -972,6 +972,7 @@ Resources:
               - transcribe:ListVocabularies
               - transcribe:StartStreamTranscription
               - transcribe:StartTranscriptionJob
+              - transcribe:StartCallAnalyticsStreamTranscription
             Effect: Allow
             Resource: "*"
           - Action:
