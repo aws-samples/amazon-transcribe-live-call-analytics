@@ -18,7 +18,13 @@ import {
     CallRecordingEvent 
 } from './entities-lca';
 
-import { TranscriptEvent } from '@aws-sdk/client-transcribe-streaming';
+import { 
+    TranscriptEvent, 
+    CallAnalyticsTranscriptResultStream,
+    UtteranceEvent,
+    CategoryEvent,
+    IssueDetected,
+} from '@aws-sdk/client-transcribe-streaming';
 import { 
     KinesisClient, 
     PutRecordCommand 
@@ -168,8 +174,183 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             try {
                 await kinesisClient.send(putCmd);
             } catch (error) {
-                console.error('Error writing transcription segment to KDS', error);
+                console.error('Error writing transcription segment (TRANSCRIBE) to KDS', error);
             }
         }
     }
 };
+
+export const writeTCASegment = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
+    
+    if (event.UtteranceEvent) {
+        const utterances:UtteranceEvent = event.UtteranceEvent;
+        const categories:CategoryEvent | undefined = event.CategoryEvent;
+        
+        // if (utterances.IsPartial && !savePartial) {
+        //     return;
+        // }
+        if (!utterances.IsPartial && utterances.Transcript) {
+            
+            const channel = utterances.ParticipantRole;
+            const startTime = utterances.BeginOffsetMillis|| '';
+            const endTime = utterances.EndOffsetMillis || '';
+            const resultId = utterances.UtteranceId || '';
+            const transid = transactionId || '';
+            const transcript = utterances.Transcript;
+            const ispartial: boolean | undefined = utterances.IsPartial;
+            const now = new Date().toISOString();
+            const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
+            let issuesDetected:IssueDetected [] = [];
+            if (utterances.IssuesDetected) {
+                issuesDetected = utterances.IssuesDetected;
+            }
+            let sentiment = '';
+            if (utterances.Sentiment) {
+                sentiment = utterances.Sentiment;
+            }
+            let categoryEvent:CategoryEvent = {};
+            
+            if (categories) {
+                categoryEvent = categories;
+            } 
+
+            const eventType = 'ADD_TRANSCRIPT_SEGMENT';
+            
+            const kdsObject = {
+                Channel: channel,
+                TransactionId: transid,
+                CallId: callId,
+                SegmentId: resultId,
+                StartTime: startTime.toString(),
+                EndTime: endTime.toString(),
+                Transcript: transcript || '',
+                IsPartial: ispartial,
+                IssuesDetected: issuesDetected,
+                CategoryEvent: categoryEvent,
+                Sentiment: sentiment,
+                EventType: eventType.toString(),
+                CreatedAt: now,
+                ExpiresAfter: expiration.toString(),
+                StreamArn: '' 
+            };
+            const putParams = {
+                StreamName: kdsStreamName,
+                PartitionKey: callId,
+                Data: Buffer.from(JSON.stringify(kdsObject)),
+            };
+
+            const putCmd = new PutRecordCommand(putParams);
+            try {
+                await kinesisClient.send(putCmd);
+            } catch (error) {
+                console.error('Error writing transcription segment (TCA) to KDS', error);
+            }
+        }
+    }
+};
+
+// export const writeIssueDetected = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
+//     if (event.UtteranceEvent) {
+//         const utterances:UtteranceEvent = event.UtteranceEvent;
+//         // if (utterances.IsPartial && !savePartial) {
+//         //     return;
+//         // }
+//         if (!utterances.IsPartial && utterances.Transcript && utterances.IssuesDetected) {
+
+//             const channel = utterances.ParticipantRole;
+//             const startTime = utterances.BeginOffsetMillis|| '';
+//             const endTime = utterances.EndOffsetMillis || '';
+//             const resultId = utterances.UtteranceId || '';
+//             const transid = transactionId || '';
+//             const transcript = utterances.Transcript;
+//             const ispartial: boolean | undefined = utterances.IsPartial;
+//             const now = new Date().toISOString();
+//             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
+//             const
+//             const eventType = 'ADD_ISSUE_DETECTED';
+//             utterances.IssuesDetected.forEach(async (issueelement) => {
+//                 const begin_offset = issueelement.CharacterOffsets?.Begin || 0;
+//                 const end_offset = issueelement.CharacterOffsets?.End;
+//                 const issue = utterances.Transcript?.substring(begin_offset, end_offset) || '';
+//                 const kdsObject = {
+//                     Channel: channel,
+//                     TransactionId: transid,
+//                     CallId: callId,
+//                     SegmentId: resultId,
+//                     StartTime: startTime.toString(),
+//                     EndTime: endTime.toString(),
+//                     Transcript: transcript || '',
+//                     IsPartial: ispartial,
+//                     IssueDetected: issue,
+//                     EventType: eventType.toString(),
+//                     CreatedAt: now,
+//                     ExpiresAfter: expiration.toString(),
+//                     StreamArn: '' 
+//                 };
+//                 const putParams = {
+//                     StreamName: kdsStreamName,
+//                     PartitionKey: callId,
+//                     Data: Buffer.from(JSON.stringify(kdsObject)),
+//                 };
+    
+//                 const putCmd = new PutRecordCommand(putParams);
+//                 try {
+//                     await kinesisClient.send(putCmd);
+//                 } catch (error) {
+//                     console.error('Error writing TCA Issue detected segment to KDS', error);
+//                 }
+//                 // console.log(`****** Issue Identified : ${issue} \n`);
+//             });
+            
+ 
+//         }
+//     }
+// };
+
+// export const writeCategoryMatched = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
+
+//     if (event.CategoryEvent) {
+//         const categories:CategoryEvent = event.CategoryEvent;
+
+//         categories.MatchedCategories?.forEach(async (category:string) => {
+//             for (const key in categories.MatchedDetails) {
+//                 categories.MatchedDetails[key].TimestampRanges?.forEach(async (ts) => {
+//                     const startTime = ts.BeginOffsetMillis|| '';
+//                     const endTime = ts.EndOffsetMillis || '';
+//                     const transid = transactionId || '';
+//                     const now = new Date().toISOString();
+//                     const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
+//                     const matchedCategory = category;
+//                     const matchedKeyWords = key;
+//                     const eventType = 'ADD_CATEGORY_MATCHED';
+
+//                     const kdsObject = {
+//                         TransactionId: transid,
+//                         CallId: callId,
+//                         MatchedCategory: matchedCategory,
+//                         matchedKeyWords: matchedKeyWords,
+//                         StartTime: startTime.toString(),
+//                         EndTime: endTime.toString(),
+//                         EventType: eventType.toString(),
+//                         CreatedAt: now,
+//                         ExpiresAfter: expiration.toString(),
+//                         StreamArn: '' 
+//                     };
+//                     const putParams = {
+//                         StreamName: kdsStreamName,
+//                         PartitionKey: callId,
+//                         Data: Buffer.from(JSON.stringify(kdsObject)),
+//                     };
+        
+//                     const putCmd = new PutRecordCommand(putParams);
+//                     try {
+//                         await kinesisClient.send(putCmd);
+//                     } catch (error) {
+//                         console.error('Error writing transcription segment (TCA) to KDS', error);
+//                     }
+
+//                 });
+//             }
+//         });
+//     }
+// };

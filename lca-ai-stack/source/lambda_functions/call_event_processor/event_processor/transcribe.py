@@ -54,6 +54,8 @@ BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
+IS_TCA_ENABLED = True
+
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 if IS_SENTIMENT_ANALYSIS_ENABLED:
     COMPREHEND_CLIENT: ComprehendClient = BOTO3_SESSION.client("comprehend", config=CLIENT_CONFIG)
@@ -102,6 +104,9 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
 
     call_id: str = message["CallId"]
     channel: str = message["Channel"]
+    if channel == "CUSTOMER":
+        channel = "CALLER"
+
     stream_arn: str = message["StreamArn"]
     transaction_id: str = message["TransactionId"]
     segment_id: str = message["SegmentId"]
@@ -125,6 +130,52 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
         CreatedAt=created_at,
         ExpiresAfter=get_ttl(),
         Status="TRANSCRIBING",
+    )
+
+def transform_segment_to_add_sentiment(message: Dict) -> Dict[str, object]:
+    """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
+
+    sentiment: str = message['Sentiment']
+    return dict(
+        Sentiment=sentiment,
+    )
+
+def transform_segment_to_issues_agent_assist(
+    message: Dict[str, Any],
+    issue: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Transforms Contact Lens Transcript Issues payload to Agent Assist"""
+    # pylint: disable=too-many-locals
+    call_id: str = message["CallId"]
+    created_at = datetime.utcnow().astimezone().isoformat()
+    is_partial = False
+    segment_id = str(uuid.uuid4())
+    channel = "AGENT_ASSISTANT"
+    transcript = message["Transcript"]
+    # transcript = segment_item["Content"]
+
+    issues_detected = message.get("IssuesDetected", [])
+    if not issues_detected:
+        raise ValueError("Invalid issue segment")
+
+    begin_offset = issue["CharacterOffsets"]["BeginOffsetChar"]
+    end_offset = issue["CharacterOffsets"]["EndOffsetChar"]
+    issue_transcript = transcript[begin_offset:end_offset]
+    start_time: float = message["StartTime"] / 1000
+    end_time: float = message["EndTime"] / 1000
+    end_time = end_time + 0.001 # UI sort order
+
+    return dict(
+        CallId=call_id,
+        Channel=channel,
+        CreatedAt=created_at,
+        ExpiresAfter=get_ttl(),
+        EndTime=end_time,
+        IsPartial=is_partial,
+        SegmentId=segment_id,
+        StartTime=start_time,
+        Status="TRANSCRIBING",
+        Transcript=issue_transcript,
     )
 
 def add_transcript_segments(
@@ -193,45 +244,51 @@ async def add_sentiment_to_transcript(
     transcript_segment = {
         **transform_segment_to_add_transcript({**message}),
     }
-
-    text = transcript_segment["Transcript"]
-    LOGGER.debug("detect sentiment on text: [%s]", text)
-
-    
-    sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
-    LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
-
-    result = {}
-    comprehend_weighted_sentiment = ComprehendWeightedSentiment()
-
-    sentiment = {
-        k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
-    }
-    if sentiment:
-        if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
-            sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
-                    sentiment_response=sentiment_response
-                )
-    
-        transcript_segment_with_sentiment = {
-            **transcript_segment,
-            **sentiment
+ 
+    if IS_TCA_ENABLED:
+        sentiment = {
+            **transform_segment_to_add_sentiment({**message})
         }
+        sentiment["SentimentWeighted"] = None            
+    else:
+        text = transcript_segment["Transcript"]
+        LOGGER.debug("detect sentiment on text: [%s]", text)
+
         
-        query = dsl_gql(
-            DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=transcript_segment_with_sentiment).select(
-                    *transcript_segment_fields(schema),
-                    *transcript_segment_sentiment_fields(schema),
-                )
+        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
+        LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
+
+        result = {}
+        comprehend_weighted_sentiment = ComprehendWeightedSentiment()
+
+        sentiment = {
+            k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
+        }
+        if sentiment:
+            if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
+                sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
+                        sentiment_response=sentiment_response
+                    )
+        
+    transcript_segment_with_sentiment = {
+        **transcript_segment,
+        **sentiment
+    }
+    
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addTranscriptSegment.args(input=transcript_segment_with_sentiment).select(
+                *transcript_segment_fields(schema),
+                *transcript_segment_sentiment_fields(schema),
             )
         )
+    )
 
-        result = await execute_gql_query_with_retries(
-            query,
-            client_session=appsync_session,
-            logger=LOGGER,
-        )
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
         
     return result
 
@@ -494,6 +551,58 @@ def add_lex_agent_assistances(
 
     return tasks
 
+
+def add_tca_agent_assistances(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+    """Add TCA Agent Assist GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    call_id: str = message["CallId"]
+    channel: str = "AGENT_ASSISTANT"
+    status: str = "TRANSCRIBING"
+    is_partial: bool = False
+
+    created_at: str
+    start_time: float
+    end_time: float
+
+    send_tca_agent_assist_args = []
+    
+    issues_detected = message.get("IssuesDetected", [])
+    for issue in issues_detected:
+        issue_segment = transform_segment_to_issues_agent_assist(
+            {**message},
+            issue=issue
+        )
+        send_tca_agent_assist_args.append(
+            dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
+        )
+
+    # categories = message.get("Categories", {})
+    # for category in categories.get("MatchedCategories", []):
+    #     category_details = categories["MatchedDetails"][category]
+    #     category_segment = transform_segment_to_categories_agent_assist(
+    #         category=category,
+    #         category_details=category_details,
+    #         call_id=call_id,
+    #     )
+    #     send_lex_agent_assist_args.append(
+    #         dict(
+    #             content=category_segment["Transcript"],
+    #             transcript_segment_args=category_segment,
+    #         ),
+    #     )
+
+    tasks = []
+    for agent_assist_args in send_tca_agent_assist_args:
+        task = send_lex_agent_assist(
+            appsync_session=appsync_session,
+            **agent_assist_args,
+        )
+        tasks.append(task)
+
+    return tasks
 ##########################################################################
 # Lambda Agent Assist
 ##########################################################################
@@ -687,6 +796,14 @@ async def execute_process_event_api_mutation(
                 message=message,
                 appsync_session=appsync_session,
             )
+
+        # Babu: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
+        # This will be removed/replaced once TCA design is finalized
+        if IS_TCA_ENABLED:
+            add_tca_agent_assist_tasks = add_tca_agent_assistances(
+                message=message,
+                appsync_session=appsync_session
+            )    
 
         add_lex_agent_assists_tasks = []
         if IS_LEX_AGENT_ASSIST_ENABLED:

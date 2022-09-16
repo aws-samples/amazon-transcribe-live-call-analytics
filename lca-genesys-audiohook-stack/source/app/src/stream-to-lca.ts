@@ -16,11 +16,24 @@
 import pEvent from 'p-event';
 import { MediaDataFrame } from './audiohook/mediadata';
 import { Session } from './session';
-import { writeCallEventToKds, writeStatusToKds, writeTranscriptionSegment } from './lca/lca';
 import { 
-    StartStreamTranscriptionCommand, 
+    writeCallEventToKds, 
+    writeStatusToKds, 
+    writeTranscriptionSegment,
+    writeTCASegment,
+    // writeIssueDetected,
+    // writeCategoryMatched,
+} from './lca/lca';
+import { 
     TranscribeStreamingClient, 
-    TranscriptEvent
+    StartStreamTranscriptionCommand, 
+    TranscriptResultStream,
+    TranscriptEvent,
+    StartCallAnalyticsStreamTranscriptionCommand,
+    CallAnalyticsTranscriptResultStream,
+    ConfigurationEvent,
+    ParticipantRole,
+    ChannelDefinition
 } from '@aws-sdk/client-transcribe-streaming';
 import { normalizeError } from './utils';
 import dotenv from 'dotenv';
@@ -32,6 +45,7 @@ const customVocab = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
 const isRedactionEnabled= process.env['IS_CONTENT_REDACTION_ENABLED'] || 'true';
 const contentRedactionType = process.env['CONTENT_REDACTION_TYPE'] || undefined;
 const piiEntities = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
+const isTCAEnabled = true;
 
 export const addStreamToLCA = (session: Session) => {
 
@@ -60,55 +74,106 @@ export const addStreamToLCA = (session: Session) => {
             for await (const audiodata of audioDataIterator) {
                 const data = audiodata.as('L16').audio.data;
                 const chunk = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+                if (isTCAEnabled) {
+                    const channel0: ChannelDefinition = { ChannelId:0, ParticipantRole: ParticipantRole.CUSTOMER };
+                    const channel1: ChannelDefinition = { ChannelId:1, ParticipantRole: ParticipantRole.AGENT };
+                    const channel_definitions: ChannelDefinition [] = [];
+                    channel_definitions.push(channel0);
+                    channel_definitions.push(channel1);
+                    const configuration_event: ConfigurationEvent = { ChannelDefinitions: channel_definitions };
+                    yield { ConfigurationEvent: configuration_event };
+                }
                 yield { AudioEvent: { AudioChunk: chunk } };
             }
         };
 
-        const {
-            SessionId: sid,
-            TranscriptResultStream: transcribeResultStream,
-        } = await client.send(
-            new StartStreamTranscriptionCommand({
-                LanguageCode: languageCode,
-                MediaSampleRateHertz: selectedMedia?.rate || 8000,
-                MediaEncoding: 'pcm',
-                EnableChannelIdentification: true,
-                NumberOfChannels: selectedMedia?.channels.length || 2,
-                VocabularyName: customVocab,
-                ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
-                PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
-                AudioStream: transcribeInput()
-            })
-        );
+ 
+        let sessionId: string | undefined;
+        let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
+        let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
 
-        session.logger.info(
-            `=== Received Initial response. Session Id: ${sid} ===`
-        );
+        if (isTCAEnabled) {
+            const response = await client.send(
+                new StartCallAnalyticsStreamTranscriptionCommand({
+                    LanguageCode: languageCode,
+                    MediaSampleRateHertz: selectedMedia?.rate || 8000,
+                    MediaEncoding: 'pcm',
+                    VocabularyName: customVocab,
+                    ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
+                    PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
+                    AudioStream: transcribeInput()
+                })
+            );
+            session.logger.info(
+                `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
+            );
+            sessionId = response.SessionId;
+            outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
+        } else {
+            const response = await client.send(
+                new StartStreamTranscriptionCommand({
+                    LanguageCode: languageCode,
+                    MediaSampleRateHertz: selectedMedia?.rate || 8000,
+                    MediaEncoding: 'pcm',
+                    EnableChannelIdentification: true,
+                    NumberOfChannels: selectedMedia?.channels.length || 2,
+                    VocabularyName: customVocab,
+                    ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
+                    PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
+                    AudioStream: transcribeInput()
+                })
+            );
+            session.logger.info(
+                `=== Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`
+            );
+            sessionId = response.SessionId;
+            outputTranscriptStream = response.TranscriptResultStream;
+        }
+
+     
         await writeStatusToKds({
             callId: openparms.conversationId,
             eventStatus: 'START_TRANSCRIPT',
             channel: 'STEREO',
-            transactionId: sid
+            transactionId: sessionId
         });
         
-        (async () => {
-            if (transcribeResultStream) {   
-                for await (const event of transcribeResultStream) {
-                    if (event.TranscriptEvent) {
-                        const message: TranscriptEvent = event.TranscriptEvent;
-                        await writeTranscriptionSegment(message, openparms.conversationId, sid);
+        if (isTCAEnabled) {
+            (async () => {
+                if (outputCallAnalyticsStream) {   
+                    for await (const event of outputCallAnalyticsStream) {
+                        await writeTCASegment(event, openparms.conversationId, sessionId);
+                        // await writeIssueDetected(event, openparms.conversationId, sessionId);
+                        // await writeCategoryMatched(event, openparms.conversationId, sessionId);
                     }
                 }
-            }
-        })()
-            .then(() => {
-                session.logger.info('##### Trans results stream ended');
-            })
-            .catch (err => {
-                session.logger.error('Error processing transcribe results stream', normalizeError(err));
-                console.log(err);
-            });
-
+            })()
+                .then(() => {
+                    session.logger.info('##### Trans results stream ended');
+                })
+                .catch (err => {
+                    session.logger.error('Error processing transcribe results stream', normalizeError(err));
+                    // console.log(err);
+                });
+        } else {
+            (async () => {
+                if (outputTranscriptStream) {   
+                    for await (const event of outputTranscriptStream) {
+                        if (event.TranscriptEvent) {
+                            const message: TranscriptEvent = event.TranscriptEvent;
+                            await writeTranscriptionSegment(message, openparms.conversationId, sessionId);
+                        }
+                    }
+                }
+            })()
+                .then(() => {
+                    session.logger.info('##### Trans results stream ended');
+                })
+                .catch (err => {
+                    session.logger.error('Error processing transcribe results stream', normalizeError(err));
+                    // console.log(err);
+                });
+        }
         
         return async () => {
             
@@ -116,7 +181,7 @@ export const addStreamToLCA = (session: Session) => {
                 callId: openparms.conversationId,
                 eventStatus: 'END_TRANSCRIPT',
                 channel: 'STEREO',
-                transactionId: sid
+                transactionId: sessionId
             });      
             
             await writeCallEventToKds({

@@ -20,7 +20,7 @@
   "dependencies": {
     "@aws-sdk/client-kinesis": "^3.105.0",
     "@aws-sdk/client-secrets-manager": "^3.74.0",
-    "@aws-sdk/client-transcribe-streaming": "^3.67.0",
+    "@aws-sdk/client-transcribe-streaming": "file:client-transcribe-streaming/aws-sdk-client-transcribe-streaming-v3.142.0.tgz",
     "aws-sdk": "^2.1087.0",
     "dotenv": "^16.0.0",
     "fastify": "^3.27.3",
