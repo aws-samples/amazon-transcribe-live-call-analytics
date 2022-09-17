@@ -242,6 +242,7 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
+                console.info('Written ADD_TRANSCRIPT_SEGMENT event for TCA to KDS');
             } catch (error) {
                 console.error('Error writing transcription segment (TCA) to KDS', error);
             }
