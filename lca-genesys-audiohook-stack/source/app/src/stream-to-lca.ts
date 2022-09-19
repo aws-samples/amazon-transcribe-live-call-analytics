@@ -71,18 +71,18 @@ export const addStreamToLCA = (session: Session) => {
         const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio'); 
         
         const transcribeInput = async function* () {
+            if (isTCAEnabled) {
+                const channel0: ChannelDefinition = { ChannelId:0, ParticipantRole: ParticipantRole.CUSTOMER };
+                const channel1: ChannelDefinition = { ChannelId:1, ParticipantRole: ParticipantRole.AGENT };
+                const channel_definitions: ChannelDefinition [] = [];
+                channel_definitions.push(channel0);
+                channel_definitions.push(channel1);
+                const configuration_event: ConfigurationEvent = { ChannelDefinitions: channel_definitions };
+                yield { ConfigurationEvent: configuration_event };
+            }
             for await (const audiodata of audioDataIterator) {
                 const data = audiodata.as('L16').audio.data;
                 const chunk = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-                if (isTCAEnabled) {
-                    const channel0: ChannelDefinition = { ChannelId:0, ParticipantRole: ParticipantRole.CUSTOMER };
-                    const channel1: ChannelDefinition = { ChannelId:1, ParticipantRole: ParticipantRole.AGENT };
-                    const channel_definitions: ChannelDefinition [] = [];
-                    channel_definitions.push(channel0);
-                    channel_definitions.push(channel1);
-                    const configuration_event: ConfigurationEvent = { ChannelDefinitions: channel_definitions };
-                    yield { ConfigurationEvent: configuration_event };
-                }
                 yield { AudioEvent: { AudioChunk: chunk } };
             }
         };
