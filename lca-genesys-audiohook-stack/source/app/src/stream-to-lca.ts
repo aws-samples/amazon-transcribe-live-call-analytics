@@ -95,12 +95,12 @@ export const addStreamToLCA = (session: Session) => {
         if (isTCAEnabled) {
             const response = await client.send(
                 new StartCallAnalyticsStreamTranscriptionCommand({
-                    LanguageCode: languageCode,
-                    MediaSampleRateHertz: selectedMedia?.rate || 8000,
+                    LanguageCode: 'en-US',
+                    MediaSampleRateHertz: 8000,
                     MediaEncoding: 'pcm',
-                    VocabularyName: customVocab,
-                    ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
-                    PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
+                    // VocabularyName: customVocab,
+                    // ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
+                    // PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
                     AudioStream: transcribeInput()
                 })
             );
