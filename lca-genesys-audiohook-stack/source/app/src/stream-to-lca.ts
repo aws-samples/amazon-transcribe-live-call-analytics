@@ -45,7 +45,7 @@ const customVocab = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
 const isRedactionEnabled= process.env['IS_CONTENT_REDACTION_ENABLED'] || 'true';
 const contentRedactionType = process.env['CONTENT_REDACTION_TYPE'] || undefined;
 const piiEntities = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
-const isTCAEnabled = false;
+const isTCAEnabled = true;
 
 export const addStreamToLCA = (session: Session) => {
 
@@ -153,6 +153,7 @@ export const addStreamToLCA = (session: Session) => {
                 })
                 .catch (err => {
                     session.logger.error('Error processing TCA results stream', normalizeError(err));
+                    session.logger.error(err);
                     // console.log(err);
                 });
         } else {
