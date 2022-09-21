@@ -18,10 +18,9 @@ import { MediaDataFrame } from './audiohook/mediadata';
 import { Session } from './session';
 import { 
     writeCallEventToKds, 
-    writeStatusToKds, 
+    // writeStatusToKds, 
     writeTranscriptionSegment,
     writeTCASegment,
-    // writeIssueDetected,
     // writeCategoryMatched,
 } from './lca/lca';
 import { 
@@ -59,7 +58,6 @@ export const addStreamToLCA = (session: Session) => {
         await writeCallEventToKds({
             callId: openparms.conversationId,
             eventStatus: 'START',
-            channel: 'STEREO',
             fromNumber: openparms.participant.ani,
             toNumber: openparms.participant.dnis
         });
@@ -131,19 +129,18 @@ export const addStreamToLCA = (session: Session) => {
         }
 
      
-        await writeStatusToKds({
-            callId: openparms.conversationId,
-            eventStatus: 'START_TRANSCRIPT',
-            channel: 'STEREO',
-            transactionId: sessionId
-        });
+        // await writeStatusToKds({
+        //     callId: openparms.conversationId,
+        //     eventStatus: 'START_TRANSCRIPT',
+        //     channel: 'STEREO',
+        //     transactionId: sessionId
+        // });
         
         if (isTCAEnabled) {
             (async () => {
                 if (outputCallAnalyticsStream) {   
                     for await (const event of outputCallAnalyticsStream) {
                         await writeTCASegment(event, openparms.conversationId, sessionId);
-                        // await writeIssueDetected(event, openparms.conversationId, sessionId);
                         // await writeCategoryMatched(event, openparms.conversationId, sessionId);
                     }
                 }
@@ -178,17 +175,16 @@ export const addStreamToLCA = (session: Session) => {
         
         return async () => {
             
-            await writeStatusToKds({
-                callId: openparms.conversationId,
-                eventStatus: 'END_TRANSCRIPT',
-                channel: 'STEREO',
-                transactionId: sessionId
-            });      
+            // await writeStatusToKds({
+            //     callId: openparms.conversationId,
+            //     eventStatus: 'END_TRANSCRIPT',
+            //     channel: 'STEREO',
+            //     transactionId: sessionId
+            // });      
             
             await writeCallEventToKds({
                 callId: openparms.conversationId,
                 eventStatus: 'END',
-                channel: 'STEREO',
                 fromNumber: openparms.participant.ani,
                 toNumber: openparms.participant.dnis,
             });        

@@ -54,7 +54,6 @@ BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
-IS_TCA_ENABLED = True
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 if IS_SENTIMENT_ANALYSIS_ENABLED:
@@ -107,7 +106,7 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
     if channel == "CUSTOMER":
         channel = "CALLER"
 
-    stream_arn: str = message["StreamArn"]
+    # stream_arn: str = message["StreamArn"]
     transaction_id: str = message["TransactionId"]
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
@@ -120,7 +119,7 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
     return dict(
         CallId=call_id,
         Channel=channel,
-        StreamArn=stream_arn,
+        # StreamArn=stream_arn,
         TransactionId=transaction_id,
         SegmentId=segment_id,
         StartTime=start_time,
@@ -245,11 +244,13 @@ async def add_sentiment_to_transcript(
         **transform_segment_to_add_transcript({**message}),
     }
  
-    if IS_TCA_ENABLED:
+    if 'Sentiment' in message:
         sentiment = {
             **transform_segment_to_add_sentiment({**message})
         }
-        sentiment["SentimentWeighted"] = None            
+        sentiment["SentimentWeighted"] = None    
+        # SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
+        
     else:
         text = transcript_segment["Transcript"]
         LOGGER.debug("detect sentiment on text: [%s]", text)
@@ -401,6 +402,38 @@ async def execute_add_s3_recording_mutation(
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
+
+# async def execute_add_call_category_mutation(
+#     message: Dict[str, Any],
+#     appsync_session: AppsyncAsyncClientSession,
+# ) -> Dict:
+#     agentId = message.get("AgentId")
+#     if not agentId:
+#         error_message = "AgentId doesn't exist in UPDATE_AGENT event"
+#         raise TypeError(error_message)
+
+#     if not appsync_session.client.schema:
+#         raise ValueError("invalid AppSync schema")
+#     schema = DSLSchema(appsync_session.client.schema)
+
+#     query = dsl_gql(
+#         DSLMutation(
+#             schema.Mutation.updateAgent.args(
+#                 input={**message, "AgentId": agentId}
+#             ).select(*call_fields(schema))
+#         )
+#     )
+    
+#     result = await execute_gql_query_with_retries(
+#                         query,
+#                         client_session=appsync_session,
+#                         logger=LOGGER,
+#                     )
+
+#     query_string = print_ast(query)
+#     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+#     return result 
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -578,22 +611,7 @@ def add_tca_agent_assistances(
         send_tca_agent_assist_args.append(
             dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
         )
-
-    # categories = message.get("Categories", {})
-    # for category in categories.get("MatchedCategories", []):
-    #     category_details = categories["MatchedDetails"][category]
-    #     category_segment = transform_segment_to_categories_agent_assist(
-    #         category=category,
-    #         category_details=category_details,
-    #         call_id=call_id,
-    #     )
-    #     send_lex_agent_assist_args.append(
-    #         dict(
-    #             content=category_segment["Transcript"],
-    #             transcript_segment_args=category_segment,
-    #         ),
-    #     )
-
+    
     tasks = []
     for agent_assist_args in send_tca_agent_assist_args:
         task = send_lex_agent_assist(
@@ -603,6 +621,7 @@ def add_tca_agent_assistances(
         tasks.append(task)
 
     return tasks
+
 ##########################################################################
 # Lambda Agent Assist
 ##########################################################################
@@ -799,7 +818,7 @@ async def execute_process_event_api_mutation(
 
         # Babu: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
         # This will be removed/replaced once TCA design is finalized
-        if IS_TCA_ENABLED:
+        if 'IssuesDetected' in message:
             add_tca_agent_assist_tasks = add_tca_agent_assistances(
                 message=message,
                 appsync_session=appsync_session
@@ -844,6 +863,17 @@ async def execute_process_event_api_mutation(
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
+    
+    # elif event_type == "ADD_CALL_CATEGORY":
+    #     LOGGER.debu("Add Call Category")
+    #     response = await execute_add_call_category_mutation(
+    #                             message=message,
+    #                             appsync_session=appsync_session
+    #                     )
+    #     if isinstance(response, Exception):
+    #         return_value["errors"].append(response)
+    #     else:
+    #         return_value["successes"].append(response)
 
     elif event_type == "UPDATE_AGENT":
         # UPDATE AGENT 

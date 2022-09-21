@@ -16,18 +16,17 @@
 export type CallEvent = {
     callId: string,
     eventStatus: string,
-    channel: string,
     fromNumber: string,
     toNumber: string
 };
 
 
-export type CallEventStatus = {
-    callId: string,
-    eventStatus: string,
-    channel: string,
-    transactionId: string | undefined
-};
+// export type CallEventStatus = {
+//     callId: string,
+//     eventStatus: string,
+//     channel: string,
+//     transactionId: string | undefined
+// };
 
 export type CallRecordingEvent = {
     callId: string,

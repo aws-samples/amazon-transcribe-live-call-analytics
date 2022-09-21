@@ -14,7 +14,7 @@
 
 import { 
     CallEvent, 
-    CallEventStatus, 
+    // CallEventStatus, 
     CallRecordingEvent 
 } from './entities-lca';
 
@@ -48,7 +48,7 @@ export const writeCallEventToKds = async (callEvent: CallEvent ) => {
     const kdsObj =  {
         CallId: callEvent.callId,
         EventType: callEvent.eventStatus,
-        Channel: callEvent.channel,
+        // Channel: callEvent.channel,
         CustomerPhoneNumber: callEvent.fromNumber || '',
         SystemPhoneNumber: callEvent.toNumber || '',
         CreatedAt: now,
@@ -99,33 +99,33 @@ export const writeRecordingUrlToKds = async (recordingEvent: CallRecordingEvent)
     }
 };
 
-export const writeStatusToKds = async (status: CallEventStatus) => {
+// export const writeStatusToKds = async (status: CallEventStatus) => {
 
-    const now = new Date().toISOString();
-    const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
+//     const now = new Date().toISOString();
+//     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
   
-    const kdsObj =  {
-        CallId: status.callId,
-        EventType: status.eventStatus,
-        Channel: status.channel,
-        TransactionId: status.transactionId || '', 
-        CreatedAt: now,
-        ExpiresAfter: expiration.toString(),
-    };
-    const putParams = {
-        StreamName: kdsStreamName,
-        PartitionKey: status.callId,
-        Data: Buffer.from(JSON.stringify(kdsObj))
-    };
+//     const kdsObj =  {
+//         CallId: status.callId,
+//         EventType: status.eventStatus,
+//         Channel: status.channel,
+//         TransactionId: status.transactionId || '', 
+//         CreatedAt: now,
+//         ExpiresAfter: expiration.toString(),
+//     };
+//     const putParams = {
+//         StreamName: kdsStreamName,
+//         PartitionKey: status.callId,
+//         Data: Buffer.from(JSON.stringify(kdsObj))
+//     };
 
-    const putCmd = new PutRecordCommand(putParams);
-    try {
-        await kinesisClient.send(putCmd);
-    } catch (error) {
-        console.error('Error writing transcription segment to KDS', error);
-    }
+//     const putCmd = new PutRecordCommand(putParams);
+//     try {
+//         await kinesisClient.send(putCmd);
+//     } catch (error) {
+//         console.error('Error writing transcription segment to KDS', error);
+//     }
 
-};
+// };
 
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: string, transactionId:string | undefined) {
 
@@ -160,8 +160,7 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 IsPartial: ispartial,
                 EventType: eventType.toString(),
                 CreatedAt: now,
-                ExpiresAfter: expiration.toString(),
-                StreamArn: '' 
+                ExpiresAfter: expiration.toString()
             };
             
             const putParams = {
@@ -186,11 +185,10 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
         const utterances:UtteranceEvent = event.UtteranceEvent;
         const categories:CategoryEvent | undefined = event.CategoryEvent;
         
-        // if (utterances.IsPartial && !savePartial) {
-        //     return;
-        // }
-        if (!utterances.IsPartial && utterances.Transcript) {
-            
+        if (utterances.IsPartial && !savePartial) {
+            return;
+        }
+        if (utterances.Transcript) {   
             const channel = utterances.ParticipantRole;
             const startTime = utterances.BeginOffsetMillis|| '';
             const endTime = utterances.EndOffsetMillis || '';
@@ -208,11 +206,11 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
             if (utterances.Sentiment) {
                 sentiment = utterances.Sentiment;
             }
-            let categoryEvent:CategoryEvent = {};
+            // let categoryEvent:CategoryEvent = {};
             
-            if (categories) {
-                categoryEvent = categories;
-            } 
+            // if (categories) {
+            //     categoryEvent = categories;
+            // } 
 
             const eventType = 'ADD_TRANSCRIPT_SEGMENT';
             
@@ -226,12 +224,11 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
                 Transcript: transcript || '',
                 IsPartial: ispartial,
                 IssuesDetected: issuesDetected,
-                CategoryEvent: categoryEvent,
+                // CategoryEvent: categoryEvent,
                 Sentiment: sentiment,
                 EventType: eventType.toString(),
                 CreatedAt: now,
-                ExpiresAfter: expiration.toString(),
-                StreamArn: '' 
+                ExpiresAfter: expiration.toString()
             };
             const putParams = {
                 StreamName: kdsStreamName,
@@ -250,108 +247,49 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
     }
 };
 
-// export const writeIssueDetected = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
-//     if (event.UtteranceEvent) {
-//         const utterances:UtteranceEvent = event.UtteranceEvent;
-//         // if (utterances.IsPartial && !savePartial) {
-//         //     return;
-//         // }
-//         if (!utterances.IsPartial && utterances.Transcript && utterances.IssuesDetected) {
+export const writeCategoryMatched = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
 
-//             const channel = utterances.ParticipantRole;
-//             const startTime = utterances.BeginOffsetMillis|| '';
-//             const endTime = utterances.EndOffsetMillis || '';
-//             const resultId = utterances.UtteranceId || '';
-//             const transid = transactionId || '';
-//             const transcript = utterances.Transcript;
-//             const ispartial: boolean | undefined = utterances.IsPartial;
-//             const now = new Date().toISOString();
-//             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
-//             const
-//             const eventType = 'ADD_ISSUE_DETECTED';
-//             utterances.IssuesDetected.forEach(async (issueelement) => {
-//                 const begin_offset = issueelement.CharacterOffsets?.Begin || 0;
-//                 const end_offset = issueelement.CharacterOffsets?.End;
-//                 const issue = utterances.Transcript?.substring(begin_offset, end_offset) || '';
-//                 const kdsObject = {
-//                     Channel: channel,
-//                     TransactionId: transid,
-//                     CallId: callId,
-//                     SegmentId: resultId,
-//                     StartTime: startTime.toString(),
-//                     EndTime: endTime.toString(),
-//                     Transcript: transcript || '',
-//                     IsPartial: ispartial,
-//                     IssueDetected: issue,
-//                     EventType: eventType.toString(),
-//                     CreatedAt: now,
-//                     ExpiresAfter: expiration.toString(),
-//                     StreamArn: '' 
-//                 };
-//                 const putParams = {
-//                     StreamName: kdsStreamName,
-//                     PartitionKey: callId,
-//                     Data: Buffer.from(JSON.stringify(kdsObject)),
-//                 };
-    
-//                 const putCmd = new PutRecordCommand(putParams);
-//                 try {
-//                     await kinesisClient.send(putCmd);
-//                 } catch (error) {
-//                     console.error('Error writing TCA Issue detected segment to KDS', error);
-//                 }
-//                 // console.log(`****** Issue Identified : ${issue} \n`);
-//             });
-            
- 
-//         }
-//     }
-// };
+    if (event.CategoryEvent) {
+        const categories:CategoryEvent = event.CategoryEvent;
 
-// export const writeCategoryMatched = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
+        categories.MatchedCategories?.forEach(async (category:string) => {
+            for (const key in categories.MatchedDetails) {
+                categories.MatchedDetails[key].TimestampRanges?.forEach(async (ts) => {
+                    const startTime = ts.BeginOffsetMillis|| '';
+                    const endTime = ts.EndOffsetMillis || '';
+                    const transid = transactionId || '';
+                    const now = new Date().toISOString();
+                    const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
+                    const matchedCategory = category;
+                    const matchedKeyWords = key;
+                    const eventType = 'ADD_CALL_CATEGORY';
 
-//     if (event.CategoryEvent) {
-//         const categories:CategoryEvent = event.CategoryEvent;
-
-//         categories.MatchedCategories?.forEach(async (category:string) => {
-//             for (const key in categories.MatchedDetails) {
-//                 categories.MatchedDetails[key].TimestampRanges?.forEach(async (ts) => {
-//                     const startTime = ts.BeginOffsetMillis|| '';
-//                     const endTime = ts.EndOffsetMillis || '';
-//                     const transid = transactionId || '';
-//                     const now = new Date().toISOString();
-//                     const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
-//                     const matchedCategory = category;
-//                     const matchedKeyWords = key;
-//                     const eventType = 'ADD_CATEGORY_MATCHED';
-
-//                     const kdsObject = {
-//                         TransactionId: transid,
-//                         CallId: callId,
-//                         MatchedCategory: matchedCategory,
-//                         matchedKeyWords: matchedKeyWords,
-//                         StartTime: startTime.toString(),
-//                         EndTime: endTime.toString(),
-//                         EventType: eventType.toString(),
-//                         CreatedAt: now,
-//                         ExpiresAfter: expiration.toString(),
-//                         StreamArn: '' 
-//                     };
-//                     const putParams = {
-//                         StreamName: kdsStreamName,
-//                         PartitionKey: callId,
-//                         Data: Buffer.from(JSON.stringify(kdsObject)),
-//                     };
+                    const kdsObject = {
+                        TransactionId: transid,
+                        CallId: callId,
+                        MatchedCategory: matchedCategory,
+                        MatchedKeyWords: matchedKeyWords,
+                        StartTime: startTime.toString(),
+                        EndTime: endTime.toString(),
+                        EventType: eventType.toString(),
+                        CreatedAt: now,
+                        ExpiresAfter: expiration.toString(),
+                    };
+                    const putParams = {
+                        StreamName: kdsStreamName,
+                        PartitionKey: callId,
+                        Data: Buffer.from(JSON.stringify(kdsObject)),
+                    };
         
-//                     const putCmd = new PutRecordCommand(putParams);
-//                     try {
-//                         await kinesisClient.send(putCmd);
-//                     } catch (error) {
-//                         console.error('Error writing transcription segment (TCA) to KDS', error);
-//                     }
+                    const putCmd = new PutRecordCommand(putParams);
+                    try {
+                        await kinesisClient.send(putCmd);
+                    } catch (error) {
+                        console.error('Error writing ADD_CATEGORY_MATCHED to KDS', error);
+                    }
 
-//                 });
-//             }
-//         });
-//     }
-// };
+                });
+            }
+        });
+    }
+};
