@@ -183,7 +183,7 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
     
     if (event.UtteranceEvent) {
         const utterances:UtteranceEvent = event.UtteranceEvent;
-        const categories:CategoryEvent | undefined = event.CategoryEvent;
+        // const categories:CategoryEvent | undefined = event.CategoryEvent;
         
         if (utterances.IsPartial && !savePartial) {
             return;
