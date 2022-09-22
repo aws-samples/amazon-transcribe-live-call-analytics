@@ -14,7 +14,7 @@
 
 import { 
     CallEvent, 
-    CallEventStatus, 
+    // CallEventStatus, 
     CallRecordingEvent,
     KDSTranscriptSegment
 } from './entities-lca';
@@ -35,7 +35,8 @@ dotenv.config();
 
 const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
 const expireInDays = 90;
-const savePartial = process.env['SAVE_PARTIAL_TRANSCRIPTS'] === 'true';
+const savePartial = (process.env['SAVE_PARTIAL_TRANSCRIPTS'] || 'true') === 'true';
+
 const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
 
 const kinesisClient = new KinesisClient({ region: awsRegion });
@@ -98,31 +99,31 @@ export const writeRecordingUrlToKds = async (recordingEvent: CallRecordingEvent)
     }
 };
 
-export const writeStatusToKds = async (status: CallEventStatus) => {
+// export const writeStatusToKds = async (status: CallEventStatus) => {
 
-    const now = new Date().toISOString();
-    const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
+//     const now = new Date().toISOString();
+//     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
   
-    const kdsObj =  {
-        CallId: status.callId,
-        EventType: status.eventStatus,
-        CreatedAt: now,
-        ExpiresAfter: expiration.toString(),
-    };
-    const putParams = {
-        StreamName: kdsStreamName,
-        PartitionKey: status.callId,
-        Data: Buffer.from(JSON.stringify(kdsObj))
-    };
+//     const kdsObj =  {
+//         CallId: status.callId,
+//         EventType: status.eventStatus,
+//         CreatedAt: now,
+//         ExpiresAfter: expiration.toString(),
+//     };
+//     const putParams = {
+//         StreamName: kdsStreamName,
+//         PartitionKey: status.callId,
+//         Data: Buffer.from(JSON.stringify(kdsObj))
+//     };
 
-    const putCmd = new PutRecordCommand(putParams);
-    try {
-        await kinesisClient.send(putCmd);
-    } catch (error) {
-        console.error('Error writing transcription segment to KDS', error);
-    }
+//     const putCmd = new PutRecordCommand(putParams);
+//     try {
+//         await kinesisClient.send(putCmd);
+//     } catch (error) {
+//         console.error('Error writing transcription segment to KDS', error);
+//     }
 
-};
+// };
 
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: string) {
 
@@ -143,8 +144,8 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 CallId: callId,
                 Channel: (result.ChannelId ==='ch_0' ? 'CALLER' : 'AGENT'),
                 SegmentId: result.ResultId || '',
-                StartTime: (result.StartTime || '').toString(),
-                EndTime: (result.EndTime || '').toString(),
+                StartTime: result.StartTime || 0,
+                EndTime: result.EndTime || 0,
                 Transcript: transcript || '',
                 IsPartial: result.IsPartial,
                 CreatedAt: now,
@@ -173,21 +174,20 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
     
     if (event.UtteranceEvent) {
         const utterances:UtteranceEvent = event.UtteranceEvent;
-        
-        if (utterances.IsPartial && !savePartial) {
+    
+        if (utterances.IsPartial == undefined || (utterances.IsPartial == true && !savePartial)) {
             return;
         }
         if (utterances.Transcript) {   
             const now = new Date().toISOString();
             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
-
             const kdsObject:KDSTranscriptSegment = {
                 EventType: 'ADD_TRANSCRIPT_SEGMENT',
                 CallId: callId,
                 Channel: utterances.ParticipantRole || '',
                 SegmentId: utterances.UtteranceId || '',
-                StartTime: (utterances.BeginOffsetMillis || '').toString(),
-                EndTime: (utterances.EndOffsetMillis || '').toString(),
+                StartTime: (utterances.BeginOffsetMillis || 0)/1000,
+                EndTime: (utterances.EndOffsetMillis || 0)/1000,
                 Transcript: utterances.Transcript,
                 IsPartial: utterances.IsPartial,
                 CreatedAt: now,
@@ -211,7 +211,8 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
-                console.info('Written ADD_TRANSCRIPT_SEGMENT event for TCA to KDS');
+                console.info('Written TCA ADD_TRANSCRIPT_SEGMENT event to KDS');
+                console.info(JSON.stringify(kdsObject));
             } catch (error) {
                 console.error('Error writing transcription segment (TCA) to KDS', error);
             }

@@ -24,10 +24,10 @@ export type CallEvent = {
 };
 
 
-export type CallEventStatus = {
-    callId: string,
-    eventStatus: string
-};
+// export type CallEventStatus = {
+//     callId: string,
+//     eventStatus: string
+// };
 
 export type CallRecordingEvent = {
     callId: string,
@@ -38,13 +38,13 @@ export type CallRecordingEvent = {
 }
 
 
-export type KDSTranscriptSegment = {
+export interface KDSTranscriptSegment {
     EventType: string,
     Channel: string,
     CallId: string,
     SegmentId: string,
-    StartTime: string,
-    EndTime: string,
+    StartTime: number,
+    EndTime: number,
     Transcript: string,
     IsPartial?: boolean,
     CreatedAt: string,
