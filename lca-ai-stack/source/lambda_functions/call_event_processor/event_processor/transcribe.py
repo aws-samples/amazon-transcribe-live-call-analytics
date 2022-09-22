@@ -639,10 +639,14 @@ def add_issues_detected_agent_assistances(
     
     issues_detected = message.get("IssuesDetected", [])
     for issue in issues_detected:
+        LOGGER.debug("Adding issue:")
+        LOGGER.debug(issue)
         issue_segment = transform_segment_to_issues_agent_assist(
             {**message},
             issue=issue
         )
+        LOGGER.debug("issue_segment:")
+        LOGGER.debug(issue_segment)
         send_issues_agent_assist_args.append(
             dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
         )
@@ -857,7 +861,7 @@ async def execute_process_event_api_mutation(
         LOGGER.debug("Issues Detected:")
         LOGGER.debug(issuedetected)
         if issuedetected:
-            # LOGGER.debug("Adding Issues Agent Assist msgs")
+            LOGGER.debug("Adding Issues Agent Assist msgs")
             add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
                 message=message,
                 appsync_session=appsync_session
