@@ -407,37 +407,37 @@ async def execute_add_s3_recording_mutation(
 
     return result
 
-# async def execute_add_call_category_mutation(
-#     message: Dict[str, Any],
-#     appsync_session: AppsyncAsyncClientSession,
-# ) -> Dict:
-#     agentId = message.get("AgentId")
-#     if not agentId:
-#         error_message = "AgentId doesn't exist in UPDATE_AGENT event"
-#         raise TypeError(error_message)
+async def execute_add_call_category_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+    agentId = message.get("AgentId")
+    if not agentId:
+        error_message = "AgentId doesn't exist in UPDATE_AGENT event"
+        raise TypeError(error_message)
 
-#     if not appsync_session.client.schema:
-#         raise ValueError("invalid AppSync schema")
-#     schema = DSLSchema(appsync_session.client.schema)
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
 
-#     query = dsl_gql(
-#         DSLMutation(
-#             schema.Mutation.updateAgent.args(
-#                 input={**message, "AgentId": agentId}
-#             ).select(*call_fields(schema))
-#         )
-#     )
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addCallCategory.args(
+                input={**message, "AgentId": agentId}
+            ).select(*call_fields(schema))
+        )
+    )
     
-#     result = await execute_gql_query_with_retries(
-#                         query,
-#                         client_session=appsync_session,
-#                         logger=LOGGER,
-#                     )
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
 
-#     query_string = print_ast(query)
-#     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
-#     return result 
+    return result 
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -602,7 +602,8 @@ async def send_issues_agent_assist(
     transcript = transcript_segment_args["Transcript"]
     if transcript:
         transcript_segment = {**transcript_segment_args, "Transcript": transcript}
-
+        LOGGER.debug("Issue Agent Assist segment")
+        LOGGER.debug(transcript_segment)
         query = dsl_gql(
             DSLMutation(
                 schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
@@ -854,6 +855,7 @@ async def execute_process_event_api_mutation(
         # This will be removed/replaced once TCA design is finalized
         issuedetected = message.get("IssuesDetected", None)
         if issuedetected:
+            LOGGER.debug("Adding Issues Agent Assist msgs")
             add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
                 message=message,
                 appsync_session=appsync_session
@@ -899,16 +901,16 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
     
-    # elif event_type == "ADD_CALL_CATEGORY":
-    #     LOGGER.debu("Add Call Category")
-    #     response = await execute_add_call_category_mutation(
-    #                             message=message,
-    #                             appsync_session=appsync_session
-    #                     )
-    #     if isinstance(response, Exception):
-    #         return_value["errors"].append(response)
-    #     else:
-    #         return_value["successes"].append(response)
+    elif event_type == "ADD_CALL_CATEGORY":
+        LOGGER.debu("Add Call Category")
+        response = await execute_add_call_category_mutation(
+                                message=message,
+                                appsync_session=appsync_session
+                        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
 
     elif event_type == "UPDATE_AGENT":
         # UPDATE AGENT 
