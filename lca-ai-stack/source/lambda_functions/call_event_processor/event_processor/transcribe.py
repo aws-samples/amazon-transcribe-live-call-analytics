@@ -850,9 +850,10 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
-        # Babu: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
+        # BabuS: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
         # This will be removed/replaced once TCA design is finalized
-        if "IssuesDetected" in message:
+        issuedetected = message.get("IssuesDetected", None)
+        if issuedetected:
             add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
                 message=message,
                 appsync_session=appsync_session

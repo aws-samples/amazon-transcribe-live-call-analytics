@@ -23,12 +23,6 @@ export type CallEvent = {
     toNumber: string
 };
 
-
-// export type CallEventStatus = {
-//     callId: string,
-//     eventStatus: string
-// };
-
 export type CallRecordingEvent = {
     callId: string,
     eventType: string,
@@ -36,7 +30,6 @@ export type CallRecordingEvent = {
     recordingsKeyPrefix: string,
     recordingsKey: string
 }
-
 
 export interface KDSTranscriptSegment {
     EventType: string,
@@ -53,4 +46,14 @@ export interface KDSTranscriptSegment {
     IssuesDetected?: IssueDetected []
 }
 
+export interface KDSMatchedCategories {
+    EventType: string, 
+    CallId: string,
+    MatchedCategory: string,
+    MatchedKeyWords: string,
+    StartTime: number,
+    EndTime: number,
+    CreatedAt: string,
+    ExpiresAfter: string,
+}
 

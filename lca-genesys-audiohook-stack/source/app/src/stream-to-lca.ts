@@ -18,10 +18,9 @@ import { MediaDataFrame } from './audiohook/mediadata';
 import { Session } from './session';
 import { 
     writeCallEventToKds, 
-    // writeStatusToKds, 
     writeTranscriptionSegment,
     writeTCASegment,
-    // writeCategoryMatched,
+    writeCategoryMatched,
 } from './lca/lca';
 import { 
     TranscribeStreamingClient, 
@@ -125,18 +124,16 @@ export const addStreamToLCA = (session: Session) => {
             outputTranscriptStream = response.TranscriptResultStream;
         }
 
-     
-        // await writeStatusToKds({
-        //     callId: openparms.conversationId,
-        //     eventStatus: 'START_TRANSCRIPT'
-        // });
-        
         if (isTCAEnabled) {
             (async () => {
                 if (outputCallAnalyticsStream) {   
                     for await (const event of outputCallAnalyticsStream) {
-                        await writeTCASegment(event, openparms.conversationId);
-                        // await writeCategoryMatched(event, openparms.conversationId, sessionId);
+                        if (event.UtteranceEvent) {
+                            await writeTCASegment(event.UtteranceEvent, openparms.conversationId);
+                        }
+                        if (event.CategoryEvent) {
+                            await writeCategoryMatched(event.CategoryEvent, openparms.conversationId);
+                        }
                     }
                 }
             })()
@@ -169,12 +166,7 @@ export const addStreamToLCA = (session: Session) => {
         }
         
         return async () => {
-            
-            // await writeStatusToKds({
-            //     callId: openparms.conversationId,
-            //     eventStatus: 'END_TRANSCRIPT'
-            // });      
-            
+
             await writeCallEventToKds({
                 callId: openparms.conversationId,
                 eventStatus: 'END',
