@@ -14,8 +14,9 @@
 
 import { 
     CallEvent, 
-    // CallEventStatus, 
-    CallRecordingEvent 
+    CallEventStatus, 
+    CallRecordingEvent,
+    KDSTranscriptSegment
 } from './entities-lca';
 
 import { 
@@ -23,7 +24,6 @@ import {
     CallAnalyticsTranscriptResultStream,
     UtteranceEvent,
     CategoryEvent,
-    IssueDetected,
 } from '@aws-sdk/client-transcribe-streaming';
 import { 
     KinesisClient, 
@@ -48,7 +48,6 @@ export const writeCallEventToKds = async (callEvent: CallEvent ) => {
     const kdsObj =  {
         CallId: callEvent.callId,
         EventType: callEvent.eventStatus,
-        // Channel: callEvent.channel,
         CustomerPhoneNumber: callEvent.fromNumber || '',
         SystemPhoneNumber: callEvent.toNumber || '',
         CreatedAt: now,
@@ -99,35 +98,33 @@ export const writeRecordingUrlToKds = async (recordingEvent: CallRecordingEvent)
     }
 };
 
-// export const writeStatusToKds = async (status: CallEventStatus) => {
+export const writeStatusToKds = async (status: CallEventStatus) => {
 
-//     const now = new Date().toISOString();
-//     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
+    const now = new Date().toISOString();
+    const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
   
-//     const kdsObj =  {
-//         CallId: status.callId,
-//         EventType: status.eventStatus,
-//         Channel: status.channel,
-//         TransactionId: status.transactionId || '', 
-//         CreatedAt: now,
-//         ExpiresAfter: expiration.toString(),
-//     };
-//     const putParams = {
-//         StreamName: kdsStreamName,
-//         PartitionKey: status.callId,
-//         Data: Buffer.from(JSON.stringify(kdsObj))
-//     };
+    const kdsObj =  {
+        CallId: status.callId,
+        EventType: status.eventStatus,
+        CreatedAt: now,
+        ExpiresAfter: expiration.toString(),
+    };
+    const putParams = {
+        StreamName: kdsStreamName,
+        PartitionKey: status.callId,
+        Data: Buffer.from(JSON.stringify(kdsObj))
+    };
 
-//     const putCmd = new PutRecordCommand(putParams);
-//     try {
-//         await kinesisClient.send(putCmd);
-//     } catch (error) {
-//         console.error('Error writing transcription segment to KDS', error);
-//     }
+    const putCmd = new PutRecordCommand(putParams);
+    try {
+        await kinesisClient.send(putCmd);
+    } catch (error) {
+        console.error('Error writing transcription segment to KDS', error);
+    }
 
-// };
+};
 
-export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: string, transactionId:string | undefined) {
+export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: string) {
 
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
         if (transcribeMessageJson.Transcript?.Results[0].Alternatives && transcribeMessageJson.Transcript?.Results[0].Alternatives?.length > 0) {
@@ -137,32 +134,25 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             if (result.IsPartial == undefined || (result.IsPartial == true && !savePartial)) {
                 return;
             }
-            
-            const channel = (result.ChannelId ==='ch_0' ? 'CALLER' : 'AGENT');
-            const startTime = result.StartTime || '';
-            const endTime = result.EndTime || '';
-            const resultId = result.ResultId || '';
-            const transid = transactionId || '';
             const { Transcript: transcript } = transcribeMessageJson.Transcript.Results[0].Alternatives[0];
-            const ispartial: boolean = result.IsPartial;
-            // console.log(channel, ': ',transcript);
             const now = new Date().toISOString();
             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
-            const eventType = 'ADD_TRANSCRIPT_SEGMENT';
-            const kdsObject = {
-                Channel: channel,
-                TransactionId: transid,
+
+            const kdsObject:KDSTranscriptSegment = {
+                EventType: 'ADD_TRANSCRIPT_SEGMENT',
                 CallId: callId,
-                SegmentId: resultId,
-                StartTime: startTime.toString(),
-                EndTime: endTime.toString(),
+                Channel: (result.ChannelId ==='ch_0' ? 'CALLER' : 'AGENT'),
+                SegmentId: result.ResultId || '',
+                StartTime: (result.StartTime || '').toString(),
+                EndTime: (result.EndTime || '').toString(),
                 Transcript: transcript || '',
-                IsPartial: ispartial,
-                EventType: eventType.toString(),
+                IsPartial: result.IsPartial,
                 CreatedAt: now,
-                ExpiresAfter: expiration.toString()
+                ExpiresAfter: expiration.toString(),
+                Sentiment: undefined,
+                IssuesDetected: undefined
             };
-            
+
             const putParams = {
                 StreamName: kdsStreamName,
                 PartitionKey: callId,
@@ -179,57 +169,39 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
     }
 };
 
-export const writeTCASegment = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
+export const writeTCASegment = async function(event:CallAnalyticsTranscriptResultStream, callId: string) {
     
     if (event.UtteranceEvent) {
         const utterances:UtteranceEvent = event.UtteranceEvent;
-        // const categories:CategoryEvent | undefined = event.CategoryEvent;
         
         if (utterances.IsPartial && !savePartial) {
             return;
         }
         if (utterances.Transcript) {   
-            const channel = utterances.ParticipantRole;
-            const startTime = utterances.BeginOffsetMillis|| '';
-            const endTime = utterances.EndOffsetMillis || '';
-            const resultId = utterances.UtteranceId || '';
-            const transid = transactionId || '';
-            const transcript = utterances.Transcript;
-            const ispartial: boolean | undefined = utterances.IsPartial;
             const now = new Date().toISOString();
             const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
-            let issuesDetected:IssueDetected [] = [];
-            if (utterances.IssuesDetected) {
-                issuesDetected = utterances.IssuesDetected;
-            }
-            let sentiment = '';
-            if (utterances.Sentiment) {
-                sentiment = utterances.Sentiment;
-            }
-            // let categoryEvent:CategoryEvent = {};
-            
-            // if (categories) {
-            //     categoryEvent = categories;
-            // } 
 
-            const eventType = 'ADD_TRANSCRIPT_SEGMENT';
-            
-            const kdsObject = {
-                Channel: channel,
-                TransactionId: transid,
+            const kdsObject:KDSTranscriptSegment = {
+                EventType: 'ADD_TRANSCRIPT_SEGMENT',
                 CallId: callId,
-                SegmentId: resultId,
-                StartTime: startTime.toString(),
-                EndTime: endTime.toString(),
-                Transcript: transcript || '',
-                IsPartial: ispartial,
-                IssuesDetected: issuesDetected,
-                // CategoryEvent: categoryEvent,
-                Sentiment: sentiment,
-                EventType: eventType.toString(),
+                Channel: utterances.ParticipantRole || '',
+                SegmentId: utterances.UtteranceId || '',
+                StartTime: (utterances.BeginOffsetMillis || '').toString(),
+                EndTime: (utterances.EndOffsetMillis || '').toString(),
+                Transcript: utterances.Transcript,
+                IsPartial: utterances.IsPartial,
                 CreatedAt: now,
-                ExpiresAfter: expiration.toString()
+                ExpiresAfter: expiration.toString(),
+                Sentiment: undefined,
+                IssuesDetected: undefined
             };
+            if (utterances.Sentiment) {
+                kdsObject['Sentiment'] = utterances.Sentiment;
+            }
+            
+            if (utterances.IssuesDetected) {
+                kdsObject['IssuesDetected'] = utterances.IssuesDetected;
+            }
             const putParams = {
                 StreamName: kdsStreamName,
                 PartitionKey: callId,
@@ -247,7 +219,7 @@ export const writeTCASegment = async function(event:CallAnalyticsTranscriptResul
     }
 };
 
-export const writeCategoryMatched = async function(event:CallAnalyticsTranscriptResultStream, callId: string, transactionId:string | undefined) {
+export const writeCategoryMatched = async function(event:CallAnalyticsTranscriptResultStream, callId: string) {
 
     if (event.CategoryEvent) {
         const categories:CategoryEvent = event.CategoryEvent;
@@ -257,7 +229,6 @@ export const writeCategoryMatched = async function(event:CallAnalyticsTranscript
                 categories.MatchedDetails[key].TimestampRanges?.forEach(async (ts) => {
                     const startTime = ts.BeginOffsetMillis|| '';
                     const endTime = ts.EndOffsetMillis || '';
-                    const transid = transactionId || '';
                     const now = new Date().toISOString();
                     const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
                     const matchedCategory = category;
@@ -265,7 +236,6 @@ export const writeCategoryMatched = async function(event:CallAnalyticsTranscript
                     const eventType = 'ADD_CALL_CATEGORY';
 
                     const kdsObject = {
-                        TransactionId: transid,
                         CallId: callId,
                         MatchedCategory: matchedCategory,
                         MatchedKeyWords: matchedKeyWords,

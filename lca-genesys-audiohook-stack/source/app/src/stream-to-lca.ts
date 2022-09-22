@@ -18,7 +18,7 @@ import { MediaDataFrame } from './audiohook/mediadata';
 import { Session } from './session';
 import { 
     writeCallEventToKds, 
-    // writeStatusToKds, 
+    writeStatusToKds, 
     writeTranscriptionSegment,
     writeTCASegment,
     // writeCategoryMatched,
@@ -86,7 +86,6 @@ export const addStreamToLCA = (session: Session) => {
         };
 
  
-        let sessionId: string | undefined;
         let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
         let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
 
@@ -105,7 +104,6 @@ export const addStreamToLCA = (session: Session) => {
             session.logger.info(
                 `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
             );
-            sessionId = response.SessionId;
             outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
         } else {
             const response = await client.send(
@@ -124,23 +122,20 @@ export const addStreamToLCA = (session: Session) => {
             session.logger.info(
                 `=== Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`
             );
-            sessionId = response.SessionId;
             outputTranscriptStream = response.TranscriptResultStream;
         }
 
      
-        // await writeStatusToKds({
-        //     callId: openparms.conversationId,
-        //     eventStatus: 'START_TRANSCRIPT',
-        //     channel: 'STEREO',
-        //     transactionId: sessionId
-        // });
+        await writeStatusToKds({
+            callId: openparms.conversationId,
+            eventStatus: 'START_TRANSCRIPT'
+        });
         
         if (isTCAEnabled) {
             (async () => {
                 if (outputCallAnalyticsStream) {   
                     for await (const event of outputCallAnalyticsStream) {
-                        await writeTCASegment(event, openparms.conversationId, sessionId);
+                        await writeTCASegment(event, openparms.conversationId);
                         // await writeCategoryMatched(event, openparms.conversationId, sessionId);
                     }
                 }
@@ -159,7 +154,7 @@ export const addStreamToLCA = (session: Session) => {
                     for await (const event of outputTranscriptStream) {
                         if (event.TranscriptEvent) {
                             const message: TranscriptEvent = event.TranscriptEvent;
-                            await writeTranscriptionSegment(message, openparms.conversationId, sessionId);
+                            await writeTranscriptionSegment(message, openparms.conversationId);
                         }
                     }
                 }
@@ -175,12 +170,10 @@ export const addStreamToLCA = (session: Session) => {
         
         return async () => {
             
-            // await writeStatusToKds({
-            //     callId: openparms.conversationId,
-            //     eventStatus: 'END_TRANSCRIPT',
-            //     channel: 'STEREO',
-            //     transactionId: sessionId
-            // });      
+            await writeStatusToKds({
+                callId: openparms.conversationId,
+                eventStatus: 'END_TRANSCRIPT'
+            });      
             
             await writeCallEventToKds({
                 callId: openparms.conversationId,

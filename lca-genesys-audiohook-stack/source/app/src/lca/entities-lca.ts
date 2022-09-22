@@ -12,6 +12,9 @@
 // # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // # See the License for the specific language governing permissions and
 // # limitations under the License.
+import { 
+    IssueDetected
+} from '@aws-sdk/client-transcribe-streaming';
 
 export type CallEvent = {
     callId: string,
@@ -21,12 +24,10 @@ export type CallEvent = {
 };
 
 
-// export type CallEventStatus = {
-//     callId: string,
-//     eventStatus: string,
-//     channel: string,
-//     transactionId: string | undefined
-// };
+export type CallEventStatus = {
+    callId: string,
+    eventStatus: string
+};
 
 export type CallRecordingEvent = {
     callId: string,
@@ -35,3 +36,21 @@ export type CallRecordingEvent = {
     recordingsKeyPrefix: string,
     recordingsKey: string
 }
+
+
+export type KDSTranscriptSegment = {
+    EventType: string,
+    Channel: string,
+    CallId: string,
+    SegmentId: string,
+    StartTime: string,
+    EndTime: string,
+    Transcript: string,
+    IsPartial?: boolean,
+    CreatedAt: string,
+    ExpiresAfter: string,
+    Sentiment?: string,
+    IssuesDetected?: IssueDetected []
+}
+
+
