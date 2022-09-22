@@ -163,8 +163,8 @@ def transform_segment_to_issues_agent_assist(
     if not issues_detected:
         raise ValueError("Invalid issue segment")
 
-    begin_offset = issue["CharacterOffsets"]["BeginOffsetChar"]
-    end_offset = issue["CharacterOffsets"]["EndOffsetChar"]
+    begin_offset = issue["CharacterOffsets"]["Begin"]
+    end_offset = issue["CharacterOffsets"]["End"]
     issue_transcript = transcript[begin_offset:end_offset]
     start_time: float = message["StartTime"] / 1000
     end_time: float = message["EndTime"] / 1000
