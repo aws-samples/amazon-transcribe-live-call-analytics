@@ -85,6 +85,14 @@ CALL_EVENT_TYPE_TO_STATUS = {
     "ADD_CHANNEL_S3_RECORDING_URL": "ENDED",
     "ADD_S3_RECORDING_URL": "ENDED",
 } 
+SENTIMENT_WEIGHT = dict(POSITIVE=5, NEGATIVE=-5, NEUTRAL=0, MIXED=0)
+
+SENTIMENT_SCORE = dict(
+    Positive=0,
+    Negative=0,
+    Neutral=0,
+    Mixed=0,
+)
 
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
@@ -106,8 +114,6 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
     if channel == "CUSTOMER":
         channel = "CALLER"
 
-    # stream_arn: str = message["StreamArn"]
-    transaction_id: str = message["TransactionId"]
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
     end_time: float = message["EndTime"]
@@ -119,8 +125,6 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
     return dict(
         CallId=call_id,
         Channel=channel,
-        # StreamArn=stream_arn,
-        TransactionId=transaction_id,
         SegmentId=segment_id,
         StartTime=start_time,
         EndTime=end_time,
@@ -134,9 +138,12 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
 def transform_segment_to_add_sentiment(message: Dict) -> Dict[str, object]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
 
-    sentiment: str = message['Sentiment']
+    sentiment: str = message["Sentiment"]
+
     return dict(
         Sentiment=sentiment,
+        SentimentScore=SENTIMENT_SCORE,
+        SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
     )
 
 def transform_segment_to_issues_agent_assist(
@@ -151,7 +158,6 @@ def transform_segment_to_issues_agent_assist(
     segment_id = str(uuid.uuid4())
     channel = "AGENT_ASSISTANT"
     transcript = message["Transcript"]
-    # transcript = segment_item["Content"]
 
     issues_detected = message.get("IssuesDetected", [])
     if not issues_detected:
@@ -244,12 +250,10 @@ async def add_sentiment_to_transcript(
         **transform_segment_to_add_transcript({**message}),
     }
  
-    if 'Sentiment' in message:
+    if "Sentiment" in message:
         sentiment = {
             **transform_segment_to_add_sentiment({**message})
         }
-        sentiment["SentimentWeighted"] = None    
-        # SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
         
     else:
         text = transcript_segment["Transcript"]
@@ -584,8 +588,38 @@ def add_lex_agent_assistances(
 
     return tasks
 
+async def send_issues_agent_assist(
+    transcript_segment_args: Dict[str, Any],
+    content: str,
+    appsync_session: AppsyncAsyncClientSession,
+):
+    """Sends Issues detected Agent Assist Requests"""
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
 
-def add_tca_agent_assistances(
+    result = {}
+    transcript = transcript_segment_args["Transcript"]
+    if transcript:
+        transcript_segment = {**transcript_segment_args, "Transcript": transcript}
+
+        query = dsl_gql(
+            DSLMutation(
+                schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                    *transcript_segment_fields(schema),
+                )
+            )
+        )
+        
+        result = await execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+        )
+
+    return result
+
+def add_issues_detected_agent_assistances(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
 ) -> List[Coroutine]:
@@ -600,7 +634,7 @@ def add_tca_agent_assistances(
     start_time: float
     end_time: float
 
-    send_tca_agent_assist_args = []
+    send_issues_agent_assist_args = []
     
     issues_detected = message.get("IssuesDetected", [])
     for issue in issues_detected:
@@ -608,13 +642,13 @@ def add_tca_agent_assistances(
             {**message},
             issue=issue
         )
-        send_tca_agent_assist_args.append(
+        send_issues_agent_assist_args.append(
             dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
         )
     
     tasks = []
-    for agent_assist_args in send_tca_agent_assist_args:
-        task = send_lex_agent_assist(
+    for agent_assist_args in send_issues_agent_assist_args:
+        task = send_issues_agent_assist(
             appsync_session=appsync_session,
             **agent_assist_args,
         )
@@ -818,8 +852,8 @@ async def execute_process_event_api_mutation(
 
         # Babu: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
         # This will be removed/replaced once TCA design is finalized
-        if 'IssuesDetected' in message:
-            add_tca_agent_assist_tasks = add_tca_agent_assistances(
+        if "IssuesDetected" in message:
+            add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
                 message=message,
                 appsync_session=appsync_session
             )    
