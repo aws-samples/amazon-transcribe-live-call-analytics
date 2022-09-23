@@ -53,7 +53,7 @@ const createHeader = function (length) {
   return buffer;
 };
 
-const mergeFiles = async function (event) {
+export const mergeFiles = async function (event) {
   let totalSize = 0;
   const combinedRawFilename = `${tempFilePath + event.callId}-combined.raw`;
   const combinedWavFilename = `${tempFilePath + event.callId}.wav`;
@@ -116,5 +116,3 @@ const mergeFiles = async function (event) {
 
   console.log('Done', data);
 };
-
-exports.mergeFiles = mergeFiles;

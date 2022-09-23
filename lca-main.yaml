@@ -133,7 +133,15 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
-
+  
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: Set the default operational mode for Transcribe
+    
   TranscribeContentRedactionType:
     Type: String
     Default: PII
@@ -567,6 +575,7 @@ Resources:
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode

@@ -95,6 +95,14 @@ Parameters:
     Description: >-
       S3 Bucket name for recordings
 
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: Set the default operational mode for Transcribe
+
   IsContentRedactionEnabled:
     Type: String
     Default: "false"
@@ -188,6 +196,7 @@ Resources:
     Properties:
       TemplateURL: ./cloudformation-templates/chime-vc-call-transcriber.yaml
       Parameters:
+        TranscribeApiMode: !Ref TranscribeApiMode
         AudioFilePrefix: !Ref AudioFilePrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn

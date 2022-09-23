@@ -6,16 +6,22 @@
   "author": "Chris Lott",
   "license": "Apache-2.0",
   "dependencies": {
-    "@aws-sdk/client-kinesis":"^3.105.0",
     "@aws-sdk/client-dynamodb": "^3.92.0",
     "@aws-sdk/client-eventbridge": "^3.92.0",
+    "@aws-sdk/client-kinesis": "^3.105.0",
     "@aws-sdk/client-kinesis-video": "^3.92.0",
     "@aws-sdk/client-kinesis-video-media": "^3.92.0",
     "@aws-sdk/client-lambda": "^3.92.0",
     "@aws-sdk/client-s3": "^3.92.0",
-    "@aws-sdk/client-transcribe-streaming": "^3.92.0",
+    "@aws-sdk/client-transcribe-streaming": "file:client-transcribe-streaming/aws-sdk-client-transcribe-streaming-v3.142.0.tgz",
     "block-stream2": "^2.1.0",
     "ebml-stream": "^1.0.3",
-    "interleave-stream": "^1.0.2"
+    "eslint": "^8.23.1",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "interleave-stream": "^1.0.2",
+    "prettier": "^2.7.1"
   }
 }

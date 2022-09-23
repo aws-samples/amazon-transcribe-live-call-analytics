@@ -37,6 +37,14 @@ Parameters:
     Description: >-
       S3 Bucket name for recordings
 
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: Set the default operational mode for Transcribe
+    
   IsContentRedactionEnabled:
     Type: String
     Default: "false"
@@ -127,6 +135,7 @@ Resources:
       Tracing: Active
       Environment:
         Variables:
+          TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
           BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
@@ -184,6 +193,7 @@ Resources:
                   - transcribe:ListTranscriptionJobs
                   - transcribe:ListVocabularies
                   - transcribe:StartStreamTranscription
+                  - transcribe:StartCallAnalyticsStreamTranscription
                   - transcribe:StartTranscriptionJob
                 Resource: "*"
               - Action:
