@@ -131,10 +131,10 @@ export const addStreamToLCA = (session: Session) => {
             (async () => {
                 if (outputCallAnalyticsStream) {   
                     for await (const event of outputCallAnalyticsStream) {
-                        if (event.UtteranceEvent) {
+                        if (event.UtteranceEvent && event.UtteranceEvent.UtteranceId) {
                             await writeAddTranscriptSegmentEvent(event.UtteranceEvent, undefined, openparms.conversationId);
                         }
-                        if (event.CategoryEvent) {
+                        if (event.CategoryEvent && event.CategoryEvent.MatchedCategories) {
                             await writeAddCallCategoryEvent(event.CategoryEvent, openparms.conversationId);
                         }
                     }
