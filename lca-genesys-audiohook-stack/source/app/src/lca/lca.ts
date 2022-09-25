@@ -42,11 +42,6 @@ const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
 const kinesisClient = new KinesisClient({ region: awsRegion });
 
 export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent ) => {
-
-    const now = new Date().toISOString();
-
-    callEvent.CreatedAt = now;
-    callEvent.UpdatedAt = now;
     
     const putParams = {
         StreamName: kdsStreamName,
@@ -90,7 +85,6 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 Transcript: transcript || '',
                 IsPartial: result.IsPartial,
                 CreatedAt: now,
-                UpdatedAt: now,
                 TranscriptEvent: undefined,
                 UtteranceEvent: undefined,
             };
@@ -143,7 +137,6 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
         TranscriptEvent: transcriptEvent,
         UtteranceEvent: utteranceEvent,
         CreatedAt: now,
-        UpdatedAt: now,
     };
 
     const putParams = {
@@ -173,7 +166,6 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
             CallId: callId,
             CategoryEvent: categoryEvent,
             CreatedAt: now,
-            UpdatedAt: now,
         };
 
         const putParams = {
