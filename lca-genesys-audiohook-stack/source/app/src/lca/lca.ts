@@ -43,7 +43,7 @@ const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
 
 const kinesisClient = new KinesisClient({ region: awsRegion });
 
-export const writeCallEventToKds = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent ) => {
+export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent ) => {
 
     const now = new Date().toISOString();
     const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
@@ -168,7 +168,7 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     }
 };
 
-export const writeAddCalCategoryEvent = async function(categoryEvent:CategoryEvent, callId: Uuid) {
+export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEvent, callId: Uuid) {
 
     if (categoryEvent) {
         const now = new Date().toISOString();

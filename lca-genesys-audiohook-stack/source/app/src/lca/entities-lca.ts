@@ -31,9 +31,9 @@ export type EventType =
 export type CallEventBase<Type extends EventType = EventType> = {
     EventType: Type,
     CallId: Uuid,
-    CreatedAt: string,
-    UpdatedAt: string,
-    ExpiresAfter: string,
+    CreatedAt?: string,
+    UpdatedAt?: string,
+    ExpiresAfter?: string,
 };
 
 export type CallStartEvent = CallEventBase<'START'> & {
