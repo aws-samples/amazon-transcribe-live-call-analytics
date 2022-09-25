@@ -33,7 +33,6 @@ export type CallEventBase<Type extends EventType = EventType> = {
     CallId: Uuid,
     CreatedAt?: string,
     UpdatedAt?: string,
-    ExpiresAfter?: string,
 };
 
 export type CallStartEvent = CallEventBase<'START'> & {

@@ -36,9 +36,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
-const expireInDays = 90;
 const savePartial = (process.env['SAVE_PARTIAL_TRANSCRIPTS'] || 'true') === 'true';
-
 const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
 
 const kinesisClient = new KinesisClient({ region: awsRegion });
@@ -46,11 +44,9 @@ const kinesisClient = new KinesisClient({ region: awsRegion });
 export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent ) => {
 
     const now = new Date().toISOString();
-    const expiration = Date.now() / 1000 + expireInDays * 24 * 3600;
 
-    callEvent.CreatedAt = now,
-    callEvent.UpdatedAt = now,
-    callEvent.ExpiresAfter = expiration.toString();
+    callEvent.CreatedAt = now;
+    callEvent.UpdatedAt = now;
     
     const putParams = {
         StreamName: kdsStreamName,
@@ -69,9 +65,8 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
     }
 };
 
-// BabuS: TODO - writeTranscriptionSegment should be removed after Call Event processor is redesigned
-//     to process TranscriptEvent structure
-//
+// BabuS: TODO - writeTranscriptionSegment should be changed to support CustomCallTranscriptEvent 
+
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid) {
 
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
@@ -84,7 +79,6 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             }
             const { Transcript: transcript } = transcribeMessageJson.Transcript.Results[0].Alternatives[0];
             const now = new Date().toISOString();
-            const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
 
             const kdsObject:AddTranscriptSegmentEvent = {
                 EventType: 'ADD_TRANSCRIPT_SEGMENT',
@@ -97,7 +91,6 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 IsPartial: result.IsPartial,
                 CreatedAt: now,
                 UpdatedAt: now,
-                ExpiresAfter: expiration.toString(),
                 TranscriptEvent: undefined,
                 UtteranceEvent: undefined,
             };
@@ -143,7 +136,6 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     }
    
     const now = new Date().toISOString();
-    const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
 
     const kdsObject:AddTranscriptSegmentEvent = {
         EventType: 'ADD_TRANSCRIPT_SEGMENT',
@@ -152,7 +144,6 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
         UtteranceEvent: utteranceEvent,
         CreatedAt: now,
         UpdatedAt: now,
-        ExpiresAfter: expiration.toString(),
     };
 
     const putParams = {
@@ -176,7 +167,6 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
 
     if (categoryEvent) {
         const now = new Date().toISOString();
-        const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
     
         const kdsObject:AddCallCategoryEvent = {
             EventType: 'ADD_CALL_CATEGORY',
@@ -184,7 +174,6 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
             CategoryEvent: categoryEvent,
             CreatedAt: now,
             UpdatedAt: now,
-            ExpiresAfter: expiration.toString(),
         };
 
         const putParams = {

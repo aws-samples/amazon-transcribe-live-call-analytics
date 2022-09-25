@@ -577,13 +577,30 @@ def add_lex_agent_assistances(
     """Add Lex Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
     call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    is_partial: bool = message["IsPartial"]
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001 # UI sort order
-    transcript: str = message["Transcript"]
+    segment_id: str = str(uuid.uuid4())
+
+    utteranceEvent = message.get("UtteranceEvent", None)
+    transcriptEvent = message.get("TranscriptEvent", None)
+    if (utteranceEvent):
+        channel: str = utteranceEvent["ParticipantRole"]
+        if channel == "CUSTOMER":
+            channel = "CALLER"
+        # segment_id: str = utteranceEvent["UtteranceId"]
+        start_time: float = utteranceEvent["BeginOffsetMillis"]/1000
+        end_time: float = utteranceEvent["EndOffsetMillis"]/1000
+        transcript: str = utteranceEvent["Transcript"]
+        is_partial: bool = utteranceEvent["IsPartial"]
+    elif(transcriptEvent):
+        # BabuS - TO DO: add processing for transcript event. 
+        None
+    else:
+        channel: str = message["Channel"]
+        is_partial: bool = message["IsPartial"]
+        # segment_id: str = message["SegmentId"]
+        start_time: float = message["StartTime"]
+        end_time: float = message["EndTime"]
+        end_time = float(end_time) + 0.001 # UI sort order
+        transcript: str = message["Transcript"]
     created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lex_agent_assist_args = []
@@ -597,7 +614,7 @@ def add_lex_agent_assistances(
                         CreatedAt=created_at,
                         EndTime=end_time,
                         IsPartial=is_partial,
-                        SegmentId=str(uuid.uuid4()),
+                        SegmentId=segment_id,
                         StartTime=start_time,
                         Status="TRANSCRIBING",
                     ),
@@ -764,13 +781,29 @@ def add_lambda_agent_assistances(
     """Add Lambda Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
     call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    is_partial: bool = message["IsPartial"]
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001 # UI sort order
-    transcript: str = message["Transcript"]
+    segment_id: str = str(uuid.uuid4())
+    utteranceEvent = message.get("UtteranceEvent", None)
+    transcriptEvent = message.get("TranscriptEvent", None)
+    if (utteranceEvent):
+        channel: str = utteranceEvent["ParticipantRole"]
+        if channel == "CUSTOMER":
+            channel = "CALLER"
+        # segment_id: str = utteranceEvent["UtteranceId"]
+        start_time: float = utteranceEvent["BeginOffsetMillis"]/1000
+        end_time: float = utteranceEvent["EndOffsetMillis"]/1000
+        transcript: str = utteranceEvent["Transcript"]
+        is_partial: bool = utteranceEvent["IsPartial"]
+    elif(transcriptEvent):
+        # BabuS - TO DO: add processing for transcript event. 
+        None
+    else:
+        channel: str = message["Channel"]
+        is_partial: bool = message["IsPartial"]
+        # segment_id: str = message["SegmentId"]
+        start_time: float = message["StartTime"]
+        end_time: float = message["EndTime"]
+        end_time = float(end_time) + 0.001 # UI sort order
+        transcript: str = message["Transcript"]
     created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lambda_agent_assist_args = []
@@ -784,7 +817,7 @@ def add_lambda_agent_assistances(
                         CreatedAt=created_at,
                         EndTime=end_time,
                         IsPartial=is_partial,
-                        SegmentId=str(uuid.uuid4()),
+                        SegmentId=segment_id,
                         StartTime=start_time,
                         Status="TRANSCRIBING",
                     ),
@@ -871,7 +904,10 @@ async def execute_process_event_api_mutation(
 
 
     elif event_type == "ADD_TRANSCRIPT_SEGMENT":
-        # UPDATE STATUS
+        _utteranceEvent = message.get("UtteranceEvent", None)
+        _transcriptEvent = message.get("TranscriptEvent", None)
+        _customTranscriptEvent = message.get("CustomTranscriptEvent", None)
+
         LOGGER.debug("Add Transcript Segment")
         add_transcript_tasks = add_transcript_segments(
             message=message,
@@ -886,7 +922,7 @@ async def execute_process_event_api_mutation(
             )
 
         utteranceEvent = message.get("UtteranceEvent", None)
-        if (utteranceEvent):
+        if utteranceEvent:
             issuesdetected = utteranceEvent.get("IssuesDetected", None)
             LOGGER.debug("Issues Detected:")
             LOGGER.debug(issuesdetected)
