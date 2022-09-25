@@ -600,6 +600,8 @@ async def send_issues_agent_assist(
 
     result = {}
     transcript = transcript_segment_args["Transcript"]
+    LOGGER.debug("transcript_segment_args")
+    LOGGER.debug(transcript_segment_args)
     if transcript:
         transcript_segment = {**transcript_segment_args, "Transcript": transcript}
         LOGGER.debug("Issue Agent Assist segment")
