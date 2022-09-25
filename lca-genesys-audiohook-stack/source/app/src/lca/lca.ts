@@ -69,6 +69,9 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
     }
 };
 
+// BabuS: TODO - writeTranscriptionSegment should be removed after Call Event processor is redesigned
+//     to process TranscriptEvent structure
+//
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid) {
 
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
@@ -118,7 +121,8 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
     }
 };
 
-export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:UtteranceEvent | undefined , transcriptEvent:TranscriptEvent | undefined,  callId: Uuid) {
+export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:UtteranceEvent | undefined , 
+    transcriptEvent:TranscriptEvent | undefined,  callId: Uuid) {
     
     if (transcriptEvent) {
         if (transcriptEvent.Transcript?.Results && transcriptEvent.Transcript?.Results.length > 0) {
@@ -192,6 +196,7 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
         const putCmd = new PutRecordCommand(putParams);
         try {
             await kinesisClient.send(putCmd);
+            console.debug('Written ADD_CALL_CATEGORY to KDS');
             console.debug(JSON.stringify(kdsObject));
         } catch (error) {
             console.error('Error writing ADD_CALL_CATEGORY to KDS', error);

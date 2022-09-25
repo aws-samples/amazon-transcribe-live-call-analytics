@@ -21,12 +21,12 @@ import {
 export type Uuid = string;             // UUID as defined by RFC#4122
 
 export type EventType = 
-    | 'START' 
-    | 'ADD_TRANSCRIPT_SEGMENT' 
-    | 'UPDATE_AGENT' 
-    | 'ADD_S3_RECORDING_URL' 
-    | 'ADD_CALL_CATEGORY' 
-    | 'END';
+    | 'START' // required
+    | 'ADD_TRANSCRIPT_SEGMENT' // required 
+    | 'UPDATE_AGENT' // optional
+    | 'ADD_S3_RECORDING_URL'  // optional
+    | 'ADD_CALL_CATEGORY' // optional
+    | 'END'; // required
 
 export type CallEventBase<Type extends EventType = EventType> = {
     EventType: Type,

@@ -108,19 +108,33 @@ def get_ttl():
 ##########################################################################
 def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
-
+    
     call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    if channel == "CUSTOMER":
-        channel = "CALLER"
 
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    transcript: str = message["Transcript"]
-    is_partial: bool = message["IsPartial"]
+    utteranceEvent = message.get("UtteranceEvent", None)
+    transcriptEvent = message.get("TranscriptEvent", None)
+    if (utteranceEvent):
+        channel: str = utteranceEvent["PartipantRole"]
+        if channel == "CUSTOMER":
+            channel = "CALLER"
+        segment_id: str = utteranceEvent["UtteranceId"]
+        start_time: float = utteranceEvent["BeginOffsetMillis"]/1000
+        end_time: float = utteranceEvent["EndOffsetMillis"]/1000
+        transcript: str = utteranceEvent["Transcript"]
+        is_partial: bool = utteranceEvent["IsPartial"]
+    elif(transcriptEvent):
+        # BabuS - TO DO: add processing for transcript event. 
+        None
+    else:
+        call_id: str = message["CallId"]
+        channel: str = message["Channel"]
+        segment_id: str = message["SegmentId"]
+        start_time: float = message["StartTime"]
+        end_time: float = message["EndTime"]
+        transcript: str = message["Transcript"]
+        is_partial: bool = message["IsPartial"]
+
     created_at = datetime.utcnow().astimezone().isoformat()
-
 
     return dict(
         CallId=call_id,
@@ -135,16 +149,46 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
         Status="TRANSCRIBING",
     )
 
-def transform_segment_to_add_sentiment(message: Dict) -> Dict[str, object]:
+async def transform_segment_to_add_sentiment(message: Dict, text:str) -> Dict[str, object]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
 
-    sentiment: str = message["Sentiment"]
+    utteranceEvent = message.get("UtteranceEvent", None)
+    transcriptEvent = message.get("TranscriptEvent", None)
 
-    return dict(
-        Sentiment=sentiment,
-        SentimentScore=SENTIMENT_SCORE,
-        SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
-    )
+    if (utteranceEvent):
+        sentiment: str = utteranceEvent["Sentiment"]
+        return dict(
+            Sentiment=sentiment,
+            SentimentScore=SENTIMENT_SCORE,
+            SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
+        )
+    elif (transcriptEvent):
+        LOGGER.debug("detect sentiment on text: [%s]", text)
+        
+        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
+        LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
+
+        result = {}
+        comprehend_weighted_sentiment = ComprehendWeightedSentiment()
+
+        sentiment = {
+            k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
+        }
+        if sentiment:
+            if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
+                sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
+                        sentiment_response=sentiment_response
+                    )
+        return sentiment
+    else:
+        sentiment: str = message["Sentiment"]
+        return dict(
+            Sentiment=sentiment,
+            SentimentScore=SENTIMENT_SCORE,
+            SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
+        )
+
+        
 
 def transform_segment_to_issues_agent_assist(
     message: Dict[str, Any],
@@ -157,7 +201,9 @@ def transform_segment_to_issues_agent_assist(
     is_partial = False
     segment_id = str(uuid.uuid4())
     channel = "AGENT_ASSISTANT"
-    transcript = message["Transcript"]
+
+    utteranceEvent = message.get("UtteranceEvent", None)
+    transcript = utteranceEvent["Transcript"]
 
     issues_detected = message.get("IssuesDetected", [])
     if not issues_detected:
@@ -250,31 +296,11 @@ async def add_sentiment_to_transcript(
         **transform_segment_to_add_transcript({**message}),
     }
  
-    if "Sentiment" in message:
-        sentiment = {
-            **transform_segment_to_add_sentiment({**message})
-        }
-        
-    else:
-        text = transcript_segment["Transcript"]
-        LOGGER.debug("detect sentiment on text: [%s]", text)
-
-        
-        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
-        LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
-
-        result = {}
-        comprehend_weighted_sentiment = ComprehendWeightedSentiment()
-
-        sentiment = {
-            k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
-        }
-        if sentiment:
-            if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
-                sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
-                        sentiment_response=sentiment_response
-                    )
-        
+    text = transcript_segment["Transcript"]
+    sentiment = {
+        **transform_segment_to_add_sentiment({**message}, text)
+    }
+    
     transcript_segment_with_sentiment = {
         **transcript_segment,
         **sentiment
@@ -639,7 +665,9 @@ def add_issues_detected_agent_assistances(
 
     send_issues_agent_assist_args = []
     
-    issues_detected = message.get("IssuesDetected", [])
+    utteranceEvent = message.get("UtteranceEvent", None)
+    issues_detected = utteranceEvent.get("IssuesDetected", None)
+
     for issue in issues_detected:
         LOGGER.debug("Adding issue:")
         LOGGER.debug(issue)
@@ -857,17 +885,17 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
-        # BabuS: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
-        # This will be removed/replaced once TCA design is finalized
-        issuedetected = message.get("IssuesDetected", None)
-        LOGGER.debug("Issues Detected:")
-        LOGGER.debug(issuedetected)
-        if issuedetected:
-            LOGGER.debug("Adding Issues Agent Assist msgs")
-            add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
-                message=message,
-                appsync_session=appsync_session
-            )    
+        utteranceEvent = message.get("UtteranceEvent", None)
+        if (utteranceEvent):
+            issuesdetected = utteranceEvent.get("IssuesDetected", None)
+            LOGGER.debug("Issues Detected:")
+            LOGGER.debug(issuesdetected)
+            if issuesdetected:
+                LOGGER.debug("Adding Issues Agent Assist msgs")
+                add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
+                    message=message,
+                    appsync_session=appsync_session
+                )    
 
         add_lex_agent_assists_tasks = []
         if IS_LEX_AGENT_ASSIST_ENABLED:
@@ -888,6 +916,7 @@ async def execute_process_event_api_mutation(
             *add_transcript_sentiment_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
+            *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
 
@@ -909,16 +938,16 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
     
-    elif event_type == "ADD_CALL_CATEGORY":
-        LOGGER.debu("Add Call Category")
-        response = await execute_add_call_category_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
-        if isinstance(response, Exception):
-            return_value["errors"].append(response)
-        else:
-            return_value["successes"].append(response)
+    # elif event_type == "ADD_CALL_CATEGORY":
+    #     LOGGER.debug("Add Call Category")
+    #     response = await execute_add_call_category_mutation(
+    #                             message=message,
+    #                             appsync_session=appsync_session
+    #                     )
+    #     if isinstance(response, Exception):
+    #         return_value["errors"].append(response)
+    #     else:
+    #         return_value["successes"].append(response)
 
     elif event_type == "UPDATE_AGENT":
         # UPDATE AGENT 
