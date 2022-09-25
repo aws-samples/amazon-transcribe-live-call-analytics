@@ -13,47 +13,55 @@
 // # See the License for the specific language governing permissions and
 // # limitations under the License.
 import { 
-    IssueDetected
+    TranscriptEvent,
+    UtteranceEvent,
+    CategoryEvent,
 } from '@aws-sdk/client-transcribe-streaming';
 
-export type CallEvent = {
-    callId: string,
-    eventStatus: string,
-    fromNumber: string,
-    toNumber: string
+export type Uuid = string;             // UUID as defined by RFC#4122
+
+export type EventType = 
+    | 'START' 
+    | 'ADD_TRANSCRIPT_SEGMENT' 
+    | 'UPDATE_AGENT' 
+    | 'ADD_S3_RECORDING_URL' 
+    | 'ADD_CALL_CATEGORY' 
+    | 'END';
+
+export type CallEventBase<Type extends EventType = EventType> = {
+    EventType: Type,
+    CallId: Uuid,
+    CreatedAt: string,
+    UpdatedAt: string,
+    ExpiresAfter: string,
 };
 
-export type CallRecordingEvent = {
-    callId: string,
-    eventType: string,
-    recordingsBucket: string,
-    recordingsKeyPrefix: string,
-    recordingsKey: string
-}
+export type CallStartEvent = CallEventBase<'START'> & {
+    CustomerPhoneNumber: string,
+    SystemPhoneNumber: string
+};
 
-export interface KDSTranscriptSegment {
-    EventType: string,
-    Channel: string,
-    CallId: string,
-    SegmentId: string,
-    StartTime: number,
-    EndTime: number,
-    Transcript: string,
+export type CallEndEvent = CallEventBase<'END'> & {
+    CustomerPhoneNumber: string,
+    SystemPhoneNumber: string
+};
+
+export type CallRecordingEvent = CallEventBase<'ADD_S3_RECORDING_URL'> & {
+    RecordingUrl: string,
+};
+
+export type AddTranscriptSegmentEvent = CallEventBase<'ADD_TRANSCRIPT_SEGMENT'> & {
+    Channel?: string,
+    SegmentId?: string,
+    StartTime?: number,
+    EndTime?: number,
+    Transcript?: string,
     IsPartial?: boolean,
-    CreatedAt: string,
-    ExpiresAfter: string,
-    Sentiment?: string,
-    IssuesDetected?: IssueDetected []
-}
+    TranscriptEvent?: TranscriptEvent,
+    UtteranceEvent?: UtteranceEvent,
+};
 
-export interface KDSMatchedCategories {
-    EventType: string, 
-    CallId: string,
-    MatchedCategory: string,
-    MatchedKeyWords: string,
-    StartTime: number,
-    EndTime: number,
-    CreatedAt: string,
-    ExpiresAfter: string,
-}
+export type AddCallCategoryEvent = CallEventBase<'ADD_CALL_CATEGORY'> & {
+    CategoryEvent: CategoryEvent,
+};
 
