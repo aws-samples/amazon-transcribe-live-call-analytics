@@ -300,11 +300,12 @@ async def add_sentiment_to_transcript(
     sentiment = {
         **transform_segment_to_add_sentiment({**message}, text)
     }
-    
     transcript_segment_with_sentiment = {
         **transcript_segment,
         **sentiment
     }
+    
+    LOGGER.debug("Sentiment", extra=dict(segment=transcript_segment_with_sentiment))
     
     query = dsl_gql(
         DSLMutation(
@@ -904,9 +905,6 @@ async def execute_process_event_api_mutation(
 
 
     elif event_type == "ADD_TRANSCRIPT_SEGMENT":
-        _utteranceEvent = message.get("UtteranceEvent", None)
-        _transcriptEvent = message.get("TranscriptEvent", None)
-        _customTranscriptEvent = message.get("CustomTranscriptEvent", None)
 
         LOGGER.debug("Add Transcript Segment")
         add_transcript_tasks = add_transcript_segments(
@@ -914,15 +912,21 @@ async def execute_process_event_api_mutation(
             appsync_session=appsync_session,
         )
 
+        utteranceEvent = message.get("UtteranceEvent", None)
+        ispartial = True;
+        if utteranceEvent:
+            ispartial = utteranceEvent["IsPartial"]
+        else:
+            ispartial = message.get("IsPartial", True)
+        
         add_transcript_sentiment_tasks = []
-        if IS_SENTIMENT_ANALYSIS_ENABLED and not message.get("IsPartial", True):
+        if IS_SENTIMENT_ANALYSIS_ENABLED and not ispartial:
             add_transcript_sentiment_tasks = add_transcript_sentiment_analysis(
                 message=message,
                 appsync_session=appsync_session,
             )
 
         add_tca_agent_assist_tasks = []
-        utteranceEvent = message.get("UtteranceEvent", None)
         if utteranceEvent:
             issuesdetected = utteranceEvent.get("IssuesDetected", None)
             LOGGER.debug("Issues Detected:")
