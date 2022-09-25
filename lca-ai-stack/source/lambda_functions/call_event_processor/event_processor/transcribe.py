@@ -921,6 +921,7 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
+        add_tca_agent_assist_tasks = []
         utteranceEvent = message.get("UtteranceEvent", None)
         if utteranceEvent:
             issuesdetected = utteranceEvent.get("IssuesDetected", None)
