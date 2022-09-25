@@ -114,7 +114,7 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
     utteranceEvent = message.get("UtteranceEvent", None)
     transcriptEvent = message.get("TranscriptEvent", None)
     if (utteranceEvent):
-        channel: str = utteranceEvent["PartipantRole"]
+        channel: str = utteranceEvent["ParticipantRole"]
         if channel == "CUSTOMER":
             channel = "CALLER"
         segment_id: str = utteranceEvent["UtteranceId"]
