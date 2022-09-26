@@ -177,6 +177,7 @@ def transform_segment_to_issues_agent_assist(
     begin_offset = issue["CharacterOffsets"]["Begin"]
     end_offset = issue["CharacterOffsets"]["End"]
     issue_transcript = transcript[begin_offset:end_offset]
+    LOGGER.debug("issue_transcript",issue_transcript)
     start_time: float = message["StartTime"] / 1000
     end_time: float = message["EndTime"] / 1000
     end_time = end_time + 0.001 # UI sort order
@@ -264,20 +265,27 @@ async def add_sentiment_to_transcript(
     utteranceEvent = message.get("UtteranceEvent", None)
     sentiment = {}
     if (utteranceEvent):
-        sentimentlabel: str = utteranceEvent["Sentiment"]
+
+        sentimentlabel: str = utteranceEvent.get("Sentiment", "NEUTRAL")
+        if sentimentlabel.strip()=="":
+            sentimentlabel = "NEUTRAL"
         sentiment = dict(
             Sentiment=sentimentlabel,
             SentimentScore=SENTIMENT_SCORE,
-            SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
+            SentimentWeighted=None,
         )
+        if sentimentlabel in ["POSITIVE", "NEGATIVE"]:
+            sentiment["SentimentWeighted"]=SENTIMENT_WEIGHT.get(sentimentlabel, 0)
+
+        LOGGER.debug(sentiment)
     else: 
+
         text = transcript_segment["Transcript"]
         LOGGER.debug("detect sentiment on text: [%s]", text)
         
         sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
         LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
 
-        result = {}
         comprehend_weighted_sentiment = ComprehendWeightedSentiment()
 
         sentiment = {
@@ -288,14 +296,15 @@ async def add_sentiment_to_transcript(
                 sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
                         sentiment_response=sentiment_response
                     )
+            LOGGER.debug(sentiment)
 
     transcript_segment_with_sentiment = {
         **transcript_segment,
         **sentiment
     }
-    
     LOGGER.debug("Sentiment Object:", extra=dict(segment=transcript_segment_with_sentiment))
     
+    result = {}
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addTranscriptSegment.args(input=transcript_segment_with_sentiment).select(
@@ -904,7 +913,7 @@ async def execute_process_event_api_mutation(
         utteranceEvent = message.get("UtteranceEvent", None)
         ispartial = True;
         if utteranceEvent:
-            ispartial = utteranceEvent["IsPartial"]
+            ispartial = utteranceEvent.get("IsPartial", True)
         else:
             ispartial = message.get("IsPartial", True)
         
@@ -917,10 +926,10 @@ async def execute_process_event_api_mutation(
 
         add_tca_agent_assist_tasks = []
         if utteranceEvent:
-            issuesdetected = utteranceEvent.get("IssuesDetected", None)
-            LOGGER.debug("Issues Detected:")
-            LOGGER.debug(issuesdetected)
+            issuesdetected = utteranceEvent.get("IssuesDetected", [])
             if issuesdetected:
+                LOGGER.debug("Issues Detected:")
+                LOGGER.debug(issuesdetected)
                 LOGGER.debug("Adding Issues Agent Assist msgs")
                 add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
                     message=message,

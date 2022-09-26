@@ -85,6 +85,7 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 Transcript: transcript || '',
                 IsPartial: result.IsPartial,
                 CreatedAt: now,
+                UpdatedAt: now,
                 TranscriptEvent: undefined,
                 UtteranceEvent: undefined,
             };
@@ -137,6 +138,7 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
         TranscriptEvent: transcriptEvent,
         UtteranceEvent: utteranceEvent,
         CreatedAt: now,
+        UpdatedAt: now,
     };
 
     const putParams = {
@@ -166,6 +168,7 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
             CallId: callId,
             CategoryEvent: categoryEvent,
             CreatedAt: now,
+            UpdatedAt: now,
         };
 
         const putParams = {

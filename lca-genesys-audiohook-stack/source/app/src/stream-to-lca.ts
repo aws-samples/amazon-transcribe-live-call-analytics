@@ -59,7 +59,8 @@ export const addStreamToLCA = (session: Session) => {
             EventType: 'START',
             CallId: openparms.conversationId,
             CustomerPhoneNumber: openparms.participant.ani,
-            SystemPhoneNumber: openparms.participant.dnis
+            SystemPhoneNumber: openparms.participant.dnis,
+            CreatedAt: new Date().toISOString(),
         };
 
         await writeCallEvent(callEvent);
@@ -173,7 +174,8 @@ export const addStreamToLCA = (session: Session) => {
                 EventType: 'END',
                 CallId: openparms.conversationId,
                 CustomerPhoneNumber: openparms.participant.ani,
-                SystemPhoneNumber: openparms.participant.dnis
+                SystemPhoneNumber: openparms.participant.dnis,
+                UpdatedAt: new Date().toISOString(),
             };
             
             await writeCallEvent(callEvent);
