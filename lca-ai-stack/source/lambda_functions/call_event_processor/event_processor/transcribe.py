@@ -149,45 +149,10 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
         Status="TRANSCRIBING",
     )
 
-async def transform_segment_to_add_sentiment(message: Dict, text:str) -> Dict[str, object]:
-    """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
+# async def transform_segment_to_add_sentiment(message: Dict, text:str) -> Dict[str, object]:
+#     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
 
-    utteranceEvent = message.get("UtteranceEvent", None)
-    transcriptEvent = message.get("TranscriptEvent", None)
-
-    if (utteranceEvent):
-        sentiment: str = utteranceEvent["Sentiment"]
-        return dict(
-            Sentiment=sentiment,
-            SentimentScore=SENTIMENT_SCORE,
-            SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
-        )
-    elif (transcriptEvent):
-        LOGGER.debug("detect sentiment on text: [%s]", text)
-        
-        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
-        LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
-
-        result = {}
-        comprehend_weighted_sentiment = ComprehendWeightedSentiment()
-
-        sentiment = {
-            k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
-        }
-        if sentiment:
-            if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
-                sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
-                        sentiment_response=sentiment_response
-                    )
-        return sentiment
-    else:
-        sentiment: str = message["Sentiment"]
-        return dict(
-            Sentiment=sentiment,
-            SentimentScore=SENTIMENT_SCORE,
-            SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
-        )
-
+    
         
 
 def transform_segment_to_issues_agent_assist(
@@ -295,17 +260,41 @@ async def add_sentiment_to_transcript(
     transcript_segment = {
         **transform_segment_to_add_transcript({**message}),
     }
- 
-    text = transcript_segment["Transcript"]
-    sentiment = {
-        **transform_segment_to_add_sentiment({**message}, text)
-    }
+
+    utteranceEvent = message.get("UtteranceEvent", None)
+    sentiment = {}
+    if (utteranceEvent):
+        sentimentlabel: str = utteranceEvent["Sentiment"]
+        sentiment = dict(
+            Sentiment=sentimentlabel,
+            SentimentScore=SENTIMENT_SCORE,
+            SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
+        )
+    else: 
+        text = transcript_segment["Transcript"]
+        LOGGER.debug("detect sentiment on text: [%s]", text)
+        
+        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
+        LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
+
+        result = {}
+        comprehend_weighted_sentiment = ComprehendWeightedSentiment()
+
+        sentiment = {
+            k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
+        }
+        if sentiment:
+            if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
+                sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
+                        sentiment_response=sentiment_response
+                    )
+
     transcript_segment_with_sentiment = {
         **transcript_segment,
         **sentiment
     }
     
-    LOGGER.debug("Sentiment", extra=dict(segment=transcript_segment_with_sentiment))
+    LOGGER.debug("Sentiment Object:", extra=dict(segment=transcript_segment_with_sentiment))
     
     query = dsl_gql(
         DSLMutation(
