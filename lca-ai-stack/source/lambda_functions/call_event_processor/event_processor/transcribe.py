@@ -177,9 +177,10 @@ def transform_segment_to_issues_agent_assist(
     begin_offset = issue["CharacterOffsets"]["Begin"]
     end_offset = issue["CharacterOffsets"]["End"]
     issue_transcript = transcript[begin_offset:end_offset]
-    LOGGER.debug("issue_transcript",issue_transcript)
-    start_time: float = message["StartTime"] / 1000
-    end_time: float = message["EndTime"] / 1000
+    LOGGER.debug("issue_transcript")
+    LOGGER.debug(issue_transcript)
+    start_time: float = utteranceEvent["BeginOffsetMillis"] / 1000
+    end_time: float = utteranceEvent["EndOffsetMillis"] / 1000
     end_time = end_time + 0.001 # UI sort order
 
     return dict(
@@ -687,10 +688,7 @@ def add_issues_detected_agent_assistances(
     for issue in issues_detected:
         LOGGER.debug("Adding issue:")
         LOGGER.debug(issue)
-        issue_segment = transform_segment_to_issues_agent_assist(
-            {**message},
-            issue=issue
-        )
+        issue_segment = transform_segment_to_issues_agent_assist({**message}, issue=issue)
         LOGGER.debug("issue_segment:")
         LOGGER.debug(issue_segment)
         send_issues_agent_assist_args.append(
