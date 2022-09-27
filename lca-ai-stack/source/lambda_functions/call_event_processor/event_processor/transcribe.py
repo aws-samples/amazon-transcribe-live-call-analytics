@@ -170,7 +170,7 @@ def transform_segment_to_issues_agent_assist(
     utteranceEvent = message.get("UtteranceEvent", None)
     transcript = utteranceEvent["Transcript"]
 
-    issues_detected = message.get("IssuesDetected", [])
+    issues_detected = utteranceEvent.get("IssuesDetected", [])
     if not issues_detected:
         raise ValueError("Invalid issue segment")
 
