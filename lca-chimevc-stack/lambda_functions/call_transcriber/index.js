@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 // TODO: Retries and resiliency
 // TODO: Debug why sometimes it is now working twice
 
-const { DynamoDBClient, QueryCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const {
   TranscribeStreamingClient,
@@ -30,7 +30,7 @@ const { KinesisClient, PutRecordCommand } = require('@aws-sdk/client-kinesis');
 const { createHook } = require('async_hooks');
 
 const REGION = process.env.REGION || 'us-east-1';
-const { EVENT_SOURCING_TABLE_NAME } = process.env;
+const { TRANSCRIBER_CALL_EVENT_TABLE_NAME } = process.env;
 const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
@@ -227,18 +227,19 @@ const writeStatusToKds = async function (channel, status, callId, streamArn, tra
     console.error('Error writing transcription segment', error);
   }
 };
+
 const writeCallEventToDynamo = async function (callEvent) {
     const startTime = new Date(callEvent.detail.startTime);
     const expiration = getExpiration(1);
     const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
     const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
     const now = new Date().toISOString();
-  
+
     const putParams = {
-      TableName: EVENT_SOURCING_TABLE_NAME,
+      TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
       Item: {
         PK: { S: `ce#${callEvent.detail.callId}` },
-        SK: { S: `ts#${callEvent.detail.startTime}#et#${eventType}#c#${channel}` },
+        SK: { S: `${channel}` },
         CallId: { S: callEvent.detail.callId },
         ExpiresAfter: { N: expiration.toString() },
         CreatedAt: { S: now },
@@ -258,51 +259,64 @@ const writeCallEventToDynamo = async function (callEvent) {
     }
 };
 
-// Query KVS for START events for this callId
-const getStreamsFromDynamo = async function (callId, agentArn, callerArn) {
-  const resultArns = {
-    agentStreamArn: agentArn, // 'agent-channel-stream';
-    callerStreamArn: callerArn, // 'caller-channel-stream';
-  };
-
-  console.log('Retrieving KVS');
-  // Set the parameters
-  const dynamoParams = {
-    KeyConditionExpression: 'PK = :ce',
-    FilterExpression: '#event = :event',
-    ExpressionAttributeNames: {
-      '#event': 'EventType',
+const writeCallMetaDataToDynamo = async function (callMetadata) {
+  const expiration = getExpiration(1);
+  const now = new Date().toISOString();
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `cd#${callMetadata.callId}` },
+      SK: { S: `BOTH` },
+      CallId: { S: callEvent.detail.callId },
+      ExpiresAfter: { N: expiration.toString() },
+      CreatedAt: { S: now },
+      CustomerPhoneNumber: { S: callEvent.detail.fromNumber },
+      SystemPhoneNumber: { S: callEvent.detail.toNumber },
+      Channel: { S: channel },
+      EventType: { S: eventType },
+      StreamArn: { S: callEvent.detail.streamArn },
     },
-    ExpressionAttributeValues: {
-      ':ce': { S: `ce#${callId}` },
-      ':event': { S: 'START' },
-    },
-    TableName: EVENT_SOURCING_TABLE_NAME,
   };
-
-  console.log(JSON.stringify(dynamoParams));
-  const command = new QueryCommand(dynamoParams);
-
+  console.log(putParams);
+  const putCmd = new PutItemCommand(putParams);
   try {
-    const data = await dynamoClient.send(command);
-    data.Items.forEach((item) => {
-      console.log(JSON.stringify(item));
-      console.log(`Channel:${item.Channel.S}`);
-      if (item.Channel.S === 'AGENT') {
-        console.log('Found agent stream');
-        resultArns.agentStreamArn = item.StreamArn.S;
-      }
-      if (item.Channel.S === 'CALLER') {
-        console.log('Found caller stream');
-        resultArns.callerStreamArn = item.StreamArn.S;
-      }
-    });
+    await dynamoClient.send(putCmd);
   } catch (error) {
-    if (error === undefined) console.error('no error');
-    else console.error('Error with connection to database: ', error);
+    console.error('Error writing event', error);
   }
-  return resultArns;
 };
+
+// Retrieve Chime stream event for specified channel, waiting for up to 10s
+const getChannelStreamFromDynamo = async function (callId, channel) {
+  // Set the parameters
+  const params = {
+    Key: {
+      "PK": {
+        S: `ce#${callId}`
+      },
+      "SK": {
+        S: `${channel}`
+      }
+    },
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+  };
+  console.log("GetItem params: ", JSON.stringify(params));
+  const command = new GetItemCommand(params);
+  let agentStreamArn = undefined;
+  let loopCount = 0;
+  while (agentStreamArn === undefined && loopCount++ < 100) {
+    const data = await dynamoClient.send(command);
+    console.log("GetItem result: ",JSON.stringify(data));
+    if (data.Item) {
+      if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
+    } else {
+      console.log(loopCount, `${channel} stream not yet available. Sleeping 100ms.`);
+      await sleep(100);
+    }
+  }
+  return agentStreamArn;
+};
+
 
 const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   let actuallyStop = false;
@@ -537,14 +551,13 @@ const go = async function (
 
 // async function handler (event) {
 const handler = async function (event, context) {
+
   if (!event.detail.lambdaCount) event.detail.lambdaCount = 0;
   if (event.detail.lambdaCount > 30) {
     console.log('Stopping due to runaway recursive Lambda.');
   }
 
   console.log(JSON.stringify(event));
-
-  if (EVENT_TYPE[event.detail.streamingStatus] == "START") await writeCallEventToDynamo(event);
 
   let result;
 
@@ -559,45 +572,27 @@ const handler = async function (event, context) {
       event.detail.lastAgentFragment,
       event.detail.lastCallerFragment,
     );
-  } else if (event.detail.streamingStatus === 'STARTED') {
-    let agentStreamArn;
-    let callerStreamArn;
+  }
 
-    // save which stream we just received from event
-    if (event.detail.isCaller === true) {
-      callerStreamArn = event.detail.streamArn;
-    }
-    else {
-      //agentStreamArn = event.detail.streamArn;
-      console.log("this is not the caller stream, so return.");
+  if (event.source === "aws.chime" && event.detail.streamingStatus === 'STARTED') {
+
+    console.log("AWS Chime stream STARTED event received. Save 'ce#' record to DynamoDB.");
+    await writeCallEventToDynamo(event);
+
+    if (event.detail.isCaller === false) {
+      console.log("This is the AGENT stream (isCaller is false). Exit and wait for CALLER stream event to arrive.");
       return;
     }
 
-    let streamResults = await getStreamsFromDynamo(
+    console.log("This is the CALLER stream (isCaller is true). Get AGENT stream data from DynamoDB.");
+    let callerStreamArn = event.detail.streamArn;
+    let agentStreamArn = await getChannelStreamFromDynamo(
       event.detail.callId,
-      agentStreamArn,
-      callerStreamArn,
+      'AGENT',
     );
-    console.log(`agent stream:${streamResults.agentStreamArn}`);
-    console.log(`caller stream:${streamResults.callerStreamArn}`);
-
-    let loopCount = 0;
-
-    while (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
-      console.log(loopCount,'Agent or caller streams not yet available. Sleeping 100ms.');
-      await sleep(100);
-      streamResults = await getStreamsFromDynamo(
-        event.detail.callId,
-        agentStreamArn,
-        callerStreamArn,
-      );
-      console.log(`agent stream:${streamResults.agentStreamArn}`);
-      console.log(`caller stream:${streamResults.callerStreamArn}`);
-      loopCount = loopCount + 1;
-      if(loopCount == 100) {
-        console.log("Both KVS streams not active after 10 seconds. Exiting.");
-        return;
-      }
+    if (agentStreamArn == undefined) {
+      console.log(`Timed out waiting for AGENT stream event after 10s. Exiting.`);
+      return;
     }
 
     // Call customer LambdaHook, if present
@@ -630,15 +625,6 @@ const handler = async function (event, context) {
           }
       */
 
-      // Should we process this call?
-      if (payload.shouldProcessCall === false) {
-        console.log('Lambda hook returned shouldProcessCall=false, exiting.');
-        return;
-      }
-      if (payload.shouldProcessCall === true) {
-        console.log('Lambda hook returned shouldProcessCall=true, continuing.');
-      }
-
       // New CallId?
       if (payload.callId) {
         console.log(`Lambda hook returned new callId: "${payload.callId}"`);
@@ -648,7 +634,7 @@ const handler = async function (event, context) {
       // Swap caller and agent channels?
       if (payload.isCaller === false) {
         console.log(`Lambda hook returned isCaller=false, swapping caller/agent streams`);
-        [streamResults.agentStreamArn, streamResults.callerStreamArn] = [streamResults.callerStreamArn, streamResults.agentStreamArn];
+        [agentStreamArn, callerStreamArn] = [callerStreamArn, agentStreamArn];
       }
       if (payload.isCaller === true) {
         console.log(`Lambda hook returned isCaller=true, caller/agent streams not swapped`);
@@ -670,6 +656,15 @@ const handler = async function (event, context) {
         event.detail.toNumber = payload.toNumber;
       }
 
+      // Should we process this call?
+      if (payload.shouldProcessCall === false) {
+        console.log('Lambda hook returned shouldProcessCall=false, exiting.');
+        return;
+      }
+      if (payload.shouldProcessCall === true) {
+        console.log('Lambda hook returned shouldProcessCall=true, continuing.');
+      }
+
     }
 
     await writeCallEventToKds(event);
@@ -677,8 +672,8 @@ const handler = async function (event, context) {
     result = await go(
       event.detail.callId,
       0,
-      streamResults.agentStreamArn,
-      streamResults.callerStreamArn,
+      agentStreamArn,
+      callerStreamArn,
       undefined,
       undefined,
       undefined,
@@ -687,7 +682,7 @@ const handler = async function (event, context) {
 
   if (result) {
     if (timeToStop) {
-      console.log('Starting new Lambad');
+      console.log('Starting new Lambda');
       event.detail.streamingStatus = 'CONTINUE';
       event.detail.agentStreamArn = result.agentStreamArn;
       event.detail.callerStreamArn = result.callerStreamArn;

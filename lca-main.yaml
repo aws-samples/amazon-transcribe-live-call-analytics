@@ -599,8 +599,6 @@ Resources:
         AudioFilePrefix: !Ref AudioFilePrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
-        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
-        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType

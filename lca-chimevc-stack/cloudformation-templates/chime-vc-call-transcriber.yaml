@@ -20,18 +20,12 @@ Parameters:
     Type: String
     Description: >-
       Name of Kinesis Data Stream to publish events to
+
   KinesisDataStreamArn:
     Type: String
     Description: >-
       Arn of Kinesis Data Stream to publish events to
-  EventSourcingTableName:
-    Type: String
-    Description: >-
-      DynamoDB Event Table name
-  EventSourcingTableArn:
-    Type: String
-    Description: >-
-      DynamoDB Event Table Arn  
+
   S3BucketName:
     Type: String
     Description: >-
@@ -106,6 +100,33 @@ Resources:
   # Call Transcriber
   ##########################################################################
 
+  TranscriberCallEventTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AttributeDefinitions:
+        # primary key attributes
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ExpiresAfter
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+  
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -130,7 +151,7 @@ Resources:
           BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
-          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTableName
+          TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
           RECORDING_FILE_PREFIS3BucketNameX: !Ref AudioFilePrefix
@@ -208,7 +229,7 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                 Resource:
-                  - !Ref EventSourcingTableArn
+                  - !GetAtt TranscriberCallEventTable.Arn
 
               - Action:
                   - kinesis:PutRecord
