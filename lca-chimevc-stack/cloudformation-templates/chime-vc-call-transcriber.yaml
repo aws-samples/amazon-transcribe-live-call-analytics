@@ -276,12 +276,14 @@ Resources:
   EventBridgeRuleToTriggerCallTranscriberLambda:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered when the Chime VoiceConnector streaming status changes"
+      Description: "This rule is triggered when the ChimeVC streaming status changes, or when a START_CALL_PROCESSING event is sent from IVR"
       EventPattern:
         detail-type:
           - "Chime VoiceConnector Streaming Status"
+          - "START_CALL_PROCESSING"
         source:
           - aws.chime
+          - lca-solution
       Targets:
         - Id: CallTranscriberTarget
           Arn: !GetAtt CallTranscriberFunction.Arn
