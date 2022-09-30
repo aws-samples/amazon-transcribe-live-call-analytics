@@ -387,7 +387,6 @@ const getCallDataForStartCallProcessingEvent = async function (scpevent) {
   // Add Start Call Event info to saved callData object and write back to DDB for tracing
   callData.startCallProcessingEvent = scpevent;
   callData.callProcessingStartTime = new Date().toISOString();
-  await writeCallDataToDdb(callData);
   /* Start Call Event can contain following optional fields, used to modify callData:
           agentId: <string>,
           fromNumber: <string>,
