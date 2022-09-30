@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.1] - 2022-09-30
 ### Added
-- CallTranscriber now has the ability to delay start of call processing until a (new) START_CALL_PROCESSING event is received - useful when call is streaming is initiated when call is established but transcribing should be delayed until after IVR navigation and hold time and triggered only when agent and caller are connected.
+- CallTranscriber now has the ability to delay start of call processing until a (new) START_CALL_PROCESSING event is received - useful when call is streaming is initiated when call is established but transcribing should be delayed until after IVR navigation and hold time and triggered only when agent and caller are connected. See [Start call processing for a in-progress call](./lca-chimevc-stack/StartCallProcessingEvent.md).
 - Support markdown and html rendering in LCA UI
 - Use QnABot markdown response when available, to take advantage of new markdown rendering feature for Agent Assist.
 ### Changed
