@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2022-09-30
+### Added
+- CallTranscriber now has the ability to delay start of call processing until a (new) START_CALL_PROCESSING event is received - useful when call is streaming is initiated when call is established but transcribing should be delayed until after IVR navigation and hold time and triggered only when agent and caller are connected.
+- Support markdown and html rendering in LCA UI
+- Use QnABot markdown response when available, to take advantage of new markdown rendering feature for Agent Assist.
+### Changed
+- CallTranscriber Lambda now has it's own DynamoDB table and no longer shares a table with the AISTACK components.
+### Fixed
+- Add ExpiresAfter fields to AGENT_ASSIST messages, used as TTL in DynamoDB
+- Check StackName length and fail fast if length would cause downstream staack failures caused by long resource names in nested stacks. Max Stack Name is now 25 characters.
+- Provide 'reason' message for stack custom resource failures.
+- Expand Troubleshooting README.
+
 ## [0.5.0] - 2022-09-11
 ### Added
 - AgentID call attribute and associated API support for setting, displaying, sorting, and filtering calls by Agent. See [Setting AgentId](./lca-chimevc-stack/SettingAgentId.md).
@@ -122,7 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.1...develop
+[0.5.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.3.0...v0.4.0
