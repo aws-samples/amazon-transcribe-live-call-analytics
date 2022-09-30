@@ -400,7 +400,15 @@ def get_lex_agent_assist_message(bot_response):
         # ignore 'noanswer' responses from QnABot
         LOGGER.debug("QnABot \"Dont't know\" response - ignoring")
         return ""
-    if "messages" in bot_response and bot_response["messages"]:
+    # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
+    appContextJSON = bot_response.get("sessionState",{}).get("sessionAttributes",{}).get("appContext")
+    if appContextJSON:
+        appContext = json.loads(appContextJSON)
+        markdown = appContext.get("altMessages",{}).get("markdown")
+        if markdown:
+            message = markdown
+    # otherwise use bot message
+    if not message and "messages" in bot_response and bot_response["messages"]:
         message = bot_response["messages"][0]["content"]
     return message
 
@@ -476,6 +484,7 @@ def add_lex_agent_assistances(
                         Channel="AGENT_ASSISTANT",
                         CreatedAt=created_at,
                         EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
                         IsPartial=is_partial,
                         SegmentId=str(uuid.uuid4()),
                         StartTime=start_time,
@@ -586,6 +595,7 @@ def add_lambda_agent_assistances(
                         Channel="AGENT_ASSISTANT",
                         CreatedAt=created_at,
                         EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
                         IsPartial=is_partial,
                         SegmentId=str(uuid.uuid4()),
                         StartTime=start_time,

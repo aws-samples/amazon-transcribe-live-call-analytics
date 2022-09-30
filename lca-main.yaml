@@ -13,8 +13,9 @@
 # limitations under the License.
 ---
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.5.0)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.5.1)
 
 Parameters:
   CallAudioSource:
@@ -447,9 +448,41 @@ Rules:
 
 Resources:
 
+  # Custom resource to enforce max length of StackName - prevent downstream failures                                             
+  StacknameCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      InlineCode: |
+          import cfnresponse
+          import time
+          import json
+          def handler(event, context):
+              print(json.dumps(event))
+              input = event['ResourceProperties'].get('InputString', '')
+              max_length = int(event['ResourceProperties'].get('MaxLength', 0))
+              status = cfnresponse.SUCCESS
+              reason = f"Stack Name Length under {max_length} - OK"
+              if event['RequestType'] == "Create":
+                if len(input) > max_length:
+                  status = cfnresponse.FAILED
+                  reason = f"Stack Name length too long - max length {max_length} - FAILED"
+              else:
+                print(f"Request type is {event['RequestType']} - skipping")
+              cfnresponse.send(event, context, status, {}, reason=reason) 
+
+  IsStacknameLengthOK:
+    Type: Custom::StacknameCheck
+    Properties:
+      ServiceToken: !GetAtt StacknameCheckFunction.Arn
+      InputString: !Ref 'AWS::StackName'
+      MaxLength: 25
+
   KENDRA:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldCreateKendraIndex
+    DependsOn: IsStacknameLengthOK
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-kendra-stack/template.yaml
@@ -464,6 +497,7 @@ Resources:
   QNABOT:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallAWSQnaBot
+    DependsOn: IsStacknameLengthOK
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot/templates/master.json
@@ -483,6 +517,7 @@ Resources:
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
+    DependsOn: IsStacknameLengthOK
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
@@ -564,8 +599,6 @@ Resources:
         AudioFilePrefix: !Ref AudioFilePrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
-        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
-        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType

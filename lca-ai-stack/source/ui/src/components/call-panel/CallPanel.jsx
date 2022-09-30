@@ -14,6 +14,9 @@ import {
   TextContent,
   Toggle,
 } from '@awsui/components-react';
+import rehypeRaw from 'rehype-raw';
+import ReactMarkdown from 'react-markdown';
+
 import RecordingPlayer from '../recording-player';
 
 import { DONE_STATUS, IN_PROGRESS_STATUS } from '../common/get-recording-status';
@@ -201,7 +204,8 @@ const TranscriptContent = ({ segment }) => {
     return (
       // eslint-disable-next-line react/no-array-index-key
       <TextContent key={`${segmentId}-text-${i}`} color="gray" className={className}>
-        {t.trim()}
+        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{t.trim()}</ReactMarkdown>
+        {/* {t.trim()} */}
       </TextContent>
     );
   });

@@ -206,7 +206,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.5.0
+    Default: 0.5.1
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -1262,15 +1262,15 @@ Resources:
             print(event)
             responseData = {}
             status = cfnresponse.SUCCESS
+            reason = "Success"
             if event['RequestType'] == 'Delete':
               try:
                 deleteS3Bucket(event['ResourceProperties']['BucketName'])
               except Exception as e:
                 print(e)
-                responseData["Error"] = f"Exception thrown: {e}"
+                reason = f"Exception thrown: {e}"
                 status = cfnresponse.FAILED
-                responseData['Data'] = "Success"
-            cfnresponse.send(event, context, status, responseData)
+            cfnresponse.send(event, context, status, responseData, reason=reason)
 
   RemoveWebAppBucketOnDelete:
     Type: Custom::RemoveWebAppBucketOnDelete
