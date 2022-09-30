@@ -16,7 +16,7 @@ If known, the AgentID can be provided when the call is started using a ChimeVC C
 
 ## Assign agent ID when you send a START_CALL_PROCESSING event
 
-If you used a [ChimeVC CallTranscriber Lambda Hook function](./LambdaHookFunction.md) to disable immediate processing of a new call received from ChimeVC, then you can provide the AgentID later if/when yoy send a `START_CALL_PROCESSING` event for that call. This is useful when the call SIPREC stream must be initiated before the caller and agent are connected. See [StartCallProcessingEvent.md](./StartCallProcessingEvent.md) for more information. 
+If you used a [ChimeVC CallTranscriber Lambda Hook function](./LambdaHookFunction.md) to suspend immediate processing of a new call received from ChimeVC, then you can provide the AgentID later if/when you send a `START_CALL_PROCESSING` event for that call. This is useful when the call SIPREC stream must be initiated before the caller and agent are connected. See [StartCallProcessingEvent.md](./StartCallProcessingEvent.md) for more information. 
 
 ## Assign agent ID at any time after the call has started
 
