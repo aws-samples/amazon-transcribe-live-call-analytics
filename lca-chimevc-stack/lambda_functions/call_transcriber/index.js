@@ -62,6 +62,8 @@ let timeToStop = false;
 let stopTimer;
 let keepAliveTimer;
 let keepAliveChunk = Buffer.alloc(2, 0);
+let kvsProducerTimestamp = {};
+let kvsServerTimestamp = {};
 
 const getExpiration = function (numberOfDays) {
   return Math.round(Date.now() / 1000) + numberOfDays * 24 * 3600;
@@ -142,6 +144,8 @@ const writeTranscriptionSegmentToKds = async function (
   if (!transcript.Transcript) return;
 
   console.log("Sending ADD_TRANSCRIPT_SEGMENT event on KDS");
+  // log if stream timestamps are more than 1 sec apart.
+  timestampDeltaCheck(1);
 
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
@@ -378,7 +382,7 @@ const getCallDataForStartCallProcessingEvent = async function (scpevent) {
   let callData = await getCallDataFromDdb(callId);
   if (!callData) {
     console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
-    return undefined;    
+    return undefined;
   }
   if (callData.callProcessingStartTime) {
     console.log(`ERROR: Call ${callId} is already processed/processing - exiting.`);
@@ -466,10 +470,21 @@ const getChannelStreamFromDynamo = async function (callId, channel) {
   return agentStreamArn;
 };
 
+function timestampDeltaCheck(n) {
+  // Log delta between producer and server timestamps for our two streams.
+  const kvsProducerTimestampDelta = Math.abs(kvsProducerTimestamp["Caller"] - kvsProducerTimestamp["Agent"]);
+  const kvsServerTimestampDelta = Math.abs(kvsServerTimestamp["Caller"] - kvsServerTimestamp["Agent"]);
+  if (kvsProducerTimestampDelta > n) {
+    console.log(`WARNING: Producer timestamp delta of received audio is over ${n} seconds.`);
+  }
+  console.log(`Producer timestamps delta: ${kvsProducerTimestampDelta}, Caller: ${kvsProducerTimestamp["Caller"]}, Agent ${kvsProducerTimestamp["Agent"]}.`);
+  console.log(`Server timestamps delta: ${kvsServerTimestampDelta}, Caller: ${kvsServerTimestamp["Caller"]}, Agent ${kvsServerTimestamp["Agent"]}.`);
+}
 
 const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   let actuallyStop = false;
   let firstDecodeEbml = true;
+  let timestampDriftDetected = false;
 
   let lastMessageTime;
 
@@ -491,11 +506,20 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
         if (chunk.Children[0].data === 'AWS_KINESISVIDEO_FRAGMENT_NUMBER') {
           lastFragment = chunk.Children[1].data;
         }
+        // capture latest audio timestamps for stream in global variable
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_SERVER_TIMESTAMP') {
+          kvsServerTimestamp[streamName] = chunk.Children[1].data;
+        }
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_PRODUCER_TIMESTAMP') {
+          kvsProducerTimestamp[streamName] = chunk.Children[1].data;
+        }
       }
       if (chunk.id === EbmlTagId.SimpleBlock) {
         if (firstDecodeEbml) {
           firstDecodeEbml = false;
           console.log(`decoded ebml, simpleblock size:${chunk.size} stream: ${streamName}`);
+          console.log(`${streamName} stream - producer timestamp: ${kvsProducerTimestamp[streamName]}, server timestamp: ${kvsServerTimestamp[streamName]}`);
+          timestampDeltaCheck(1);
         }
         try {
           streamPipe.write(chunk.payload);
