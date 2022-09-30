@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 // TODO: Retries and resiliency
 // TODO: Debug why sometimes it is now working twice
 
-const { DynamoDBClient, QueryCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const {
   TranscribeStreamingClient,
@@ -27,10 +27,9 @@ const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
 
 const mergeFiles = require('./mergeFiles');
 const { KinesisClient, PutRecordCommand } = require('@aws-sdk/client-kinesis');
-const { createHook } = require('async_hooks');
 
 const REGION = process.env.REGION || 'us-east-1';
-const { EVENT_SOURCING_TABLE_NAME } = process.env;
+const { TRANSCRIBER_CALL_EVENT_TABLE_NAME } = process.env;
 const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/';
 const RAW_FILE_PREFIX = process.env.RAW_FILE_PREFIX || 'lca-audio-raw/';
@@ -44,7 +43,6 @@ const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
-const KINESIS_STREAM_ARN = process.env.KINESIS_STREAM_ARN || '';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 
 const EVENT_TYPE = {
@@ -55,10 +53,10 @@ const EVENT_TYPE = {
 };
 const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
 
-const s3Client = new S3Client({ region: REGION });
-const lambdaClient = new LambdaClient({ region: REGION });
-const dynamoClient = new DynamoDBClient({ region: REGION });
-const kinesisClient = new KinesisClient({ region: REGION });
+var s3Client;
+var lambdaClient;
+var dynamoClient;
+var kinesisClient;
 
 let timeToStop = false;
 let stopTimer;
@@ -73,41 +71,39 @@ const sleep = async function (msec) {
   return new Promise((resolve) => setTimeout(resolve, msec));
 }
 
-const writeS3Url = async function (callId) {
+const writeS3UrlToKds = async function (callId) {
   console.log('Writing S3 URL To Dynamo');
-
   const now = new Date().toISOString();
   const eventType = 'ADD_S3_RECORDING_URL';
   const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
-
   const putObj = {
     CallId: callId,
     RecordingUrl: recordingUrl,
     EventType: eventType.toString(),
     CreatedAt: now,
   };
-
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
     Data: Buffer.from(JSON.stringify(putObj)),
   };
   const putCmd = new PutRecordCommand(putParams);
+  console.log("Sending ADD_S3_RECORDING_URL event on KDS: ", JSON.stringify(putObj));
   try {
     await kinesisClient.send(putCmd);
   } catch (error) {
-    console.error('Error writing transcription segment', error);
+    console.error('Error writing ADD_S3_RECORDING_URL event', error);
   }
 };
 
-const writeToS3 = async function (sourceFile, destBucket, destPrefix, destKey) {
-  console.log('Uploading to S3');
-
+const writeToS3 = async function (tempFileName) {
+  let sourceFile = TEMP_FILE_PATH + tempFileName;
+  console.log('Uploading audio to S3');
   let data;
   const fileStream = fs.createReadStream(sourceFile);
   const uploadParams = {
     Bucket: OUTPUT_BUCKET,
-    Key: destPrefix + destKey,
+    Key: RAW_FILE_PREFIX + tempFileName,
     Body: fileStream,
   };
   try {
@@ -130,7 +126,7 @@ const deleteTempFile = async function (sourceFile) {
   }
 };
 
-const writeTranscriptionSegment = async function (
+const writeTranscriptionSegmentToKds = async function (
   transcriptionEvent,
   callId,
   streamArn,
@@ -145,13 +141,14 @@ const writeTranscriptionSegment = async function (
   const transcript = result.Alternatives[0];
   if (!transcript.Transcript) return;
 
+  console.log("Sending ADD_TRANSCRIPT_SEGMENT event on KDS");
+
   const channel = result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
   const eventType = 'ADD_TRANSCRIPT_SEGMENT';
 
   const putObj = {
     Channel: channel,
-    StreamArn: streamArn,
     TransactionId: transactionId,
     CallId: callId,
     SegmentId: result.ResultId,
@@ -161,6 +158,7 @@ const writeTranscriptionSegment = async function (
     IsPartial: result.IsPartial,
     EventType: eventType.toString(),
     CreatedAt: now,
+    StreamArn: '<DEPRECATED>',
   };
 
   const putParams = {
@@ -172,73 +170,167 @@ const writeTranscriptionSegment = async function (
   try {
     await kinesisClient.send(putCmd);
   } catch (error) {
-    console.error('Error writing transcription segment', error);
+    console.error('Error writing ADD_TRANSCRIPT_SEGMENT event', error);
   }
 };
 
-const writeCallEventToKds = async function (callEvent) {
-  const startTime = new Date(callEvent.detail.startTime);
-  const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
-  const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
-  const now = new Date().toISOString();
-
+const writeCallStartEventToKds = async function (callData) {
+  console.log("Write Call Start Event to KDS");
   const putObj = {
-    CallId: callEvent.detail.callId,
-    CreatedAt: now,
-    CustomerPhoneNumber: callEvent.detail.fromNumber,
-    SystemPhoneNumber: callEvent.detail.toNumber,
-    AgentId: callEvent.detail.agentId,
-    Channel: channel,
-    EventType: eventType,
-    StreamArn: callEvent.detail.streamArn,
+    CallId: callData.callId,
+    CreatedAt: new Date().toISOString(),
+    CustomerPhoneNumber: callData.fromNumber,
+    SystemPhoneNumber: callData.toNumber,
+    AgentId: callData.agentId,
+    EventType: "START",
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
-    PartitionKey: callEvent.detail.callId,
+    PartitionKey: callData.callId,
     Data: Buffer.from(JSON.stringify(putObj)),
   };
+  console.log("Sending Call START event on KDS: ", JSON.stringify(putObj));
   const putCmd = new PutRecordCommand(putParams);
   try {
     await kinesisClient.send(putCmd);
   } catch (error) {
-    console.error('Error writing transcription segment', error);
+    console.error('Error writing call START event', error);
   }
 };
 
-const writeStatusToKds = async function (channel, status, callId, streamArn, transactionId) {
-  const now = new Date().toISOString();
+const writeCallEndEventToKds = async function (callId) {
+  console.log("Write Call End Event to KDS");
   const putObj = {
     CallId: callId,
-    Channel: channel,
-    StreamArn: streamArn,
-    TransactionId: transactionId,
-    EventType: status,
-    CreatedAt: now,
+    EventType: "END_TRANSCRIPT",
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
     Data: Buffer.from(JSON.stringify(putObj)),
   };
+  console.log("Sending Call END_TRANSCRIPT event on KDS: ", JSON.stringify(putObj));
   const putCmd = new PutRecordCommand(putParams);
   try {
     await kinesisClient.send(putCmd);
   } catch (error) {
-    console.error('Error writing transcription segment', error);
+    console.error('Error writing call END_TRANSCRIPT', error);
   }
 };
-const writeCallEventToDynamo = async function (callEvent) {
+
+const getCallDataFromChimeEvents = async function (callEvent) {
+  let callerStreamArn = callEvent.detail.streamArn;
+  let agentStreamArn = await getChannelStreamFromDynamo(
+    callEvent.detail.callId,
+    'AGENT',
+  );
+  if (agentStreamArn == undefined) {
+    console.log(`Timed out waiting for AGENT stream event after 10s. Exiting.`);
+    return;
+  }
+
+  let now = new Date().toISOString();
+  let callData = {
+    callId: callEvent.detail.callId,
+    originalCallId: callEvent.detail.callId,
+    callStreamingStartTime: now,
+    callProcessingStartTime: now,
+    callStreamingEndTime: "",
+    shouldProcessCall: true,
+    fromNumber: callEvent.detail.fromNumber,
+    toNumber: callEvent.detail.toNumber,
+    agentId: callEvent.detail.agentId,
+    callerStreamArn: callerStreamArn,
+    agentStreamArn: agentStreamArn,
+    lambdaCount: 0,
+  };
+
+  // Call customer LambdaHook, if present
+  if (LAMBDA_HOOK_FUNCTION_ARN) {
+    // invoke lambda function
+    // if it fails, just throw an exception and exit
+    console.log(`Invoking LambdaHook: ${LAMBDA_HOOK_FUNCTION_ARN}`);
+    const invokeCmd = new InvokeCommand({
+      FunctionName: LAMBDA_HOOK_FUNCTION_ARN,
+      InvocationType: 'RequestResponse',
+      Payload: JSON.stringify(callEvent),
+    });
+    const lambdaResponse = await lambdaClient.send(invokeCmd);
+    const payload = JSON.parse(Buffer.from(lambdaResponse.Payload));
+    console.log(`LambdaHook response: ${JSON.stringify(payload)}`);
+    if (lambdaResponse.FunctionError) {
+      console.log('Lambda failed to run, throwing an exception');
+      throw new Error(payload);
+    }
+    /* Process the response. All fields optional:
+        {
+          // all fields optional
+          originalCallId: <string>,
+          shouldProcessCall: <boolean>,
+          isCaller: <boolean>,
+          callId: <string>,
+          agentId: <string>,
+          fromNumber: <string>,
+          toNumber: <string>
+        }
+    */
+
+    // New CallId?
+    if (payload.callId) {
+      console.log(`Lambda hook returned new callId: "${payload.callId}"`);
+      callData.callId = payload.callId;
+    }
+
+    // Swap caller and agent channels?
+    if (payload.isCaller === false) {
+      console.log(`Lambda hook returned isCaller=false, swapping caller/agent streams`);
+      [callData.agentStreamArn, callData.callerStreamArn] = [callData.callerStreamArn, callData.agentStreamArn];
+    }
+    if (payload.isCaller === true) {
+      console.log(`Lambda hook returned isCaller=true, caller/agent streams not swapped`);
+    }
+
+    // AgentId?
+    if (payload.agentId) {
+      console.log(`Lambda hook returned agentId: "${payload.agentId}"`);
+      callData.agentId = payload.agentId;
+    }
+
+    // New 'to' or 'from' phone numbers?
+    if (payload.fromNumber) {
+      console.log(`Lambda hook returned fromNumber: "${payload.fromNumber}"`);
+      callData.fromNumber = payload.fromNumber;
+    }
+    if (payload.toNumber) {
+      console.log(`Lambda hook returned toNumber: "${payload.toNumber}"`);
+      callData.toNumber = payload.toNumber;
+    }
+
+    // Should we process this call?
+    if (payload.shouldProcessCall === false) {
+      console.log('Lambda hook returned shouldProcessCall=false.');
+      callData.shouldProcessCall = false;
+      callData.callProcessingStartTime = "";
+    }
+    if (payload.shouldProcessCall === true) {
+      console.log('Lambda hook returned shouldProcessCall=true.');
+    }
+  }
+  return callData;
+};
+
+const writeChimeCallStartEventToDdb = async function (callEvent) {
     const startTime = new Date(callEvent.detail.startTime);
     const expiration = getExpiration(1);
     const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
     const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
     const now = new Date().toISOString();
-  
+
     const putParams = {
-      TableName: EVENT_SOURCING_TABLE_NAME,
+      TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
       Item: {
         PK: { S: `ce#${callEvent.detail.callId}` },
-        SK: { S: `ts#${callEvent.detail.startTime}#et#${eventType}#c#${channel}` },
+        SK: { S: `${channel}` },
         CallId: { S: callEvent.detail.callId },
         ExpiresAfter: { N: expiration.toString() },
         CreatedAt: { S: now },
@@ -249,60 +341,131 @@ const writeCallEventToDynamo = async function (callEvent) {
         StreamArn: { S: callEvent.detail.streamArn },
       },
     };
-    console.log(putParams);
+    console.log("Writing Chime Call Start event to DynamoDB: ", JSON.stringify(putParams));
     const putCmd = new PutItemCommand(putParams);
     try {
       await dynamoClient.send(putCmd);
     } catch (error) {
-      console.error('Error writing event', error);
+      console.error('Error writing Chime Call Start event', error);
     }
 };
 
-// Query KVS for START events for this callId
-const getStreamsFromDynamo = async function (callId, agentArn, callerArn) {
-  const resultArns = {
-    agentStreamArn: agentArn, // 'agent-channel-stream';
-    callerStreamArn: callerArn, // 'caller-channel-stream';
+const writeCallDataToDdb = async function (callData) {
+  console.log("Write callData to DDB");
+  const expiration = getExpiration(1);
+  const now = new Date().toISOString();
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `cd#${callData.callId}` },
+      SK: { S: `BOTH` },
+      CreatedAt: { S: now },
+      ExpiresAfter: { N: expiration.toString() },
+      CallData: { S: JSON.stringify(callData)},
+    },
   };
+  console.log(putParams);
+  const putCmd = new PutItemCommand(putParams);
+  try {
+    await dynamoClient.send(putCmd);
+  } catch (error) {
+    console.error('Error writing Call Data to Ddb', error);
+  }
+};
 
-  console.log('Retrieving KVS');
+const getCallDataForStartCallProcessingEvent = async function (scpevent) {
+  const callId = scpevent.callId;
+  let callData = await getCallDataFromDdb(callId);
+  if (!callData) {
+    console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
+    return undefined;    
+  }
+  if (callData.callProcessingStartTime) {
+    console.log(`ERROR: Call ${callId} is already processed/processing - exiting.`);
+    return undefined;
+  }
+  // Add Start Call Event info to saved callData object and write back to DDB for tracing
+  callData.startCallProcessingEvent = scpevent;
+  callData.callProcessingStartTime = new Date().toISOString();
+  /* Start Call Event can contain following optional fields, used to modify callData:
+          agentId: <string>,
+          fromNumber: <string>,
+          toNumber: <string>
+  */
+  // AgentId?
+  if (scpevent.agentId) {
+    console.log(`START_CALL_PROCESSING event contains agentId: "${scpevent.agentId}"`);
+    callData.agentId = scpevent.agentId;
+  }
+  // New 'to' or 'from' phone numbers?
+  if (scpevent.fromNumber) {
+    console.log(`START_CALL_PROCESSING event contains fromNumber: "${scpevent.fromNumber}"`);
+    callData.fromNumber = scpevent.fromNumber;
+  }
+  if (scpevent.toNumber) {
+    console.log(`START_CALL_PROCESSING event contains toNumber: "${scpevent.toNumber}"`);
+    callData.toNumber = scpevent.toNumber;
+  }
+  return callData;
+};
+
+const getCallDataFromDdb = async function (callId) {
   // Set the parameters
-  const dynamoParams = {
-    KeyConditionExpression: 'PK = :ce',
-    FilterExpression: '#event = :event',
-    ExpressionAttributeNames: {
-      '#event': 'EventType',
+  const params = {
+    Key: {
+      "PK": {
+        S: `cd#${callId}`
+      },
+      "SK": {
+        S: `BOTH`
+      }
     },
-    ExpressionAttributeValues: {
-      ':ce': { S: `ce#${callId}` },
-      ':event': { S: 'START' },
-    },
-    TableName: EVENT_SOURCING_TABLE_NAME,
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-
-  console.log(JSON.stringify(dynamoParams));
-  const command = new QueryCommand(dynamoParams);
-
+  console.log("GetItem params: ", JSON.stringify(params));
+  const command = new GetItemCommand(params);
+  let callData;
   try {
     const data = await dynamoClient.send(command);
-    data.Items.forEach((item) => {
-      console.log(JSON.stringify(item));
-      console.log(`Channel:${item.Channel.S}`);
-      if (item.Channel.S === 'AGENT') {
-        console.log('Found agent stream');
-        resultArns.agentStreamArn = item.StreamArn.S;
-      }
-      if (item.Channel.S === 'CALLER') {
-        console.log('Found caller stream');
-        resultArns.callerStreamArn = item.StreamArn.S;
-      }
-    });
+    console.log("GetItem result: ",JSON.stringify(data));
+    callData = JSON.parse(data.Item.CallData.S);
   } catch (error) {
-    if (error === undefined) console.error('no error');
-    else console.error('Error with connection to database: ', error);
+    console.log("Error retrieving callData - Possibly invalid callId?: ", error)
   }
-  return resultArns;
+  return callData;
 };
+
+// Retrieve Chime stream event for specified channel, waiting for up to 10s
+const getChannelStreamFromDynamo = async function (callId, channel) {
+  // Set the parameters
+  const params = {
+    Key: {
+      "PK": {
+        S: `ce#${callId}`
+      },
+      "SK": {
+        S: `${channel}`
+      }
+    },
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+  };
+  console.log("GetItem params: ", JSON.stringify(params));
+  const command = new GetItemCommand(params);
+  let agentStreamArn = undefined;
+  let loopCount = 0;
+  while (agentStreamArn === undefined && loopCount++ < 100) {
+    const data = await dynamoClient.send(command);
+    console.log("GetItem result: ",JSON.stringify(data));
+    if (data.Item) {
+      if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
+    } else {
+      console.log(loopCount, `${channel} stream not yet available. Sleeping 100ms.`);
+      await sleep(100);
+    }
+  }
+  return agentStreamArn;
+};
+
 
 const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   let actuallyStop = false;
@@ -399,13 +562,11 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
 const readTranscripts = async function (tsStream, callId, callerStreamArn, sessionId) {
   try {
     for await (const chunk of tsStream) {
-      writeTranscriptionSegment(chunk, callId, callerStreamArn, sessionId);
+      writeTranscriptionSegmentToKds(chunk, callId, callerStreamArn, sessionId);
     }
   } catch (error) {
     console.error('error writing transcription segment', JSON.stringify(error));
-    writeStatusToKds('STEREO', 'TRANSCRIPT_ERROR', callId, callerStreamArn, sessionId);
   } finally {
-    // writeStatusToKds('STEREO', 'END_TRANSCRIPT', callId, callerStreamArn, sessionId);
   }
 };
 
@@ -464,10 +625,6 @@ const go = async function (
   const tsResponse = await tsClient.send(tsCmd);
   // console.log(tsResponse);
   sessionId = tsResponse.SessionId;
-  if (lastAgentFragment === undefined) {
-    writeStatusToKds('STEREO', 'START_TRANSCRIPT', callId, callerStreamArn, sessionId);
-  }
-  else writeStatusToKds('STEREO', 'CONTINUE_TRANSCRIPT', callId, callerStreamArn, sessionId);
   console.log('creating readable from transcript stream');
   const tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
 
@@ -535,192 +692,123 @@ const go = async function (
   };
 };
 
-// async function handler (event) {
+
+// MAIN LAMBDA HANDLER - FUNCTION ENTRY POINT
 const handler = async function (event, context) {
-  if (!event.detail.lambdaCount) event.detail.lambdaCount = 0;
-  if (event.detail.lambdaCount > 30) {
-    console.log('Stopping due to runaway recursive Lambda.');
-  }
 
-  console.log(JSON.stringify(event));
+  console.log("Event: ", JSON.stringify(event));
 
-  if (EVENT_TYPE[event.detail.streamingStatus] == "START") await writeCallEventToDynamo(event);
+  // initialise clients (globals) each invocation to avoid possibility of ECONNRESET in subsequent invocations.
+  s3Client = new S3Client({ region: REGION });
+  lambdaClient = new LambdaClient({ region: REGION });
+  dynamoClient = new DynamoDBClient({ region: REGION });
+  kinesisClient = new KinesisClient({ region: REGION });
 
-  let result;
+  /*
+  Create a callData object for incoming event:
+  A LAMBDA_CONTINUE event contains callData object ready to use
+  A START_CALL_PROCESSING event contains callId which is used to look up a previously stored callData object
+  Chime stream STARTED events for both AGENT and CALLER streams are combined to create a new callData object
+    - the AGENT event is stored to DynamoDB and the function exits
+    - the CALLER event is correlated with stored AGENT event to create callData object
+    - an optional user defined Lambda hook may:
+         - manipulate callData object fields
+         - save callData object to DynamoDB and delay or disable call processing until/if a START_CALL_PROCESSING is received later
+  */
 
-  if (event.detail.streamingStatus === 'CONTINUE') {
-    console.log('---CONTINUING FROM PREVIOUS LAMBDA: ', event.detail.lambdaCount, '---');
-    result = await go(
-      event.detail.callId,
-      event.detail.lambdaCount,
-      event.detail.agentStreamArn,
-      event.detail.callerStreamArn,
-      event.detail.transcribeSessionId,
-      event.detail.lastAgentFragment,
-      event.detail.lastCallerFragment,
-    );
-  } else if (event.detail.streamingStatus === 'STARTED') {
-    let agentStreamArn;
-    let callerStreamArn;
+  let callData;
 
-    // save which stream we just received from event
-    if (event.detail.isCaller === true) {
-      callerStreamArn = event.detail.streamArn;
-    }
-    else {
-      //agentStreamArn = event.detail.streamArn;
-      console.log("this is not the caller stream, so return.");
+  if (event['action'] === 'LAMBDA_CONTINUE') {
+    callData = event.callData;
+    console.log('--- CONTINUING FROM PREVIOUS LAMBDA. LAMBDA SEQUENCE COUNT: ', callData.lambdaCount, '---');
+    if (callData.lambdaCount > 30) {
+      console.log('Stopping due to runaway recursive Lambda.');
       return;
     }
-
-    let streamResults = await getStreamsFromDynamo(
-      event.detail.callId,
-      agentStreamArn,
-      callerStreamArn,
-    );
-    console.log(`agent stream:${streamResults.agentStreamArn}`);
-    console.log(`caller stream:${streamResults.callerStreamArn}`);
-
-    let loopCount = 0;
-
-    while (streamResults.agentStreamArn === undefined || streamResults.callerStreamArn === undefined) {
-      console.log(loopCount,'Agent or caller streams not yet available. Sleeping 100ms.');
-      await sleep(100);
-      streamResults = await getStreamsFromDynamo(
-        event.detail.callId,
-        agentStreamArn,
-        callerStreamArn,
-      );
-      console.log(`agent stream:${streamResults.agentStreamArn}`);
-      console.log(`caller stream:${streamResults.callerStreamArn}`);
-      loopCount = loopCount + 1;
-      if(loopCount == 100) {
-        console.log("Both KVS streams not active after 10 seconds. Exiting.");
-        return;
-      }
-    }
-
-    // Call customer LambdaHook, if present
-    if (LAMBDA_HOOK_FUNCTION_ARN) {
-      // invoke lambda function
-      // if it fails, just throw an exception and exit
-      console.log(`Invoking LambdaHook: ${LAMBDA_HOOK_FUNCTION_ARN}`);
-      const invokeCmd = new InvokeCommand({
-        FunctionName: LAMBDA_HOOK_FUNCTION_ARN,
-        InvocationType: 'RequestResponse',
-        Payload: JSON.stringify(event),
-      });
-      const lambdaResponse = await lambdaClient.send(invokeCmd);
-      const payload = JSON.parse(Buffer.from(lambdaResponse.Payload));
-      console.log(`LambdaHook response: ${JSON.stringify(payload)}`);
-      if (lambdaResponse.FunctionError) {
-        console.log('Lambda failed to run, throwing an exception');
-        throw new Error(payload);
-      }
-      /* Process the response. Payload looks like this:
-          {
-            // all fields optional
-            originalCallId: <string>,
-            shouldProcessCall: <boolean>,
-            isCaller: <boolean>,
-            callId: <string>,
-            agentId: <string>,
-            fromNumber: <string>,
-            toNumber: <string>
-          }
-      */
-
-      // Should we process this call?
-      if (payload.shouldProcessCall === false) {
-        console.log('Lambda hook returned shouldProcessCall=false, exiting.');
-        return;
-      }
-      if (payload.shouldProcessCall === true) {
-        console.log('Lambda hook returned shouldProcessCall=true, continuing.');
-      }
-
-      // New CallId?
-      if (payload.callId) {
-        console.log(`Lambda hook returned new callId: "${payload.callId}"`);
-        event.detail.callId = payload.callId;
-      }
-
-      // Swap caller and agent channels?
-      if (payload.isCaller === false) {
-        console.log(`Lambda hook returned isCaller=false, swapping caller/agent streams`);
-        [streamResults.agentStreamArn, streamResults.callerStreamArn] = [streamResults.callerStreamArn, streamResults.agentStreamArn];
-      }
-      if (payload.isCaller === true) {
-        console.log(`Lambda hook returned isCaller=true, caller/agent streams not swapped`);
-      }
-
-      // AgentId?
-      if (payload.agentId) {
-        console.log(`Lambda hook returned agentId: "${payload.agentId}"`);
-        event.detail.agentId = payload.agentId;
-      }
-
-      // New 'to' or 'from' phone numbers?
-      if (payload.fromNumber) {
-        console.log(`Lambda hook returned fromNumber: "${payload.fromNumber}"`);
-        event.detail.fromNumber = payload.fromNumber;
-      }
-      if (payload.toNumber) {
-        console.log(`Lambda hook returned toNumber: "${payload.toNumber}"`);
-        event.detail.toNumber = payload.toNumber;
-      }
-
-    }
-
-    await writeCallEventToKds(event);
-
-    result = await go(
-      event.detail.callId,
-      0,
-      streamResults.agentStreamArn,
-      streamResults.callerStreamArn,
-      undefined,
-      undefined,
-      undefined,
-    );
   }
 
+  else if (event['source'] === 'lca-solution' && event['detail-type'] === 'START_CALL_PROCESSING') {
+    console.log('START_CALL_PROCESSING event received, Retrieving previously stored callData.');
+    callData = await getCallDataForStartCallProcessingEvent(event.detail);
+    if (!callData) {
+      console.log('Nothing to do - exiting.');
+      return;
+    }
+    await writeCallDataToDdb(callData);
+    console.log("Ready to start processing call")
+    await writeCallStartEventToKds(callData);
+  }
+
+  else if (event['source'] === "aws.chime") {
+    if (event.detail.streamingStatus === 'STARTED') {
+      console.log("AWS Chime stream STARTED event received. Save event record to DynamoDB.");
+      await writeChimeCallStartEventToDdb(event);
+
+      if (event.detail.isCaller === false) {
+        console.log("This is the AGENT stream (isCaller is false). Exit and wait for CALLER stream event to arrive.");
+        return;
+      }
+
+      console.log("This is the CALLER stream (isCaller is true). Collate with AGENT stream data from DynamoDB.");
+      callData = await getCallDataFromChimeEvents(event);
+
+      console.log("Saving callData to DynamoDB");
+      await writeCallDataToDdb(callData);
+
+      if (callData.shouldProcessCall === false) {
+        console.log('CallData shouldProcessCall is false, exiting.');
+        return;
+      }
+      console.log("Ready to start processing call")
+      await writeCallStartEventToKds(callData);
+    }
+    else {
+      console.log(`AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`)
+      return;
+    }
+  }
+
+  if (!callData) {
+    console.log("Nothing to do - exiting")
+    return;
+  }
+
+  console.log("CallData: ", JSON.stringify(callData));
+  let result = await go(
+    callData.callId,
+    callData.lambdaCount,
+    callData.agentStreamArn,
+    callData.callerStreamArn,
+    callData.transcribeSessionId || undefined,
+    callData.lastAgentFragment || undefined,
+    callData.lastCallerFragment || undefined,
+  );
   if (result) {
     if (timeToStop) {
-      console.log('Starting new Lambad');
-      event.detail.streamingStatus = 'CONTINUE';
-      event.detail.agentStreamArn = result.agentStreamArn;
-      event.detail.callerStreamArn = result.callerStreamArn;
-      event.detail.lastAgentFragment = result.lastAgentFragment;
-      event.detail.lastCallerFragment = result.lastCallerFragment;
-      event.detail.transcribeSessionId = result.sessionId;
-      if (!event.detail.lambdaCount) event.detail.lambdaCount = 1;
-      else event.detail.lambdaCount = event.detail.lambdaCount + 1;
-
-      // we need to launch a new one
+      console.log('Lambda approaching max execution time. Starting a new Lambda to continue processing the call.');
+      let newEvent = {};
+      newEvent.action = 'LAMBDA_CONTINUE';
+      newEvent.callData = callData;
+      newEvent.callData.lastAgentFragment = result.lastAgentFragment;
+      newEvent.callData.lastCallerFragment = result.lastCallerFragment;
+      newEvent.callData.transcribeSessionId = result.sessionId;
+      newEvent.callData.lambdaCount = callData.lambdaCount + 1;
+      console.log("Launching new Lambda with event: ", JSON.stringify(newEvent))
       const invokeCmd = new InvokeCommand({
         FunctionName: context.invokedFunctionArn,
         InvocationType: 'Event',
-        Payload: JSON.stringify(event),
+        Payload: JSON.stringify(newEvent),
       });
       await lambdaClient.send(invokeCmd);
     } else {
-      writeStatusToKds(
-        'STEREO',
-        'END_TRANSCRIPT',
-        event.detail.callId,
-        event.detail.streamArn,
-        event.detail.transcribeSessionId ? event.detail.transcribeSessionId : '',
-      );
+      // Call has ended
+      await writeCallEndEventToKds(callData.callId);
+      callData.callStreamingEndTime = new Date().toISOString();
+      await writeCallDataToDdb(callData);
     }
 
-    // regardless, write to s3 before completely exiting
-    await writeToS3(
-      TEMP_FILE_PATH + result.tempFileName,
-      OUTPUT_BUCKET,
-      RAW_FILE_PREFIX,
-      result.tempFileName,
-    );
+    // Write audio to s3 before completely exiting
+    await writeToS3(result.tempFileName);
     await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
 
     if (!timeToStop) {
@@ -728,13 +816,13 @@ const handler = async function (event, context) {
         bucketName: OUTPUT_BUCKET,
         recordingPrefix: RECORDING_FILE_PREFIX,
         rawPrefix: RAW_FILE_PREFIX,
-        callId: event.detail.callId,
-        lambdaCount: event.detail.lambdaCount,
+        callId: callData.callId,
+        lambdaCount: callData.lambdaCount,
       });
-      await writeS3Url(event.detail.callId);
+      await writeS3UrlToKds(callData.callId);
     }
   }
-  return 'not done yet';
+  return;
 };
 
 exports.handler = handler;

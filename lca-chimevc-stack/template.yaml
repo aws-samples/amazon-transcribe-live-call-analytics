@@ -82,14 +82,7 @@ Parameters:
     Type: String
     Description: >-
       Arn of Kinesis Data Stream to publish events to
-  EventSourcingTableName:
-    Type: String
-    Description: >-
-      DynamoDB Event Table name
-  EventSourcingTableArn:
-    Type: String
-    Description: >-
-      DynamoDB Event Table Arn  
+ 
   S3BucketName:
     Type: String
     Description: >-
@@ -191,8 +184,6 @@ Resources:
         AudioFilePrefix: !Ref AudioFilePrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        EventSourcingTableName: !Ref EventSourcingTableName
-        EventSourcingTableArn: !Ref EventSourcingTableArn
         S3BucketName: !Ref S3BucketName
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
