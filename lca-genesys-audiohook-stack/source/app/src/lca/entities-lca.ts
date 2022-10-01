@@ -56,6 +56,7 @@ export type AddTranscriptSegmentEvent = CallEventBase<'ADD_TRANSCRIPT_SEGMENT'> 
     EndTime?: number,
     Transcript?: string,
     IsPartial?: boolean,
+    Sentiment?: string,
     TranscriptEvent?: TranscriptEvent,
     UtteranceEvent?: UtteranceEvent,
 };

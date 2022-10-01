@@ -86,6 +86,7 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 IsPartial: result.IsPartial,
                 CreatedAt: now,
                 UpdatedAt: now,
+                Sentiment: undefined,
                 TranscriptEvent: undefined,
                 UtteranceEvent: undefined,
             };

@@ -127,10 +127,31 @@ def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
         None
     else:
         call_id: str = message["CallId"]
-        channel: str = message["Channel"]
-        segment_id: str = message["SegmentId"]
-        start_time: float = message["StartTime"]
-        end_time: float = message["EndTime"]
+        
+        channel: str = "CALLER"
+        if message.get("Channel", None):
+            channel = message["Channel"]
+        else:
+            iscaller: bool = message.get("IsCaller", True)
+            if iscaller:
+                channel = "CALLER"
+            else:
+                channel = "AGENT"
+        
+        segment_id: str = str(uuid.uuid4())
+        if message.get("SegmentId", None):
+            segment_id = message["SegmentId"]
+        
+        if message.get("BeginOffsetMillis", None):
+            start_time: float = message["BeginOffsetMillis"]
+        if message.get("StartTime", None):
+            start_time: float = message["StarTime"]
+        
+        if message.get("EndOffsetMillis", None):
+            start_time: float = message["EndOffsetMillis"]
+        if message.get("EndTime", None):
+            start_time: float = message["EndTime"]
+        
         transcript: str = message["Transcript"]
         is_partial: bool = message["IsPartial"]
 
@@ -279,6 +300,17 @@ async def add_sentiment_to_transcript(
             sentiment["SentimentWeighted"]=SENTIMENT_WEIGHT.get(sentimentlabel, 0)
 
         LOGGER.debug(sentiment)
+    elif message.get("Sentiment", None):
+        sentimentlabel: str = message.get("Sentiment", "NEUTRAL") 
+        if sentimentlabel.strip()=="":
+            sentimentlabel = "NEUTRAL"
+        sentiment = dict(
+            Sentiment=sentimentlabel,
+            SentimentScore=SENTIMENT_SCORE,
+            SentimentWeighted=None,
+        )
+        if sentimentlabel in ["POSITIVE", "NEGATIVE"]:
+            sentiment["SentimentWeighted"]=SENTIMENT_WEIGHT.get(sentimentlabel, 0)
     else: 
 
         text = transcript_segment["Transcript"]
