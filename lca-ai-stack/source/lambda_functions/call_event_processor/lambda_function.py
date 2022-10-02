@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource, Table as DynamoDbTable
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.client import LambdaClient
+    from mypy_boto3_comprehend.client import ComprehendClient
     from boto3 import Session as Boto3Session
 else:
     Boto3Session = object
@@ -36,6 +37,7 @@ else:
     DynamoDbTable = object
     LexRuntimeV2Client = object
     LambdaClient = object
+    ComprehendClient = object
 
 
 APPSYNC_GRAPHQL_URL = environ["APPSYNC_GRAPHQL_URL"]
@@ -75,6 +77,12 @@ else:
     LAMBDA_CLIENT = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN = environ["LAMBDA_AGENT_ASSIST_FUNCTION_ARN"]
 
+IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
+if IS_SENTIMENT_ANALYSIS_ENABLED:
+    COMPREHEND_CLIENT: ComprehendClient = BOTO3_SESSION.client("comprehend", config=CLIENT_CONFIG)
+else: 
+    COMPREHEND_CLIENT: None
+COMPREHEND_LANGUAGE_CODE = getenv("COMPREHEND_LANGUAGE_CODE", "en")
 
 CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
 MUTATION_FUNCTION_MAPPING = {
@@ -123,6 +131,10 @@ async def process_event(event) -> Dict[str, List]:
             lex_bot_locale_id=LEX_BOT_LOCALE_ID,
             lambda_client=LAMBDA_CLIENT,
             lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN
+        ),
+        sentiment_analysis_args=dict(
+            comprehend_client=COMPREHEND_CLIENT,
+            comprehend_language_code=COMPREHEND_LANGUAGE_CODE
         ),
         # called for each record right before the context manager exits
         api_mutation_fn=MUTATION_FUNCTION_NAME,
