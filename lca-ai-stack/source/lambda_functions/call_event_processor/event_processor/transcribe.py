@@ -3,20 +3,18 @@
 """ Transcribe API Mutation Processor
 """
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
 
 # third-party imports from Lambda layer
-import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
 from gql.dsl import DSLMutation, DSLSchema, dsl_gql
 from graphql.language.printer import print_ast
-
 
 # custom utils/helpers imports from Lambda layer
 # pylint: disable=import-error
@@ -28,37 +26,24 @@ from graphql_helpers import (
 )
 from lex_utils import recognize_text_lex
 from lambda_utils import invoke_lambda
-from sentiment import ComprehendWeightedSentiment
+from eventprocessor_utils import (
+    normalize_transcript_segment, 
+    get_ttl,
+    transform_segment_to_add_sentiment,
+    transform_segment_to_issues_agent_assist
+)
 # pylint: enable=import-error
-
 if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.type_defs import RecognizeTextResponseTypeDef
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
-    from mypy_boto3_lambda.client import LambdaClient
-    from mypy_boto3_comprehend.client import ComprehendClient
-    from mypy_boto3_comprehend.type_defs import DetectSentimentResponseTypeDef
-    from mypy_boto3_comprehend.literals import LanguageCodeType
-    from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
     RecognizeTextResponseTypeDef = object
-    LambdaClient = object
     InvocationResponseTypeDef = object
-    ComprehendClient = object
-    DetectSentimentResponseTypeDef = object
-    LanguageCodeType = object
-    Boto3Session = object
 
-BOTO3_SESSION: Boto3Session = boto3.Session()
-CLIENT_CONFIG = BotoCoreConfig(
-    retries={"mode": "adaptive", "max_attempts": 3},
-)
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
-if IS_SENTIMENT_ANALYSIS_ENABLED:
-    COMPREHEND_CLIENT: ComprehendClient = BOTO3_SESSION.client("comprehend", config=CLIENT_CONFIG)
-    COMPREHEND_LANGUAGE_CODE = getenv("COMPREHEND_LANGUAGE_CODE", "en")
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
 LEXV2_CLIENT: Optional[LexRuntimeV2Client] = None
@@ -85,106 +70,18 @@ CALL_EVENT_TYPE_TO_STATUS = {
     "ADD_CHANNEL_S3_RECORDING_URL": "ENDED",
     "ADD_S3_RECORDING_URL": "ENDED",
 } 
-SENTIMENT_WEIGHT = dict(POSITIVE=5, NEGATIVE=-5, NEUTRAL=0, MIXED=0)
-
-SENTIMENT_SCORE = dict(
-    Positive=0,
-    Negative=0,
-    Neutral=0,
-    Mixed=0,
-)
 
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
 
-# Get value for DynamboDB TTL field
-DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
-def get_ttl():
-    return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
-
 ##########################################################################
 # Transcripts
 ##########################################################################
-def transform_segment_to_add_transcript(message: Dict) -> Dict[str, object]:
-    """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
 
-    call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    if channel == "CUSTOMER":
-        channel = "CALLER"
-
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    transcript: str = message["Transcript"]
-    is_partial: bool = message["IsPartial"]
-    created_at = datetime.utcnow().astimezone().isoformat()
-
-
-    return dict(
-        CallId=call_id,
-        Channel=channel,
-        SegmentId=segment_id,
-        StartTime=start_time,
-        EndTime=end_time,
-        Transcript=transcript,
-        IsPartial=is_partial,
-        CreatedAt=created_at,
-        ExpiresAfter=get_ttl(),
-        Status="TRANSCRIBING",
-    )
-
-def transform_segment_to_add_sentiment(message: Dict) -> Dict[str, object]:
-    """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
-
-    sentiment: str = message["Sentiment"]
-
-    return dict(
-        Sentiment=sentiment,
-        SentimentScore=SENTIMENT_SCORE,
-        SentimentWeighted=SENTIMENT_WEIGHT.get(sentiment, 0),
-    )
-
-def transform_segment_to_issues_agent_assist(
-    message: Dict[str, Any],
-    issue: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Transforms Contact Lens Transcript Issues payload to Agent Assist"""
-    # pylint: disable=too-many-locals
-    call_id: str = message["CallId"]
-    created_at = datetime.utcnow().astimezone().isoformat()
-    is_partial = False
-    segment_id = str(uuid.uuid4())
-    channel = "AGENT_ASSISTANT"
-    transcript = message["Transcript"]
-
-    issues_detected = message.get("IssuesDetected", [])
-    if not issues_detected:
-        raise ValueError("Invalid issue segment")
-
-    begin_offset = issue["CharacterOffsets"]["Begin"]
-    end_offset = issue["CharacterOffsets"]["End"]
-    issue_transcript = transcript[begin_offset:end_offset]
-    start_time: float = message["StartTime"] / 1000
-    end_time: float = message["EndTime"] / 1000
-    end_time = end_time + 0.001 # UI sort order
-
-    return dict(
-        CallId=call_id,
-        Channel=channel,
-        CreatedAt=created_at,
-        ExpiresAfter=get_ttl(),
-        EndTime=end_time,
-        IsPartial=is_partial,
-        SegmentId=segment_id,
-        StartTime=start_time,
-        Status="TRANSCRIBING",
-        Transcript=issue_transcript,
-    )
 
 def add_transcript_segments(
-    message: Dict[str, Any],
+    message: Dict[str, object],
     appsync_session: AppsyncAsyncClientSession,
 ) -> List[Coroutine]:
     """Add Transcript Segment GraphQL Mutation"""
@@ -193,15 +90,10 @@ def add_transcript_segments(
     schema = DSLSchema(appsync_session.client.schema)
 
     tasks = []
-        
-    transcript_segment = {
-        **transform_segment_to_add_transcript({**message}),
-    }
-
-    if transcript_segment:
+    if message:
         query = dsl_gql(
             DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                schema.Mutation.addTranscriptSegment.args(input=message).select(
                     *transcript_segment_fields(schema),
                 )
             )
@@ -218,68 +110,18 @@ def add_transcript_segments(
 
     return tasks
 
-async def detect_sentiment(text: str) -> DetectSentimentResponseTypeDef:
-    # text_hash = hash(text)
-    # if text_hash in self._sentiment_cache:
-    #     LOGGER.debug("using sentiment cache on text: [%s]", text)
-    #     return self._sentiment_cache[text_hash]
-
-    LOGGER.debug("detect sentiment on text: [%s]", text)
-    loop = asyncio.get_running_loop()
-    sentiment_future = loop.run_in_executor(
-        None,
-        lambda: COMPREHEND_CLIENT.detect_sentiment(
-            Text=text,
-            LanguageCode=COMPREHEND_LANGUAGE_CODE,
-        ),
-    )
-    results = await asyncio.gather(sentiment_future)
-    result = results[0]
-    # self._sentiment_cache[text_hash] = result
-    return result
-
 async def add_sentiment_to_transcript(
     message: Dict[str, Any],
+    sentiment_analysis_args: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
 ):
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
-        
-    transcript_segment = {
-        **transform_segment_to_add_transcript({**message}),
-    }
- 
-    if "Sentiment" in message:
-        sentiment = {
-            **transform_segment_to_add_sentiment({**message})
-        }
-        
-    else:
-        text = transcript_segment["Transcript"]
-        LOGGER.debug("detect sentiment on text: [%s]", text)
 
-        
-        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text)
-        LOGGER.debug("Sentiment Response: ", extra=sentiment_response)
+    transcript_segment_with_sentiment = await transform_segment_to_add_sentiment(message, sentiment_analysis_args)
 
-        result = {}
-        comprehend_weighted_sentiment = ComprehendWeightedSentiment()
-
-        sentiment = {
-            k: v for k, v in sentiment_response.items() if k in ["Sentiment", "SentimentScore"]
-        }
-        if sentiment:
-            if sentiment.get("Sentiment") in ["POSITIVE", "NEGATIVE"]:
-                sentiment["SentimentWeighted"] = comprehend_weighted_sentiment.get_weighted_sentiment_score(
-                        sentiment_response=sentiment_response
-                    )
-        
-    transcript_segment_with_sentiment = {
-        **transcript_segment,
-        **sentiment
-    }
-    
+    result = {}
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addTranscriptSegment.args(input=transcript_segment_with_sentiment).select(
@@ -299,13 +141,14 @@ async def add_sentiment_to_transcript(
 
 def add_transcript_sentiment_analysis(
     message: Dict[str, Any],
+    sentiment_analysis_args: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
 ) -> List[Coroutine]:
     """Add Transcript Sentiment GraphQL Mutation"""
 
     tasks = []
 
-    task = add_sentiment_to_transcript(message, appsync_session)
+    task = add_sentiment_to_transcript(message, sentiment_analysis_args, appsync_session)
     tasks.append(task)
 
     return tasks
@@ -407,37 +250,6 @@ async def execute_add_s3_recording_mutation(
 
     return result
 
-async def execute_add_call_category_mutation(
-    message: Dict[str, Any],
-    appsync_session: AppsyncAsyncClientSession,
-) -> Dict:
-    agentId = message.get("AgentId")
-    if not agentId:
-        error_message = "AgentId doesn't exist in UPDATE_AGENT event"
-        raise TypeError(error_message)
-
-    if not appsync_session.client.schema:
-        raise ValueError("invalid AppSync schema")
-    schema = DSLSchema(appsync_session.client.schema)
-
-    query = dsl_gql(
-        DSLMutation(
-            schema.Mutation.addCallCategory.args(
-                input={**message, "AgentId": agentId}
-            ).select(*call_fields(schema))
-        )
-    )
-    
-    result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
-
-    query_string = print_ast(query)
-    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
-
-    return result 
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -550,29 +362,20 @@ def add_lex_agent_assistances(
 ) -> List[Coroutine]:
     """Add Lex Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
-    call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    is_partial: bool = message["IsPartial"]
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001 # UI sort order
-    transcript: str = message["Transcript"]
-    created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lex_agent_assist_args = []
-    if (channel == "CALLER" and not is_partial):
+    if (message["Channel"] == "CALLER" and not message["IsPartial"]):
         send_lex_agent_assist_args.append(
                 dict(
-                    content=transcript,
+                    content=message["Transcript"],
                     transcript_segment_args=dict(
-                        CallId=call_id,
+                        CallId=message["CallId"],
                         Channel="AGENT_ASSISTANT",
-                        CreatedAt=created_at,
-                        EndTime=end_time,
-                        IsPartial=is_partial,
+                        CreatedAt=message["CreatedAt"],
+                        EndTime=message["EndTime"],
+                        IsPartial=message["IsPartial"],
                         SegmentId=str(uuid.uuid4()),
-                        StartTime=start_time,
+                        StartTime=message["StartTime"],
                         Status="TRANSCRIBING",
                     ),
                 )
@@ -600,6 +403,8 @@ async def send_issues_agent_assist(
 
     result = {}
     transcript = transcript_segment_args["Transcript"]
+    LOGGER.debug("transcript_segment_args")
+    LOGGER.debug(transcript_segment_args)
     if transcript:
         transcript_segment = {**transcript_segment_args, "Transcript": transcript}
         LOGGER.debug("Issue Agent Assist segment")
@@ -626,23 +431,17 @@ def add_issues_detected_agent_assistances(
 ) -> List[Coroutine]:
     """Add TCA Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
-    call_id: str = message["CallId"]
-    channel: str = "AGENT_ASSISTANT"
-    status: str = "TRANSCRIBING"
-    is_partial: bool = False
-
-    created_at: str
-    start_time: float
-    end_time: float
-
+    
     send_issues_agent_assist_args = []
     
-    issues_detected = message.get("IssuesDetected", [])
+    issues_detected = message.get("IssuesDetected", None)
+
     for issue in issues_detected:
-        issue_segment = transform_segment_to_issues_agent_assist(
-            {**message},
-            issue=issue
-        )
+        LOGGER.debug("Adding issue:")
+        LOGGER.debug(issue)
+        issue_segment = transform_segment_to_issues_agent_assist({**message}, issue=issue)
+        LOGGER.debug("issue_segment:")
+        LOGGER.debug(issue_segment)
         send_issues_agent_assist_args.append(
             dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
         )
@@ -729,29 +528,20 @@ def add_lambda_agent_assistances(
 ) -> List[Coroutine]:
     """Add Lambda Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
-    call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    is_partial: bool = message["IsPartial"]
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001 # UI sort order
-    transcript: str = message["Transcript"]
-    created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lambda_agent_assist_args = []
-    if (channel == "CALLER" and not is_partial):
+    if (message["Channel"] == "CALLER" and not message["IsPartial"]):
         send_lambda_agent_assist_args.append(
                 dict(
-                    content=transcript,
+                    content=message["Transcript"],
                     transcript_segment_args=dict(
-                        CallId=call_id,
+                        CallId=message["CallId"],
                         Channel="AGENT_ASSISTANT",
-                        CreatedAt=created_at,
-                        EndTime=end_time,
-                        IsPartial=is_partial,
+                        CreatedAt=message["CreatedAt"],
+                        EndTime=message["EndTime"],
+                        IsPartial=message["IsPartial"],
                         SegmentId=str(uuid.uuid4()),
-                        StartTime=start_time,
+                        StartTime=message["StartTime"],
                         Status="TRANSCRIBING",
                     ),
                 )
@@ -771,6 +561,7 @@ async def execute_process_event_api_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
     agent_assist_args: Dict[str, Any],
+    sentiment_analysis_args: Dict[str, Any]
 ) -> Dict[Literal["successes", "errors"], List]:
 
     """Executes AppSync API Mutation"""
@@ -793,6 +584,7 @@ async def execute_process_event_api_mutation(
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
     LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")   
 
+    
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],
         "errors": [],
@@ -837,43 +629,53 @@ async def execute_process_event_api_mutation(
 
 
     elif event_type == "ADD_TRANSCRIPT_SEGMENT":
-        # UPDATE STATUS
+
+        # ADD_TRANSCRIPT_SEGMENT event supports these 3 types of message structure. 
+        #   The logic for populating transcripts, sentiment values and agent assist messages depend on 
+        #    which one of these 3 json structures are populated in the KDS Event message.  
+        #  
+        #  1. custom i.e. source populates invidividual transcript fields, including optional sentiment field
+        #  2. TranscriptEvent - json structure from standard Transcribe API
+        #  3. UtteranceEvent - json structure from TCA streaming API
+
+        normalized_message = {
+            **normalize_transcript_segment({**message}),
+        }
+        
         LOGGER.debug("Add Transcript Segment")
         add_transcript_tasks = add_transcript_segments(
-            message=message,
+            message=normalized_message,
             appsync_session=appsync_session,
         )
 
         add_transcript_sentiment_tasks = []
-        if IS_SENTIMENT_ANALYSIS_ENABLED and not message.get("IsPartial", True):
+        if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
+            LOGGER.debug("Add Sentiment Analysis")
             add_transcript_sentiment_tasks = add_transcript_sentiment_analysis(
-                message=message,
+                message=normalized_message,
+                sentiment_analysis_args=sentiment_analysis_args,
                 appsync_session=appsync_session,
             )
 
-        # BabuS: Temporary code block to display issues & categories on AGENT_ASSISTANT channel
-        # This will be removed/replaced once TCA design is finalized
-        issuedetected = message.get("IssuesDetected", None)
-        LOGGER.debug("Issues Detected:")
-        LOGGER.debug(issuedetected)
-        if issuedetected:
-            # LOGGER.debug("Adding Issues Agent Assist msgs")
+        add_tca_agent_assist_tasks = []
+        issuesdetected = normalized_message.get("IssuesDetected", [])
+        if issuesdetected and not normalized_message["IsPartial"]:
             add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
-                message=message,
+                message=normalized_message,
                 appsync_session=appsync_session
             )    
 
         add_lex_agent_assists_tasks = []
         if IS_LEX_AGENT_ASSIST_ENABLED:
             add_lex_agent_assists_tasks = add_lex_agent_assistances(
-                    message=message,
+                    message=normalized_message,
                     appsync_session=appsync_session,
                 )
 
         add_lambda_agent_assists_tasks = []
         if IS_LAMBDA_AGENT_ASSIST_ENABLED:
             add_lambda_agent_assists_tasks = add_lambda_agent_assistances(
-                    message=message,
+                    message=normalized_message,
                     appsync_session=appsync_session,
                 )
 
@@ -882,6 +684,7 @@ async def execute_process_event_api_mutation(
             *add_transcript_sentiment_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
+            *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
 
@@ -903,17 +706,6 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
     
-    elif event_type == "ADD_CALL_CATEGORY":
-        LOGGER.debu("Add Call Category")
-        response = await execute_add_call_category_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
-        if isinstance(response, Exception):
-            return_value["errors"].append(response)
-        else:
-            return_value["successes"].append(response)
-
     elif event_type == "UPDATE_AGENT":
         # UPDATE AGENT 
         LOGGER.debug("Update AgentId for call")

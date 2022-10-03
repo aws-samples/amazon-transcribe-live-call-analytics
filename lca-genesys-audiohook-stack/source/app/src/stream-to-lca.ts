@@ -17,10 +17,10 @@ import pEvent from 'p-event';
 import { MediaDataFrame } from './audiohook/mediadata';
 import { Session } from './session';
 import { 
-    writeCallEventToKds, 
+    writeCallEvent, 
     writeTranscriptionSegment,
-    writeTCASegment,
-    writeCategoryMatched,
+    writeAddTranscriptSegmentEvent,
+    writeAddCallCategoryEvent,
 } from './lca/lca';
 import { 
     TranscribeStreamingClient, 
@@ -35,6 +35,7 @@ import {
 } from '@aws-sdk/client-transcribe-streaming';
 import { normalizeError } from './utils';
 import dotenv from 'dotenv';
+import { CallEndEvent, CallStartEvent } from './lca/entities-lca';
 dotenv.config();
 
 const awsRegion = process.env['AWS_REGION'] || 'us-east-1';
@@ -54,12 +55,15 @@ export const addStreamToLCA = (session: Session) => {
         session.logger.info(`Channels supported: ${selectedMedia?.channels}`);
         session.logger.info('Call Participant: ');
 
-        await writeCallEventToKds({
-            callId: openparms.conversationId,
-            eventStatus: 'START',
-            fromNumber: openparms.participant.ani,
-            toNumber: openparms.participant.dnis
-        });
+        const callEvent: CallStartEvent = {
+            EventType: 'START',
+            CallId: openparms.conversationId,
+            CustomerPhoneNumber: openparms.participant.ani,
+            SystemPhoneNumber: openparms.participant.dnis,
+            CreatedAt: new Date().toISOString(),
+        };
+
+        await writeCallEvent(callEvent);
         
         const client = new TranscribeStreamingClient({
             region: awsRegion 
@@ -91,8 +95,8 @@ export const addStreamToLCA = (session: Session) => {
         if (isTCAEnabled) {
             const response = await client.send(
                 new StartCallAnalyticsStreamTranscriptionCommand({
-                    LanguageCode: 'en-US',
-                    MediaSampleRateHertz: 8000,
+                    LanguageCode: languageCode,
+                    MediaSampleRateHertz: selectedMedia?.rate || 8000,
                     MediaEncoding: 'pcm',
                     // VocabularyName: customVocab,
                     // ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
@@ -128,11 +132,11 @@ export const addStreamToLCA = (session: Session) => {
             (async () => {
                 if (outputCallAnalyticsStream) {   
                     for await (const event of outputCallAnalyticsStream) {
-                        if (event.UtteranceEvent) {
-                            await writeTCASegment(event.UtteranceEvent, openparms.conversationId);
+                        if (event.UtteranceEvent && event.UtteranceEvent.UtteranceId) {
+                            await writeAddTranscriptSegmentEvent(event.UtteranceEvent, undefined, openparms.conversationId);
                         }
-                        if (event.CategoryEvent) {
-                            await writeCategoryMatched(event.CategoryEvent, openparms.conversationId);
+                        if (event.CategoryEvent && event.CategoryEvent.MatchedCategories) {
+                            await writeAddCallCategoryEvent(event.CategoryEvent, openparms.conversationId);
                         }
                     }
                 }
@@ -166,13 +170,15 @@ export const addStreamToLCA = (session: Session) => {
         }
         
         return async () => {
-
-            await writeCallEventToKds({
-                callId: openparms.conversationId,
-                eventStatus: 'END',
-                fromNumber: openparms.participant.ani,
-                toNumber: openparms.participant.dnis,
-            });        
+            const callEvent: CallEndEvent = {
+                EventType: 'END',
+                CallId: openparms.conversationId,
+                CustomerPhoneNumber: openparms.participant.ani,
+                SystemPhoneNumber: openparms.participant.dnis,
+                UpdatedAt: new Date().toISOString(),
+            };
+            
+            await writeCallEvent(callEvent);
   
             session.logger.info('Close handler executed');
         };

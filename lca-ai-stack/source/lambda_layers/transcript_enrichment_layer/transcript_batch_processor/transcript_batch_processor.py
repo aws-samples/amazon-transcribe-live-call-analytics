@@ -38,6 +38,7 @@ class TranscriptBatchProcessor:
             message: object,
             appsync_session: AsyncClientSession,
             agent_assist_args: Dict[str, object],
+            sentiment_analysis_args: Dict[str, object]
         ) -> Coroutine[Any, Any, Any]:
             ...
 
@@ -46,10 +47,12 @@ class TranscriptBatchProcessor:
         appsync_client: AppsyncAioGqlClient,
         api_mutation_fn: ApiMutationFnType,
         agent_assist_args: Optional[Dict[str, Any]] = None,
+        sentiment_analysis_args: Optional[Dict[str, object]] = None
     ):
         self._appsync_client = appsync_client
         self._api_mutation_fn = api_mutation_fn
         self._agent_assist_args = agent_assist_args or {}
+        self._sentiment_analysis_args = sentiment_analysis_args or {}
         self._kds_batch_processor = KDS_BATCH_PROCESSOR
 
         self._kds_processed_messages: List[Dict[str, object]] = []
@@ -77,6 +80,7 @@ class TranscriptBatchProcessor:
                         message=message["result"],
                         appsync_session=appsync_session,
                         agent_assist_args=self._agent_assist_args,
+                        sentiment_analysis_args=self._sentiment_analysis_args,
                     )
                     for message in self._kds_processed_messages
                     if message["status"] == "success"
