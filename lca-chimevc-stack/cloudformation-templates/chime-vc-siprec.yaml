@@ -138,18 +138,18 @@ Resources:
                 responseData = create_vc(event)
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
               except Exception as e:
-                error = { 'error': f'Exception thrown: {e}'}
+                error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                 print(error)
-                cfnresponse.send(event, context, cfnresponse.FAILED, error )   
+                cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
             elif event['RequestType'] == 'Delete':
               try:
                 delete_vc(event)
                 responseData = {'Message': 'Deleting VC.  Returning success status.'}                   
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                      
               except Exception as e:
-                error = { 'error': f'Exception thrown: {e}'}
+                error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                 print(error)
-                cfnresponse.send(event, context, cfnresponse.FAILED, error )   
+                cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
             else:
                 responseData = {'Message': 'Update is no-op. Returning success status.'}
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)

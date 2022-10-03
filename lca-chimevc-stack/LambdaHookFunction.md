@@ -3,7 +3,8 @@
 ## Overview
 
 LCA v0.5.0 and later offers optional custom logic via a user-provided Lambda function, to support the following features:
-1. Selectively choose whether to process a call, or to ignore it
+1. Selectively choose whether to process a call, or to ignore/suspend it. 
+   *NOTE see [StartCallProcesingEvent.md](./StartCallProcessingEvent.md) to start later processing for a call that was initially suspended.*
 2. Reverse the default assignment of caller and agent audio streams
 3. Assign an Agent identifier string for display, search, and sort on the LCA UI.  
    *NOTE see [SettingAgentId.md](./SettingAgentId.md) if you need to provide an AgentID after the call has started.*

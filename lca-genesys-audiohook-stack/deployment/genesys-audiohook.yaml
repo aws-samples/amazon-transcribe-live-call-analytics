@@ -263,6 +263,7 @@ Resources:
               print(event)
               status = cfnresponse.SUCCESS
               response_data = {}
+              reason = "Success"
               if event["RequestType"] == "Delete":
                   try:
                       repository_name = event["ResourceProperties"]["RepositoryName"]
@@ -270,9 +271,9 @@ Resources:
                       response_data["RepositoryName"] = repository_name
                   except Exception as e:
                       print(e)
-                      response_data["Reason"] = f"Exception thrown: {e}"
+                      reason = f"Exception thrown: {e}"
                       status = cfnresponse.FAILED
-              cfnresponse.send(event, context, status, response_data)
+              cfnresponse.send(event, context, status, response_data, reason=reason)
 
   EcrImagesDelete:
     Type: Custom::EcrImagesDelete

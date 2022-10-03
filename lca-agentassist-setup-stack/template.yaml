@@ -333,6 +333,7 @@ Resources:
           def handler(event, context):
             print(json.dumps(event))
             status = cfnresponse.SUCCESS
+            reason = "Success"
             responseData = {}
             responseData['Data'] = "Success"
             if event['RequestType'] != 'Delete':
@@ -344,9 +345,9 @@ Resources:
                   setupQnABot(props, oldprops)
               except Exception as e:
                 print(e)
-                responseData["Error"] = f"Exception thrown: {e}"
+                reason = f"Exception thrown: {e}"
                 status = cfnresponse.FAILED
-            cfnresponse.send(event, context, status, responseData)
+            cfnresponse.send(event, context, status, responseData, reason=reason)
 
   # Trigger Lambda function
   SetupFunctionResource:

@@ -306,7 +306,15 @@ def get_lex_agent_assist_message(bot_response):
         # ignore 'noanswer' responses from QnABot
         LOGGER.debug("QnABot \"Dont't know\" response - ignoring")
         return ""
-    if "messages" in bot_response and bot_response["messages"]:
+    # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
+    appContextJSON = bot_response.get("sessionState",{}).get("sessionAttributes",{}).get("appContext")
+    if appContextJSON:
+        appContext = json.loads(appContextJSON)
+        markdown = appContext.get("altMessages",{}).get("markdown")
+        if markdown:
+            message = markdown
+    # otherwise use bot message
+    if not message and "messages" in bot_response and bot_response["messages"]:
         message = bot_response["messages"][0]["content"]
     return message
 
@@ -373,6 +381,7 @@ def add_lex_agent_assistances(
                         Channel="AGENT_ASSISTANT",
                         CreatedAt=message["CreatedAt"],
                         EndTime=message["EndTime"],
+                        ExpiresAfter=get_ttl(),
                         IsPartial=message["IsPartial"],
                         SegmentId=str(uuid.uuid4()),
                         StartTime=message["StartTime"],
@@ -539,6 +548,7 @@ def add_lambda_agent_assistances(
                         Channel="AGENT_ASSISTANT",
                         CreatedAt=message["CreatedAt"],
                         EndTime=message["EndTime"],
+                        ExpiresAfter=get_ttl(),
                         IsPartial=message["IsPartial"],
                         SegmentId=str(uuid.uuid4()),
                         StartTime=message["StartTime"],
@@ -584,7 +594,6 @@ async def execute_process_event_api_mutation(
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
     LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")   
 
-    
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],
         "errors": [],
