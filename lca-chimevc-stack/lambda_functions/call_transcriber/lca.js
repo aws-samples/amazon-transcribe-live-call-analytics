@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-param-reassign */
 
-const { KinesisClient, PutRecordCommand } = require('@aws-sdk/client-kinesis');
+const { PutRecordCommand } = require('@aws-sdk/client-kinesis');
 
 const REGION = process.env.REGION || 'us-east-1';
 const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || 'true') === 'true';
@@ -24,9 +24,8 @@ const EVENT_TYPE = {
   CONTINUE: 'CONTINUE',
 };
 
-const kinesisClient = new KinesisClient({ region: REGION });
-
-export const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentToKds(
+const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentToKds(
+  kinesisClient,
   transcriptionEvent,
   callId,
   streamArn,
@@ -74,7 +73,71 @@ export const writeTranscriptionSegmentToKds = async function writeTranscriptionS
   }
 };
 
-export const writeUtteranceEventToKds = async function writeUtteranceEventToKds(
+const writeAddTranscriptSegmentEventToKds = async function writeAddTranscriptSegmentEventToKds(
+  kinesisClient,
+  utteranceEvent,
+  transcriptEvent,
+  callId,
+) {
+  if (transcriptEvent) {
+    if (transcriptEvent.Transcript?.Results && transcriptEvent.Transcript?.Results.length > 0) {
+      if (
+        // eslint-disable-next-line operator-linebreak
+        transcriptEvent.Transcript?.Results[0].Alternatives &&
+        transcriptEvent.Transcript?.Results[0].Alternatives?.length > 0
+      ) {
+        const result = transcriptEvent.Transcript?.Results[0];
+        if (
+          // eslint-disable-next-line operator-linebreak
+          result.IsPartial === undefined ||
+          (result.IsPartial === true && !SAVE_PARTIAL_TRANSCRIPTS)
+        ) {
+          return;
+        }
+      }
+    }
+  }
+
+  if (utteranceEvent) {
+    if (
+      // eslint-disable-next-line operator-linebreak
+      utteranceEvent.IsPartial === undefined ||
+      (utteranceEvent.IsPartial === true && !SAVE_PARTIAL_TRANSCRIPTS)
+    ) {
+      return;
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  const kdsObject = {
+    EventType: 'ADD_TRANSCRIPT_SEGMENT',
+    CallId: callId,
+    TranscriptEvent: transcriptEvent,
+    UtteranceEvent: utteranceEvent,
+    CreatedAt: now,
+    UpdatedAt: now,
+  };
+
+  const putParams = {
+    StreamName: KINESIS_STREAM_NAME,
+    PartitionKey: callId,
+    Data: Buffer.from(JSON.stringify(kdsObject)),
+  };
+
+  const putCmd = new PutRecordCommand(putParams);
+  try {
+    await kinesisClient.send(putCmd);
+    console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
+    console.info(JSON.stringify(kdsObject));
+  } catch (error) {
+    console.error('Error writing transcription segment to KDS', error);
+    console.debug(JSON.stringify(kdsObject));
+  }
+};
+
+const writeUtteranceEventToKds = async function writeUtteranceEventToKds(
+  kinesisClient,
   utterances,
   callId,
 ) {
@@ -128,47 +191,41 @@ export const writeUtteranceEventToKds = async function writeUtteranceEventToKds(
   }
 };
 
-export const writeCategoryEventToKds = async function writeCategoryEventToKds(categories, callId) {
-  if (categories) {
-    categories.MatchedCategories?.forEach(async (category) => {
-      for (const key in categories.MatchedDetails) {
-        if ({}.hasOwnProperty.call(categories.MatchedDetails, key)) {
-          categories.MatchedDetails[key].TimestampRanges?.forEach(async (ts) => {
-            const now = new Date().toISOString();
-            const expiration = Math.round(Date.now() / 1000) + expireInDays * 24 * 3600;
+const writeCategoryEventToKds = async function writeCategoryEventToKds(
+  kinesisClient,
+  categoryEvent,
+  callId,
+) {
+  if (categoryEvent) {
+    const now = new Date().toISOString();
 
-            const kdsObject = {
-              EventType: 'ADD_CALL_CATEGORY',
-              CallId: callId,
-              MatchedCategory: category,
-              MatchedKeyWords: key,
-              StartTime: (ts.BeginOffsetMillis || 0) / 1000,
-              EndTime: (ts.EndOffsetMillis || 0) / 1000,
-              CreatedAt: now,
-              ExpiresAfter: expiration.toString(),
-            };
+    const kdsObject = {
+      EventType: 'ADD_CALL_CATEGORY',
+      CallId: callId,
+      CategoryEvent: categoryEvent,
+      CreatedAt: now,
+      UpdatedAt: now,
+    };
 
-            const putParams = {
-              StreamName: KINESIS_STREAM_NAME,
-              PartitionKey: callId,
-              Data: Buffer.from(JSON.stringify(kdsObject)),
-            };
+    const putParams = {
+      StreamName: KINESIS_STREAM_NAME,
+      PartitionKey: callId,
+      Data: Buffer.from(JSON.stringify(kdsObject)),
+    };
 
-            const putCmd = new PutRecordCommand(putParams);
-            try {
-              await kinesisClient.send(putCmd);
-              console.debug(JSON.stringify(kdsObject));
-            } catch (error) {
-              console.error('Error writing ADD_CALL_CATEGORY to KDS', error);
-            }
-          });
-        }
-      }
-    });
+    const putCmd = new PutRecordCommand(putParams);
+    try {
+      await kinesisClient.send(putCmd);
+      console.debug('Written ADD_CALL_CATEGORY to KDS');
+      console.debug(JSON.stringify(kdsObject));
+    } catch (error) {
+      console.error('Error writing ADD_CALL_CATEGORY to KDS', error);
+      console.debug(JSON.stringify(kdsObject));
+    }
   }
 };
 
-export const writeCallStartEventToKds = async function writeCallStartEventToKds(callData) {
+const writeCallStartEventToKds = async function writeCallStartEventToKds(kinesisClient, callData) {
   console.log('Write Call Start Event to KDS');
   const putObj = {
     CallId: callData.callId,
@@ -192,7 +249,7 @@ export const writeCallStartEventToKds = async function writeCallStartEventToKds(
   }
 };
 
-export const writeCallEndEventToKds = async function writeCallEndEventToKds(callId) {
+const writeCallEndEventToKds = async function writeCallEndEventToKds(kinesisClient, callId) {
   console.log('Write Call End Event to KDS');
   const putObj = {
     CallId: callId,
@@ -212,7 +269,7 @@ export const writeCallEndEventToKds = async function writeCallEndEventToKds(call
   }
 };
 
-export const writeCallEventToKds = async function writeCallEventToKds(callEvent) {
+const writeCallEventToKds = async function writeCallEventToKds(kinesisClient, callEvent) {
   const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
   const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
   const now = new Date().toISOString();
@@ -240,7 +297,8 @@ export const writeCallEventToKds = async function writeCallEventToKds(callEvent)
   }
 };
 
-export const writeStatusToKds = async function writeStatusToKds(
+const writeStatusToKds = async function writeStatusToKds(
+  kinesisClient,
   channel,
   status,
   callId,
@@ -269,7 +327,7 @@ export const writeStatusToKds = async function writeStatusToKds(
   }
 };
 
-export const writeS3UrlToKds = async function writeS3UrlToKds(callId) {
+const writeS3UrlToKds = async function writeS3UrlToKds(kinesisClient, callId) {
   console.log('Writing S3 URL To Dynamo');
   const now = new Date().toISOString();
   const eventType = 'ADD_S3_RECORDING_URL';
@@ -293,3 +351,11 @@ export const writeS3UrlToKds = async function writeS3UrlToKds(callId) {
     console.error('Error writing ADD_S3_RECORDING_URL event', error);
   }
 };
+
+exports.writeS3UrlToKds = writeS3UrlToKds;
+exports.writeTranscriptionSegmentToKds = writeTranscriptionSegmentToKds;
+exports.writeCallStartEventToKds = writeCallStartEventToKds;
+exports.writeCallEndEventToKds = writeCallEndEventToKds;
+exports.writeUtteranceEventToKds = writeUtteranceEventToKds;
+exports.writeCategoryEventToKds = writeCategoryEventToKds;
+exports.writeAddTranscriptSegmentEventToKds = writeAddTranscriptSegmentEventToKds;

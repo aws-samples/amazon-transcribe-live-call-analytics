@@ -9,6 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 
 const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { KinesisClient } = require('@aws-sdk/client-kinesis');
 
 /* Transcribe and Streaming Libraries */
 const {
@@ -33,7 +34,7 @@ const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
 const { mergeFiles } = require('./mergeFiles');
 const {
   writeS3UrlToKds,
-  writeTranscriptionSegmentToKds,
+  writeAddTranscriptSegmentEventToKds,
   writeCallStartEventToKds,
   writeCallEndEventToKds,
   writeUtteranceEventToKds,
@@ -69,6 +70,8 @@ const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
 let s3Client;
 let lambdaClient;
 let dynamoClient;
+// eslint-disable-next-line no-unused-vars
+let kinesisClient;
 
 let timeToStop = false;
 let stopTimer;
@@ -484,22 +487,22 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   return lastFragment;
 };
 
-const readTranscripts = async function readTranscripts(
-  tsStream,
-  callId,
-  callerStreamArn,
-  sessionId,
-) {
+const readTranscripts = async function readTranscripts(tsStream, callId) {
   try {
     for await (const event of tsStream) {
       if (event.UtteranceEvent) {
-        writeUtteranceEventToKds(event.UtteranceEvent, callId, callerStreamArn, sessionId);
+        writeAddTranscriptSegmentEventToKds(kinesisClient, event.UtteranceEvent, undefined, callId);
       }
       if (event.CategoryEvent) {
-        writeCategoryEventToKds(event.CategoryEvent, callId, callerStreamArn, sessionId);
+        writeCategoryEventToKds(kinesisClient, event.CategoryEvent, callId);
       }
       if (event.TranscriptionEvent) {
-        writeTranscriptionSegmentToKds(event.TranscriptEvent, callId, callerStreamArn, sessionId);
+        writeAddTranscriptSegmentEventToKds(
+          kinesisClient,
+          undefined,
+          event.TranscriptEvent,
+          callId,
+        );
       }
     }
   } catch (error) {
@@ -522,11 +525,14 @@ const go = async function go(
     try {
       if (isTCAEnabled) {
         const channel0 = { ChannelId: 0, ParticipantRole: ParticipantRole.AGENT };
-        const channel1 = { ChannelId: 1, ParticipantRole: ParticipantRole.CALLER };
+        const channel1 = { ChannelId: 1, ParticipantRole: ParticipantRole.CUSTOMER };
         const channelDefinitions = [];
         channelDefinitions.push(channel0);
         channelDefinitions.push(channel1);
         const configurationEvent = { ChannelDefinitions: channelDefinitions };
+
+        console.log('Sending TCA configuration event');
+        console.log(JSON.stringify(configurationEvent));
         yield { ConfigurationEvent: configurationEvent };
       }
       for await (const payloadChunk of passthroughStream) {
@@ -627,7 +633,7 @@ const go = async function go(
     }
   }, KEEP_ALIVE);
 
-  const transcribePromise = readTranscripts(tsStream, callId, callerStreamArn, sessionId);
+  const transcribePromise = readTranscripts(tsStream, callId);
 
   const returnVals = await Promise.all([callerWorker, agentWorker]);
 
@@ -667,6 +673,7 @@ const handler = async function handler(event, context) {
   s3Client = new S3Client({ region: REGION });
   lambdaClient = new LambdaClient({ region: REGION });
   dynamoClient = new DynamoDBClient({ region: REGION });
+  kinesisClient = new KinesisClient({ region: REGION });
 
   /*
   Create a callData object for incoming event:
@@ -705,7 +712,7 @@ const handler = async function handler(event, context) {
     }
     await writeCallDataToDdb(callData);
     console.log('Ready to start processing call');
-    await writeCallStartEventToKds(callData);
+    await writeCallStartEventToKds(kinesisClient, callData);
   } else if (event.source === 'aws.chime') {
     if (event.detail.streamingStatus === 'STARTED') {
       console.log('AWS Chime stream STARTED event received. Save event record to DynamoDB.');
@@ -731,7 +738,7 @@ const handler = async function handler(event, context) {
         return;
       }
       console.log('Ready to start processing call');
-      await writeCallStartEventToKds(callData);
+      await writeCallStartEventToKds(kinesisClient, callData);
     } else {
       console.log(
         `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
@@ -776,7 +783,7 @@ const handler = async function handler(event, context) {
       await lambdaClient.send(invokeCmd);
     } else {
       // Call has ended
-      await writeCallEndEventToKds(callData.callId);
+      await writeCallEndEventToKds(kinesisClient, callData.callId);
       callData.callStreamingEndTime = new Date().toISOString();
       await writeCallDataToDdb(callData);
     }
@@ -786,14 +793,14 @@ const handler = async function handler(event, context) {
     await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
 
     if (!timeToStop) {
-      await mergeFiles.mergeFiles({
+      await mergeFiles({
         bucketName: OUTPUT_BUCKET,
         recordingPrefix: RECORDING_FILE_PREFIX,
         rawPrefix: RAW_FILE_PREFIX,
         callId: callData.callId,
         lambdaCount: callData.lambdaCount,
       });
-      await writeS3UrlToKds(callData.callId);
+      await writeS3UrlToKds(kinesisClient, callData.callId);
     }
   }
 };
