@@ -524,8 +524,8 @@ const go = async function go(
   const audioStream = async function* audioStream() {
     try {
       if (isTCAEnabled) {
-        const channel0 = { ChannelId: 0, ParticipantRole: ParticipantRole.AGENT };
-        const channel1 = { ChannelId: 1, ParticipantRole: ParticipantRole.CUSTOMER };
+        const channel0 = { ChannelId: 0, ParticipantRole: ParticipantRole.CUSTOMER };
+        const channel1 = { ChannelId: 1, ParticipantRole: ParticipantRole.AGENT };
         const channelDefinitions = [];
         channelDefinitions.push(channel0);
         channelDefinitions.push(channel1);
