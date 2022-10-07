@@ -18,3 +18,19 @@
 .sentiment-image-popover {
     cursor: pointer;
 }
+
+span.issue-span {
+    text-decoration: underline;
+    text-decoration-color: red;
+    text-decoration-thickness: 2px;
+}
+
+span.issue-pill {
+    background-color: red;
+    border-radius: 2em;
+    padding-left: 1em;
+    padding-right: 1em;
+    line-height: 2.5em;    
+    color: white;
+    padding-bottom: 0.1em;
+}

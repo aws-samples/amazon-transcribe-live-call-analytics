@@ -91,6 +91,16 @@ def add_transcript_segments(
 
     tasks = []
     if message:
+        issues_detected = message.get("IssuesDetected", None)
+        transcript = message["Transcript"]
+        if issues_detected and len(issues_detected) > 0:
+            LOGGER.debug("issue detected in add transcript segment")
+            offsets = issues_detected[0].get("CharacterOffsets")
+            start = int(offsets.get("Begin"))
+            end = int(offsets.get("End"))
+            transcript = f"{transcript[:start]}<span class='issue-span'>{transcript[start:end]}</span>{transcript[end:]}<br/><span class='issue-pill'>Issue Detected</span>"
+            message["Transcript"] = transcript
+            
         query = dsl_gql(
             DSLMutation(
                 schema.Mutation.addTranscriptSegment.args(input=message).select(
@@ -666,13 +676,13 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
-        add_tca_agent_assist_tasks = []
-        issuesdetected = normalized_message.get("IssuesDetected", [])
-        if issuesdetected and not normalized_message["IsPartial"]:
-            add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
-                message=normalized_message,
-                appsync_session=appsync_session
-            )    
+        #add_tca_agent_assist_tasks = []
+        #issuesdetected = normalized_message.get("IssuesDetected", [])
+        #if issuesdetected and not normalized_message["IsPartial"]:
+        #    add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
+        #        message=normalized_message,
+        #        appsync_session=appsync_session
+        #    )    
 
         add_lex_agent_assists_tasks = []
         if IS_LEX_AGENT_ASSIST_ENABLED:
@@ -693,7 +703,7 @@ async def execute_process_event_api_mutation(
             *add_transcript_sentiment_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
-            *add_tca_agent_assist_tasks,
+            #*add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
 
