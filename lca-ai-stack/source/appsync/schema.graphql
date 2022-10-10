@@ -58,6 +58,7 @@ enum Channel {
 	CALLER
 	AGENT
 	AGENT_ASSISTANT
+	CATEGORY_MATCH
 }
 
 input CreateCallInput {

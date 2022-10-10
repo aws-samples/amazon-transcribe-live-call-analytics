@@ -293,6 +293,79 @@ async def execute_update_agent_mutation(
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
+    
+##########################################################################
+# Call Categories
+##########################################################################
+
+async def send_call_category(
+    transcript_segment_args: Dict[str, Any],
+    category: str,
+    appsync_session: AppsyncAsyncClientSession,
+):
+    """Send Call Category Transcript Segment"""
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    transcript_segment = {**transcript_segment_args, "Transcript": category}
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                *transcript_segment_fields(schema),
+            )
+        )
+    )
+
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    return result
+
+def add_call_category(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+    """Add Lambda Agent Assist GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    LOGGER.debug("Detected Call Category")
+
+    category = message["CategoryEvent"]["MatchedCategories"][0]
+    start_time = message["CategoryEvent"]["MatchedDetails"][category]["TimestampRanges"][0]["EndOffsetMillis"]/1000
+    end_time = start_time + 0.1
+    send_call_category_args = []
+
+    send_call_category_args.append(
+            dict(
+                category=category,
+                transcript_segment_args=dict(
+                    CallId=message["CallId"],
+                    Channel="CATEGORY_MATCH",
+                    CreatedAt=message["CreatedAt"],
+                    EndTime=end_time,
+                    ExpiresAfter=get_ttl(),
+                    SegmentId=str(uuid.uuid4()),
+                    StartTime=start_time,
+                    IsPartial=False,
+                    Status="TRANSCRIBING",
+                ),
+            )
+        )
+
+    tasks = []
+    for call_category_args in send_call_category_args:
+        task = send_call_category(
+            appsync_session=appsync_session,
+            **call_category_args,
+        )
+        tasks.append(task)
+
+    return tasks 
+    
 
 ##########################################################################
 # Lex Agent Assist
@@ -657,6 +730,12 @@ async def execute_process_event_api_mutation(
         #  2. TranscriptEvent - json structure from standard Transcribe API
         #  3. UtteranceEvent - json structure from TCA streaming API
 
+        utteranceEvent = message.get("UtteranceEvent", None)
+        if utteranceEvent:
+            participantRole = utteranceEvent.get("ParticipantRole", None)
+            if not participantRole:
+                return return_value
+
         normalized_message = {
             **normalize_transcript_segment({**message}),
         }
@@ -704,6 +783,24 @@ async def execute_process_event_api_mutation(
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
             #*add_tca_agent_assist_tasks,
+            return_exceptions=True,
+        )
+
+        for response in task_responses:
+            if isinstance(response, Exception):
+                return_value["errors"].append(response)
+            else:
+                return_value["successes"].append(response)
+
+    elif event_type == "ADD_CALL_CATEGORY":
+        add_call_category_tasks = []
+        add_call_category_tasks = add_call_category(
+            message=message,
+            appsync_session=appsync_session,
+        )
+
+        task_responses = await asyncio.gather(
+            *add_call_category_tasks,
             return_exceptions=True,
         )
 

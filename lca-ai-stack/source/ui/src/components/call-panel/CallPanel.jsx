@@ -200,11 +200,24 @@ const TranscriptContent = ({ segment }) => {
       // eslint-disable-next-line react/no-array-index-key
       return <Badge key={`${segmentId}-pii-${i}`} color="red">{`${t}`}</Badge>;
     }
-    const className = channel === 'AGENT_ASSISTANT' ? 'transcript-segment-agent-assist' : '';
+    let className = '';
+    let text = t;
+    switch (channel) {
+      case 'AGENT_ASSISTANT':
+        className = 'transcript-segment-agent-assist';
+        break;
+      case 'CATEGORY_MATCH':
+        className = 'transcript-segment-category-match';
+        text = `Category Match: ${text}`;
+        break;
+      default:
+        break;
+    }
+    // if(channel === 'AGENT_ASSISTANT' ? 'transcript-segment-agent-assist' : '';
     return (
       // eslint-disable-next-line react/no-array-index-key
       <TextContent key={`${segmentId}-text-${i}`} color="gray" className={className}>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{t.trim()}</ReactMarkdown>
+        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{text.trim()}</ReactMarkdown>
         {/* {t.trim()} */}
       </TextContent>
     );
@@ -219,6 +232,26 @@ const TranscriptContent = ({ segment }) => {
 
 const TranscriptSegment = ({ segment }) => {
   const { channel } = segment;
+
+  if (channel === 'CATEGORY_MATCH') {
+    const categoryText = `${segment.transcript}`;
+    const newSegment = segment;
+    newSegment.transcript = categoryText;
+    // We will return a special version of the grid thats specifically only for category.
+    return (
+      <Grid
+        className="transcript-segment"
+        disableGutters
+        gridDefinition={[{ colspan: 1 }, { colspan: 11 }]}
+      >
+        {getSentimentImage(segment)}
+        <SpaceBetween direction="vertical" size="xxs">
+          <TranscriptContent segment={newSegment} />
+        </SpaceBetween>
+      </Grid>
+    );
+  }
+
   const channelClass = channel === 'AGENT_ASSISTANT' ? 'transcript-segment-agent-assist' : '';
   return (
     <Grid
@@ -246,8 +279,8 @@ const TranscriptSegment = ({ segment }) => {
 const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll }) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
-  // channels: AGENT, AGENT_ASSITS, CALLER,
-  const maxChannels = 3;
+  // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
+  const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
@@ -299,7 +332,7 @@ const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll })
   );
 };
 
-const getTrascriptContent = ({ item, callTranscriptPerCallId, autoScroll }) => {
+const getTranscriptContent = ({ item, callTranscriptPerCallId, autoScroll }) => {
   switch (item.recordingStatusLabel) {
     case DONE_STATUS:
     case IN_PROGRESS_STATUS:
@@ -349,7 +382,7 @@ const CallTranscriptContainer = ({ setToolsOpen, item, callTranscriptPerCallId }
         </Header>
       }
     >
-      {getTrascriptContent({ item, callTranscriptPerCallId, autoScroll })}
+      {getTranscriptContent({ item, callTranscriptPerCallId, autoScroll })}
     </Container>
   );
 };
