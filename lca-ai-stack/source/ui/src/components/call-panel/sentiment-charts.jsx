@@ -33,7 +33,7 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 
   return (
     <LineChart
-      height="150"
+      height="80"
       hideFilter
       series={[
         {
@@ -96,7 +96,7 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
 
   return (
     <LineChart
-      height="150"
+      height="80"
       hideFilter
       series={[
         {
