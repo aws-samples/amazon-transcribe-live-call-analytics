@@ -159,9 +159,9 @@ async def transform_segment_to_add_sentiment(message: Dict, sentiment_analysis_a
 
         text = message.get("Transcript", "")
         comprehend_client: ComprehendClient = sentiment_analysis_args.get("comprehend_client")
-        comprehend_language_coe = message.get("comprehend_language_code", "en")
+        comprehend_language_code = sentiment_analysis_args.get("comprehend_language_code", "en")
 
-        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text, comprehend_client, comprehend_language_coe)
+        sentiment_response:DetectSentimentResponseTypeDef = await detect_sentiment(text, comprehend_client, comprehend_language_code)
         comprehend_weighted_sentiment = ComprehendWeightedSentiment()
 
         sentiment = {

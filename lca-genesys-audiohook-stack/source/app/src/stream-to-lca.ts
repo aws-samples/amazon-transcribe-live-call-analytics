@@ -98,9 +98,6 @@ export const addStreamToLCA = (session: Session) => {
                     LanguageCode: languageCode,
                     MediaSampleRateHertz: selectedMedia?.rate || 8000,
                     MediaEncoding: 'pcm',
-                    // VocabularyName: customVocab,
-                    // ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
-                    // PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
                     AudioStream: transcribeInput()
                 })
             );

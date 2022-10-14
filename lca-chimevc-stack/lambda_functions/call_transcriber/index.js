@@ -557,13 +557,9 @@ const go = async function go(
   /* configure stream transcription parameters */
   if (isTCAEnabled) {
     tsParams = {
-      LanguageCode: 'en-US',
+      LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
       MediaSampleRateHertz: 8000,
       MediaEncoding: 'pcm',
-      // VocabularyName: customVocab,
-      // ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
-      // PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII')
-      //    ? piiEntities : undefined,
       AudioStream: audioStream(),
     };
   } else {

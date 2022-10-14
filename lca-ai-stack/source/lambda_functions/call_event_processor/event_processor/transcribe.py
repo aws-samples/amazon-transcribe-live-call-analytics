@@ -60,14 +60,7 @@ EVENT_LOOP = asyncio.get_event_loop()
 
 CALL_EVENT_TYPE_TO_STATUS = {
     "START": "STARTED",
-    "START_TRANSCRIPT": "TRANSCRIBING",
-    "CONTINUE_TRANSCRIPT": "TRANSCRIBING",
-    "CONTINUE": "TRANSCRIBING",
-    "END_TRANSCRIPT": "ENDED",
-    "TRANSCRIPT_ERROR": "ERRORED ",
-    "ERROR": "ERRORED ",
     "END": "ENDED",
-    "ADD_CHANNEL_S3_RECORDING_URL": "ENDED",
     "ADD_S3_RECORDING_URL": "ENDED",
 } 
 
@@ -330,7 +323,7 @@ def add_call_category(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
 ) -> List[Coroutine]:
-    """Add Lambda Agent Assist GraphQL Mutations"""
+    """Add Categories GraphQL Mutations"""
     # pylint: disable=too-many-locals
     LOGGER.debug("Detected Call Category")
 
@@ -476,71 +469,6 @@ def add_lex_agent_assistances(
     tasks = []
     for agent_assist_args in send_lex_agent_assist_args:
         task = send_lex_agent_assist(
-            appsync_session=appsync_session,
-            **agent_assist_args,
-        )
-        tasks.append(task)
-
-    return tasks
-
-async def send_issues_agent_assist(
-    transcript_segment_args: Dict[str, Any],
-    content: str,
-    appsync_session: AppsyncAsyncClientSession,
-):
-    """Sends Issues detected Agent Assist Requests"""
-    if not appsync_session.client.schema:
-        raise ValueError("invalid AppSync schema")
-    schema = DSLSchema(appsync_session.client.schema)
-
-    result = {}
-    transcript = transcript_segment_args["Transcript"]
-    LOGGER.debug("transcript_segment_args")
-    LOGGER.debug(transcript_segment_args)
-    if transcript:
-        transcript_segment = {**transcript_segment_args, "Transcript": transcript}
-        LOGGER.debug("Issue Agent Assist segment")
-        LOGGER.debug(transcript_segment)
-        query = dsl_gql(
-            DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
-                    *transcript_segment_fields(schema),
-                )
-            )
-        )
-        
-        result = await execute_gql_query_with_retries(
-            query,
-            client_session=appsync_session,
-            logger=LOGGER,
-        )
-
-    return result
-
-def add_issues_detected_agent_assistances(
-    message: Dict[str, Any],
-    appsync_session: AppsyncAsyncClientSession,
-) -> List[Coroutine]:
-    """Add TCA Agent Assist GraphQL Mutations"""
-    # pylint: disable=too-many-locals
-    
-    send_issues_agent_assist_args = []
-    
-    issues_detected = message.get("IssuesDetected", None)
-
-    for issue in issues_detected:
-        LOGGER.debug("Adding issue:")
-        LOGGER.debug(issue)
-        issue_segment = transform_segment_to_issues_agent_assist({**message}, issue=issue)
-        LOGGER.debug("issue_segment:")
-        LOGGER.debug(issue_segment)
-        send_issues_agent_assist_args.append(
-            dict(content=issue_segment["Transcript"], transcript_segment_args=issue_segment),
-        )
-    
-    tasks = []
-    for agent_assist_args in send_issues_agent_assist_args:
-        task = send_issues_agent_assist(
             appsync_session=appsync_session,
             **agent_assist_args,
         )
@@ -700,12 +628,6 @@ async def execute_process_event_api_mutation(
             return_value["successes"].append(response)
 
     elif event_type in [
-        "START_TRANSCRIPT",
-        "CONTINUE_TRANSCRIPT",
-        "CONTINUE",
-        "END_TRANSCRIPT",
-        "TRANSCRIPT_ERROR",
-        "ERROR",
         "END",
         "ADD_CHANNEL_S3_RECORDING_URL",]:
         # UPDATE STATUS
@@ -754,14 +676,6 @@ async def execute_process_event_api_mutation(
                 sentiment_analysis_args=sentiment_analysis_args,
                 appsync_session=appsync_session,
             )
-
-        #add_tca_agent_assist_tasks = []
-        #issuesdetected = normalized_message.get("IssuesDetected", [])
-        #if issuesdetected and not normalized_message["IsPartial"]:
-        #    add_tca_agent_assist_tasks = add_issues_detected_agent_assistances(
-        #        message=normalized_message,
-        #        appsync_session=appsync_session
-        #    )    
 
         add_lex_agent_assists_tasks = []
         if IS_LEX_AGENT_ASSIST_ENABLED:

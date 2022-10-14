@@ -213,12 +213,10 @@ const TranscriptContent = ({ segment }) => {
       default:
         break;
     }
-    // if(channel === 'AGENT_ASSISTANT' ? 'transcript-segment-agent-assist' : '';
     return (
       // eslint-disable-next-line react/no-array-index-key
       <TextContent key={`${segmentId}-text-${i}`} color="gray" className={className}>
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{text.trim()}</ReactMarkdown>
-        {/* {t.trim()} */}
       </TextContent>
     );
   });
