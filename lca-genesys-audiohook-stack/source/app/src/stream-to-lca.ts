@@ -28,6 +28,7 @@ import {
     TranscriptResultStream,
     TranscriptEvent,
     StartCallAnalyticsStreamTranscriptionCommand,
+    StartCallAnalyticsStreamTranscriptionCommandInput,
     CallAnalyticsTranscriptResultStream,
     ConfigurationEvent,
     ParticipantRole,
@@ -38,13 +39,14 @@ import dotenv from 'dotenv';
 import { CallEndEvent, CallStartEvent } from './lca/entities-lca';
 dotenv.config();
 
-const awsRegion = process.env['AWS_REGION'] || 'us-east-1';
-const languageCode = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
-const customVocab = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
-const isRedactionEnabled= process.env['IS_CONTENT_REDACTION_ENABLED'] || 'true';
-const contentRedactionType = process.env['CONTENT_REDACTION_TYPE'] || undefined;
-const piiEntities = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
-const isTCAEnabled = true;
+const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
+const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
+const CUSTOM_VOCABULARY_NAME = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
+const IS_CONTENT_REDACTION_ENABLED = (process.env['IS_CONTENT_REDACTION_ENABLED'] || '') === 'true';
+const CONTENT_REDACTION_TYPE = process.env['CONTENT_REDACTION_TYPE'] || 'PII';
+const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
+const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
+const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 
 export const addStreamToLCA = (session: Session) => {
 
@@ -66,7 +68,7 @@ export const addStreamToLCA = (session: Session) => {
         await writeCallEvent(callEvent);
         
         const client = new TranscribeStreamingClient({
-            region: awsRegion 
+            region: AWS_REGION 
         });
 
         const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio'); 
@@ -92,32 +94,35 @@ export const addStreamToLCA = (session: Session) => {
         let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
         let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
 
+        const tsParams: StartCallAnalyticsStreamTranscriptionCommandInput = {
+            LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
+            MediaSampleRateHertz: selectedMedia?.rate || 8000,
+            MediaEncoding: 'pcm',
+            AudioStream: transcribeInput()
+        };
+        if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
+            tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
+            if (TRANSCRIBE_PII_ENTITY_TYPES) {
+                tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
+            }
+        }
+        if (CUSTOM_VOCABULARY_NAME) {
+            tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
+        }
+        
         if (isTCAEnabled) {
             const response = await client.send(
-                new StartCallAnalyticsStreamTranscriptionCommand({
-                    LanguageCode: languageCode,
-                    MediaSampleRateHertz: selectedMedia?.rate || 8000,
-                    MediaEncoding: 'pcm',
-                    AudioStream: transcribeInput()
-                })
+                new StartCallAnalyticsStreamTranscriptionCommand(tsParams)
             );
             session.logger.info(
                 `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
             );
             outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
         } else {
+            tsParams.EnableChannelIdentification = true;
+            tsParams.NumberOfChannels = selectedMedia?.channels.length || 2;
             const response = await client.send(
-                new StartStreamTranscriptionCommand({
-                    LanguageCode: languageCode,
-                    MediaSampleRateHertz: selectedMedia?.rate || 8000,
-                    MediaEncoding: 'pcm',
-                    EnableChannelIdentification: true,
-                    NumberOfChannels: selectedMedia?.channels.length || 2,
-                    VocabularyName: customVocab,
-                    ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
-                    PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
-                    AudioStream: transcribeInput()
-                })
+                new StartStreamTranscriptionCommand(tsParams)
             );
             session.logger.info(
                 `=== Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`

@@ -552,25 +552,17 @@ const go = async function go(
 
   const tsClient = new TranscribeStreamingClient({ region: REGION });
   let tsStream;
-  let tsParams;
+  const tsParams = {
+    LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
+    MediaSampleRateHertz: 8000,
+    MediaEncoding: 'pcm',
+    AudioStream: audioStream(),
+  };
 
   /* configure stream transcription parameters */
-  if (isTCAEnabled) {
-    tsParams = {
-      LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
-      MediaSampleRateHertz: 8000,
-      MediaEncoding: 'pcm',
-      AudioStream: audioStream(),
-    };
-  } else {
-    tsParams = {
-      LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
-      MediaEncoding: 'pcm',
-      MediaSampleRateHertz: 8000,
-      NumberOfChannels: 2,
-      EnableChannelIdentification: true,
-      AudioStream: audioStream(),
-    };
+  if (!isTCAEnabled) {
+    tsParams.NumberOfChannels = 2;
+    tsParams.EnableChannelIdentification = true;
   }
   /* common optional stream parameters */
   if (sessionId !== undefined) {

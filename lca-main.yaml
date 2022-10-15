@@ -282,6 +282,7 @@ Metadata:
       - Label:
           default: Amazon Transcribe Configuration
         Parameters:
+          - TranscribeApiMode
           - IsContentRedactionEnabled
           - TranscribeLanguageCode
           - TranscribeContentRedactionType
@@ -334,6 +335,8 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      TranscribeApiMode:
+        default: Transcribe API mode
       IsContentRedactionEnabled:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
