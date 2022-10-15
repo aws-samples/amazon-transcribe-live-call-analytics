@@ -32,7 +32,8 @@ import {
     CallAnalyticsTranscriptResultStream,
     ConfigurationEvent,
     ParticipantRole,
-    ChannelDefinition
+    ChannelDefinition,
+    StartStreamTranscriptionCommandInput
 } from '@aws-sdk/client-transcribe-streaming';
 import { normalizeError } from './utils';
 import dotenv from 'dotenv';
@@ -47,6 +48,10 @@ const CONTENT_REDACTION_TYPE = process.env['CONTENT_REDACTION_TYPE'] || 'PII';
 const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
 const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
+
+type transcribeInput<TCAEnabled> = TCAEnabled extends true 
+    ? StartCallAnalyticsStreamTranscriptionCommandInput
+    : StartStreamTranscriptionCommandInput;
 
 export const addStreamToLCA = (session: Session) => {
 
@@ -93,13 +98,14 @@ export const addStreamToLCA = (session: Session) => {
  
         let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
         let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
-
-        const tsParams: StartCallAnalyticsStreamTranscriptionCommandInput = {
+        
+        const tsParams:transcribeInput<typeof isTCAEnabled> = {
             LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
             MediaSampleRateHertz: selectedMedia?.rate || 8000,
             MediaEncoding: 'pcm',
             AudioStream: transcribeInput()
         };
+        
         if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
             tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
             if (TRANSCRIBE_PII_ENTITY_TYPES) {
@@ -112,15 +118,15 @@ export const addStreamToLCA = (session: Session) => {
         
         if (isTCAEnabled) {
             const response = await client.send(
-                new StartCallAnalyticsStreamTranscriptionCommand(tsParams)
+                new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
             );
             session.logger.info(
                 `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
             );
             outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
         } else {
-            tsParams.EnableChannelIdentification = true;
-            tsParams.NumberOfChannels = selectedMedia?.channels.length || 2;
+            (tsParams as StartStreamTranscriptionCommandInput).EnableChannelIdentification = true;
+            (tsParams as StartStreamTranscriptionCommandInput).NumberOfChannels = selectedMedia?.channels.length || 2;
             const response = await client.send(
                 new StartStreamTranscriptionCommand(tsParams)
             );
