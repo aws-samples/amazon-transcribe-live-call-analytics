@@ -11,6 +11,7 @@ LCA v0.5.0 and later offers optional custom logic via a user-provided Lambda fun
 4. Override the default CallId with another unique value for the call
 5. Override the default toNumber (System Phone number)
 6. Override the default fromNumber (Caller Phone number)
+7. Selectively choose whether to save call recording to S3
 
 To use this feature:
 1. Implement a Lambda function with the desired business logic
@@ -29,7 +30,8 @@ Your Lambda implements your required business logic, and returns a simple JSON s
             callId: <string>,
             agentId: <string>,
             fromNumber: <string>,
-            toNumber: <string>
+            toNumber: <string>,
+            shouldRecordCall: <boolean>
           }
 ``` 
 Here is a minimal example of a valid custom Lambda hook function, written in node.js
@@ -43,7 +45,8 @@ exports.handler = async (event) => {
             callId: `MODIFIED-${event.detail.callId}`,
             agentId: "Bob the Builder",
             fromNumber: "Bob's cell",
-            toNumber: "Demo Asterisk"
+            toNumber: "Demo Asterisk",
+            shouldRecordCall: false,
           }
     return response;
 };
@@ -55,6 +58,7 @@ This minimal function:
 - assigns a (hardcoded) agentId to the call
 - replaces the `fromNumber` value with a (hardcoded) string
 - replaces the `toNumber` value with a (hardcoded) string
+- disables call audio recording
 
 Your function will be much smarter, possibly interacting with your IVR or CRM to determine the desired behavior.
 
@@ -70,6 +74,8 @@ INFO Lambda hook returned isCaller=false, swapping caller/agent streams
 INFO Lambda hook returned agentId: "Bob the Builder"
 INFO Lambda hook returned fromNumber: "Bob's cell"
 INFO Lambda hook returned toNumber: "Demo Asterisk"
+INFO Lambda hook returned shouldRecordCall=false, audio recording disabled.
+
 ```
 
 If your function response sets `shouldProcessCall` to `false` the CallTranscriber function logs a message and exits without processing the call. No other response fields matter in this case.
