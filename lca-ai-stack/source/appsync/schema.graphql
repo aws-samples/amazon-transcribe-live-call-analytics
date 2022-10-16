@@ -29,6 +29,7 @@ type Call implements DynamoDbBase @aws_cognito_user_pools
 	RecordingUrl: String
 	TotalConversationDurationMillis: Float
 	AgentId: String
+	Metadatajson: String
 }
 
 type CallList @aws_cognito_user_pools
@@ -65,6 +66,7 @@ input CreateCallInput {
 	AgentId: String
 	CustomerPhoneNumber: String
 	SystemPhoneNumber: String
+	Metadatajson: String
 	ExpiresAfter: AWSTimestamp
 }
 
