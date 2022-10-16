@@ -12,6 +12,7 @@ LCA v0.5.0 and later offers optional custom logic via a user-provided Lambda fun
 5. Override the default toNumber (System Phone number)
 6. Override the default fromNumber (Caller Phone number)
 7. Selectively choose whether to save call recording to S3
+8. Attach optional arbitrary metadata json object to call record, for use by downstream custom applications via the LCA graphQL API or DynamoDB event sourcing table. NOTE metadatajson values are not currently used by the LCA UI.
 
 To use this feature:
 1. Implement a Lambda function with the desired business logic
@@ -31,7 +32,8 @@ Your Lambda implements your required business logic, and returns a simple JSON s
             agentId: <string>,
             fromNumber: <string>,
             toNumber: <string>,
-            shouldRecordCall: <boolean>
+            shouldRecordCall: <boolean>,
+            metadatajson: <string>
           }
 ``` 
 Here is a minimal example of a valid custom Lambda hook function, written in node.js
@@ -47,6 +49,7 @@ exports.handler = async (event) => {
             fromNumber: "Bob's cell",
             toNumber: "Demo Asterisk",
             shouldRecordCall: false,
+            metadatajson: JSON.stringify({key1:"value1", key2:"value2"}),
           }
     return response;
 };
@@ -59,6 +62,7 @@ This minimal function:
 - replaces the `fromNumber` value with a (hardcoded) string
 - replaces the `toNumber` value with a (hardcoded) string
 - disables call audio recording
+- adds metadata to the call, as an arbitrary JSON string - metadata is written 
 
 Your function will be much smarter, possibly interacting with your IVR or CRM to determine the desired behavior.
 
@@ -68,14 +72,14 @@ If your function provides a valid response, the LCA ChimeVC CallTranscriber proc
 ```
 INFO Invoking LambdaHook: arn:aws:lambda:us-east-1:XXXXXXXXXXXX:function:testLambdaHook
 INFO LambdaHook response: {"originalCallId":"cfaafd64-0eed-4fdd-9699-321b6ce14d54","shouldProcessCall":true,"isCaller":false,"callId":...
-INFO Lambda hook returned shouldProcessCall=true, continuing.
 INFO Lambda hook returned new callId: "MODIFIED-cfaafd64-0eed-4fdd-9699-321b6ce14d54"
 INFO Lambda hook returned isCaller=false, swapping caller/agent streams
 INFO Lambda hook returned agentId: "Bob the Builder"
 INFO Lambda hook returned fromNumber: "Bob's cell"
 INFO Lambda hook returned toNumber: "Demo Asterisk"
+INFO Lambda hook returned metadatajson: "{"key1":"value1","key2":"value2"}"
+INFO Lambda hook returned shouldProcessCall=true, continuing.
 INFO Lambda hook returned shouldRecordCall=false, audio recording disabled.
-
 ```
 
 If your function response sets `shouldProcessCall` to `false` the CallTranscriber function logs a message and exits without processing the call. No other response fields matter in this case.
