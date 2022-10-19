@@ -631,6 +631,7 @@ Resources:
         AudioFilePrefix: !Ref AudioFilePrefix
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode

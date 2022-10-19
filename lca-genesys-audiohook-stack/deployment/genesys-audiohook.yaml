@@ -52,6 +52,14 @@ Parameters:
     ConstraintDescription: >-
       Allowed Price Classes PriceClass_100 PriceClass_200 and PriceClass_All
 
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: Set the default operational mode for Transcribe
+
   IsContentRedactionEnabled:
     Type: String
     Default: "false"
@@ -1024,6 +1032,8 @@ Resources:
               Value: !Ref SecretsManagerAPIClientSecret
             - Name: SAVE_PARTIAL_TRANSCRIPTS
               Value: "true"
+            - Name: TRANSCRIBE_API_MODE
+              Value: !Ref TranscribeApiMode
             - Name: IS_CONTENT_REDACTION_ENABLED
               Value: !If
                 - ShouldEnableContentRedaction
