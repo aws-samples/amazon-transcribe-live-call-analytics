@@ -31,6 +31,16 @@ Parameters:
     Description: >-
       S3 Bucket name for recordings
 
+  IsPartialTranscriptEnabled:
+    Type: String
+    Default: 'true'
+    Description: >-
+      Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn. Set to false to process only the
+      final version of each conversation turn.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
   IsContentRedactionEnabled:
     Type: String
     Default: "false"
@@ -158,7 +168,7 @@ Resources:
           MONO_RECORDING_FILE_PREFIX: !Ref MonoAudioFilePrefix
           RAW_FILE_PREFIX: 'lca-audio-raw/'
           TEMP_FILE_PATH: '/tmp/'
-          SAVE_PARTIAL_TRANSCRIPTS: 'true'
+          SAVE_PARTIAL_TRANSCRIPTS: !Ref IsPartialTranscriptEnabled
           IS_CONTENT_REDACTION_ENABLED: !If
             - ShouldEnableContentRedaction
             - 'true'
