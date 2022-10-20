@@ -186,6 +186,7 @@ const writeCallStartEventToKds = async function (callData) {
     CustomerPhoneNumber: callData.fromNumber,
     SystemPhoneNumber: callData.toNumber,
     AgentId: callData.agentId,
+    Metadatajson: callData.metadatajson,
     EventType: "START",
   };
   const putParams = {
@@ -245,6 +246,7 @@ const getCallDataFromChimeEvents = async function (callEvent) {
     fromNumber: callEvent.detail.fromNumber,
     toNumber: callEvent.detail.toNumber,
     agentId: callEvent.detail.agentId,
+    metadatajson: undefined,
     callerStreamArn: callerStreamArn,
     agentStreamArn: agentStreamArn,
     lambdaCount: 0,
@@ -278,6 +280,7 @@ const getCallDataFromChimeEvents = async function (callEvent) {
           fromNumber: <string>,
           toNumber: <string>,
           shouldRecordCall: <boolean>,
+          metadatajson: <string>
         }
     */
 
@@ -310,6 +313,12 @@ const getCallDataFromChimeEvents = async function (callEvent) {
     if (payload.toNumber) {
       console.log(`Lambda hook returned toNumber: "${payload.toNumber}"`);
       callData.toNumber = payload.toNumber;
+    }
+
+    // Metadata?
+    if (payload.metadatajson) {
+      console.log(`Lambda hook returned metadatajson: "${payload.metadatajson}"`);
+      callData.metadatajson = payload.metadatajson;
     }
 
     // Should we process this call?
