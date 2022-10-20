@@ -185,6 +185,13 @@ Parameters:
       The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom
       vocabulary must pre-exist in your account.
 
+  CustomLanguageModelName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the custom language model to use when processing the transcription job. Leave blank if no
+      custom language model is to be used. If yes, the custom language model must pre-exist in your account.
+
   IsSentimentAnalysisEnabled:
     Type: String
     Default: 'true'
@@ -309,6 +316,7 @@ Metadata:
           - TranscribeContentRedactionType
           - TranscribePiiEntityTypes
           - CustomVocabularyName
+          - CustomLanguageModelName
       - Label:
           default: Transcript Event Processing Configuration
         Parameters:
@@ -370,6 +378,8 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
+      CustomLanguageModelName:
+        default: Transcription Custom Language Model Name
       DemoAsteriskDownloadUrl:
         default: Demo Asterisk Server Source Code Download URL
       DemoAsteriskAgentAudioURL:
@@ -657,6 +667,7 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
   GENESYSAUDIOHOOKSTACK:
@@ -676,6 +687,7 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
