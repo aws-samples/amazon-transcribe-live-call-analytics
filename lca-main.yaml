@@ -199,8 +199,8 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
-      (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each 
-      transcript segment. The function can capture and/or modify the text of the transcript, for example to implement custom
+      (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each completed 
+      (non-partial) transcript segment. The function can capture and/or modify the text of the transcript, for example to implement custom
       redaction logic, profanity filtering, or custom rules to highlight patterns in the transcript. 
 
   TranscriptLambdaHookFunctionNonPartialOnly:
