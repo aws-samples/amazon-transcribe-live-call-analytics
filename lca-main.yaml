@@ -190,7 +190,8 @@ Parameters:
     Default: ''
     Description: >-
       The name of the custom language model to use when processing the transcription job. Leave blank if no
-      custom language model is to be used. If yes, the custom language model must pre-exist in your account.
+      custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
+      match the Language Code selected above, and use the 'Narrow Band' base model.
 
   IsSentimentAnalysisEnabled:
     Type: String
