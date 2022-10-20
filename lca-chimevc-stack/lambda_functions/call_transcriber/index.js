@@ -241,6 +241,7 @@ const getCallDataFromChimeEvents = async function (callEvent) {
     callProcessingStartTime: now,
     callStreamingEndTime: "",
     shouldProcessCall: true,
+    shouldRecordCall: true,
     fromNumber: callEvent.detail.fromNumber,
     toNumber: callEvent.detail.toNumber,
     agentId: callEvent.detail.agentId,
@@ -275,7 +276,8 @@ const getCallDataFromChimeEvents = async function (callEvent) {
           callId: <string>,
           agentId: <string>,
           fromNumber: <string>,
-          toNumber: <string>
+          toNumber: <string>,
+          shouldRecordCall: <boolean>,
         }
     */
 
@@ -318,6 +320,15 @@ const getCallDataFromChimeEvents = async function (callEvent) {
     }
     if (payload.shouldProcessCall === true) {
       console.log('Lambda hook returned shouldProcessCall=true.');
+    }
+
+    // Should we record this call?
+    if (payload.shouldRecordCall === false) {
+      console.log('Lambda hook returned shouldRecordCall=false.');
+      callData.shouldRecordCall = false;
+    }
+    if (payload.shouldRecordCall === true) {
+      console.log('Lambda hook returned shouldRecordCall=true.');
     }
   }
   return callData;
@@ -831,20 +842,22 @@ const handler = async function (event, context) {
       await writeCallDataToDdb(callData);
     }
 
-    // Write audio to s3 before completely exiting
-    await writeToS3(result.tempFileName);
-    await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
-
-    if (!timeToStop) {
-      await mergeFiles.mergeFiles({
-        bucketName: OUTPUT_BUCKET,
-        recordingPrefix: RECORDING_FILE_PREFIX,
-        rawPrefix: RAW_FILE_PREFIX,
-        callId: callData.callId,
-        lambdaCount: callData.lambdaCount,
-      });
-      await writeS3UrlToKds(callData.callId);
+    if (callData.shouldRecordCall) {
+      // Write audio to s3 before completely exiting
+      await writeToS3(result.tempFileName);
+      await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
+      if (!timeToStop) {
+        await mergeFiles.mergeFiles({
+          bucketName: OUTPUT_BUCKET,
+          recordingPrefix: RECORDING_FILE_PREFIX,
+          rawPrefix: RAW_FILE_PREFIX,
+          callId: callData.callId,
+          lambdaCount: callData.lambdaCount,
+        });
+        await writeS3UrlToKds(callData.callId);
+      }
     }
+
   }
   return;
 };
