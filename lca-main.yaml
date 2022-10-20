@@ -184,6 +184,25 @@ Parameters:
       - 'true'
       - 'false'
 
+  TranscriptLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each completed 
+      (non-partial) transcript segment. The function can capture and/or modify the text of the transcript, for example to implement custom
+      redaction logic, profanity filtering, or custom rules to highlight patterns in the transcript. 
+
+  TranscriptLambdaHookFunctionNonPartialOnly:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
+      both Partial and Non-Partial transcript segments (false).
+
   AdminEmail:
     Type: String
     Description: >-
@@ -280,9 +299,11 @@ Metadata:
           - TranscribePiiEntityTypes
           - CustomVocabularyName
       - Label:
-          default: Amazon Comprehend Configuration
+          default: Transcript Event Processing Configuration
         Parameters:
           - IsSentimentAnalysisEnabled
+          - TranscriptLambdaHookFunctionArn
+          - TranscriptLambdaHookFunctionNonPartialOnly
       - Label:
           default: Download locations
         Parameters:
@@ -342,6 +363,10 @@ Metadata:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
         default: Enable Sentiment Analysis using Amazon Comprehend
+      TranscriptLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
+      TranscriptLambdaHookFunctionNonPartialOnly:
+        default: Lambda Hook Function Mode Non-Partial only
       CloudFrontPriceClass:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
@@ -550,6 +575,8 @@ Resources:
             - false
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+        TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
+        TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -579,6 +606,17 @@ Resources:
           - !GetAtt QNABOT.Outputs.LexV2BotAliasId
           - !Ref AgentAssistExistingLexV2BotAliasId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
+        # Changes to Params below force AgentAssist Setup to update.
+        AgentAssistOption: !Ref AgentAssistOption
+        AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
+        AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
+        AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
+        AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
+        TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+        DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

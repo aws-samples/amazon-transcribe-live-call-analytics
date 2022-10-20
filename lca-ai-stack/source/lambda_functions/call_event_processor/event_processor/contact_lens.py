@@ -7,10 +7,11 @@ from datetime import datetime, timedelta
 from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
-import boto3
 import json
 
 # third-party imports from Lambda layer
+import boto3
+from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
 from gql.dsl import DSLMutation, DSLSchema, dsl_gql
@@ -35,11 +36,23 @@ if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
     from mypy_boto3_lambda.client import LambdaClient
+    from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
     RecognizeTextResponseTypeDef = object
     LambdaClient = object
     InvocationResponseTypeDef = object
+    Boto3Session = object
+
+BOTO3_SESSION: Boto3Session = boto3.Session()
+CLIENT_CONFIG = BotoCoreConfig(
+    retries={"mode": "adaptive", "max_attempts": 3},
+)
+TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
+TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
+    "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN:
+    LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
 LEXV2_CLIENT: Optional[LexRuntimeV2Client] = None
@@ -51,19 +64,25 @@ IS_LAMBDA_AGENT_ASSIST_ENABLED = False
 LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
 
-# Contact Lens doesn't include call metadata so we attempt to use API lookups 
+
+# Contact Lens doesn't include call metadata so we attempt to use API lookups
 # to retrieve numbers from defined contact attributes on receipt of STARTED event.
-# Connect contact flow must set these (user defined) attributes using values of 
-# system attribute for Customer Number and Dialled Number. 
+# Connect contact flow must set these (user defined) attributes using values of
+# system attribute for Customer Number and Dialled Number.
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
 DEFAULT_SYSTEM_PHONE_NUMBER = getenv("DEFAULT_SYSTEM_PHONE_NUMBER", "+18005551111")
-CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
-CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv("CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
+CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv(
+    "CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
+CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv(
+    "CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
 
 # Get value for DynamboDB TTL field
 DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
+
+
 def get_ttl():
     return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
+
 
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
@@ -96,15 +115,19 @@ def get_caller_and_system_phone_numbers_from_connect(instanceId, contactId):
     # Try to retrieve customer phone number from contact attribute
     customer_phone_number = response["Attributes"].get(CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER)
     if not customer_phone_number:
-        LOGGER.warning(f"Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER}'. Reverting to default.")
+        LOGGER.warning(
+            f"Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER}'. Reverting to default.")
         customer_phone_number = DEFAULT_CUSTOMER_PHONE_NUMBER
     # Try to retrieve system phone number from contact attribute: "LCA System Phone Number"
     system_phone_number = response["Attributes"].get(CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER)
     if not system_phone_number:
-        LOGGER.warning("Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER}'. Reverting to default.")
+        LOGGER.warning(
+            "Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER}'. Reverting to default.")
         system_phone_number = DEFAULT_SYSTEM_PHONE_NUMBER
-    LOGGER.info(f"Setting customer_phone_number={customer_phone_number}, system_phone_number={system_phone_number}")
+    LOGGER.info(
+        f"Setting customer_phone_number={customer_phone_number}, system_phone_number={system_phone_number}")
     return (customer_phone_number, system_phone_number)
+
 
 def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
@@ -114,7 +137,8 @@ def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
     if event_type == "STARTED":
         instanceId = message.get("InstanceId")
         contactId = message.get("ContactId")
-        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(instanceId, contactId)
+        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(
+            instanceId, contactId)
         return dict(
             CallId=call_id,
             ExpiresAfter=get_ttl(),
@@ -152,7 +176,7 @@ async def update_call_status(
     }
 
     if event_type == "STARTED":
-        LOGGER.debug("CREATE CALL") 
+        LOGGER.debug("CREATE CALL")
         query = dsl_gql(
             DSLMutation(
                 schema.Mutation.createCall.args(input=status).select(schema.CreateCallOutput.CallId)
@@ -179,6 +203,7 @@ async def update_call_status(
 
     return return_value
 
+
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -200,12 +225,12 @@ async def execute_update_agent_mutation(
             ).select(*call_fields(schema))
         )
     )
-    
+
     response = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
@@ -215,6 +240,8 @@ async def execute_update_agent_mutation(
 ##########################################################################
 # Transcripts
 ##########################################################################
+
+
 def transform_segment_to_add_transcript(segment: Dict) -> Dict[str, object]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
     call_id: str = segment["CallId"]
@@ -297,6 +324,10 @@ def add_transcript_segments(
         transcript_segment = {
             **transform_segment_to_add_transcript({**segment, "CallId": call_id}),
         }
+
+        # Invoke custom lambda hook (if any) and use returned version of transcript_segment.
+        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
+            transcript_segment = invoke_transcript_lambda_hook(transcript_segment)
 
         if transcript_segment:
             query = dsl_gql(
@@ -388,7 +419,7 @@ def transform_segment_to_issues_agent_assist(
     issue_transcript = transcript[begin_offset:end_offset]
     start_time: float = segment_item["BeginOffsetMillis"] / 1000
     end_time: float = segment_item["EndOffsetMillis"] / 1000
-    end_time = end_time + 0.001 # UI sort order
+    end_time = end_time + 0.001  # UI sort order
 
     return dict(
         CallId=call_id,
@@ -485,6 +516,7 @@ def is_qnabot_noanswer(bot_response):
         return True
     return False
 
+
 def get_lex_agent_assist_message(bot_response):
     message = ""
     if is_qnabot_noanswer(bot_response):
@@ -492,16 +524,18 @@ def get_lex_agent_assist_message(bot_response):
         LOGGER.debug("QnABot \"Dont't know\" response - ignoring")
         return ""
     # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
-    appContextJSON = bot_response.get("sessionState",{}).get("sessionAttributes",{}).get("appContext")
+    appContextJSON = bot_response.get("sessionState", {}).get(
+        "sessionAttributes", {}).get("appContext")
     if appContextJSON:
         appContext = json.loads(appContextJSON)
-        markdown = appContext.get("altMessages",{}).get("markdown")
+        markdown = appContext.get("altMessages", {}).get("markdown")
         if markdown:
             message = markdown
     # otherwise use bot message
     if not message and "messages" in bot_response and bot_response["messages"]:
         message = bot_response["messages"][0]["content"]
     return message
+
 
 async def send_lex_agent_assist(
     transcript_segment_args: Dict[str, Any],
@@ -514,7 +548,7 @@ async def send_lex_agent_assist(
     schema = DSLSchema(appsync_session.client.schema)
 
     call_id = transcript_segment_args["CallId"]
-    
+
     LOGGER.debug("Bot Request: %s", content)
 
     bot_response: RecognizeTextResponseTypeDef = await recognize_text_lex(
@@ -525,7 +559,7 @@ async def send_lex_agent_assist(
         bot_alias_id=LEX_BOT_ALIAS_ID,
         locale_id=LEX_BOT_LOCALE_ID,
     )
-    
+
     LOGGER.debug("Bot Response: ", extra=bot_response)
 
     result = {}
@@ -568,7 +602,7 @@ def add_lex_agent_assistances(
     send_lex_agent_assist_args = []
     for segment in message.get("Segments", []):
         # only send relevant segments to agent assist
-        # BobS: Modified to process Utterance rather than Transcript events 
+        # BobS: Modified to process Utterance rather than Transcript events
         # to lower latency
         if not ("Utterance" in segment or "Categories" in segment):
             continue
@@ -585,7 +619,7 @@ def add_lex_agent_assistances(
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
             end_time = segment_item["EndOffsetMillis"] / 1000
-            end_time = end_time + 0.001 # UI sort order
+            end_time = end_time + 0.001  # UI sort order
 
             send_lex_agent_assist_args.append(
                 dict(
@@ -603,7 +637,7 @@ def add_lex_agent_assistances(
                     ),
                 )
             )
-        # BobS - Issue detection code will not be invoked since we are not processing 
+        # BobS - Issue detection code will not be invoked since we are not processing
         # Transcript events now.
         issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
         if (
@@ -619,7 +653,7 @@ def add_lex_agent_assistances(
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
             end_time = segment_item["EndOffsetMillis"] / 1000
-            end_time = end_time + 0.001 # UI sort order
+            end_time = end_time + 0.001  # UI sort order
 
             send_lex_agent_assist_args.append(
                 dict(
@@ -676,6 +710,7 @@ def add_lex_agent_assistances(
 # Lambda Agent Assist
 ##########################################################################
 
+
 def get_lambda_agent_assist_message(lambda_response):
     message = ""
     try:
@@ -689,6 +724,7 @@ def get_lambda_agent_assist_message(lambda_response):
         )
     return message
 
+
 async def send_lambda_agent_assist(
     transcript_segment_args: Dict[str, Any],
     content: str,
@@ -700,13 +736,13 @@ async def send_lambda_agent_assist(
     schema = DSLSchema(appsync_session.client.schema)
 
     call_id = transcript_segment_args["CallId"]
-    
+
     payload = {
         'text': content,
         'call_id': call_id,
         'transcript_segment_args': transcript_segment_args
     }
-    
+
     LOGGER.debug("Agent Assist Lambda Request: %s", content)
 
     lambda_response: InvocationResponseTypeDef = await invoke_lambda(
@@ -714,7 +750,7 @@ async def send_lambda_agent_assist(
         lambda_client=LAMBDA_CLIENT,
         lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
     )
-    
+
     LOGGER.debug("Agent Assist Lambda Response: ", extra=lambda_response)
 
     result = {}
@@ -757,7 +793,7 @@ def add_lambda_agent_assistances(
     send_lambda_agent_assist_args = []
     for segment in message.get("Segments", []):
         # only send relevant segments to agent assist
-        # BobS: Modified to process Utterance rather than Transcript events 
+        # BobS: Modified to process Utterance rather than Transcript events
         # to lower latency
         if not ("Utterance" in segment or "Categories" in segment):
             continue
@@ -774,7 +810,7 @@ def add_lambda_agent_assistances(
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
             end_time = segment_item["EndOffsetMillis"] / 1000
-            end_time = end_time + 0.001 # UI sort order
+            end_time = end_time + 0.001  # UI sort order
 
             send_lambda_agent_assist_args.append(
                 dict(
@@ -792,7 +828,7 @@ def add_lambda_agent_assistances(
                     ),
                 )
             )
-        # BobS - Issue detection code will not be invoked since we are not processing 
+        # BobS - Issue detection code will not be invoked since we are not processing
         # Transcript events now - only Utterance events - for latency reasons.
         issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
         if (
@@ -807,8 +843,8 @@ def add_lambda_agent_assistances(
 
             created_at = datetime.utcnow().astimezone().isoformat()
             start_time = segment_item["BeginOffsetMillis"] / 1000
-            end_time = segment_item["EndOffsetMillis"] / 1000 
-            end_time = end_time + 0.001 # UI sort order
+            end_time = segment_item["EndOffsetMillis"] / 1000
+            end_time = end_time + 0.001  # UI sort order
 
             send_lambda_agent_assist_args.append(
                 dict(
@@ -860,6 +896,42 @@ def add_lambda_agent_assistances(
 
     return tasks
 
+##########################################################################
+# Transcript Lambda Hook
+# User provided function should return a copy of the input event with
+# optionally modified "Transcript" field (to support custom redaction or
+# other transcript manipulation.
+# Agent Assist input uses the original (not modified) version of the
+# "Transcript" field (note: this behavior is different for Transcribe/TCA 
+# events)
+##########################################################################
+
+
+def invoke_transcript_lambda_hook(
+    message: Dict[str, Any]
+):
+    if (message.get("IsPartial") == False or TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY == False):
+        LOGGER.debug("Transcript Lambda Hook Arn: %s", TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN)
+        LOGGER.debug("Transcript Lambda Hook Request: %s", message)
+        lambda_response = LAMBDA_HOOK_CLIENT.invoke(
+            FunctionName=TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(message)
+        )
+        LOGGER.debug("Transcript Lambda Hook Response: ", extra=lambda_response)
+        try:
+            message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+        except Exception as error:
+            LOGGER.error(
+                "Transcript Lambda Hook result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
+                extra=error,
+            )
+    return message
+
+##########################################################################
+# Main event processing
+##########################################################################
+
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
@@ -884,7 +956,7 @@ async def execute_process_event_api_mutation(
     LEX_BOT_LOCALE_ID = agent_assist_args.get("lex_bot_locale_id", "")
     LAMBDA_CLIENT = agent_assist_args.get("lambda_client")
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
-    LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "") 
+    LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],
@@ -900,6 +972,7 @@ async def execute_process_event_api_mutation(
     message_normalized = {**message, "EventType": event_type}
 
     if event_type == "TRANSCRIBING":
+
         add_transcript_tasks = add_transcript_segments(
             message=message_normalized,
             appsync_session=appsync_session,
@@ -947,7 +1020,7 @@ async def execute_process_event_api_mutation(
             message=message_normalized,
             appsync_session=appsync_session,
         )
-    
+
     elif event_type in ["UPDATE_AGENT"]:
         return_value = await execute_update_agent_mutation(
             message=message_normalized,
@@ -955,6 +1028,7 @@ async def execute_process_event_api_mutation(
         )
 
     else:
-        LOGGER.warning("unknown event type [%s] (message event type [%s])", event_type, msg_event_type)
+        LOGGER.warning(
+            "unknown event type [%s] (message event type [%s])", event_type, msg_event_type)
 
     return return_value

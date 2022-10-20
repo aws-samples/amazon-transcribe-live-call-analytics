@@ -70,6 +70,25 @@ Parameters:
       - zh
       # - zh-TW
 
+  TranscriptLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each completed 
+      (non-partial) transcript segment. The function can capture and/or modify the text of the transcript, for example to implement custom
+      redaction logic, profanity filtering, or custom rules to highlight patterns in the transcript.
+
+  TranscriptLambdaHookFunctionNonPartialOnly:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
+      both Partial and Non-Partial transcript segments (false).
+
   CloudFrontPriceClass:
     Type: String
     Default: PriceClass_100
@@ -234,12 +253,17 @@ Metadata:
         default: Enable Sentiment Analysis with Comprehend
       ComprehendLanguageCode:
         default: Comprehend Sentiment Analysis Language Code
+      TranscriptLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
+      TranscriptLambdaHookFunctionNonPartialOnly:
+        default: Lambda Hook Function Mode Non-Partial only
 
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldAllowSignUpEmailDomain: !Not [!Equals [!Ref AllowedSignUpEmailDomain, ""]]
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
+  ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
 
 Outputs:
   CallDataStreamName:
@@ -687,8 +711,13 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
               - Ref: AWS::NoValue
-
-
+            - !If 
+              - ShouldEnableTranscriptLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${TranscriptLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -714,6 +743,8 @@ Resources:
           IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
           LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
+          TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
+          TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers
