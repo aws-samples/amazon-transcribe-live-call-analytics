@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.5.1)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.5.2) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -125,6 +125,16 @@ Parameters:
     Default: lca-audio-recordings/
     Description: The Amazon S3 prefix where the audio files will be saved (must end in "/")
 
+  IsPartialTranscriptEnabled:
+    Type: String
+    Default: 'true'
+    Description: >-
+      Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn. Set to false to process only the
+      final version of each conversation turn.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
   IsContentRedactionEnabled:
     Type: String
     Default: 'false'
@@ -175,6 +185,14 @@ Parameters:
       The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom
       vocabulary must pre-exist in your account.
 
+  CustomLanguageModelName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the custom language model to use when processing the transcription job. Leave blank if no
+      custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
+      match the Language Code selected above, and use the 'Narrow Band' base model.
+
   IsSentimentAnalysisEnabled:
     Type: String
     Default: 'true'
@@ -183,6 +201,25 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+
+  TranscriptLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each completed 
+      (non-partial) transcript segment. The function can capture and/or modify the text of the transcript, for example to implement custom
+      redaction logic, profanity filtering, or custom rules to highlight patterns in the transcript. 
+
+  TranscriptLambdaHookFunctionNonPartialOnly:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
+      both Partial and Non-Partial transcript segments (false).
 
   AdminEmail:
     Type: String
@@ -274,15 +311,19 @@ Metadata:
       - Label:
           default: Amazon Transcribe Configuration
         Parameters:
+          - IsPartialTranscriptEnabled
           - IsContentRedactionEnabled
           - TranscribeLanguageCode
           - TranscribeContentRedactionType
           - TranscribePiiEntityTypes
           - CustomVocabularyName
+          - CustomLanguageModelName
       - Label:
-          default: Amazon Comprehend Configuration
+          default: Transcript Event Processing Configuration
         Parameters:
           - IsSentimentAnalysisEnabled
+          - TranscriptLambdaHookFunctionArn
+          - TranscriptLambdaHookFunctionNonPartialOnly
       - Label:
           default: Download locations
         Parameters:
@@ -326,6 +367,8 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      IsPartialTranscriptEnabled:
+        default: Enable Partial Transcripts
       IsContentRedactionEnabled:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
@@ -336,12 +379,18 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
+      CustomLanguageModelName:
+        default: Transcription Custom Language Model Name
       DemoAsteriskDownloadUrl:
         default: Demo Asterisk Server Source Code Download URL
       DemoAsteriskAgentAudioURL:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
         default: Enable Sentiment Analysis using Amazon Comprehend
+      TranscriptLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
+      TranscriptLambdaHookFunctionNonPartialOnly:
+        default: Lambda Hook Function Mode Non-Partial only
       CloudFrontPriceClass:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
@@ -550,6 +599,8 @@ Resources:
             - false
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+        TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
+        TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -579,6 +630,17 @@ Resources:
           - !GetAtt QNABOT.Outputs.LexV2BotAliasId
           - !Ref AgentAssistExistingLexV2BotAliasId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
+        # Changes to Params below force AgentAssist Setup to update.
+        AgentAssistOption: !Ref AgentAssistOption
+        AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
+        AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
+        AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
+        AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
+        TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+        DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
@@ -600,11 +662,13 @@ Resources:
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
 
   GENESYSAUDIOHOOKSTACK:
@@ -624,6 +688,7 @@ Resources:
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack

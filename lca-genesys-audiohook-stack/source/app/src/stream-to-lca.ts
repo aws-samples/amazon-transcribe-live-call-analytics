@@ -29,6 +29,7 @@ dotenv.config();
 const awsRegion = process.env['AWS_REGION'] || 'us-east-1';
 const languageCode = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
 const customVocab = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
+const customLanguageModel = process.env['CUSTOM_LANGUAGE_MODEL_NAME'] || undefined;
 const isRedactionEnabled= process.env['IS_CONTENT_REDACTION_ENABLED'] || 'true';
 const contentRedactionType = process.env['CONTENT_REDACTION_TYPE'] || undefined;
 const piiEntities = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
@@ -75,6 +76,7 @@ export const addStreamToLCA = (session: Session) => {
                 EnableChannelIdentification: true,
                 NumberOfChannels: selectedMedia?.channels.length || 2,
                 VocabularyName: customVocab,
+                LanguageModelName: customLanguageModel,
                 ContentRedactionType: (isRedactionEnabled === 'true') ? contentRedactionType : undefined,
                 PiiEntityTypes: (isRedactionEnabled === 'true') && (contentRedactionType === 'PII') ? piiEntities : undefined,
                 AudioStream: transcribeInput()

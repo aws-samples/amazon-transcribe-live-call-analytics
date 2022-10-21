@@ -41,6 +41,7 @@ const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US'
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
+const CUSTOM_LANGUAGE_MODEL_NAME = process.env.CUSTOM_LANGUAGE_MODEL_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
@@ -186,6 +187,7 @@ const writeCallStartEventToKds = async function (callData) {
     CustomerPhoneNumber: callData.fromNumber,
     SystemPhoneNumber: callData.toNumber,
     AgentId: callData.agentId,
+    Metadatajson: callData.metadatajson,
     EventType: "START",
   };
   const putParams = {
@@ -241,9 +243,11 @@ const getCallDataFromChimeEvents = async function (callEvent) {
     callProcessingStartTime: now,
     callStreamingEndTime: "",
     shouldProcessCall: true,
+    shouldRecordCall: true,
     fromNumber: callEvent.detail.fromNumber,
     toNumber: callEvent.detail.toNumber,
     agentId: callEvent.detail.agentId,
+    metadatajson: undefined,
     callerStreamArn: callerStreamArn,
     agentStreamArn: agentStreamArn,
     lambdaCount: 0,
@@ -275,7 +279,9 @@ const getCallDataFromChimeEvents = async function (callEvent) {
           callId: <string>,
           agentId: <string>,
           fromNumber: <string>,
-          toNumber: <string>
+          toNumber: <string>,
+          shouldRecordCall: <boolean>,
+          metadatajson: <string>
         }
     */
 
@@ -310,6 +316,12 @@ const getCallDataFromChimeEvents = async function (callEvent) {
       callData.toNumber = payload.toNumber;
     }
 
+    // Metadata?
+    if (payload.metadatajson) {
+      console.log(`Lambda hook returned metadatajson: "${payload.metadatajson}"`);
+      callData.metadatajson = payload.metadatajson;
+    }
+
     // Should we process this call?
     if (payload.shouldProcessCall === false) {
       console.log('Lambda hook returned shouldProcessCall=false.');
@@ -318,6 +330,15 @@ const getCallDataFromChimeEvents = async function (callEvent) {
     }
     if (payload.shouldProcessCall === true) {
       console.log('Lambda hook returned shouldProcessCall=true.');
+    }
+
+    // Should we record this call?
+    if (payload.shouldRecordCall === false) {
+      console.log('Lambda hook returned shouldRecordCall=false.');
+      callData.shouldRecordCall = false;
+    }
+    if (payload.shouldRecordCall === true) {
+      console.log('Lambda hook returned shouldRecordCall=true.');
     }
   }
   return callData;
@@ -645,6 +666,10 @@ const go = async function (
     tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
   }
 
+  if (CUSTOM_LANGUAGE_MODEL_NAME) {
+    tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
+  }
+
   const tsCmd = new StartStreamTranscriptionCommand(tsParams);
   const tsResponse = await tsClient.send(tsCmd);
   // console.log(tsResponse);
@@ -831,20 +856,22 @@ const handler = async function (event, context) {
       await writeCallDataToDdb(callData);
     }
 
-    // Write audio to s3 before completely exiting
-    await writeToS3(result.tempFileName);
-    await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
-
-    if (!timeToStop) {
-      await mergeFiles.mergeFiles({
-        bucketName: OUTPUT_BUCKET,
-        recordingPrefix: RECORDING_FILE_PREFIX,
-        rawPrefix: RAW_FILE_PREFIX,
-        callId: callData.callId,
-        lambdaCount: callData.lambdaCount,
-      });
-      await writeS3UrlToKds(callData.callId);
+    if (callData.shouldRecordCall) {
+      // Write audio to s3 before completely exiting
+      await writeToS3(result.tempFileName);
+      await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
+      if (!timeToStop) {
+        await mergeFiles.mergeFiles({
+          bucketName: OUTPUT_BUCKET,
+          recordingPrefix: RECORDING_FILE_PREFIX,
+          rawPrefix: RAW_FILE_PREFIX,
+          callId: callData.callId,
+          lambdaCount: callData.lambdaCount,
+        });
+        await writeS3UrlToKds(callData.callId);
+      }
     }
+
   }
   return;
 };
