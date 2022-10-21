@@ -102,7 +102,7 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     15. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
     16. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. *DO NOT ADD CUSTOM VALUES HERE*.
     17. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
-    18. `Transcription Custom Language Model Name` - The name of the custom language model to use when processing the transcription job. Leave blank if no custom language model is to be used. If yes, the custom language model must pre-exist in your account.
+    18. `Transcription Custom Language Model Name` - The name of the custom language model to use when processing the transcription job. Leave blank if no custom language model is to be used. If specified, the custom language model must pre-exist in your account, match the Language Code selected above, and use the 'Narrow Band' base model.
     19. `Enable Sentiment Analysis using Amazon Comprehend` - Enable sentiment analysis using Amazon Comprehend
     20. `Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)` - If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each 
       transcript segment. See [TranscriptLambdaHookFunction.md](./lca-ai-stack/TranscriptLambdaHookFunction.md).
