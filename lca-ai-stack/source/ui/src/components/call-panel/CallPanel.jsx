@@ -143,7 +143,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
   </Container>
 );
 const CallCategories = ({ item, setToolsOpen }) => {
-  const categories = item.callCategories;
+  const categories = item.callCategories || [];
 
   const categoryComponents = categories.map((t, i) => (
     <SpaceBetween size="xs">
