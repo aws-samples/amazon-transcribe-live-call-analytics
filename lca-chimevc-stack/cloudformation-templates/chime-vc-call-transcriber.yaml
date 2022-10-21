@@ -94,6 +94,14 @@ Parameters:
       The name of the vocabulary to use when processing the transcription job. Leave blank if no
       custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
 
+  CustomLanguageModelName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the custom language model to use when processing the transcription job. Leave blank if no
+      custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
+      match the Language Code selected above, and use the 'Narrow Band' base model.
+
   SiprecLambdaHookFunctionArn:
     Default: ''
     Type: String
@@ -177,6 +185,7 @@ Resources:
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
+          CUSTOM_LANGUAGE_MODEL_NAME: !Ref CustomLanguageModelName
           LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
       CodeUri: ../lambda_functions/call_transcriber
     Metadata:

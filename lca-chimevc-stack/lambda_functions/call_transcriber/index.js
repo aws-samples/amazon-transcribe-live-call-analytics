@@ -41,6 +41,7 @@ const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US'
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
+const CUSTOM_LANGUAGE_MODEL_NAME = process.env.CUSTOM_LANGUAGE_MODEL_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
@@ -663,6 +664,10 @@ const go = async function (
 
   if (CUSTOM_VOCABULARY_NAME) {
     tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
+  }
+
+  if (CUSTOM_LANGUAGE_MODEL_NAME) {
+    tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
   }
 
   const tsCmd = new StartStreamTranscriptionCommand(tsParams);
