@@ -11,6 +11,7 @@ import {
   Popover,
   SpaceBetween,
   StatusIndicator,
+  Tabs,
   TextContent,
   Toggle,
 } from '@awsui/components-react';
@@ -141,6 +142,68 @@ const CallAttributes = ({ item, setToolsOpen }) => (
     </ColumnLayout>
   </Container>
 );
+const CallCategories = ({ item, setToolsOpen }) => {
+  const categories = item.callCategories;
+
+  const categoryComponents = categories.map((t, i) => (
+    <SpaceBetween size="xs">
+      <div>
+        {/* eslint-disable-next-line react/no-array-index-key */}
+        <TextContent key={`call-category-${i}`} className="transcript-segment-category-match">
+          <ReactMarkdown rehypePlugins={[rehypeRaw]}>{t.trim()}</ReactMarkdown>
+        </TextContent>
+      </div>
+    </SpaceBetween>
+  ));
+
+  return (
+    <Container
+      header={
+        <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
+          Call Categories
+        </Header>
+      }
+    >
+      <ColumnLayout columns={6} variant="text-grid">
+        {categoryComponents}
+      </ColumnLayout>
+    </Container>
+  );
+};
+
+// eslint-disable-next-line arrow-body-style
+const CallSummary = ({ item, setToolsOpen }) => {
+  return (
+    <Container
+      header={
+        <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
+          Call Summary
+        </Header>
+      }
+    >
+      <Tabs
+        tabs={[
+          {
+            label: 'Issues',
+            id: 'issues',
+            content: (
+              <div>
+                {/* eslint-disable-next-line react/no-array-index-key */}
+                <TextContent color="gray" className="issue-detected">
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                    Okay. this is about my rewards card. I&apos;m not happy with the rewards points
+                    I wanted for hotel booking.
+                  </ReactMarkdown>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.issuesDetected}</ReactMarkdown>
+                </TextContent>
+              </div>
+            ),
+          },
+        ]}
+      />
+    </Container>
+  );
+};
 
 const getSentimentImage = (segment) => {
   const { sentiment, sentimentScore, sentimentWeighted } = segment;
@@ -389,7 +452,7 @@ const CallStatsContainer = ({ setToolsOpen, item, callTranscriptPerCallId }) => 
   <Container
     header={
       <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
-        Call Statistics
+        Call Sentiment Analysis
       </Header>
     }
   >
@@ -441,6 +504,8 @@ const CallStatsContainer = ({ setToolsOpen, item, callTranscriptPerCallId }) => 
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => (
   <SpaceBetween size="s">
     <CallAttributes item={item} setToolsOpen={setToolsOpen} />
+    <CallCategories item={item} setToolsOpen={setToolsOpen} />
+    <CallSummary item={item} setToolsOpen={setToolsOpen} />
     <CallStatsContainer
       item={item}
       setToolsOpen={setToolsOpen}

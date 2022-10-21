@@ -29,6 +29,7 @@ type Call implements DynamoDbBase @aws_cognito_user_pools
 	RecordingUrl: String
 	TotalConversationDurationMillis: Float
 	AgentId: String
+	CallCategories: [String]
 }
 
 type CallList @aws_cognito_user_pools
@@ -87,6 +88,7 @@ type Mutation @aws_iam {
 	updateCallAggregation(input: UpdateCallAggregationInput!): Call
 	updateRecordingUrl(input: UpdateRecordingUrlInput!): Call
 	updateAgent(input: UpdateAgentInput!): Call
+	addCallCategory(input: AddCallCategoryInput!): Call
 	addTranscriptSegment(input: AddTranscriptSegmentInput!): TranscriptSegment
 }
 
@@ -180,7 +182,7 @@ type Subscription {
 	onCreateCall: CreateCallOutput
 		@aws_subscribe(mutations: ["createCall"])
 	onUpdateCall(CallId: ID): Call
-		@aws_subscribe(mutations: ["updateCallStatus","updateCallAggregation","updateRecordingUrl","updateAgent"])
+		@aws_subscribe(mutations: ["updateCallStatus","updateCallAggregation","updateRecordingUrl","updateAgent", "addCallCategory"])
 	onAddTranscriptSegment(CallId: ID, Channel: String): TranscriptSegment
 		@aws_subscribe(mutations: ["addTranscriptSegment"])
 }
@@ -213,6 +215,12 @@ type TranscriptSegmentList @aws_cognito_user_pools
 input UpdateAgentInput {
 	CallId: ID!
 	AgentId: String!
+	UpdatedAt: AWSDateTime
+}
+
+input AddCallCategoryInput {
+	CallId: ID!
+	CallCategories: String!
 	UpdatedAt: AWSDateTime
 }
 

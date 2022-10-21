@@ -7,6 +7,7 @@ export default gql`
     getCall(CallId: $callId) {
       CallId
       AgentId
+      CallCategories
       CreatedAt
       CustomerPhoneNumber
       Status

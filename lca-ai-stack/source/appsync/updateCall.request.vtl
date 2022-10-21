@@ -19,7 +19,11 @@ $util.qr( $ctx.args.input.put("UpdatedAt", $UpdatedAt ) )
 #if( !${expSet.isEmpty()} )
     #set( $expression = "SET" )
     #foreach( $entry in $expSet.entrySet() )
-        #set( $expression = "${expression} ${entry.key} = ${entry.value}" )
+        #if( $entry == "#CallCategories" )
+            #set( $expression = "${expression} ${entry.key} = list_append(if_not_exists(${entry.key}, $util.dynamodb.toDynamoDBJson([])), $util.dynamodb.toDynamoDBJson($ctx.args.input.CallCategories))",         
+        #else
+            #set( $expression = "${expression} ${entry.key} = ${entry.value}" )
+        #end
         #if ( $foreach.hasNext )
             #set( $expression = "${expression}," )
         #end

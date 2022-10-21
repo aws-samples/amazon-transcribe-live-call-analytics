@@ -253,6 +253,38 @@ async def execute_add_s3_recording_mutation(
 
     return result
 
+async def execute_add_call_category_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    category = message["CategoryEvent"]["MatchedCategories"][0]
+    if not category:
+        error_message = "Category does not exist in ADD_CALL_CATEGORY event"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addCallCategory.args(
+                input={**message, "CallCategories": category}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -707,6 +739,16 @@ async def execute_process_event_api_mutation(
                 return_value["successes"].append(response)
 
     elif event_type == "ADD_CALL_CATEGORY":
+        LOGGER.debug("Add Call Category to Call details")
+        response = await execute_add_call_category_mutation(
+                                message=message,
+                                appsync_session=appsync_session
+                        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
+
         add_call_category_tasks = []
         add_call_category_tasks = add_call_category(
             message=message,

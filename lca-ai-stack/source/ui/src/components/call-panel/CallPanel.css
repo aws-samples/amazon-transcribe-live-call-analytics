@@ -18,7 +18,11 @@
 .sentiment-image-popover {
     cursor: pointer;
 }
-
+.issue-detected {
+    text-decoration: underline;
+    text-decoration-color: red;
+    text-decoration-thickness: 3px;
+}
 span.issue-span {
     text-decoration: underline;
     text-decoration-color: red;
