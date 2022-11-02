@@ -286,6 +286,44 @@ async def execute_add_call_category_mutation(
 
     return result
 
+async def execute_add_issues_detected_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    issues_detected = message.get("IssuesDetected",None)
+    issueText = ""
+    if issues_detected and len(issues_detected) > 0:
+        LOGGER.debug("issue detected in add transcript segment")
+        offsets = issues_detected[0].get("CharacterOffsets")
+        start = int(offsets.get("Begin"))
+        end = int(offsets.get("End"))
+        transcript = message["Transcript"]
+        issueText = transcript[start:end]
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addIssuesDetected.args(
+                input={**message, "IssuesDetected": issueText}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
+
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -699,6 +737,16 @@ async def execute_process_event_api_mutation(
             message=normalized_message,
             appsync_session=appsync_session,
         )
+        if (message.get("IssuesDetected", None)):
+            LOGGER.debug("Add Issues Detected to Call Summary")
+            response = await execute_add_issues_detected_mutation(
+                                    message=message,
+                                    appsync_session=appsync_session
+                            )
+            if isinstance(response, Exception):
+                return_value["errors"].append(response)
+            else:
+                return_value["successes"].append(response)
 
         add_transcript_sentiment_tasks = []
         if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
@@ -749,12 +797,12 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
 
+        LOGGER.debug("Add Call Category to Transcript segments")
         add_call_category_tasks = []
         add_call_category_tasks = add_call_category(
             message=message,
             appsync_session=appsync_session,
         )
-
         task_responses = await asyncio.gather(
             *add_call_category_tasks,
             return_exceptions=True,

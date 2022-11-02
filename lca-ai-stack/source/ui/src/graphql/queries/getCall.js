@@ -8,6 +8,7 @@ export default gql`
       CallId
       AgentId
       CallCategories
+      IssuesDetected
       CreatedAt
       CustomerPhoneNumber
       Status

@@ -10,6 +10,7 @@ export default gql`
       CallId
       AgentId
       CallCategories
+      IssuesDetected
       Status
       UpdatedAt
       CreatedAt

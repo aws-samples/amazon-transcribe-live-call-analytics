@@ -190,10 +190,6 @@ const CallSummary = ({ item, setToolsOpen }) => {
               <div>
                 {/* eslint-disable-next-line react/no-array-index-key */}
                 <TextContent color="gray" className="issue-detected">
-                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                    Okay. this is about my rewards card. I&apos;m not happy with the rewards points
-                    I wanted for hotel booking.
-                  </ReactMarkdown>
                   <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.issuesDetected}</ReactMarkdown>
                 </TextContent>
               </div>
