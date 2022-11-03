@@ -222,7 +222,7 @@ input UpdateAgentInput {
 
 input AddCallCategoryInput {
 	CallId: ID!
-	CallCategories: String!
+	CallCategories: [String]
 	UpdatedAt: AWSDateTime
 }
 

@@ -267,10 +267,12 @@ async def execute_add_call_category_mutation(
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
+    categories = []
+    categories.append(category)
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addCallCategory.args(
-                input={**message, "CallCategories": category}
+                input={**message, "CallCategories": categories}
             ).select(*call_fields(schema))
         )
     )
