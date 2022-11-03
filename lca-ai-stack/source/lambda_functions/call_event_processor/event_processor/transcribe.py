@@ -739,10 +739,11 @@ async def execute_process_event_api_mutation(
             message=normalized_message,
             appsync_session=appsync_session,
         )
-        if (message.get("IssuesDetected", None)):
+        issues_detected = normalized_message.get("IssuesDetected", None)
+        if issues_detected and len(issues_detected)>0:
             LOGGER.debug("Add Issues Detected to Call Summary")
             response = await execute_add_issues_detected_mutation(
-                                    message=message,
+                                    message=normalized_message,
                                     appsync_session=appsync_session
                             )
             if isinstance(response, Exception):
