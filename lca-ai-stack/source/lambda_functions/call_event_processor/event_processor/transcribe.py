@@ -10,6 +10,7 @@ import uuid
 import json
 
 # third-party imports from Lambda layer
+import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
@@ -36,15 +37,21 @@ from eventprocessor_utils import (
 if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.type_defs import RecognizeTextResponseTypeDef
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
+    from mypy_boto3_lambda.client import LambdaClient
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
 else:
     LexRuntimeV2Client = object
     RecognizeTextResponseTypeDef = object
+    LambdaClient = object
     InvocationResponseTypeDef = object
 
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 
+BOTO3_SESSION: Boto3Session = boto3.Session()
+CLIENT_CONFIG = BotoCoreConfig(
+    retries={"mode": "adaptive", "max_attempts": 3},
+)
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
 if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN:
