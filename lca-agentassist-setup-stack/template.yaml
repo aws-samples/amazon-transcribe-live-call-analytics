@@ -66,7 +66,29 @@ Parameters:
     Type: String
     Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
     Description: >-
-      Comma separated list of public web sites to crawl automatically - for Agent assist demo 
+      Comma separated list of public web sites to crawl automatically - for Agent assist demo
+
+  # Changes to Params below force AgentAssist Setup to update.
+  AgentAssistOption:
+    Type: String
+  AgentAssistExistingKendraIndexId:
+    Type: String
+  AgentAssistExistingLexV2BotId:
+    Type: String
+  AgentAssistExistingLexV2BotAliasId:
+    Type: String
+  AgentAssistExistingLambdaFunctionArn:
+    Type: String
+  TranscribeLanguageCode:
+    Type: String
+  IsSentimentAnalysisEnabled:
+    Type: String
+  TranscriptLambdaHookFunctionArn:
+    Type: String
+  TranscriptLambdaHookFunctionNonPartialOnly:
+    Type: String
+  DynamoDbExpirationInDays:
+    Type: String
 
 Conditions:
   ShouldConfigureQnabot: !Not [!Equals [!Ref QNABOTSTACK, '']]
@@ -361,6 +383,17 @@ Resources:
       KendraIndexId: !Ref KendraIndexId
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
+      # Changes to Params below force AgentAssist Setup to execute.
+      AgentAssistOption: !Ref AgentAssistOption
+      AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
+      AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
+      AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
+      AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+      TranscribeLanguageCode: !Ref TranscribeLanguageCode
+      IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+      TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
+      TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+      DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 

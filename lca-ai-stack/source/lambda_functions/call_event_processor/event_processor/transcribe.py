@@ -45,6 +45,11 @@ else:
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 
+TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
+TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN:
+    LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
+
 IS_LEX_AGENT_ASSIST_ENABLED = False
 LEXV2_CLIENT: Optional[LexRuntimeV2Client] = None
 LEX_BOT_ID: str
@@ -518,21 +523,31 @@ def add_lex_agent_assistances(
 ) -> List[Coroutine]:
     """Add Lex Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
+    call_id: str = message["CallId"]
+    channel: str = message["Channel"]
+    is_partial: bool = message["IsPartial"]
+    segment_id: str = message["SegmentId"]
+    start_time: float = message["StartTime"]
+    end_time: float = message["EndTime"]
+    end_time = float(end_time) + 0.001 # UI sort order
+    # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
+    transcript: str = message.get("OriginalTranscript", message["Transcript"]) 
+    created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lex_agent_assist_args = []
-    if (message["Channel"] == "CALLER" and not message["IsPartial"]):
+    if (channel == "CALLER" and not is_partial):
         send_lex_agent_assist_args.append(
                 dict(
-                    content=message["Transcript"],
+                    content=transcript,
                     transcript_segment_args=dict(
-                        CallId=message["CallId"],
+                        CallId=call_id,
                         Channel="AGENT_ASSISTANT",
-                        CreatedAt=message["CreatedAt"],
-                        EndTime=message["EndTime"],
+                        CreatedAt=created_at,
+                        EndTime=end_time,
                         ExpiresAfter=get_ttl(),
-                        IsPartial=message["IsPartial"],
+                        IsPartial=is_partial,
                         SegmentId=str(uuid.uuid4()),
-                        StartTime=message["StartTime"],
+                        StartTime=start_time,
                         Status="TRANSCRIBING",
                     ),
                 )
@@ -620,21 +635,31 @@ def add_lambda_agent_assistances(
 ) -> List[Coroutine]:
     """Add Lambda Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
+    call_id: str = message["CallId"]
+    channel: str = message["Channel"]
+    is_partial: bool = message["IsPartial"]
+    segment_id: str = message["SegmentId"]
+    start_time: float = message["StartTime"]
+    end_time: float = message["EndTime"]
+    end_time = float(end_time) + 0.001 # UI sort order
+    # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
+    transcript: str = message.get("OriginalTranscript", message["Transcript"]) 
+    created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lambda_agent_assist_args = []
-    if (message["Channel"] == "CALLER" and not message["IsPartial"]):
+    if (channel == "CALLER" and not is_partial):
         send_lambda_agent_assist_args.append(
                 dict(
-                    content=message["Transcript"],
+                    content=transcript,
                     transcript_segment_args=dict(
-                        CallId=message["CallId"],
+                        CallId=call_id,
                         Channel="AGENT_ASSISTANT",
-                        CreatedAt=message["CreatedAt"],
-                        EndTime=message["EndTime"],
+                        CreatedAt=created_at,
+                        EndTime=end_time,
                         ExpiresAfter=get_ttl(),
-                        IsPartial=message["IsPartial"],
+                        IsPartial=is_partial,
                         SegmentId=str(uuid.uuid4()),
-                        StartTime=message["StartTime"],
+                        StartTime=start_time,
                         Status="TRANSCRIBING",
                     ),
                 )
@@ -649,7 +674,42 @@ def add_lambda_agent_assistances(
         tasks.append(task)
 
     return tasks
-    
+
+##########################################################################
+# Transcript Lambda Hook
+# User provided function should return a copy of the input event with
+# optionally modified "Transcript" field (to support custom redaction or
+# other transcript manipulation.
+# The original transcript can be optionally returned as "OriginalTranscript"
+# to be used as input for Agent Assist bot or Lambda, otherwise "Transcript"
+# field is used for Agent Assist input.
+##########################################################################
+
+def invoke_transcript_lambda_hook(
+    message: Dict[str, Any]
+):
+    if (message.get("IsPartial") == False or TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY == False):
+        LOGGER.debug("Transcript Lambda Hook Arn: %s", TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN)
+        LOGGER.debug("Transcript Lambda Hook Request: %s", message)
+        lambda_response = LAMBDA_HOOK_CLIENT.invoke(
+                        FunctionName=TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN,
+                        InvocationType='RequestResponse',
+                        Payload = json.dumps(message)
+                    )
+        LOGGER.debug("Transcript Lambda Hook Response: ", extra=lambda_response)
+        try:
+            message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+        except Exception as error:
+            LOGGER.error(
+                "Transcript Lambda Hook result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
+                extra=error,
+            )
+    return message
+
+##########################################################################
+# Main event processing
+##########################################################################
+
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -735,6 +795,11 @@ async def execute_process_event_api_mutation(
         }
         
         LOGGER.debug("Add Transcript Segment")
+
+        # Invoke custom lambda hook (if any) and use returned version of message.
+        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
+            message = invoke_transcript_lambda_hook(message)
+
         add_transcript_tasks = add_transcript_segments(
             message=normalized_message,
             appsync_session=appsync_session,

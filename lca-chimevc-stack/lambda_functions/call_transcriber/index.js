@@ -54,6 +54,7 @@ const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US'
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
+const CUSTOM_LANGUAGE_MODEL_NAME = process.env.CUSTOM_LANGUAGE_MODEL_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 const TRANSCRIBE_API_MODE = process.env.TRANSCRIBE_API_MODE || 'standard';
@@ -139,16 +140,28 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
   let agentStreamArn;
   let loopCount = 0;
 
-  // eslint-disable-next-line no-plusplus
-  while (agentStreamArn === undefined && loopCount++ < 100) {
-    const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
-    if (data.Item) {
-      if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
-    } else {
-      console.log(loopCount, `${channel} stream not yet available. Sleeping 100ms.`);
-      await sleep(100);
-    }
+const writeCallStartEventToKds = async function (callData) {
+  console.log("Write Call Start Event to KDS");
+  const putObj = {
+    CallId: callData.callId,
+    CreatedAt: new Date().toISOString(),
+    CustomerPhoneNumber: callData.fromNumber,
+    SystemPhoneNumber: callData.toNumber,
+    AgentId: callData.agentId,
+    EventType: "START",
+  };
+  const putParams = {
+    StreamName: KINESIS_STREAM_NAME,
+    PartitionKey: callData.callId,
+    Data: Buffer.from(JSON.stringify(putObj)),
+  };
+  console.log("Sending Call START event on KDS: ", JSON.stringify(putObj));
+  const putCmd = new PutRecordCommand(putParams);
+  try {
+    await kinesisClient.send(putCmd);
+  } catch (error) {
+    console.error('Error writing call START event', error);
+  }
   }
   return agentStreamArn;
 };
@@ -169,9 +182,11 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     callProcessingStartTime: now,
     callStreamingEndTime: '',
     shouldProcessCall: true,
+    shouldRecordCall: true,
     fromNumber: callEvent.detail.fromNumber,
     toNumber: callEvent.detail.toNumber,
     agentId: callEvent.detail.agentId,
+    metadatajson: undefined,
     callerStreamArn,
     agentStreamArn,
     lambdaCount: 0,
@@ -203,7 +218,9 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
           callId: <string>,
           agentId: <string>,
           fromNumber: <string>,
-          toNumber: <string>
+          toNumber: <string>,
+          shouldRecordCall: <boolean>,
+          metadatajson: <string>
         }
     */
 
@@ -241,6 +258,12 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
       callData.toNumber = payload.toNumber;
     }
 
+    // Metadata?
+    if (payload.metadatajson) {
+      console.log(`Lambda hook returned metadatajson: "${payload.metadatajson}"`);
+      callData.metadatajson = payload.metadatajson;
+    }
+
     // Should we process this call?
     if (payload.shouldProcessCall === false) {
       console.log('Lambda hook returned shouldProcessCall=false.');
@@ -249,6 +272,15 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     }
     if (payload.shouldProcessCall === true) {
       console.log('Lambda hook returned shouldProcessCall=true.');
+    }
+
+    // Should we record this call?
+    if (payload.shouldRecordCall === false) {
+      console.log('Lambda hook returned shouldRecordCall=false.');
+      callData.shouldRecordCall = false;
+    }
+    if (payload.shouldRecordCall === true) {
+      console.log('Lambda hook returned shouldRecordCall=true.');
     }
   }
   return callData;
@@ -576,6 +608,10 @@ const go = async function go(
     tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
   }
 
+  if (CUSTOM_LANGUAGE_MODEL_NAME) {
+    tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
+  }
+
   /* start the stream */
   let tsResponse;
   if (isTCAEnabled) {
@@ -776,21 +812,24 @@ const handler = async function handler(event, context) {
       await writeCallDataToDdb(callData);
     }
 
-    // Write audio to s3 before completely exiting
-    await writeToS3(result.tempFileName);
-    await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
-
-    if (!timeToStop) {
-      await mergeFiles({
-        bucketName: OUTPUT_BUCKET,
-        recordingPrefix: RECORDING_FILE_PREFIX,
-        rawPrefix: RAW_FILE_PREFIX,
-        callId: callData.callId,
-        lambdaCount: callData.lambdaCount,
-      });
-      await writeS3UrlToKds(kinesisClient, callData.callId);
+    if (callData.shouldRecordCall) {
+      // Write audio to s3 before completely exiting
+      await writeToS3(result.tempFileName);
+      await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
+      if (!timeToStop) {
+        await mergeFiles.mergeFiles({
+          bucketName: OUTPUT_BUCKET,
+          recordingPrefix: RECORDING_FILE_PREFIX,
+          rawPrefix: RAW_FILE_PREFIX,
+          callId: callData.callId,
+          lambdaCount: callData.lambdaCount,
+        });
+        await writeS3UrlToKds(callData.callId);
+      }
     }
+
   }
+  return;
 };
 
 exports.handler = handler;

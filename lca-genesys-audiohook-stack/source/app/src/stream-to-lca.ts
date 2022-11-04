@@ -43,6 +43,7 @@ dotenv.config();
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
 const CUSTOM_VOCABULARY_NAME = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
+const CUSTOM_LANGUAGE_MODEL_NAME = process.env['CUSTOM_LANGUAGE_MODEL_NAME'] || undefined;
 const IS_CONTENT_REDACTION_ENABLED = (process.env['IS_CONTENT_REDACTION_ENABLED'] || '') === 'true';
 const CONTENT_REDACTION_TYPE = process.env['CONTENT_REDACTION_TYPE'] || 'PII';
 const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
@@ -115,7 +116,10 @@ export const addStreamToLCA = (session: Session) => {
         if (CUSTOM_VOCABULARY_NAME) {
             tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
         }
-        
+        if (CUSTOM_LANGUAGE_MODEL_NAME) {
+            tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
+        }
+
         if (isTCAEnabled) {
             const response = await client.send(
                 new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
