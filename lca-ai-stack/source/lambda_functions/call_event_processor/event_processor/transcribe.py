@@ -98,7 +98,6 @@ def add_transcript_segments(
 
     tasks = []
     if message:
-        temp_message = message
         issues_detected = message.get("IssuesDetected", None)
         transcript = message["Transcript"]
         if issues_detected and len(issues_detected) > 0:
@@ -107,11 +106,11 @@ def add_transcript_segments(
             start = int(offsets.get("Begin"))
             end = int(offsets.get("End"))
             transcript = f"{transcript[:start]}<span class='issue-span'>{transcript[start:end]}</span>{transcript[end:]}<br/><span class='issue-pill'>Issue Detected</span>"
-            temp_message["Transcript"] = transcript
+            message["Transcript"] = transcript
             
         query = dsl_gql(
             DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=temp_message).select(
+                schema.Mutation.addTranscriptSegment.args(input=message).select(
                     *transcript_segment_fields(schema),
                 )
             )
@@ -315,8 +314,9 @@ async def execute_add_issues_detected_mutation(
         offsets = issues_detected[0].get("CharacterOffsets")
         start = int(offsets.get("Begin"))
         end = int(offsets.get("End"))
-        transcript = message["Transcript"]
-        issueText = transcript[start:end]
+        if (start > 0 and end > 0):
+            transcript = message["Transcript"]
+            issueText = transcript[start:end]
 
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
@@ -807,11 +807,6 @@ async def execute_process_event_api_mutation(
             **normalize_transcript_segment({**message}),
         }
         
-        LOGGER.debug("Add Transcript Segment")
-        add_transcript_tasks = add_transcript_segments(
-            message=normalized_message,
-            appsync_session=appsync_session,
-        )
         issues_detected = normalized_message.get("IssuesDetected", None)
         if issues_detected and len(issues_detected)>0:
             LOGGER.debug("Add Issues Detected to Call Summary")
@@ -823,6 +818,12 @@ async def execute_process_event_api_mutation(
                 return_value["errors"].append(response)
             else:
                 return_value["successes"].append(response)
+
+        LOGGER.debug("Add Transcript Segment")
+        add_transcript_tasks = add_transcript_segments(
+            message=normalized_message,
+            appsync_session=appsync_session,
+        )
 
         add_transcript_sentiment_tasks = []
         if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
