@@ -14,13 +14,13 @@ $util.qr( $ctx.args.input.put("UpdatedAt", $UpdatedAt ) )
         $util.qr( $expValues.put(":${entry.key}", $util.dynamodb.toDynamoDB($entry.value)) )
     #end
 #end
-$util.qr( $expValues.put(":EmptyList", $util.dynamodb.toDynamoDB([])) )
 ## Start building the update expression, starting with attributes we're going to SET **
 #set( $expression = "" )
 #if( !${expSet.isEmpty()} )
     #set( $expression = "SET" )
     #foreach( $entry in $expSet.entrySet() )
         #if( $entry.key == "#CallCategories" )
+            $util.qr( $expValues.put(":EmptyList", $util.dynamodb.toDynamoDB([])) )
             #set( $expression = "${expression} ${entry.key} = list_append(if_not_exists(${entry.key}, :EmptyList), ${entry.value})" )
         #else
             #set( $expression = "${expression} ${entry.key} = ${entry.value}" )
