@@ -310,7 +310,7 @@ async def execute_add_issues_detected_mutation(
     issues_detected = message.get("IssuesDetected",None)
     issueText = ""
     if issues_detected and len(issues_detected) > 0:
-        LOGGER.debug("issue detected in add transcript segment")
+        LOGGER.debug("issue detected in add issues detected mutation")
         offsets = issues_detected[0].get("CharacterOffsets")
         start = int(offsets.get("Begin"))
         end = int(offsets.get("End"))
@@ -798,17 +798,15 @@ async def execute_process_event_api_mutation(
             participantRole = utteranceEvent.get("ParticipantRole", None)
             if not participantRole:
                 return return_value
+        # Invoke custom lambda hook (if any) and use returned version of message.
+        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
+            message = invoke_transcript_lambda_hook(message)
 
         normalized_message = {
             **normalize_transcript_segment({**message}),
         }
         
         LOGGER.debug("Add Transcript Segment")
-
-        # Invoke custom lambda hook (if any) and use returned version of message.
-        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
-            message = invoke_transcript_lambda_hook(message)
-
         add_transcript_tasks = add_transcript_segments(
             message=normalized_message,
             appsync_session=appsync_session,
