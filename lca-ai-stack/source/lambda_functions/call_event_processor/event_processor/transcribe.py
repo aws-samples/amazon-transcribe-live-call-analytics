@@ -98,6 +98,7 @@ def add_transcript_segments(
 
     tasks = []
     if message:
+        temp_message = message
         issues_detected = message.get("IssuesDetected", None)
         transcript = message["Transcript"]
         if issues_detected and len(issues_detected) > 0:
@@ -106,11 +107,11 @@ def add_transcript_segments(
             start = int(offsets.get("Begin"))
             end = int(offsets.get("End"))
             transcript = f"{transcript[:start]}<span class='issue-span'>{transcript[start:end]}</span>{transcript[end:]}<br/><span class='issue-pill'>Issue Detected</span>"
-            message["Transcript"] = transcript
+            temp_message["Transcript"] = transcript
             
         query = dsl_gql(
             DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=message).select(
+                schema.Mutation.addTranscriptSegment.args(input=temp_message).select(
                     *transcript_segment_fields(schema),
                 )
             )
