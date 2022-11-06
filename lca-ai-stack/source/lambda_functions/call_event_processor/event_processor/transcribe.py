@@ -39,11 +39,13 @@ if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.client import LambdaClient
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
+    from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
     RecognizeTextResponseTypeDef = object
     LambdaClient = object
     InvocationResponseTypeDef = object
+    Boto3Session = object
 
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
