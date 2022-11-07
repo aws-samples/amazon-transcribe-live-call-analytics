@@ -37,7 +37,6 @@ const {
   writeAddTranscriptSegmentEventToKds,
   writeCallStartEventToKds,
   writeCallEndEventToKds,
-  writeUtteranceEventToKds,
   writeCategoryEventToKds,
 } = require('./lca');
 
@@ -140,28 +139,16 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
   let agentStreamArn;
   let loopCount = 0;
 
-const writeCallStartEventToKds = async function (callData) {
-  console.log("Write Call Start Event to KDS");
-  const putObj = {
-    CallId: callData.callId,
-    CreatedAt: new Date().toISOString(),
-    CustomerPhoneNumber: callData.fromNumber,
-    SystemPhoneNumber: callData.toNumber,
-    AgentId: callData.agentId,
-    EventType: "START",
-  };
-  const putParams = {
-    StreamName: KINESIS_STREAM_NAME,
-    PartitionKey: callData.callId,
-    Data: Buffer.from(JSON.stringify(putObj)),
-  };
-  console.log("Sending Call START event on KDS: ", JSON.stringify(putObj));
-  const putCmd = new PutRecordCommand(putParams);
-  try {
-    await kinesisClient.send(putCmd);
-  } catch (error) {
-    console.error('Error writing call START event', error);
-  }
+  // eslint-disable-next-line no-plusplus
+  while (agentStreamArn === undefined && loopCount++ < 100) {
+    const data = await dynamoClient.send(command);
+    console.log('GetItem result: ', JSON.stringify(data));
+    if (data.Item) {
+      if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
+    } else {
+      console.log(loopCount, `${channel} stream not yet available. Sleeping 100ms.`);
+      await sleep(100);
+    }
   }
   return agentStreamArn;
 };
@@ -607,11 +594,9 @@ const go = async function go(
   if (CUSTOM_VOCABULARY_NAME) {
     tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
   }
-
   if (CUSTOM_LANGUAGE_MODEL_NAME) {
     tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
   }
-
   /* start the stream */
   let tsResponse;
   if (isTCAEnabled) {
@@ -827,9 +812,7 @@ const handler = async function handler(event, context) {
         await writeS3UrlToKds(callData.callId);
       }
     }
-
   }
-  return;
 };
 
 exports.handler = handler;
