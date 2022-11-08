@@ -28,8 +28,6 @@ const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentT
   kinesisClient,
   transcriptionEvent,
   callId,
-  streamArn,
-  transactionId,
 ) {
   // only write if there is more than 0
   const result = transcriptionEvent.TranscriptEvent.Transcript.Results[0];
@@ -48,7 +46,6 @@ const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentT
 
   const putObj = {
     Channel: channel,
-    TransactionId: transactionId,
     CallId: callId,
     SegmentId: result.ResultId,
     StartTime: result.StartTime.toString(),
@@ -57,7 +54,6 @@ const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentT
     IsPartial: result.IsPartial,
     EventType: eventType.toString(),
     CreatedAt: now,
-    StreamArn: '<DEPRECATED>',
   };
 
   const putParams = {

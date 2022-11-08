@@ -35,6 +35,7 @@ const { mergeFiles } = require('./mergeFiles');
 const {
   writeS3UrlToKds,
   writeAddTranscriptSegmentEventToKds,
+  writeTranscriptionSegmentToKds,
   writeCallStartEventToKds,
   writeCallEndEventToKds,
   writeCategoryEventToKds,
@@ -516,12 +517,7 @@ const readTranscripts = async function readTranscripts(tsStream, callId) {
         writeCategoryEventToKds(kinesisClient, event.CategoryEvent, callId);
       }
       if (event.TranscriptEvent) {
-        writeAddTranscriptSegmentEventToKds(
-          kinesisClient,
-          undefined,
-          event.TranscriptEvent,
-          callId,
-        );
+        writeTranscriptionSegmentToKds(kinesisClient, event.TranscriptEvent, callId);
       }
     }
   } catch (error) {
