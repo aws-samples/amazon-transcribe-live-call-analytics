@@ -802,7 +802,7 @@ const handler = async function handler(event, context) {
       await writeToS3(result.tempFileName);
       await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
       if (!timeToStop) {
-        await mergeFiles.mergeFiles({
+        await mergeFiles({
           bucketName: OUTPUT_BUCKET,
           recordingPrefix: RECORDING_FILE_PREFIX,
           rawPrefix: RAW_FILE_PREFIX,
