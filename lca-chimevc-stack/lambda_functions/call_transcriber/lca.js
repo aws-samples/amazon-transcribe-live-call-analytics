@@ -253,19 +253,19 @@ const writeCallEndEventToKds = async function writeCallEndEventToKds(kinesisClie
   console.log('Write Call End Event to KDS');
   const putObj = {
     CallId: callId,
-    EventType: 'END_TRANSCRIPT',
+    EventType: 'END',
   };
   const putParams = {
     StreamName: KINESIS_STREAM_NAME,
     PartitionKey: callId,
     Data: Buffer.from(JSON.stringify(putObj)),
   };
-  console.log('Sending Call END_TRANSCRIPT event on KDS: ', JSON.stringify(putObj));
+  console.log('Sending Call END event on KDS: ', JSON.stringify(putObj));
   const putCmd = new PutRecordCommand(putParams);
   try {
     await kinesisClient.send(putCmd);
   } catch (error) {
-    console.error('Error writing call END_TRANSCRIPT', error);
+    console.error('Error writing call END', error);
   }
 };
 
