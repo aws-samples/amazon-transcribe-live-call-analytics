@@ -30,7 +30,7 @@ const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentT
   callId,
 ) {
   // only write if there is more than 0
-  const result = transcriptionEvent.TranscriptEvent.Transcript.Results[0];
+  const result = transcriptionEvent.Transcript.Results[0];
   if (!result) return;
   if (result.IsPartial === true && !SAVE_PARTIAL_TRANSCRIPTS) {
     return;
