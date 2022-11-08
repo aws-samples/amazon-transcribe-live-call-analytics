@@ -515,7 +515,7 @@ const readTranscripts = async function readTranscripts(tsStream, callId) {
       if (event.CategoryEvent) {
         writeCategoryEventToKds(kinesisClient, event.CategoryEvent, callId);
       }
-      if (event.TranscriptionEvent) {
+      if (event.TranscriptEvent) {
         writeAddTranscriptSegmentEventToKds(
           kinesisClient,
           undefined,
