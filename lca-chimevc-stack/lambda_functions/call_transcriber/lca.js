@@ -200,7 +200,6 @@ const writeCategoryEventToKds = async function writeCategoryEventToKds(
       CallId: callId,
       CategoryEvent: categoryEvent,
       CreatedAt: now,
-      UpdatedAt: now,
     };
 
     const putParams = {
