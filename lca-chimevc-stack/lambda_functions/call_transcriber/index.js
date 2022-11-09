@@ -805,7 +805,7 @@ const handler = async function handler(event, context) {
           callId: callData.callId,
           lambdaCount: callData.lambdaCount,
         });
-        await writeS3UrlToKds(callData.callId);
+        await writeS3UrlToKds(kinesisClient, callData.callId);
       }
     }
   }
