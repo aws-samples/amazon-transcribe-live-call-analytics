@@ -27,11 +27,11 @@ popd
 
 ```
 
-### Download files to root folder
+### Download files to root folder of Asterisk EC2 instance
 
-1. Copy the recordings from this git repo into `/root/recordings/`.
+1. Unzip and copy the recordings from the /recordings folder to into `/root/recordings/`.
 2. Copy `call_2hr_test.sh`, `call_test.sh`, and `conc_call_test.sh` into `/root`
-3. Copy all the recordings that end with `_agent.wav` into `/var/lib/asterisk/sounds/en/`
+3. Copy all the recordings also into `/var/lib/asterisk/sounds/en/`
 
 ### Edit the shell scripts
 
