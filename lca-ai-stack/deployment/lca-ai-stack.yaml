@@ -230,6 +230,12 @@ Parameters:
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
 
+  CategoryAlertRegEx:
+    Type: String
+    Default: .*
+    Description: >
+      A regular expression that will send an SNS notification if the call category matches it.
+
 Metadata:
   "AWS::CloudFormation::Interface":
     ParameterGroups:
@@ -645,6 +651,13 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
 
+        
+  ##########################################################################
+  # SNS Topic for Category Event Notifications
+  ##########################################################################
+  CategorySNSTopic:
+    Type:  AWS::SNS::Topic
+
   ##########################################################################
   # Call Event Processor
   ##########################################################################
@@ -687,6 +700,10 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref EventSourcingTable
         - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref CategorySNSTopic
             - Effect: Allow
               Action:
                 - appsync:GraphQL
@@ -745,6 +762,7 @@ Resources:
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+          SNS_TOPIC_ARN: !Ref CategorySNSTopic
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.client import LambdaClient
     from mypy_boto3_comprehend.client import ComprehendClient
+    from mypy_boto3_sns.client import SNSClient
     from boto3 import Session as Boto3Session
 else:
     Boto3Session = object
@@ -38,6 +39,7 @@ else:
     LexRuntimeV2Client = object
     LambdaClient = object
     ComprehendClient = object
+    SNSClient = object
 
 
 APPSYNC_GRAPHQL_URL = environ["APPSYNC_GRAPHQL_URL"]
@@ -80,9 +82,12 @@ LAMBDA_AGENT_ASSIST_FUNCTION_ARN = environ["LAMBDA_AGENT_ASSIST_FUNCTION_ARN"]
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 if IS_SENTIMENT_ANALYSIS_ENABLED:
     COMPREHEND_CLIENT: ComprehendClient = BOTO3_SESSION.client("comprehend", config=CLIENT_CONFIG)
-else: 
+else:
     COMPREHEND_CLIENT: None
 COMPREHEND_LANGUAGE_CODE = getenv("COMPREHEND_LANGUAGE_CODE", "en")
+
+SNS_CLIENT:SNSClient = BOTO3_SESSION.client("sns", config=CLIENT_CONFIG)
+
 
 CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
 MUTATION_FUNCTION_MAPPING = {
@@ -96,6 +101,7 @@ MUTATION_FUNCTION_NAME = MUTATION_FUNCTION_MAPPING.get(CALL_AUDIO_SOURCE)
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 EVENT_LOOP = asyncio.get_event_loop()
+
 
 async def update_state(event, event_processor_results) -> Dict[str, object]:
     """Updates the Lambda Tumbling Window State"""
@@ -121,7 +127,7 @@ async def update_state(event, event_processor_results) -> Dict[str, object]:
 
 
 async def process_event(event) -> Dict[str, List]:
-    """Processes a Batch of Transcript Records""" 
+    """Processes a Batch of Transcript Records"""
     async with TranscriptBatchProcessor(
         appsync_client=APPSYNC_CLIENT,
         agent_assist_args=dict(
@@ -138,6 +144,7 @@ async def process_event(event) -> Dict[str, List]:
         ),
         # called for each record right before the context manager exits
         api_mutation_fn=MUTATION_FUNCTION_NAME,
+        sns_client=SNS_CLIENT
     ) as processor:
         await processor.handle_event(event=event)
 

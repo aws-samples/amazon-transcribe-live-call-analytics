@@ -46,10 +46,12 @@ class TranscriptBatchProcessor:
         self,
         appsync_client: AppsyncAioGqlClient,
         api_mutation_fn: ApiMutationFnType,
+        sns_client,
         agent_assist_args: Optional[Dict[str, Any]] = None,
         sentiment_analysis_args: Optional[Dict[str, object]] = None
     ):
         self._appsync_client = appsync_client
+        self._sns_client = sns_client
         self._api_mutation_fn = api_mutation_fn
         self._agent_assist_args = agent_assist_args or {}
         self._sentiment_analysis_args = sentiment_analysis_args or {}
@@ -79,6 +81,7 @@ class TranscriptBatchProcessor:
                     self._api_mutation_fn(
                         message=message["result"],
                         appsync_session=appsync_session,
+                        sns_client=self._sns_client,
                         agent_assist_args=self._agent_assist_args,
                         sentiment_analysis_args=self._sentiment_analysis_args,
                     )

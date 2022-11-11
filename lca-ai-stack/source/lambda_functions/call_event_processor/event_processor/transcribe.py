@@ -26,6 +26,7 @@ from graphql_helpers import (
     transcript_segment_sentiment_fields,
 )
 from lex_utils import recognize_text_lex
+from sns_utils import publish_sns
 from lambda_utils import invoke_lambda
 from eventprocessor_utils import (
     normalize_transcript_segment, 
@@ -39,6 +40,8 @@ if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.client import LambdaClient
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
+    from mypy_boto3_sns.client import SNSClient
+
     from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
@@ -46,7 +49,9 @@ else:
     LambdaClient = object
     InvocationResponseTypeDef = object
     Boto3Session = object
+    SNSClient = object
 
+SNS_TOPIC_ARN = getenv("SNS_TOPIC_ARN", "")
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 
@@ -381,7 +386,7 @@ async def execute_update_agent_mutation(
 async def send_call_category(
     transcript_segment_args: Dict[str, Any],
     category: str,
-    appsync_session: AppsyncAsyncClientSession,
+    appsync_session: AppsyncAsyncClientSession
 ):
     """Send Call Category Transcript Segment"""
     if not appsync_session.client.schema:
@@ -406,9 +411,23 @@ async def send_call_category(
 
     return result
 
+async def publish_sns_category(
+    sns_client: SNSClient,
+    category_name:str,
+    call_id:str
+):
+    LOGGER.debug("Publishing Call Category to SNS")
+    result = await publish_sns(category_name= category_name,
+        call_id= call_id,
+        sns_topic_arn= SNS_TOPIC_ARN,
+        sns_client= sns_client,
+    )
+    return result
+
 def add_call_category(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient
 ) -> List[Coroutine]:
     """Add Categories GraphQL Mutations"""
     # pylint: disable=too-many-locals
@@ -443,6 +462,12 @@ def add_call_category(
             **call_category_args,
         )
         tasks.append(task)
+        sns_task = publish_sns_category(
+            sns_client=sns_client,
+            category_name=category,
+            call_id=message["CallId"]
+        )
+        tasks.append(sns_task)
 
     return tasks 
     
@@ -723,6 +748,7 @@ def invoke_transcript_lambda_hook(
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient,
     agent_assist_args: Dict[str, Any],
     sentiment_analysis_args: Dict[str, Any]
 ) -> Dict[Literal["successes", "errors"], List]:
@@ -879,6 +905,7 @@ async def execute_process_event_api_mutation(
         add_call_category_tasks = add_call_category(
             message=message,
             appsync_session=appsync_session,
+            sns_client=sns_client
         )
         task_responses = await asyncio.gather(
             *add_call_category_tasks,
