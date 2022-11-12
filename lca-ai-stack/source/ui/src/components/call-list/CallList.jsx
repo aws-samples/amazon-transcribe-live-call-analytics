@@ -9,6 +9,7 @@ import useCallsContext from '../../contexts/calls';
 
 import mapCallsAttributes from '../common/map-call-attributes';
 import { paginationLabels } from '../common/labels';
+import useLocalStorage from '../common/local-storage';
 
 import {
   CallsPreferences,
@@ -39,7 +40,10 @@ const CallList = () => {
     periodsToLoad,
   } = useCallsContext();
 
-  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const [preferences, setPreferences] = useLocalStorage(
+    'call-list-preferences',
+    DEFAULT_PREFERENCES,
+  );
 
   // prettier-ignore
   const {
