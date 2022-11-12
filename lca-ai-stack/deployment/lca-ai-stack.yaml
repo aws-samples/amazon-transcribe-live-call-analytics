@@ -234,7 +234,7 @@ Parameters:
     Type: String
     Default: .*
     Description: >
-      A regular expression that will send an SNS notification if the call category matches it.
+      A regular expression that will be used to show an alert in the UI if a category matches
 
 Metadata:
   "AWS::CloudFormation::Interface":
@@ -540,6 +540,8 @@ Resources:
           # aws-exports.js Amplify config. The values are embedded in the
           # code at build time. See:
           # https://create-react-app.dev/docs/adding-custom-environment-variables/
+          - Name: REACT_APP_CATEGORY_REGEX
+            Value: !Ref CategoryAlertRegEx
           - Name: REACT_APP_USER_POOL_ID
             Value: !Ref UserPool
           - Name: REACT_APP_USER_POOL_CLIENT_ID

@@ -14,6 +14,7 @@ import { TableHeader } from '../common/table';
 import { CALLS_PATH } from '../../routes/constants';
 import { SentimentIndicator } from '../sentiment-icon/SentimentIcon';
 import { SentimentTrendIndicator } from '../sentiment-trend-icon/SentimentTrendIcon';
+import { CategoryPill } from './CategoryPill';
 
 export const KEY_COLUMN_ID = 'callId';
 
@@ -24,6 +25,13 @@ export const COLUMN_DEFINITIONS_MAIN = [
     cell: (item) => <Link href={`#${CALLS_PATH}/${item.callId}`}>{item.callId}</Link>,
     sortingField: 'callId',
     width: 325,
+  },
+  {
+    id: 'callCategories',
+    header: 'Categories',
+    cell: (item) => <CategoryPill categories={item.callCategories} />,
+    sortingField: 'callCategories',
+    width: 85,
   },
   {
     id: 'agentId',
@@ -89,7 +97,7 @@ export const COLUMN_DEFINITIONS_MAIN = [
   },
 ];
 
-export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[2];
+export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[3];
 
 export const SELECTION_LABELS = {
   itemSelectionLabel: (data, row) => `select ${row.callId}`,
@@ -108,6 +116,7 @@ const VISIBLE_CONTENT_OPTIONS = [
     label: 'Call list properties',
     options: [
       { id: 'callId', label: 'Call ID', editable: false },
+      { id: 'callCategories', label: 'Categories' },
       { id: 'agentId', label: 'Agent' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
@@ -122,6 +131,7 @@ const VISIBLE_CONTENT_OPTIONS = [
 ];
 
 const VISIBLE_CONTENT = [
+  'callCategories',
   'agentId',
   'initiationTimeStamp',
   'callerPhoneNumber',

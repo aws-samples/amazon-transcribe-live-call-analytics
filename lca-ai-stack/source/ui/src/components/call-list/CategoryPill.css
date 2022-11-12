@@ -1,0 +1,18 @@
+
+.category-pill  {
+  background-color: lavender;
+  border-radius: 2em;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  padding-bottom: 0.0em;
+  line-height: 1.5em !important;
+}
+.category-pill-alert  {
+  background-color: red;
+  border-radius: 2em;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  padding-bottom: 0.0em;
+  line-height: 1.5em !important;
+  color: white;
+}

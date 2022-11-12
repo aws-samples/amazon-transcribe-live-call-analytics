@@ -152,6 +152,14 @@ Parameters:
         - standard
         - analytics
     Description: Set the default operational mode for Transcribe
+
+  CategoryAlertRegEx:
+    Type: String
+    Default: .*
+    Description: >
+      If using the 'analytics' Transcribe API Mode, this regular expression will be used to show
+      an alert in red in the web user interface if it matches a call category. This defaults to 
+      matching all categories.
     
   TranscribeContentRedactionType:
     Type: String
@@ -587,7 +595,7 @@ Resources:
         S3BucketName: !Ref S3BucketName
         AdminEmail: !Ref AdminEmail
         AllowedSignUpEmailDomain: !Ref AllowedSignUpEmailDomain
-
+        CategoryAlertRegEx: !Ref CategoryAlertRegEx
         ComprehendLanguageCode:
           !FindInMap [
             TranscribeToComprehendLanguage,
