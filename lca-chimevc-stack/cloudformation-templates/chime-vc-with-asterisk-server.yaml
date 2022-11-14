@@ -358,6 +358,7 @@ Resources:
                   - cloudformation:DescribeStacks
                   - iam:CreateServiceLinkedRole
                   - iam:PutRolePolicy
+                  - logs:ListLogDeliveries
                 Effect: Allow
                 Resource: '*'
             Version: '2012-10-17'
