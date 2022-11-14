@@ -124,10 +124,11 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      Email address domain (example.com) or comma separated list of email domains 
+      (example1.com, example2.com) allowed to signin and signup using the web UI.
       If left empty, signup via the web UI is disabled and users will have to be created using
       Cognito.
-    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6}(, *([\w-]+\.)+[\w-]{2,6})*)$'
 
   IsLexAgentAssistEnabled:
     Type: String
@@ -225,7 +226,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.5.2
+    Default: 0.6.000
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -1242,19 +1243,23 @@ Resources:
       Timeout: 3
       Environment:
         Variables:
-          ALLOWED_SIGNUP_EMAIL_DOMAIN: !Ref AllowedSignUpEmailDomain
+          ALLOWED_SIGNUP_EMAIL_DOMAINS: !Ref AllowedSignUpEmailDomain
       InlineCode: |
         exports.handler = async (event, context) => {
           console.log(event);
+          const allowed_domains = (
+              process.env?.ALLOWED_SIGNUP_EMAIL_DOMAINS
+              .split(",").map(domain => {return domain.trim()})
+          );
           const { email } = event.request?.userAttributes;
           if (!email || !email.includes('@')) {
             throw Error('Username does not exists or invalid email address');
           }
           const emailDomain = email?.split('@')[1];
-          if (!emailDomain || !process.env?.ALLOWED_SIGNUP_EMAIL_DOMAIN) {
+          if (!emailDomain || !allowed_domains) {
             throw new Error('Server error - invalid configuration');
           }
-          if (emailDomain !== process.env?.ALLOWED_SIGNUP_EMAIL_DOMAIN) {
+          if (!allowed_domains.includes(emailDomain)) {
             throw new Error('Invalid email address domain');
           }
           return event;
