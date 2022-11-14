@@ -16,7 +16,8 @@ Contact Lens for Amazon Connect provides real-time supervisor and agent assist f
 Our sample solution, Live Call Analytics with Agent Assist (LCA), does most of the heavy lifting associated with providing an end-to-end solution that can plug into your contact center and provide the intelligent insights that you need.
 
 ## Architecture
-![lca-architecture](./images/lca-chimevc-architecture.png)
+![lca-architecture](./images/lca-chimevc-architecture.png)  
+  
 The demo Asterisk server is configured to use Amazon Voice Connector, which provides the phone number and SIP trunking needed to route inbound and outbound calls. When you configure LCA to integrate with your contact center using the Chime Voice Connector (SIPREC) option, instead of the demo Asterisk server, Voice Connector is configured to integrate instead with your existing contact center using SIP-based media recording (SIPREC) or network-based recording (NBR). In both cases, Voice Connector streams audio to Kinesis Video Streams using two streams per call, one for the caller and one for the agent.  
   
 LCA also now also supports two additional input sources, using different architectures for ingestion: 
