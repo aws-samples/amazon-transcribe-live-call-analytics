@@ -14,7 +14,8 @@ import { TableHeader } from '../common/table';
 import { CALLS_PATH } from '../../routes/constants';
 import { SentimentIndicator } from '../sentiment-icon/SentimentIcon';
 import { SentimentTrendIndicator } from '../sentiment-trend-icon/SentimentTrendIcon';
-import { CategoryPill } from './CategoryPill';
+import { CategoryAlertPill } from './CategoryAlertPill';
+import { CategoryPills } from './CategoryPills';
 
 export const KEY_COLUMN_ID = 'callId';
 
@@ -27,10 +28,10 @@ export const COLUMN_DEFINITIONS_MAIN = [
     width: 325,
   },
   {
-    id: 'callCategories',
-    header: 'Categories',
-    cell: (item) => <CategoryPill categories={item.callCategories} />,
-    sortingField: 'callCategories',
+    id: 'alerts',
+    header: 'Alerts',
+    cell: (item) => <CategoryAlertPill categories={item.callCategories} />,
+    sortingField: 'alerts',
     width: 85,
   },
   {
@@ -95,6 +96,13 @@ export const COLUMN_DEFINITIONS_MAIN = [
     cell: (item) => item.conversationDurationTimeStamp,
     sortingField: 'conversationDurationTimeStamp',
   },
+  {
+    id: 'callCategories',
+    header: 'Categories',
+    cell: (item) => <CategoryPills categories={item.callCategories} />,
+    sortingField: 'callCategories',
+    width: 200,
+  },
 ];
 
 export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[3];
@@ -116,7 +124,7 @@ const VISIBLE_CONTENT_OPTIONS = [
     label: 'Call list properties',
     options: [
       { id: 'callId', label: 'Call ID', editable: false },
-      { id: 'callCategories', label: 'Categories' },
+      { id: 'alerts', label: 'Alerts' },
       { id: 'agentId', label: 'Agent' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
@@ -126,12 +134,13 @@ const VISIBLE_CONTENT_OPTIONS = [
       { id: 'agentSentiment', label: 'Agent Sentiment' },
       { id: 'agentSentimentTrend', label: 'Agent Sentiment Trend' },
       { id: 'conversationDuration', label: 'Duration' },
+      { id: 'callCategories', label: 'Categories' },
     ],
   },
 ];
 
 const VISIBLE_CONTENT = [
-  'callCategories',
+  'alerts',
   'agentId',
   'initiationTimeStamp',
   'callerPhoneNumber',
