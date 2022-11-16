@@ -67,12 +67,11 @@ Parameters:
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
 
-  MonoAudioFilePrefix:
+  CallAnalyticsJSONPrefix:
     Type: String
-    Default: lca-mono-audio-recordings/
-    Description: >-
-      The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
-   
+    Default: lca-call-analytics-json/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -167,6 +166,29 @@ Parameters:
       custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
       match the Language Code selected above, and use the 'Narrow Band' base model.
 
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      Value of PCA stack "InputBucket". Effective only Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: mp3/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: Value of PCA stack "WebAppURL". 
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -208,6 +230,7 @@ Resources:
       Parameters:
         TranscribeApiMode: !Ref TranscribeApiMode
         AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsJSONPrefix: !Ref CallAnalyticsJSONPrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
         S3BucketName: !Ref S3BucketName
@@ -219,6 +242,10 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
 
 Outputs:
   DemoPBXIPAddress:

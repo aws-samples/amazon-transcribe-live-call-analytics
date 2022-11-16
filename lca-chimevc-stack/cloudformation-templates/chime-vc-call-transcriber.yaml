@@ -10,12 +10,11 @@ Parameters:
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
 
-  MonoAudioFilePrefix:
+  CallAnalyticsJSONPrefix:
     Type: String
-    Default: lca-mono-audio-recordings/
-    Description: >-
-      The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
-    
+    Default: lca-call-analytics-json/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -120,6 +119,29 @@ Parameters:
       The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
       The function must return a True/False flag to indicate if the call should be processed or ignored, 
       a mapped CallId, an AgentId, and may be extended to support additional features in future.
+
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      Value of PCA stack "InputBucket". Effective only Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '(|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: mp3/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: Value of PCA stack "WebAppURL". 
         
 Resources:
   ##########################################################################
@@ -181,8 +203,9 @@ Resources:
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
-          RECORDING_FILE_PREFIS3BucketNameX: !Ref AudioFilePrefix
-          MONO_RECORDING_FILE_PREFIX: !Ref MonoAudioFilePrefix
+          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
+          CALL_ANALYTICS_JSON_FILE_PREFIX: !Ref CallAnalyticsJSONPrefix
+          TCA_DATA_ACCESS_ROLE_ARN: !GetAtt TcaDataAccessRole.Arn
           RAW_FILE_PREFIX: 'lca-audio-raw/'
           TEMP_FILE_PATH: '/tmp/'
           SAVE_PARTIAL_TRANSCRIPTS: !Ref IsPartialTranscriptEnabled
@@ -196,6 +219,11 @@ Resources:
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
           CUSTOM_LANGUAGE_MODEL_NAME: !Ref CustomLanguageModelName
           LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
+          PCA_S3_BUCKET_NAME: !Ref PcaS3BucketName
+          PCA_TRANSCRIPTS_PREFIX: !Ref PcaTranscriptsPrefix
+          PCA_AUDIO_PLAYBACK_FILE_PREFIX: !Ref PcaPlaybackAudioFilePrefix
+          PCA_WEB_APP_URL: !Ref PcaWebAppURL
+
       CodeUri: ../lambda_functions/call_transcriber
     Metadata:
       cfn_nag:
@@ -280,12 +308,59 @@ Resources:
                     - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName
               - !If 
+                - ShouldAddPcaBucketPermission
+                - Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                    - s3:PutObject
+                  Resource:
+                    - !Sub
+                      - "arn:aws:s3:::${bucket}"
+                      - bucket: !Ref PcaS3BucketName
+                    - !Sub
+                      - "arn:aws:s3:::${bucket}/*"
+                      - bucket: !Ref PcaS3BucketName
+                - Ref: AWS::NoValue             
+              - !If
                 - ShouldEnableLambdaHook
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
                   Resource: !Sub "${SiprecLambdaHookFunctionArn}"
                 - Ref: AWS::NoValue
+
+  TcaDataAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - transcribe.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: tca-post-call-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !Ref S3BucketName          
+
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -356,3 +431,4 @@ Conditions:
   - !Equals [!Ref IsContentRedactionEnabled, 'true']
   - !Equals [!Ref TranscribeLanguageCode, 'en-US']
   ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
+  ShouldAddPcaBucketPermission: !Not [!Equals [!Ref PcaS3BucketName, ""]]

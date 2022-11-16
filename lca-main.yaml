@@ -64,8 +64,31 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:connect:.*)$'
     Description: >
-      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'
+      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'.
       Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
+
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: mp3/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: Value of PCA stack "WebAppURL". 
 
   AgentAssistOption:
     Type: String
@@ -127,6 +150,11 @@ Parameters:
     Type: String
     Default: lca-audio-recordings/
     Description: The Amazon S3 prefix where the audio files will be saved (must end in "/")
+  
+  CallAnalyticsJSONPrefix:
+    Type: String
+    Default: lca-call-analytics-json/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
 
   IsPartialTranscriptEnabled:
     Type: String
@@ -154,7 +182,9 @@ Parameters:
     AllowedValues:
         - standard
         - analytics
-    Description: Set the default operational mode for Transcribe
+    Description: >-
+      Set the default API mode for Transcribe. 
+      Must be set to 'analytics' when "Enable PCA Integration" is 'true'.
 
   CategoryAlertRegEx:
     Type: String
@@ -317,6 +347,13 @@ Metadata:
           - SiprecLambdaHookFunctionArn
           - ConnectInstanceArn
       - Label:
+          default: Post Call Analytics (PCA) Integration
+        Parameters:
+          - PcaS3BucketName
+          - PcaTranscriptsPrefix
+          - PcaPlaybackAudioFilePrefix
+          - PcaWebAppURL
+      - Label:
           default: Agent Assist Options
         Parameters:
           - AgentAssistOption
@@ -329,6 +366,7 @@ Metadata:
         Parameters:
           - S3BucketName
           - AudioFilePrefix
+          - CallAnalyticsJSONPrefix
       - Label:
           default: Amazon Transcribe Configuration
         Parameters:
@@ -365,6 +403,8 @@ Metadata:
         default: Call Audio Recordings Bucket Name
       AudioFilePrefix:
         default: Audio File Prefix
+      CallAnalyticsJSONPrefix:
+        default: Call Analytics JSON File Prefix
       AdminEmail:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
@@ -379,6 +419,12 @@ Metadata:
         default: Lambda Hook Function ARN for SIPREC Call Initialization (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
+      PcaS3BucketName:
+        default: PCA InputBucket
+      PcaTranscriptsPrefix:
+        default: PCA InputBucket Transcript prefix
+      PcaPlaybackAudioFilePrefix:
+        default: PCA InputBucket Playback AudioFile prefix
       AgentAssistOption:
         default: Enable Agent Assist
       AgentAssistExistingKendraIndexId:
@@ -683,6 +729,7 @@ Resources:
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsJSONPrefix: !Ref CallAnalyticsJSONPrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
@@ -695,6 +742,10 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack
