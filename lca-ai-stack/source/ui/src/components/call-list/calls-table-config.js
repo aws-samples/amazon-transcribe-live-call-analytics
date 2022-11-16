@@ -29,7 +29,7 @@ export const COLUMN_DEFINITIONS_MAIN = [
   },
   {
     id: 'alerts',
-    header: 'Alerts',
+    header: '⚠',
     cell: (item) => <CategoryAlertPill categories={item.callCategories} />,
     sortingField: 'alerts',
     width: 85,

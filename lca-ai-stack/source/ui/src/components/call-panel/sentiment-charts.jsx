@@ -15,7 +15,8 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
-    .filter((c) => c !== 'AGENT_ASSISTANT');
+    .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentPerChannel = transcriptChannels
     .map((channel) => transcriptsForThisCallId[channel])
@@ -78,7 +79,8 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
-    .filter((c) => c !== 'AGENT_ASSISTANT');
+    .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentByQuarterPerChannel = transcriptChannels
     .map((channel) => item?.sentiment?.SentimentByPeriod?.QUARTER[channel] || [])
