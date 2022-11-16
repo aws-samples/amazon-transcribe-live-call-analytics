@@ -67,29 +67,6 @@ Parameters:
       Required when CallAudioSource is set to 'Amazon Connect Contact Lens'.
       Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
 
-  PcaS3BucketName:
-    Type: String
-    Description: >
-      Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
-    # yamllint disable rule:line-length
-    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
-    # yamllint enable rule:line-length
-
-  PcaTranscriptsPrefix:
-    Type: String
-    Default: originalTranscripts/
-    Description: Value of PCA stack "InputBucketTranscriptPrefix".
-
-  PcaPlaybackAudioFilePrefix:
-    Type: String
-    Default: mp3/
-    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
-
-  PcaWebAppURL:
-    Type: String
-    AllowedPattern: '^(|https:\/\/.*)$'
-    Description: Value of PCA stack "WebAppURL". 
-
   AgentAssistOption:
     Type: String
     Default: QnABot on AWS with new Kendra Index (Developer Edition)
@@ -330,6 +307,34 @@ Parameters:
     Description: >-
       Number of days to retain call records. Records will be automatically deleted from LCA after this time.
 
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: mp3/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: Value of PCA stack "WebAppURL". 
+  
+  PcaWebAppCallPathPrefix:
+    Type: String
+    Default: dashboard/parsedFiles/
+    Description: PCA path prefix for call detail pages.
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -346,13 +351,6 @@ Metadata:
           - SiprecAllowedCidrList
           - SiprecLambdaHookFunctionArn
           - ConnectInstanceArn
-      - Label:
-          default: Post Call Analytics (PCA) Integration
-        Parameters:
-          - PcaS3BucketName
-          - PcaTranscriptsPrefix
-          - PcaPlaybackAudioFilePrefix
-          - PcaWebAppURL
       - Label:
           default: Agent Assist Options
         Parameters:
@@ -398,6 +396,15 @@ Metadata:
           default: Record retention
         Parameters:
           - DynamoDbExpirationInDays
+      - Label:
+          default: Post Call Analytics (PCA) Integration
+        Parameters:
+          - PcaS3BucketName
+          - PcaTranscriptsPrefix
+          - PcaPlaybackAudioFilePrefix
+          - PcaWebAppURL
+          - PcaWebAppCallPathPrefix
+  
     ParameterLabels:
       S3BucketName:
         default: Call Audio Recordings Bucket Name
@@ -419,12 +426,6 @@ Metadata:
         default: Lambda Hook Function ARN for SIPREC Call Initialization (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
-      PcaS3BucketName:
-        default: PCA InputBucket
-      PcaTranscriptsPrefix:
-        default: PCA InputBucket Transcript prefix
-      PcaPlaybackAudioFilePrefix:
-        default: PCA InputBucket Playback AudioFile prefix
       AgentAssistOption:
         default: Enable Agent Assist
       AgentAssistExistingKendraIndexId:
@@ -467,6 +468,16 @@ Metadata:
         default: CloudFront Allowed Geographies
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
+      PcaS3BucketName:
+        default: PCA InputBucket
+      PcaTranscriptsPrefix:
+        default: PCA InputBucket Transcript prefix
+      PcaPlaybackAudioFilePrefix:
+        default: PCA InputBucket Playback AudioFile prefix
+      PcaWebAppUrl:
+        default: PCA Web App URL
+      PcaWebAppCallPathPrefix:
+        default: PCA Web App Call Path Prefix
 
 Conditions:
   ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
@@ -746,6 +757,7 @@ Resources:
         PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack

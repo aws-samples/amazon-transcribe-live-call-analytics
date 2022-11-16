@@ -189,6 +189,11 @@ Parameters:
     AllowedPattern: '^(|https:\/\/.*)$'
     Description: Value of PCA stack "WebAppURL". 
 
+  PcaWebAppCallPathPrefix:
+    Type: String
+    Default: dashboard/parsedFiles/
+    Description: PCA path prefix for call detail pages.
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -246,6 +251,7 @@ Resources:
         PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
 Outputs:
   DemoPBXIPAddress:

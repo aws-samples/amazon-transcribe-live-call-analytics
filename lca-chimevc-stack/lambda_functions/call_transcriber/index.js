@@ -33,29 +33,25 @@ const { KinesisVideoMedia } = require('@aws-sdk/client-kinesis-video-media');
 /* Local libraries */
 const { mergeFiles } = require('./mergeFiles');
 const {
+  formatPath,
   writeS3UrlToKds,
   writeAddTranscriptSegmentEventToKds,
   writeTranscriptionSegmentToKds,
   writeCallStartEventToKds,
   writeCallEndEventToKds,
   writeCategoryEventToKds,
+  mkTcaFilename,
+  writePcaUrlToKds,
+  copyAudioRecordingToPca,
+  copyPostCallAnalyticsToPca,
 } = require('./lca');
-
-// Add a '/' to S3 prefixes if needed
-const formatPrefix = function(prefix) {
-  let prefixOut = prefix;
-  if (prefix.charAt(prefix.length - 1) != "/") {
-    prefixOut += "/";
-  }
-  return prefixOut;
-}
 
 const REGION = process.env.REGION || 'us-east-1';
 const { TRANSCRIBER_CALL_EVENT_TABLE_NAME } = process.env;
 const { OUTPUT_BUCKET } = process.env;
-const RECORDING_FILE_PREFIX = formatPrefix(process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/');
-const CALL_ANALYTICS_JSON_FILE_PREFIX = formatPrefix(process.env.CALL_ANALYTICS_JSON_FILE_PREFIX || 'lca-call-analytics-json/');
-const RAW_FILE_PREFIX = formatPrefix(process.env.RAW_FILE_PREFIX || 'lca-audio-raw/');
+const RECORDING_FILE_PREFIX = formatPath(process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/');
+const CALL_ANALYTICS_JSON_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_JSON_FILE_PREFIX || 'lca-call-analytics-json/');
+const RAW_FILE_PREFIX = formatPath(process.env.RAW_FILE_PREFIX || 'lca-audio-raw/');
 const TCA_DATA_ACCESS_ROLE_ARN = process.env.TCA_DATA_ACCESS_ROLE_ARN || '';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
 const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
@@ -71,9 +67,7 @@ const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 const TRANSCRIBE_API_MODE = process.env.TRANSCRIBE_API_MODE || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 const PCA_S3_BUCKET_NAME = process.env.PCA_S3_BUCKET_NAME || '';
-const PCA_TRANSCRIPTS_PREFIX = formatPrefix(process.env.PCA_TRANSCRIPTS_PREFIX || '');
-const PCA_AUDIO_PLAYBACK_FILE_PREFIX = formatPrefix(process.env.PCA_AUDIO_PLAYBACK_FILE_PREFIX || '');
-const PCA_WEB_APP_URL = process.env.PCA_WEB_APP_URL || '';
+
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -522,7 +516,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   return lastFragment;
 };
 
-const readTranscripts = async function readTranscripts(tsStream, callId) {
+const readTranscripts = async function readTranscripts(tsStream, callId, sessionId) {
   try {
     for await (const event of tsStream) {
       if (event.UtteranceEvent) {
@@ -536,7 +530,7 @@ const readTranscripts = async function readTranscripts(tsStream, callId) {
       }
     }
   } catch (error) {
-    console.error('error writing transcription segment', JSON.stringify(error));
+    console.error('Error processing transcribe stream. SessionId: ', sessionId, JSON.stringify(error));
   }
 };
 
@@ -625,6 +619,7 @@ const go = async function go(
     tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
   }
   sessionId = tsResponse.SessionId;
+  console.log('Transcribe SessionId: ', sessionId);
   console.log('creating readable from transcript stream');
 
   console.log('creating interleave streams');
@@ -660,7 +655,7 @@ const go = async function go(
     }
   }, KEEP_ALIVE);
 
-  const transcribePromise = readTranscripts(tsStream, callId);
+  const transcribePromise = readTranscripts(tsStream, callId, sessionId);
 
   const returnVals = await Promise.all([callerWorker, agentWorker]);
 
@@ -690,17 +685,6 @@ const go = async function go(
     tempFileName: tempRecordingFilename,
   };
 };
-
-function mkTcaFilename(callData) {
-  let f = `TCA_GUID_${callData.callId}`;
-  f = `${f}_CUST_${callData.fromNumber}`;
-  if (callData.agentId) {
-    f = `${f}_AGENT_${callData.agentId}`;
-  }
-  const date = callData.callStreamingStartTime.replace(/:/g,"-");
-  f = `${f}_${date}`;
-  return f;
-}
 
 
 // MAIN LAMBDA HANDLER - FUNCTION ENTRY POINT
@@ -843,19 +827,12 @@ const handler = async function handler(event, context) {
           lambdaCount: callData.lambdaCount,
         });
         await writeS3UrlToKds(kinesisClient, callData.callId);
-        // Copy to PCA bucket if specified
+        // Copy recording and post-call-analytics files to PCA bucket if specified
         if (PCA_S3_BUCKET_NAME) {
-          const copyParms = {
-            Bucket: PCA_S3_BUCKET_NAME,
-            CopySource: encodeURI(`/${OUTPUT_BUCKET}/${RECORDING_FILE_PREFIX}${callData.callId}.wav`),
-            Key: PCA_AUDIO_PLAYBACK_FILE_PREFIX + mkTcaFilename(callData) + ".wav",
-          }
-          console.log("Copying recording to PCA: ", copyParms);
-          try {
-            data = await s3Client.send(new CopyObjectCommand(copyParms));
-            console.log("Done copying recording.");
-          } catch (err) {
-            console.error('S3 copy error: ', JSON.stringify(err));
+          if (isTCAEnabled) {
+            await copyAudioRecordingToPca(s3Client, callData);
+            await copyPostCallAnalyticsToPca(s3Client, callData);
+            await writePcaUrlToKds(kinesisClient, callData);
           }
         }
       }
