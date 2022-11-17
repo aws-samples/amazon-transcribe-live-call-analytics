@@ -4,25 +4,22 @@ import { PropTypes } from 'prop-types';
 import './CategoryPill.css';
 import { Popover } from '@awsui/components-react';
 
+const regex = process.env.REACT_APP_CATEGORY_REGEX;
+
 // eslint-disable-next-line import/prefer-default-export, arrow-body-style
 export const CategoryAlertPill = (props) => {
-  const { categories } = props;
-  const regex = process.env.REACT_APP_CATEGORY_REGEX;
+  const { alertCount, categories } = props;
 
-  let matches = 0;
-  let total = 0;
   const matchList = [];
   if (categories) {
     categories.forEach((category) => {
       if (category.match(regex)) {
-        matches += 1;
         matchList.push(category);
       }
-      total += 1;
     });
   }
 
-  if (total === 0 || matches === 0) return null;
+  if (categories?.length === 0 || alertCount === 0) return null;
   const popup = matchList.map((category) => (
     <>
       <span className="category-pill-alert">{category}</span>
@@ -37,15 +34,17 @@ export const CategoryAlertPill = (props) => {
       triggerType="custom"
       content={popup}
     >
-      <span className="category-pill-alert-icon">{matches}</span>
+      <span className="category-pill-alert-icon">{alertCount}</span>
     </Popover>
   );
 };
 
 CategoryAlertPill.propTypes = {
   categories: PropTypes.arrayOf(PropTypes.string),
+  alertCount: PropTypes.number,
 };
 
 CategoryAlertPill.defaultProps = {
   categories: [],
+  alertCount: 0,
 };

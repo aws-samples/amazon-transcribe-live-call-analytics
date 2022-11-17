@@ -30,8 +30,10 @@ export const COLUMN_DEFINITIONS_MAIN = [
   {
     id: 'alerts',
     header: '⚠',
-    cell: (item) => <CategoryAlertPill categories={item.callCategories} />,
-    sortingField: 'alerts',
+    cell: (item) => (
+      <CategoryAlertPill alertCount={item.alertCount} categories={item.callCategories} />
+    ),
+    sortingField: 'alertCount',
     width: 85,
   },
   {
@@ -100,7 +102,7 @@ export const COLUMN_DEFINITIONS_MAIN = [
     id: 'callCategories',
     header: 'Categories',
     cell: (item) => <CategoryPills categories={item.callCategories} />,
-    sortingField: 'callCategories',
+    sortingField: 'callCategoryCount',
     width: 200,
   },
 ];

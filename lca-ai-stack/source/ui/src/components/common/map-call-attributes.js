@@ -3,6 +3,9 @@
 import getRecordingStatus from './get-recording-status';
 import { getSentimentTrendLabel, getWeightedSentimentLabel } from './sentiment';
 
+const regex = process.env.REACT_APP_CATEGORY_REGEX;
+const countAlerts = (categories) => categories.filter((category) => category.match(regex)).length;
+
 /* Maps call attributes from API to a format that can be used in tables and panel */
 // eslint-disable-next-line arrow-body-style
 const mapCallsAttributes = (calls) => {
@@ -31,11 +34,15 @@ const mapCallsAttributes = (calls) => {
     const callerSentimentTrendLabel = getSentimentTrendLabel(callerSentimentByQuarter);
     const agentSentimentByQuarter = sentiment?.SentimentByPeriod?.QUARTER?.AGENT || [];
     const agentSentimentTrendLabel = getSentimentTrendLabel(agentSentimentByQuarter);
+    const callCategoryCount = callCategories?.length || 0;
+    const alertCount = callCategories?.length ? countAlerts(callCategories) : 0;
 
     return {
       callId,
       agentId,
       callCategories,
+      callCategoryCount,
+      alertCount,
       issuesDetected,
       callerPhoneNumber,
       systemPhoneNumber,
