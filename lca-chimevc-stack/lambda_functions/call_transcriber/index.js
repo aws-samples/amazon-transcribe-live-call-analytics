@@ -66,6 +66,8 @@ const TRANSCRIBE_API_MODE = process.env.TRANSCRIBE_API_MODE || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 const PCA_S3_BUCKET_NAME = process.env.PCA_S3_BUCKET_NAME || '';
 
+// optional - provide custom Transcribe endpoint via env var
+const TRANSCRIBE_ENDPOINT = process.env.TRANSCRIBE_ENDPOINT || '';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -609,7 +611,13 @@ const go = async function go(callData) {
   const tempRecordingFilename = `${callId}-${lambdaCount}.raw`;
   const writeRecordingStream = fs.createWriteStream(TEMP_FILE_PATH + tempRecordingFilename);
 
-  const tsClient = new TranscribeStreamingClient({ region: REGION });
+  let tsClientArgs = { region: REGION };
+  if (TRANSCRIBE_ENDPOINT) {
+    console.log("Using custom Transcribe endpoint:", TRANSCRIBE_ENDPOINT);
+    tsClientArgs.endpoint = TRANSCRIBE_ENDPOINT;
+  }
+  console.log("Transcribe client args:", tsClientArgs);
+  const tsClient = new TranscribeStreamingClient(tsClientArgs);
   let tsStream;
   const tsParams = {
     LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
@@ -642,9 +650,11 @@ const go = async function go(callData) {
   /* start the stream */
   let tsResponse;
   if (isTCAEnabled) {
+    console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
     tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
     tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
   } else {
+    console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
     tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
     tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
   }
