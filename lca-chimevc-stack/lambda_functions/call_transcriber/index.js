@@ -40,10 +40,8 @@ const {
   writeCallStartEventToKds,
   writeCallEndEventToKds,
   writeCategoryEventToKds,
-  mkTcaFilename,
   writePcaUrlToKds,
   copyAudioRecordingToPca,
-  copyPostCallAnalyticsToPca,
 } = require('./lca');
 
 const REGION = process.env.REGION || 'us-east-1';
@@ -187,6 +185,8 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     callerStreamArn,
     agentStreamArn,
     lambdaCount: 0,
+    sessionId: undefined,
+    tcaOutputLocation: `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_JSON_FILE_PREFIX}`,
   };
 
   // Call customer LambdaHook, if present
@@ -335,6 +335,30 @@ const writeCallDataToDdb = async function writeCallDataToDdb(callData) {
     console.error('Error writing Call Data to Ddb', error);
   }
 };
+
+const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) {
+  console.log('Write sessionData to DDB');
+  const expiration = getExpiration(1);
+  const now = new Date().toISOString();
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `sd#${sessionData.sessionId}` },
+      SK: { S: 'TRANSCRIBE SESSION' },
+      CreatedAt: { S: now },
+      ExpiresAfter: { N: expiration.toString() },
+      SessionData: { S: JSON.stringify(sessionData) },
+    },
+  };
+  console.log(putParams);
+  const putCmd = new PutItemCommand(putParams);
+  try {
+    await dynamoClient.send(putCmd);
+  } catch (error) {
+    console.error('Error writing Session Data to Ddb', error);
+  }
+};
+
 
 const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
   // Set the parameters
@@ -534,16 +558,20 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
   }
 };
 
-const go = async function go(
-  callId,
-  lambdaCount,
-  agentStreamArn,
-  callerStreamArn,
-  sessionId,
-  lastAgentFragment,
-  lastCallerFragment,
-  tcaOutputLocation,
-) {
+const go = async function go(callData) {
+  const {
+    callId,
+    fromNumber,
+    agentId,
+    callStreamingStartTime,
+    agentStreamArn,
+    callerStreamArn,
+    lastAgentFragment,
+    lastCallerFragment,
+    tcaOutputLocation,
+    lambdaCount,
+  } = callData;
+  let sessionId = callData.sessionId;
   let firstChunkToTranscribe = true;
   const passthroughStream = new stream.PassThrough({ highWaterMark: BUFFER_SIZE });
   const audioStream = async function* audioStream() {
@@ -595,6 +623,7 @@ const go = async function go(
     tsParams.NumberOfChannels = 2;
     tsParams.EnableChannelIdentification = true;
   }
+
   /* common optional stream parameters */
   if (sessionId !== undefined) {
     tsParams.SessionId = sessionId;
@@ -609,6 +638,7 @@ const go = async function go(
   if (CUSTOM_LANGUAGE_MODEL_NAME) {
     tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
   }
+
   /* start the stream */
   let tsResponse;
   if (isTCAEnabled) {
@@ -620,8 +650,22 @@ const go = async function go(
   }
   sessionId = tsResponse.SessionId;
   console.log('Transcribe SessionId: ', sessionId);
-  console.log('creating readable from transcript stream');
 
+  /* cache session data in DDB - use to process post call output if/when needed */
+  if (lambdaCount == 0) {
+    const sessionData = {
+      sessionId: sessionId,
+      callId: callId,
+      fromNumber: fromNumber,
+      agentId: agentId,
+      callStreamingStartTime: callStreamingStartTime,
+      tcaOutputLocation: tcaOutputLocation,
+      tsParams: tsParams,
+    };
+    await writeSessionDataToDdb(sessionData);
+  }
+
+  console.log('creating readable from transcript stream');
   console.log('creating interleave streams');
   const agentBlock = new BlockStream(2);
   const callerBlock = new BlockStream(2);
@@ -632,13 +676,10 @@ const go = async function go(
     passthroughStream.write(chunk);
     writeRecordingStream.write(chunk);
   });
-
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
-
   const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
   const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
-
   console.log('done starting workers');
 
   timeToStop = false;
@@ -776,18 +817,7 @@ const handler = async function handler(event, context) {
   }
 
   console.log('CallData: ', JSON.stringify(callData));
-  const tcaFilename = mkTcaFilename(callData);
-  const tcaOutputLocation = `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_JSON_FILE_PREFIX}${tcaFilename}.json`;
-  const result = await go(
-    callData.callId,
-    callData.lambdaCount,
-    callData.agentStreamArn,
-    callData.callerStreamArn,
-    callData.transcribeSessionId || undefined,
-    callData.lastAgentFragment || undefined,
-    callData.lastCallerFragment || undefined,
-    tcaOutputLocation,
-  );
+  const result = await go(callData);
   if (result) {
     if (timeToStop) {
       console.log(
@@ -798,7 +828,7 @@ const handler = async function handler(event, context) {
       newEvent.callData = callData;
       newEvent.callData.lastAgentFragment = result.lastAgentFragment;
       newEvent.callData.lastCallerFragment = result.lastCallerFragment;
-      newEvent.callData.transcribeSessionId = result.sessionId;
+      newEvent.callData.sessionId = result.sessionId;
       newEvent.callData.lambdaCount = callData.lambdaCount + 1;
       console.log('Launching new Lambda with event: ', JSON.stringify(newEvent));
       const invokeCmd = new InvokeCommand({
@@ -831,7 +861,6 @@ const handler = async function handler(event, context) {
         if (PCA_S3_BUCKET_NAME) {
           if (isTCAEnabled) {
             await copyAudioRecordingToPca(s3Client, callData);
-            await copyPostCallAnalyticsToPca(s3Client, callData);
             await writePcaUrlToKds(kinesisClient, callData);
           }
         }

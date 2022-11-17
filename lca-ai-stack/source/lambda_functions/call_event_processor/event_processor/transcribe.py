@@ -272,6 +272,40 @@ async def execute_add_s3_recording_mutation(
 
     return result
 
+async def execute_add_pca_url_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    pca_url = message.get("PcaUrl")
+    if not pca_url:
+        error_message = "pca url doesn't exist in add pca url event"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updatePcaUrl.args(
+                input={**message, "PcaUrl": pca_url}
+            ).select(*call_fields(schema))
+        )
+    )
+    
+    result = await execute_gql_query_with_retries(
+                        query,
+                        client_session=appsync_session,
+                        logger=LOGGER,
+                    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
+
+
 async def execute_add_call_category_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -797,7 +831,7 @@ async def execute_process_event_api_mutation(
 
     elif event_type in [
         "END",
-        "ADD_CHANNEL_S3_RECORDING_URL",]:
+        ]:
         # UPDATE STATUS
         LOGGER.debug("update status")
         response = await execute_update_call_status_mutation(
@@ -922,6 +956,18 @@ async def execute_process_event_api_mutation(
         # ADD S3 RECORDING URL 
         LOGGER.debug("Add recording url")
         response = await execute_add_s3_recording_mutation(
+                                message=message,
+                                appsync_session=appsync_session
+                        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
+
+    elif event_type == "ADD_PCA_URL":
+        # ADD PCA URL 
+        LOGGER.debug("Add PCA url")
+        response = await execute_add_pca_url_mutation(
                                 message=message,
                                 appsync_session=appsync_session
                         )
