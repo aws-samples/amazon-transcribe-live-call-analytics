@@ -397,6 +397,10 @@ Metadata:
         Parameters:
           - DynamoDbExpirationInDays
       - Label:
+          default: User Experience
+        Parameters:
+          - CategoryAlertRegEx
+      - Label:
           default: Post Call Analytics (PCA) Integration
         Parameters:
           - PcaS3BucketName
@@ -468,6 +472,8 @@ Metadata:
         default: CloudFront Allowed Geographies
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
+      CategoryAlertRegEx:
+        default: Category Alert Regular Expression
       PcaS3BucketName:
         default: PCA InputBucket
       PcaTranscriptsPrefix:
