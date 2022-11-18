@@ -344,7 +344,7 @@ Resources:
           - Effect: Allow
             Principal:
               Service:
-                - transcribe.amazonaws.com
+                - transcribe.streaming.amazonaws.com
             Action:
               - sts:AssumeRole
       Path: /
