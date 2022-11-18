@@ -13,7 +13,7 @@
     "@aws-sdk/client-kinesis-video-media": "^3.92.0",
     "@aws-sdk/client-lambda": "^3.92.0",
     "@aws-sdk/client-s3": "^3.92.0",
-    "@aws-sdk/client-transcribe-streaming": "file:client-transcribe-streaming/aws-sdk-client-transcribe-streaming-v3.142.0.tgz",
+    "@aws-sdk/client-transcribe-streaming": "file:client-transcribe-streaming/aws-sdk-client-transcribe-streaming-v3.211.0.tgz",
     "block-stream2": "^2.1.0",
     "ebml-stream": "^1.0.3",
     "eslint": "^8.23.1",
