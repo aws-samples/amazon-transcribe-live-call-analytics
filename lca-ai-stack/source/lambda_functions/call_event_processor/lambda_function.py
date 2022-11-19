@@ -136,7 +136,8 @@ async def process_event(event) -> Dict[str, List]:
             lex_bot_alias_id=LEX_BOT_ALIAS_ID,
             lex_bot_locale_id=LEX_BOT_LOCALE_ID,
             lambda_client=LAMBDA_CLIENT,
-            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN
+            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
+            dynamodb_table_name=STATE_DYNAMODB_TABLE_NAME,
         ),
         sentiment_analysis_args=dict(
             comprehend_client=COMPREHEND_CLIENT,

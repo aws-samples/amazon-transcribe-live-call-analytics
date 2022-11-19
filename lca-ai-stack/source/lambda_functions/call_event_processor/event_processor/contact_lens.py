@@ -63,6 +63,7 @@ LEX_BOT_LOCALE_ID: str
 IS_LAMBDA_AGENT_ASSIST_ENABLED = False
 LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
+DYNAMODB_TABLE_NAME: str
 
 
 # Contact Lens doesn't include call metadata so we attempt to use API lookups
@@ -740,7 +741,9 @@ async def send_lambda_agent_assist(
     payload = {
         'text': content,
         'call_id': call_id,
-        'transcript_segment_args': transcript_segment_args
+        'transcript_segment_args': transcript_segment_args,
+        'dynamodb_table_name': DYNAMODB_TABLE_NAME,
+        'dynamodb_pk': f"c#{call_id}",
     }
 
     LOGGER.debug("Agent Assist Lambda Request: %s", content)
@@ -947,6 +950,8 @@ async def execute_process_event_api_mutation(
     global LEX_BOT_LOCALE_ID
     global LAMBDA_CLIENT
     global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
+    global DYNAMODB_TABLE_NAME
+
     # pylint: enable=global-statement
 
     LEXV2_CLIENT = agent_assist_args.get("lex_client")
@@ -957,6 +962,8 @@ async def execute_process_event_api_mutation(
     LAMBDA_CLIENT = agent_assist_args.get("lambda_client")
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
     LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
+    DYNAMODB_TABLE_NAME = agent_assist_args.get("dynamodb_table_name", "")
+
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],

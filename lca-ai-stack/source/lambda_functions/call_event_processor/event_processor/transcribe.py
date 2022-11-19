@@ -29,7 +29,7 @@ from lex_utils import recognize_text_lex
 from sns_utils import publish_sns
 from lambda_utils import invoke_lambda
 from eventprocessor_utils import (
-    normalize_transcript_segment, 
+    normalize_transcript_segment,
     get_ttl,
     transform_segment_to_add_sentiment,
     transform_segment_to_issues_agent_assist
@@ -60,7 +60,8 @@ CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
-TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
+TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
+    "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
 if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN:
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
@@ -73,6 +74,7 @@ LEX_BOT_LOCALE_ID: str
 IS_LAMBDA_AGENT_ASSIST_ENABLED = False
 LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
+DYNAMODB_TABLE_NAME: str
 
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 EVENT_LOOP = asyncio.get_event_loop()
@@ -81,7 +83,7 @@ CALL_EVENT_TYPE_TO_STATUS = {
     "START": "STARTED",
     "END": "ENDED",
     "ADD_S3_RECORDING_URL": "ENDED",
-} 
+}
 
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
@@ -112,7 +114,7 @@ def add_transcript_segments(
             end = int(offsets.get("End"))
             transcript = f"{transcript[:start]}<span class='issue-span'>{transcript[start:end]}</span>{transcript[end:]}<br/><span class='issue-pill'>Issue Detected</span>"
             message["Transcript"] = transcript
-            
+
         query = dsl_gql(
             DSLMutation(
                 schema.Mutation.addTranscriptSegment.args(input=message).select(
@@ -120,17 +122,19 @@ def add_transcript_segments(
                 )
             )
         )
-        ignore_exception_fn = lambda e: True if (e["message"] == 'item put condition failure') else False
+        def ignore_exception_fn(e): return True if (
+            e["message"] == 'item put condition failure') else False
         tasks.append(
             execute_gql_query_with_retries(
                 query,
                 client_session=appsync_session,
                 logger=LOGGER,
-                should_ignore_exception_fn = ignore_exception_fn, 
+                should_ignore_exception_fn=ignore_exception_fn,
             ),
         )
 
     return tasks
+
 
 async def add_sentiment_to_transcript(
     message: Dict[str, Any],
@@ -158,8 +162,9 @@ async def add_sentiment_to_transcript(
         client_session=appsync_session,
         logger=LOGGER,
     )
-        
+
     return result
+
 
 def add_transcript_sentiment_analysis(
     message: Dict[str, Any],
@@ -175,6 +180,7 @@ def add_transcript_sentiment_analysis(
 
     return tasks
 
+
 async def execute_create_call_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -183,7 +189,7 @@ async def execute_create_call_mutation(
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
-    
+
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.createCall.args(input=message).select(
@@ -191,17 +197,18 @@ async def execute_create_call_mutation(
             )
         )
     )
-    
+
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
+
 
 async def execute_update_call_status_mutation(
     message: Dict[str, Any],
@@ -229,15 +236,16 @@ async def execute_update_call_status_mutation(
         )
     )
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
+
 
 async def execute_add_s3_recording_mutation(
     message: Dict[str, Any],
@@ -260,17 +268,18 @@ async def execute_add_s3_recording_mutation(
             ).select(*call_fields(schema))
         )
     )
-    
+
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
+
 
 async def execute_add_pca_url_mutation(
     message: Dict[str, Any],
@@ -293,12 +302,12 @@ async def execute_add_pca_url_mutation(
             ).select(*call_fields(schema))
         )
     )
-    
+
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
@@ -329,24 +338,25 @@ async def execute_add_call_category_mutation(
             ).select(*call_fields(schema))
         )
     )
-    
+
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
 
+
 async def execute_add_issues_detected_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
 ) -> Dict:
 
-    issues_detected = message.get("IssuesDetected",None)
+    issues_detected = message.get("IssuesDetected", None)
     issueText = ""
     if issues_detected and len(issues_detected) > 0:
         LOGGER.debug("issue detected in add issues detected mutation")
@@ -368,17 +378,18 @@ async def execute_add_issues_detected_mutation(
             ).select(*call_fields(schema))
         )
     )
-    
+
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
+
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -401,21 +412,22 @@ async def execute_update_agent_mutation(
             ).select(*call_fields(schema))
         )
     )
-    
+
     result = await execute_gql_query_with_retries(
-                        query,
-                        client_session=appsync_session,
-                        logger=LOGGER,
-                    )
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
 
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
-    
+
 ##########################################################################
 # Call Categories
 ##########################################################################
+
 
 async def send_call_category(
     transcript_segment_args: Dict[str, Any],
@@ -445,18 +457,20 @@ async def send_call_category(
 
     return result
 
+
 async def publish_sns_category(
     sns_client: SNSClient,
-    category_name:str,
-    call_id:str
+    category_name: str,
+    call_id: str
 ):
     LOGGER.debug("Publishing Call Category to SNS")
-    result = await publish_sns(category_name= category_name,
-        call_id= call_id,
-        sns_topic_arn= SNS_TOPIC_ARN,
-        sns_client= sns_client,
-    )
+    result = await publish_sns(category_name=category_name,
+                               call_id=call_id,
+                               sns_topic_arn=SNS_TOPIC_ARN,
+                               sns_client=sns_client,
+                               )
     return result
+
 
 def add_call_category(
     message: Dict[str, Any],
@@ -473,21 +487,21 @@ def add_call_category(
     send_call_category_args = []
 
     send_call_category_args.append(
-            dict(
-                category=category,
-                transcript_segment_args=dict(
-                    CallId=message["CallId"],
-                    Channel="CATEGORY_MATCH",
-                    CreatedAt=message["CreatedAt"],
-                    EndTime=end_time,
-                    ExpiresAfter=get_ttl(),
-                    SegmentId=str(uuid.uuid4()),
-                    StartTime=start_time,
-                    IsPartial=False,
-                    Status="TRANSCRIBING",
-                ),
-            )
+        dict(
+            category=category,
+            transcript_segment_args=dict(
+                CallId=message["CallId"],
+                Channel="CATEGORY_MATCH",
+                CreatedAt=message["CreatedAt"],
+                EndTime=end_time,
+                ExpiresAfter=get_ttl(),
+                SegmentId=str(uuid.uuid4()),
+                StartTime=start_time,
+                IsPartial=False,
+                Status="TRANSCRIBING",
+            ),
         )
+    )
 
     tasks = []
     for call_category_args in send_call_category_args:
@@ -503,8 +517,8 @@ def add_call_category(
         )
         tasks.append(sns_task)
 
-    return tasks 
-    
+    return tasks
+
 
 ##########################################################################
 # Lex Agent Assist
@@ -522,6 +536,7 @@ def is_qnabot_noanswer(bot_response):
         return True
     return False
 
+
 def get_lex_agent_assist_message(bot_response):
     message = ""
     if is_qnabot_noanswer(bot_response):
@@ -529,16 +544,18 @@ def get_lex_agent_assist_message(bot_response):
         LOGGER.debug("QnABot \"Dont't know\" response - ignoring")
         return ""
     # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
-    appContextJSON = bot_response.get("sessionState",{}).get("sessionAttributes",{}).get("appContext")
+    appContextJSON = bot_response.get("sessionState", {}).get(
+        "sessionAttributes", {}).get("appContext")
     if appContextJSON:
         appContext = json.loads(appContextJSON)
-        markdown = appContext.get("altMessages",{}).get("markdown")
+        markdown = appContext.get("altMessages", {}).get("markdown")
         if markdown:
             message = markdown
     # otherwise use bot message
     if not message and "messages" in bot_response and bot_response["messages"]:
         message = bot_response["messages"][0]["content"]
     return message
+
 
 async def send_lex_agent_assist(
     transcript_segment_args: Dict[str, Any],
@@ -551,7 +568,7 @@ async def send_lex_agent_assist(
     schema = DSLSchema(appsync_session.client.schema)
 
     call_id = transcript_segment_args["CallId"]
-    
+
     LOGGER.debug("Bot Request: %s", content)
 
     bot_response: RecognizeTextResponseTypeDef = await recognize_text_lex(
@@ -562,7 +579,7 @@ async def send_lex_agent_assist(
         bot_alias_id=LEX_BOT_ALIAS_ID,
         locale_id=LEX_BOT_LOCALE_ID,
     )
-    
+
     LOGGER.debug("Bot Response: ", extra=bot_response)
 
     result = {}
@@ -586,6 +603,7 @@ async def send_lex_agent_assist(
 
     return result
 
+
 def add_lex_agent_assistances(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -598,30 +616,30 @@ def add_lex_agent_assistances(
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
     end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001 # UI sort order
+    end_time = float(end_time) + 0.001  # UI sort order
     # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
-    transcript: str = message.get("OriginalTranscript", message["Transcript"]) 
+    transcript: str = message.get("OriginalTranscript", message["Transcript"])
     created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lex_agent_assist_args = []
     if (channel == "CALLER" and not is_partial):
         send_lex_agent_assist_args.append(
-                dict(
-                    content=transcript,
-                    transcript_segment_args=dict(
-                        CallId=call_id,
-                        Channel="AGENT_ASSISTANT",
-                        CreatedAt=created_at,
-                        EndTime=end_time,
-                        ExpiresAfter=get_ttl(),
-                        IsPartial=is_partial,
-                        SegmentId=str(uuid.uuid4()),
-                        StartTime=start_time,
-                        Status="TRANSCRIBING",
-                    ),
-                )
+            dict(
+                content=transcript,
+                transcript_segment_args=dict(
+                    CallId=call_id,
+                    Channel="AGENT_ASSISTANT",
+                    CreatedAt=created_at,
+                    EndTime=end_time,
+                    ExpiresAfter=get_ttl(),
+                    IsPartial=is_partial,
+                    SegmentId=str(uuid.uuid4()),
+                    StartTime=start_time,
+                    Status="TRANSCRIBING",
+                ),
             )
-            
+        )
+
     tasks = []
     for agent_assist_args in send_lex_agent_assist_args:
         task = send_lex_agent_assist(
@@ -636,6 +654,7 @@ def add_lex_agent_assistances(
 # Lambda Agent Assist
 ##########################################################################
 
+
 def get_lambda_agent_assist_message(lambda_response):
     message = ""
     try:
@@ -648,6 +667,7 @@ def get_lambda_agent_assist_message(lambda_response):
             extra=error,
         )
     return message
+
 
 async def send_lambda_agent_assist(
     transcript_segment_args: Dict[str, Any],
@@ -664,9 +684,11 @@ async def send_lambda_agent_assist(
     payload = {
         'text': content,
         'call_id': call_id,
-        'transcript_segment_args': transcript_segment_args
+        'transcript_segment_args': transcript_segment_args,
+        'dynamodb_table_name': DYNAMODB_TABLE_NAME,
+        'dynamodb_pk': f"c#{call_id}",
     }
-    
+
     LOGGER.debug("Agent Assist Lambda Request: %s", content)
 
     lambda_response: InvocationResponseTypeDef = await invoke_lambda(
@@ -674,7 +696,7 @@ async def send_lambda_agent_assist(
         lambda_client=LAMBDA_CLIENT,
         lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
     )
-    
+
     LOGGER.debug("Agent Assist Lambda Response: ", extra=lambda_response)
 
     result = {}
@@ -698,6 +720,7 @@ async def send_lambda_agent_assist(
 
     return result
 
+
 def add_lambda_agent_assistances(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -710,29 +733,29 @@ def add_lambda_agent_assistances(
     segment_id: str = message["SegmentId"]
     start_time: float = message["StartTime"]
     end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001 # UI sort order
+    end_time = float(end_time) + 0.001  # UI sort order
     # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
-    transcript: str = message.get("OriginalTranscript", message["Transcript"]) 
+    transcript: str = message.get("OriginalTranscript", message["Transcript"])
     created_at = datetime.utcnow().astimezone().isoformat()
 
     send_lambda_agent_assist_args = []
     if (channel == "CALLER" and not is_partial):
         send_lambda_agent_assist_args.append(
-                dict(
-                    content=transcript,
-                    transcript_segment_args=dict(
-                        CallId=call_id,
-                        Channel="AGENT_ASSISTANT",
-                        CreatedAt=created_at,
-                        EndTime=end_time,
-                        ExpiresAfter=get_ttl(),
-                        IsPartial=is_partial,
-                        SegmentId=str(uuid.uuid4()),
-                        StartTime=start_time,
-                        Status="TRANSCRIBING",
-                    ),
-                )
+            dict(
+                content=transcript,
+                transcript_segment_args=dict(
+                    CallId=call_id,
+                    Channel="AGENT_ASSISTANT",
+                    CreatedAt=created_at,
+                    EndTime=end_time,
+                    ExpiresAfter=get_ttl(),
+                    IsPartial=is_partial,
+                    SegmentId=str(uuid.uuid4()),
+                    StartTime=start_time,
+                    Status="TRANSCRIBING",
+                ),
             )
+        )
 
     tasks = []
     for agent_assist_args in send_lambda_agent_assist_args:
@@ -754,6 +777,7 @@ def add_lambda_agent_assistances(
 # field is used for Agent Assist input.
 ##########################################################################
 
+
 def invoke_transcript_lambda_hook(
     message: Dict[str, Any]
 ):
@@ -761,10 +785,10 @@ def invoke_transcript_lambda_hook(
         LOGGER.debug("Transcript Lambda Hook Arn: %s", TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN)
         LOGGER.debug("Transcript Lambda Hook Request: %s", message)
         lambda_response = LAMBDA_HOOK_CLIENT.invoke(
-                        FunctionName=TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN,
-                        InvocationType='RequestResponse',
-                        Payload = json.dumps(message)
-                    )
+            FunctionName=TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(message)
+        )
         LOGGER.debug("Transcript Lambda Hook Response: ", extra=lambda_response)
         try:
             message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
@@ -778,6 +802,7 @@ def invoke_transcript_lambda_hook(
 ##########################################################################
 # Main event processing
 ##########################################################################
+
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
@@ -796,6 +821,7 @@ async def execute_process_event_api_mutation(
     global LEX_BOT_LOCALE_ID
     global LAMBDA_CLIENT
     global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
+    global DYNAMODB_TABLE_NAME
     # pylint: enable=global-statement
 
     LEXV2_CLIENT = agent_assist_args.get("lex_client")
@@ -805,7 +831,8 @@ async def execute_process_event_api_mutation(
     LEX_BOT_LOCALE_ID = agent_assist_args.get("lex_bot_locale_id", "")
     LAMBDA_CLIENT = agent_assist_args.get("lambda_client")
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
-    LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")   
+    LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
+    DYNAMODB_TABLE_NAME = agent_assist_args.get("dynamodb_table_name", "")
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],
@@ -817,13 +844,13 @@ async def execute_process_event_api_mutation(
 
     if event_type == "START":
         # CREATE CALL
-        LOGGER.debug("CREATE CALL") 
+        LOGGER.debug("CREATE CALL")
 
         response = await execute_create_call_mutation(
-                            message=message, 
-                            appsync_session=appsync_session
-                        )
-                        
+            message=message,
+            appsync_session=appsync_session
+        )
+
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
@@ -831,25 +858,24 @@ async def execute_process_event_api_mutation(
 
     elif event_type in [
         "END",
-        ]:
+    ]:
         # UPDATE STATUS
         LOGGER.debug("update status")
         response = await execute_update_call_status_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
+            message=message,
+            appsync_session=appsync_session
+        )
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
 
-
     elif event_type == "ADD_TRANSCRIPT_SEGMENT":
 
-        # ADD_TRANSCRIPT_SEGMENT event supports these 3 types of message structure. 
-        #   The logic for populating transcripts, sentiment values and agent assist messages depend on 
-        #    which one of these 3 json structures are populated in the KDS Event message.  
-        #  
+        # ADD_TRANSCRIPT_SEGMENT event supports these 3 types of message structure.
+        #   The logic for populating transcripts, sentiment values and agent assist messages depend on
+        #    which one of these 3 json structures are populated in the KDS Event message.
+        #
         #  1. custom i.e. source populates invidividual transcript fields, including optional sentiment field
         #  2. TranscriptEvent - json structure from standard Transcribe API
         #  3. UtteranceEvent - json structure from TCA streaming API
@@ -866,14 +892,14 @@ async def execute_process_event_api_mutation(
         normalized_message = {
             **normalize_transcript_segment({**message}),
         }
-        
+
         issues_detected = normalized_message.get("IssuesDetected", None)
-        if issues_detected and len(issues_detected)>0:
+        if issues_detected and len(issues_detected) > 0:
             LOGGER.debug("Add Issues Detected to Call Summary")
             response = await execute_add_issues_detected_mutation(
-                                    message=normalized_message,
-                                    appsync_session=appsync_session
-                            )
+                message=normalized_message,
+                appsync_session=appsync_session
+            )
             if isinstance(response, Exception):
                 return_value["errors"].append(response)
             else:
@@ -897,23 +923,23 @@ async def execute_process_event_api_mutation(
         add_lex_agent_assists_tasks = []
         if IS_LEX_AGENT_ASSIST_ENABLED:
             add_lex_agent_assists_tasks = add_lex_agent_assistances(
-                    message=normalized_message,
-                    appsync_session=appsync_session,
-                )
+                message=normalized_message,
+                appsync_session=appsync_session,
+            )
 
         add_lambda_agent_assists_tasks = []
         if IS_LAMBDA_AGENT_ASSIST_ENABLED:
             add_lambda_agent_assists_tasks = add_lambda_agent_assistances(
-                    message=normalized_message,
-                    appsync_session=appsync_session,
-                )
+                message=normalized_message,
+                appsync_session=appsync_session,
+            )
 
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
-            #*add_tca_agent_assist_tasks,
+            # *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
 
@@ -926,9 +952,9 @@ async def execute_process_event_api_mutation(
     elif event_type == "ADD_CALL_CATEGORY":
         LOGGER.debug("Add Call Category to Call details")
         response = await execute_add_call_category_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
+            message=message,
+            appsync_session=appsync_session
+        )
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
@@ -953,36 +979,36 @@ async def execute_process_event_api_mutation(
                 return_value["successes"].append(response)
 
     elif event_type == "ADD_S3_RECORDING_URL":
-        # ADD S3 RECORDING URL 
+        # ADD S3 RECORDING URL
         LOGGER.debug("Add recording url")
         response = await execute_add_s3_recording_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
+            message=message,
+            appsync_session=appsync_session
+        )
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
 
     elif event_type == "ADD_PCA_URL":
-        # ADD PCA URL 
+        # ADD PCA URL
         LOGGER.debug("Add PCA url")
         response = await execute_add_pca_url_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
+            message=message,
+            appsync_session=appsync_session
+        )
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
-    
+
     elif event_type == "UPDATE_AGENT":
-        # UPDATE AGENT 
+        # UPDATE AGENT
         LOGGER.debug("Update AgentId for call")
         response = await execute_update_agent_mutation(
-                                message=message,
-                                appsync_session=appsync_session
-                        )
+            message=message,
+            appsync_session=appsync_session
+        )
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
@@ -990,6 +1016,5 @@ async def execute_process_event_api_mutation(
 
     else:
         LOGGER.warning("unknown event type [%s]", event_type)
-        
 
     return return_value
