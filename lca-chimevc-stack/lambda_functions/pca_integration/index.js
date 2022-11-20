@@ -140,7 +140,7 @@ const handler = async function handler(event, context) {
   console.log("Event: ", JSON.stringify(event));
   const sessionId = event.detail.StreamingSessionId;
   let job_completed = true;
-  if (event.detail.PostCallStatus != "COMPLETED") {
+  if (event.detail.PostCallStatus != "COMPLETED" && event.detail.PostStreamStatus != "COMPLETED") {
     console.log("ERROR Job failed - Failure reason:", event.detail.FailureReason);
     job_completed = false;
   }
