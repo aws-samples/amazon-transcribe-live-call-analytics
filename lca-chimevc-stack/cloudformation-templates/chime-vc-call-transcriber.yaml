@@ -10,9 +10,9 @@ Parameters:
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
 
-  CallAnalyticsJSONPrefix:
+  CallAnalyticsPrefix:
     Type: String
-    Default: lca-call-analytics-json/
+    Default: lca-call-analytics/
     Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
 
   KinesisDataStreamName:
@@ -120,33 +120,6 @@ Parameters:
       The function must return a True/False flag to indicate if the call should be processed or ignored, 
       a mapped CallId, an AgentId, and may be extended to support additional features in future.
 
-  PcaS3BucketName:
-    Type: String
-    Description: >
-      Value of PCA stack "InputBucket". Effective only Transcribe API Mode parameter is 'analytics'.
-    # yamllint disable rule:line-length
-    AllowedPattern: '(|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
-    # yamllint enable rule:line-length
-
-  PcaTranscriptsPrefix:
-    Type: String
-    Default: originalTranscripts/
-    Description: Value of PCA stack "InputBucketTranscriptPrefix".
-
-  PcaPlaybackAudioFilePrefix:
-    Type: String
-    Default: mp3/
-    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
-
-  PcaWebAppURL:
-    Type: String
-    AllowedPattern: '^(|https:\/\/.*)$'
-    Description: Value of PCA stack "WebAppURL". 
-
-  PcaWebAppCallPathPrefix:
-    Type: String
-    Default: dashboard/parsedFiles/
-    Description: PCA path prefix for call detail pages.
         
 Resources:
   ##########################################################################
@@ -208,10 +181,11 @@ Resources:
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
-          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
-          CALL_ANALYTICS_JSON_FILE_PREFIX: !Ref CallAnalyticsJSONPrefix
-          TCA_DATA_ACCESS_ROLE_ARN: !GetAtt TcaDataAccessRole.Arn
           RAW_FILE_PREFIX: 'lca-audio-raw/'
+          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
+          CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
+          TCA_DATA_ACCESS_ROLE_ARN: !GetAtt TcaDataAccessRole.Arn
+          POST_CALL_CONTENT_REDACTION_OUTPUT: 'redacted'
           TEMP_FILE_PATH: '/tmp/'
           SAVE_PARTIAL_TRANSCRIPTS: !Ref IsPartialTranscriptEnabled
           IS_CONTENT_REDACTION_ENABLED: !If
@@ -224,12 +198,6 @@ Resources:
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
           CUSTOM_LANGUAGE_MODEL_NAME: !Ref CustomLanguageModelName
           LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
-          PCA_S3_BUCKET_NAME: !Ref PcaS3BucketName
-          PCA_TRANSCRIPTS_PREFIX: !Ref PcaTranscriptsPrefix
-          PCA_AUDIO_PLAYBACK_FILE_PREFIX: !Ref PcaPlaybackAudioFilePrefix
-          PCA_WEB_APP_URL: !Ref PcaWebAppURL
-          PCA_WEB_APP_CALL_PATH_PREFIX: !Ref PcaWebAppCallPathPrefix
-
       CodeUri: ../lambda_functions/call_transcriber
     Metadata:
       cfn_nag:
@@ -259,6 +227,11 @@ Resources:
           PolicyDocument:
             Version: 2012-10-17
             Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt TcaDataAccessRole.Arn
               - Effect: Allow
                 Action:
                   - transcribe:DeleteTranscriptionJob
@@ -293,13 +266,11 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - !GetAtt TranscriberCallEventTable.Arn
-
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
                 Resource:  
                   - !Ref KinesisDataStreamArn
-                  
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -313,20 +284,6 @@ Resources:
                   - !Sub
                     - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName
-              - !If 
-                - ShouldAddPcaBucketPermission
-                - Effect: Allow
-                  Action:
-                    - s3:ListBucket
-                    - s3:PutObject
-                  Resource:
-                    - !Sub
-                      - "arn:aws:s3:::${bucket}"
-                      - bucket: !Ref PcaS3BucketName
-                    - !Sub
-                      - "arn:aws:s3:::${bucket}/*"
-                      - bucket: !Ref PcaS3BucketName
-                - Ref: AWS::NoValue             
               - !If
                 - ShouldEnableLambdaHook
                 - Effect: Allow
@@ -437,4 +394,17 @@ Conditions:
   - !Equals [!Ref IsContentRedactionEnabled, 'true']
   - !Equals [!Ref TranscribeLanguageCode, 'en-US']
   ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
-  ShouldAddPcaBucketPermission: !Not [!Equals [!Ref PcaS3BucketName, ""]]
+
+Outputs:
+
+  CallTranscriberEventTableName:
+    Value: !Ref TranscriberCallEventTable
+
+  CallTranscriberEventTableArn:
+    Value: !GetAtt TranscriberCallEventTable.Arn
+
+  IsContentRedactionEnabled: 
+    Value: !If
+      - ShouldEnableContentRedaction
+      - 'true'
+      - 'false'

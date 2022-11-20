@@ -40,15 +40,13 @@ const {
   writeCallStartEventToKds,
   writeCallEndEventToKds,
   writeCategoryEventToKds,
-  writePcaUrlToKds,
-  copyAudioRecordingToPca,
 } = require('./lca');
 
 const REGION = process.env.REGION || 'us-east-1';
 const { TRANSCRIBER_CALL_EVENT_TABLE_NAME } = process.env;
 const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = formatPath(process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/');
-const CALL_ANALYTICS_JSON_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_JSON_FILE_PREFIX || 'lca-call-analytics-json/');
+const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_FILE_PREFIX || 'lca-call-analytics-json/');
 const RAW_FILE_PREFIX = formatPath(process.env.RAW_FILE_PREFIX || 'lca-audio-raw/');
 const TCA_DATA_ACCESS_ROLE_ARN = process.env.TCA_DATA_ACCESS_ROLE_ARN || '';
 const TEMP_FILE_PATH = process.env.TEMP_FILE_PATH || '/tmp/';
@@ -64,10 +62,13 @@ const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 const TRANSCRIBE_API_MODE = process.env.TRANSCRIBE_API_MODE || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
-const PCA_S3_BUCKET_NAME = process.env.PCA_S3_BUCKET_NAME || '';
 
 // optional - provide custom Transcribe endpoint via env var
 const TRANSCRIBE_ENDPOINT = process.env.TRANSCRIBE_ENDPOINT || '';
+// optional - disable post call analytics output
+const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env.IS_TCA_POST_CALL_ANALYTICS_ENABLED || 'true') === 'true';
+// optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
+const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env.POST_CALL_CONTENT_REDACTION_OUTPUT || 'redacted';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -188,7 +189,7 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     agentStreamArn,
     lambdaCount: 0,
     sessionId: undefined,
-    tcaOutputLocation: `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_JSON_FILE_PREFIX}`,
+    tcaOutputLocation: `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_FILE_PREFIX}`,
   };
 
   // Call customer LambdaHook, if present
@@ -584,14 +585,18 @@ const go = async function go(callData) {
         const channelDefinitions = [];
         channelDefinitions.push(channel0);
         channelDefinitions.push(channel1);
-        const postCallAnalyticsSettings = {
-          OutputLocation: tcaOutputLocation,
-          DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
-        };
-        const configurationEvent = {
+        let configurationEvent = {
           ChannelDefinitions: channelDefinitions,
-          PostCallAnalyticsSettings: postCallAnalyticsSettings,
         };
+        if (IS_TCA_POST_CALL_ANALYTICS_ENABLED) {
+          configurationEvent.PostCallAnalyticsSettings = {
+            OutputLocation: tcaOutputLocation,
+            DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
+          };
+          if (IS_CONTENT_REDACTION_ENABLED) {
+            configurationEvent.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
+          }
+        }
         console.log('Sending TCA configuration event');
         console.log(JSON.stringify(configurationEvent));
         yield { ConfigurationEvent: configurationEvent };
@@ -867,13 +872,6 @@ const handler = async function handler(event, context) {
           lambdaCount: callData.lambdaCount,
         });
         await writeS3UrlToKds(kinesisClient, callData.callId);
-        // Copy recording and post-call-analytics files to PCA bucket if specified
-        if (PCA_S3_BUCKET_NAME) {
-          if (isTCAEnabled) {
-            await copyAudioRecordingToPca(s3Client, callData);
-            await writePcaUrlToKds(kinesisClient, callData);
-          }
-        }
       }
     }
   }

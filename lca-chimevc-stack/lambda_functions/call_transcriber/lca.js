@@ -25,12 +25,6 @@ const SAVE_PARTIAL_TRANSCRIPTS = (process.env.SAVE_PARTIAL_TRANSCRIPTS || 'true'
 const KINESIS_STREAM_NAME = process.env.KINESIS_STREAM_NAME || '';
 const { OUTPUT_BUCKET } = process.env;
 const RECORDING_FILE_PREFIX = formatPath(process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/');
-const CALL_ANALYTICS_JSON_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_JSON_FILE_PREFIX || 'lca-call-analytics-json/');
-const PCA_S3_BUCKET_NAME = process.env.PCA_S3_BUCKET_NAME || '';
-const PCA_TRANSCRIPTS_PREFIX = formatPath(process.env.PCA_TRANSCRIPTS_PREFIX || '');
-const PCA_AUDIO_PLAYBACK_FILE_PREFIX = formatPath(process.env.PCA_AUDIO_PLAYBACK_FILE_PREFIX || '');
-const PCA_WEB_APP_URL = formatPath(process.env.PCA_WEB_APP_URL || '');
-const PCA_WEB_APP_CALL_PATH_PREFIX = formatPath(process.env.PCA_WEB_APP_CALL_PATH_PREFIX || '');
 
 const expireInDays = 90;
 
@@ -306,79 +300,6 @@ const writeS3UrlToKds = async function writeS3UrlToKds(kinesisClient, callId) {
   }
 };
 
-// TCA Integration functions
-
-const mkTcaFilename = function mkTcaFilename(callData) {
-  let f = `TCA_GUID_${callData.callId}`;
-  f = `${f}_CUST_${callData.fromNumber}`;
-  if (callData.agentId) {
-    f = `${f}_AGENT_${callData.agentId}`;
-  }
-  const date = callData.callStreamingStartTime.replace(/:/g,"-");
-  f = `${f}_${date}`;
-  return f;
-}
-
-const writePcaUrlToKds = async function writePcaUrlToKds(kinesisClient, callData) {
-  const filename = mkTcaFilename(callData);
-  console.log('Writing TCA URL To KDS');
-  const now = new Date().toISOString();
-  const eventType = 'ADD_PCA_URL';
-  const pcaUrl = `${PCA_WEB_APP_URL}${PCA_WEB_APP_CALL_PATH_PREFIX}${filename}.json`;
-  const putObj = {
-    CallId: callData.callId,
-    PcaUrl: pcaUrl,
-    EventType: eventType.toString(),
-    CreatedAt: now,
-  };
-  const putParams = {
-    StreamName: KINESIS_STREAM_NAME,
-    PartitionKey: callData.callId,
-    Data: Buffer.from(JSON.stringify(putObj)),
-  };
-  const putCmd = new PutRecordCommand(putParams);
-  console.log('Sending ADD_PCA_URL event on KDS: ', JSON.stringify(putObj));
-  try {
-    await kinesisClient.send(putCmd);
-  } catch (error) {
-    console.error('Error writing ADD_PCA_URL event', error);
-  }
-}
-
-const copyAudioRecordingToPca = async function copyAudioRecordingToPca(s3Client, callData) {
-  const copyParms = {
-    Bucket: PCA_S3_BUCKET_NAME,
-    CopySource: encodeURI(`/${OUTPUT_BUCKET}/${RECORDING_FILE_PREFIX}${callData.callId}.wav`),
-    Key: PCA_AUDIO_PLAYBACK_FILE_PREFIX + mkTcaFilename(callData) + ".wav",
-  }
-  console.log("Copying recording to PCA: ", copyParms);
-  try {
-    data = await s3Client.send(new CopyObjectCommand(copyParms));
-    console.log("Done copying recording.");
-  } catch (err) {
-    console.error('S3 copy error: ', JSON.stringify(err));
-  }
-}
-
-const copyPostCallAnalyticsToPca = async function copyPostCallAnalyticsToPca(s3Client, callData) {
-  const filename = mkTcaFilename(callData);
-  const copyParms = {
-    Bucket: PCA_S3_BUCKET_NAME,
-    CopySource: encodeURI(`/${OUTPUT_BUCKET}/${CALL_ANALYTICS_JSON_FILE_PREFIX}${filename}.json`),
-    Key: PCA_TRANSCRIPTS_PREFIX + filename + ".json",
-  }
-  console.log("TEMP DISABLED: Copying post call analytics JSON to PCA: ", copyParms);
-  return ; // no op for now
-  // Might need to wait for TCA to complete writing file
-  try {
-    data = await s3Client.send(new CopyObjectCommand(copyParms));
-    console.log("Done copying recording.");
-  } catch (err) {
-    console.error('S3 copy error: ', JSON.stringify(err));
-  }
-}
-
-
 exports.formatPath = formatPath;
 exports.writeS3UrlToKds = writeS3UrlToKds;
 exports.writeTranscriptionSegmentToKds = writeTranscriptionSegmentToKds;
@@ -387,8 +308,4 @@ exports.writeCallEndEventToKds = writeCallEndEventToKds;
 exports.writeUtteranceEventToKds = writeUtteranceEventToKds;
 exports.writeCategoryEventToKds = writeCategoryEventToKds;
 exports.writeAddTranscriptSegmentEventToKds = writeAddTranscriptSegmentEventToKds;
-exports.mkTcaFilename = mkTcaFilename;
-exports.writePcaUrlToKds = writePcaUrlToKds;
-exports.copyAudioRecordingToPca = copyAudioRecordingToPca;
-exports.copyPostCallAnalyticsToPca = copyPostCallAnalyticsToPca;
 

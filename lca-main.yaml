@@ -128,9 +128,9 @@ Parameters:
     Default: lca-audio-recordings/
     Description: The Amazon S3 prefix where the audio files will be saved (must end in "/")
   
-  CallAnalyticsJSONPrefix:
+  CallAnalyticsPrefix:
     Type: String
-    Default: lca-call-analytics-json/
+    Default: lca-call-analytics/
     Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
 
   IsPartialTranscriptEnabled:
@@ -364,7 +364,7 @@ Metadata:
         Parameters:
           - S3BucketName
           - AudioFilePrefix
-          - CallAnalyticsJSONPrefix
+          - CallAnalyticsPrefix
       - Label:
           default: Amazon Transcribe Configuration
         Parameters:
@@ -414,8 +414,8 @@ Metadata:
         default: Call Audio Recordings Bucket Name
       AudioFilePrefix:
         default: Audio File Prefix
-      CallAnalyticsJSONPrefix:
-        default: Call Analytics JSON File Prefix
+      CallAnalyticsPrefix:
+        default: Call Analytics Output File Prefix
       AdminEmail:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
@@ -746,7 +746,7 @@ Resources:
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         AudioFilePrefix: !Ref AudioFilePrefix
-        CallAnalyticsJSONPrefix: !Ref CallAnalyticsJSONPrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName

@@ -61,15 +61,20 @@ Parameters:
     Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
 
+  S3BucketName:
+    Type: String
+    Description: >-
+      S3 Bucket name for recordings
+
   AudioFilePrefix:
     Type: String
     Default: lca-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
 
-  CallAnalyticsJSONPrefix:
+  CallAnalyticsPrefix:
     Type: String
-    Default: lca-call-analytics-json/
+    Default: lca-call-analytics/
     Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
 
   KinesisDataStreamName:
@@ -81,11 +86,6 @@ Parameters:
     Type: String
     Description: >-
       Arn of Kinesis Data Stream to publish events to
- 
-  S3BucketName:
-    Type: String
-    Description: >-
-      S3 Bucket name for recordings
 
   IsPartialTranscriptEnabled:
     Type: String
@@ -208,6 +208,7 @@ Conditions:
   ShouldInstallDemoAsteriskServer:
     !Equals [!Ref InstallDemoAsteriskServer, 'true']
   ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
+  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
 
 Resources:
   DeployChimeVCAsteriskDemo:
@@ -235,7 +236,7 @@ Resources:
       Parameters:
         TranscribeApiMode: !Ref TranscribeApiMode
         AudioFilePrefix: !Ref AudioFilePrefix
-        CallAnalyticsJSONPrefix: !Ref CallAnalyticsJSONPrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
         S3BucketName: !Ref S3BucketName
@@ -247,6 +248,20 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+
+  DeployPcaIntegration:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallPcaIntegration
+    Properties:
+      TemplateURL: ./cloudformation-templates/pca-integration.yaml
+      Parameters:
+        KinesisDataStreamName: !Ref KinesisDataStreamName
+        KinesisDataStreamArn: !Ref KinesisDataStreamArn
+        CallTranscriberEventTableName: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
+        CallTranscriberEventTableArn: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
+        IsContentRedactionEnabled: !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+        LCAS3BucketName: !Ref S3BucketName
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         PcaS3BucketName: !Ref PcaS3BucketName
         PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
