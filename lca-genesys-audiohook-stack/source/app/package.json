@@ -23,7 +23,7 @@
     "@aws-sdk/client-transcribe-streaming": "^3.67.0",
     "aws-sdk": "^2.1087.0",
     "dotenv": "^16.0.0",
-    "fastify": "^3.27.3",
+    "fastify": "^3.29.4",
     "fastify-websocket": "^4.2.0",
     "install": "^0.13.0",
     "p-event": "^4.2.0",
