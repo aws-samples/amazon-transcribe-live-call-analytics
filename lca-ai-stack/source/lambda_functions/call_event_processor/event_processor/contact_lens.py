@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
     from mypy_boto3_lambda.client import LambdaClient
+    from mypy_boto3_sns.client import SNSClient
     from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
@@ -43,6 +44,7 @@ else:
     LambdaClient = object
     InvocationResponseTypeDef = object
     Boto3Session = object
+    SNSClient = object
 
 BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
@@ -939,6 +941,7 @@ def invoke_transcript_lambda_hook(
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient,
     agent_assist_args: Dict[str, Any],
 ) -> Dict[Literal["successes", "errors"], List]:
     """Executes AppSync API Mutation"""
