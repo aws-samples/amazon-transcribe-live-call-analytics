@@ -17,6 +17,7 @@ export default gql`
       CustomerPhoneNumber
       SystemPhoneNumber
       RecordingUrl
+      PcaUrl
       TotalConversationDurationMillis
       Sentiment {
         OverallSentiment {

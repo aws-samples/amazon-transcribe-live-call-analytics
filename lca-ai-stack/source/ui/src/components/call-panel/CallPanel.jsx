@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Badge,
   Box,
+  Button,
   ColumnLayout,
   Container,
   Grid,
@@ -129,6 +130,24 @@ const CallAttributes = ({ item, setToolsOpen }) => (
           </StatusIndicator>
         </div>
       </SpaceBetween>
+      {item?.pcaUrl?.length && (
+        <SpaceBetween size="xs">
+          <div>
+            <Box margin={{ bottom: 'xxxs' }} color="text-label">
+              <strong>Post Call Analytics</strong>
+            </Box>
+            <Button
+              variant="normal"
+              href={item.pcaUrl}
+              target="_blank"
+              iconAlign="right"
+              iconName="external"
+            >
+              Open in Post Call Analytics
+            </Button>
+          </div>
+        </SpaceBetween>
+      )}
       {item?.recordingUrl?.length && (
         <SpaceBetween size="xs">
           <div>
@@ -146,7 +165,8 @@ const CallCategories = ({ item, setToolsOpen }) => {
   const categories = item.callCategories || [];
 
   const categoryComponents = categories.map((t, i) => (
-    <SpaceBetween size="xs">
+    /* eslint-disable-next-line react/no-array-index-key */
+    <SpaceBetween size="xs" key={`call-category-${i}`}>
       <div>
         {/* eslint-disable-next-line react/no-array-index-key */}
         <TextContent key={`call-category-${i}`} className="transcript-segment-category-match">

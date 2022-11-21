@@ -22,6 +22,7 @@ const mapCallsAttributes = (calls) => {
       RecordingUrl: recordingUrl,
       TotalConversationDurationMillis: totalConversationDurationMillis = 0,
       Sentiment: sentiment = {},
+      PcaUrl: pcaUrl,
     } = item;
     const recordingStatus = getRecordingStatus(item);
 
@@ -48,6 +49,7 @@ const mapCallsAttributes = (calls) => {
       systemPhoneNumber,
       updatedAt,
       recordingUrl,
+      pcaUrl,
       totalConversationDurationMillis,
       conversationDurationTimeStamp: new Date(totalConversationDurationMillis)
         .toISOString()
