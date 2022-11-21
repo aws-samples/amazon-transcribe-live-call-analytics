@@ -47,6 +47,7 @@ function mkTcaFilename(sessionData) {
   return f;
 }
 
+// TODO - Refactor to use new TCA Post Call event - now includes Transcript file and Media File Uris.
 function getAnalyticsOutputUri(sessionId, suffix) {
   const analyticsfolder = (IS_CONTENT_REDACTION_ENABLED) ? "redacted-analytics/" : "analytics/";
   const uri = `/${LCA_BUCKET_NAME}/${CALL_ANALYTICS_FILE_PREFIX}${analyticsfolder}${sessionId}${suffix}`;
