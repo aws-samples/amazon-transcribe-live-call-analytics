@@ -1065,6 +1065,7 @@ async def execute_process_event_api_mutation(
     appsync_session: AppsyncAsyncClientSession,
     sns_client: SNSClient,
     agent_assist_args: Dict[str, Any],
+    sentiment_analysis_args: Dict[str, Any]
 ) -> Dict[Literal["successes", "errors"], List]:
     """Executes AppSync API Mutation"""
     # pylint: disable=global-statement
