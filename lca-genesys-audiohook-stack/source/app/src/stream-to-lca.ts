@@ -35,6 +35,19 @@ import {
     ChannelDefinition,
     StartStreamTranscriptionCommandInput
 } from '@aws-sdk/client-transcribe-streaming';
+
+import {
+    DynamoDBClient,
+    GetItemCommand,
+    PutItemCommand
+} from '@aws-sdk/client-dynamodb';
+
+import {
+    S3Client,
+    PutObjectCommand,
+    CopyObjectCommand
+} from '@aws-sdk/client-s3';
+
 import { normalizeError } from './utils';
 import dotenv from 'dotenv';
 import { CallEndEvent, CallStartEvent } from './lca/entities-lca';
@@ -49,6 +62,12 @@ const CONTENT_REDACTION_TYPE = process.env['CONTENT_REDACTION_TYPE'] || 'PII';
 const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
 const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
+// optional - provide custom Transcribe endpoint via env var
+const TRANSCRIBE_ENDPOINT = process.env['TRANSCRIBE_ENDPOINT'] || '';
+// optional - disable post call analytics output
+// const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYTICS_ENABLED'] || 'true') === 'true';
+// optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
+// const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env['POST_CALL_CONTENT_REDACTION_OUTPUT'] || 'redacted';
 
 type transcribeInput<TCAEnabled> = TCAEnabled extends true 
     ? StartCallAnalyticsStreamTranscriptionCommandInput
