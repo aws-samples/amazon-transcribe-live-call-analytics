@@ -8,7 +8,6 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
-import copy
 import re
 
 # third-party imports from Lambda layer
@@ -113,19 +112,20 @@ def add_transcript_segments(
     tasks = []
     if message:
         issues_detected = message.get("IssuesDetected", None)
-        mutatedMessage = copy.deepcopy(message)
-        transcript = mutatedMessage["Transcript"]
+        transcript = message["Transcript"]
+        if "OriginalTranscript" not in message:
+            message["OriginalTranscript"] = transcript
         if issues_detected and len(issues_detected) > 0:
             LOGGER.debug("issue detected in add transcript segment")
             offsets = issues_detected[0].get("CharacterOffsets")
             start = int(offsets.get("Begin"))
             end = int(offsets.get("End"))
             transcript = f"{transcript[:start]}<span class='issue-span'>{transcript[start:end]}</span>{transcript[end:]}<br/><span class='issue-pill'>Issue Detected</span>"
-            mutatedMessage["Transcript"] = transcript
+            message["Transcript"] = transcript
 
         query = dsl_gql(
             DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=mutatedMessage).select(
+                schema.Mutation.addTranscriptSegment.args(input=message).select(
                     *transcript_segment_fields(schema),
                 )
             )
