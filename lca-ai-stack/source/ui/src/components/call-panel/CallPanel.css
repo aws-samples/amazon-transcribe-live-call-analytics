@@ -52,3 +52,18 @@ span.issue-pill {
     height:1.5em;
     padding: 0px !important;
 }
+
+.transcript-segment-category-match-alert  {
+    background-color: rgb(255, 147, 147);
+    border-radius: 2em;
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-bottom: 0.1em;
+    line-height: 2.5em !important;
+}
+.transcript-segment-category-match-alert p {
+    height:1.5em;
+    padding: 0px !important;
+    color:white;
+}
+

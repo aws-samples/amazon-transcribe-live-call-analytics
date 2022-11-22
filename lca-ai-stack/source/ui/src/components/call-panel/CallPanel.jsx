@@ -46,6 +46,7 @@ const piiTypes = [
   'SSN',
 ];
 const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
+const categoryAlertRegex = process.env.REACT_APP_CATEGORY_REGEX;
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 const CallAttributes = ({ item, setToolsOpen }) => (
@@ -164,17 +165,23 @@ const CallAttributes = ({ item, setToolsOpen }) => (
 const CallCategories = ({ item, setToolsOpen }) => {
   const categories = item.callCategories || [];
 
-  const categoryComponents = categories.map((t, i) => (
-    /* eslint-disable-next-line react/no-array-index-key */
-    <SpaceBetween size="xs" key={`call-category-${i}`}>
-      <div>
-        {/* eslint-disable-next-line react/no-array-index-key */}
-        <TextContent key={`call-category-${i}`} className="transcript-segment-category-match">
-          <ReactMarkdown rehypePlugins={[rehypeRaw]}>{t.trim()}</ReactMarkdown>
-        </TextContent>
-      </div>
-    </SpaceBetween>
-  ));
+  const categoryComponents = categories.map((t, i) => {
+    const className = t.match(categoryAlertRegex)
+      ? 'transcript-segment-category-match-alert'
+      : 'transcript-segment-category-match';
+
+    return (
+      /* eslint-disable-next-line react/no-array-index-key */
+      <SpaceBetween size="xs" key={`call-category-${i}`}>
+        <div>
+          {/* eslint-disable-next-line react/no-array-index-key */}
+          <TextContent key={`call-category-${i}`} className={className}>
+            <ReactMarkdown rehypePlugins={[rehypeRaw]}>{t.trim()}</ReactMarkdown>
+          </TextContent>
+        </div>
+      </SpaceBetween>
+    );
+  });
 
   return (
     <Container
@@ -286,8 +293,13 @@ const TranscriptContent = ({ segment }) => {
         className = 'transcript-segment-agent-assist';
         break;
       case 'CATEGORY_MATCH':
-        className = 'transcript-segment-category-match';
-        text = `Category Match: ${text}`;
+        if (text.match(categoryAlertRegex)) {
+          className = 'transcript-segment-category-match-alert';
+          text = `Alert: ${text}`;
+        } else {
+          className = 'transcript-segment-category-match';
+          text = `Category: ${text}`;
+        }
         break;
       default:
         break;
