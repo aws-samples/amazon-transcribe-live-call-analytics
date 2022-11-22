@@ -44,6 +44,9 @@ function mkTcaFilename(sessionData) {
   }
   const date = sessionData.callStreamingStartTime.replace(/:/g,"-");
   f = `${f}_${date}`;
+  // Remove filename characters that are not allowed in Transcribe jobs names used in PCA
+  // Pattern allowed '^[0-9a-zA-Z._-]+'
+  f = f.replace(/[^0-9a-zA-Z._-]/g, "");
   return f;
 }
 
