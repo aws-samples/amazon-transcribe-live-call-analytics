@@ -9,23 +9,21 @@ import json
 # third-party imports from Lambda layer
 from aws_lambda_powertools import Logger
 
-
 LOGGER = Logger(child=True, location="%(filename)s:%(lineno)d - %(funcName)s()")
 
-
-#if TYPE_CHECKING:
-    #from mypy_boto3_sns.client import SNSClient
-    #from mypy_boto3_sns.type_defs import PublishSNSResponseTypeDef
-#else:
-SNSClient = object
-PublishSNSResponseTypeDef = object
-
+if TYPE_CHECKING:
+    from mypy_boto3_sns.client import SNSClient
+    from mypy_boto3_sns.type_defs import PublishSNSResponseTypeDef
+else:
+    SNSClient = object
+    PublishSNSResponseTypeDef = object
 
 async def publish_sns(
     category_name: str,
     call_id: str,
     sns_topic_arn: str,
     sns_client: SNSClient,
+    alert: bool = False,
     max_retries: int = 3,
 ) -> PublishSNSResponseTypeDef:
     """Runs Lex Recognize Text in the Async Event Loop"""
@@ -40,7 +38,7 @@ async def publish_sns(
                 None,
                 lambda: sns_client.publish(
                     TargetArn=sns_topic_arn,
-                    Message=json.dumps({'default': json.dumps({'call_id':call_id, 'category_name':category_name})}),
+                    Message=json.dumps({'default': json.dumps({'call_id':call_id, 'category_name':category_name, 'alert': alert})}),
                     MessageStructure='json',
                     Subject='Call Category Match'
                 ),

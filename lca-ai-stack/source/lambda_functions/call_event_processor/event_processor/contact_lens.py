@@ -8,6 +8,7 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
+import re
 
 # third-party imports from Lambda layer
 import boto3
@@ -83,6 +84,10 @@ CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv(
 # Get value for DynamboDB TTL field
 DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
 
+category_regex = None
+CATEGORY_REGEX = getenv("CATEGORY_REGEX", "")
+if CATEGORY_REGEX != "":
+    category_regex = re.compile(CATEGORY_REGEX)
 
 def get_ttl():
     return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
@@ -392,10 +397,17 @@ async def publish_sns_category(
     call_id: str
 ):
     LOGGER.debug("Publishing Call Category to SNS")
+    isAlert = False
+    if category_regex is not None:
+        isMatch = category_regex.match(category_name)
+        if isMatch:
+            isAlert = True
+    
     result = await publish_sns(category_name=category_name,
                                call_id=call_id,
                                sns_topic_arn=SNS_TOPIC_ARN,
                                sns_client=sns_client,
+                               isAlert=isAlert
                                )
     return result
 

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
 import copy
+import re
 
 # third-party imports from Lambda layer
 import boto3
@@ -89,6 +90,11 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
+
+category_regex = None
+CATEGORY_REGEX = getenv("CATEGORY_REGEX", "")
+if CATEGORY_REGEX != "":
+    category_regex = re.compile(CATEGORY_REGEX)
 
 ##########################################################################
 # Transcripts
@@ -466,10 +472,17 @@ async def publish_sns_category(
     call_id: str
 ):
     LOGGER.debug("Publishing Call Category to SNS")
+    isAlert = False
+    if category_regex is not None:
+        isMatch = category_regex.match(category_name)
+        if isMatch:
+            isAlert = True
+    
     result = await publish_sns(category_name=category_name,
                                call_id=call_id,
                                sns_topic_arn=SNS_TOPIC_ARN,
                                sns_client=sns_client,
+                               alert=isAlert
                                )
     return result
 

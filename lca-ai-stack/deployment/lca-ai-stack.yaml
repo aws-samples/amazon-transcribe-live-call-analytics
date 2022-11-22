@@ -766,6 +766,7 @@ Resources:
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
+          CATEGORY_REGEX: !Ref CategoryAlertRegEx
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers
