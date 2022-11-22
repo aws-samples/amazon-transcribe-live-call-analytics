@@ -401,6 +401,16 @@ Resources:
             Resource: "*"
 
   ##########################################################################
+  # ParameterStore
+  ##########################################################################
+
+  LCASettingsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: !Sub '{"CategoryAlertRegex":"${CategoryAlertRegEx}"}'
+
+  ##########################################################################
   # CodeBuild
   ##########################################################################
 
@@ -541,8 +551,8 @@ Resources:
           # aws-exports.js Amplify config. The values are embedded in the
           # code at build time. See:
           # https://create-react-app.dev/docs/adding-custom-environment-variables/
-          - Name: REACT_APP_CATEGORY_REGEX
-            Value: !Ref CategoryAlertRegEx
+          - Name: REACT_APP_SETTINGS_PARAMETER
+            Value: !Ref LCASettingsParameter
           - Name: REACT_APP_USER_POOL_ID
             Value: !Ref UserPool
           - Name: REACT_APP_USER_POOL_CLIENT_ID
@@ -766,7 +776,7 @@ Resources:
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
-          CATEGORY_REGEX: !Ref CategoryAlertRegEx
+          PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers
@@ -1208,6 +1218,16 @@ Resources:
                         - ShouldCreateRecordingBucket
                         - !Ref RecordingsBucket
                         - !Ref S3BucketName
+        - PolicyName: accessParameterStore
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameter"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
+                  -  
     Metadata:
       cfn_nag:
         rules_to_suppress:

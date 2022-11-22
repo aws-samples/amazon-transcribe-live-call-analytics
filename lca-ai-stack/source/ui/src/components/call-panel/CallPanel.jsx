@@ -21,6 +21,7 @@ import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
 
 import RecordingPlayer from '../recording-player';
+import useSettingsContext from '../../contexts/settings';
 
 import { DONE_STATUS, IN_PROGRESS_STATUS } from '../common/get-recording-status';
 import { InfoLink } from '../common/info-link';
@@ -47,7 +48,6 @@ const piiTypes = [
   'SSN',
 ];
 const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
-const categoryAlertRegex = process.env.REACT_APP_CATEGORY_REGEX;
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 const CallAttributes = ({ item, setToolsOpen }) => (
@@ -164,10 +164,13 @@ const CallAttributes = ({ item, setToolsOpen }) => (
   </Container>
 );
 const CallCategories = ({ item }) => {
+  const { settings } = useSettingsContext();
+  const regex = settings?.CategoryAlertRegex ?? '.*';
+
   const categories = item.callCategories || [];
 
   const categoryComponents = categories.map((t, i) => {
-    const className = t.match(categoryAlertRegex)
+    const className = t.match(regex)
       ? 'transcript-segment-category-match-alert'
       : 'transcript-segment-category-match';
 
@@ -302,6 +305,9 @@ const getTimestampFromSeconds = (secs) => {
 };
 
 const TranscriptContent = ({ segment }) => {
+  const { settings } = useSettingsContext();
+  const regex = settings?.CategoryAlertRegex ?? '.*';
+
   const { transcript, segmentId, channel } = segment;
   const transcriptPiiSplit = transcript.split(piiTypesSplitRegEx);
   const transcriptComponents = transcriptPiiSplit.map((t, i) => {
@@ -316,7 +322,7 @@ const TranscriptContent = ({ segment }) => {
         className = 'transcript-segment-agent-assist';
         break;
       case 'CATEGORY_MATCH':
-        if (text.match(categoryAlertRegex)) {
+        if (text.match(regex)) {
           className = 'transcript-segment-category-match-alert';
           text = `Alert: ${text}`;
         } else {

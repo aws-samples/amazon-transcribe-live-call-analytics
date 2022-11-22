@@ -3,11 +3,13 @@ import { PropTypes } from 'prop-types';
 
 import './CategoryPill.css';
 import { Popover } from '@awsui/components-react';
-
-const regex = process.env.REACT_APP_CATEGORY_REGEX;
+import useSettingsContext from '../../contexts/settings';
 
 // eslint-disable-next-line import/prefer-default-export, arrow-body-style
 export const CategoryAlertPill = (props) => {
+  const { settings } = useSettingsContext();
+  const regex = settings.CategoryAlertRegex ?? '.*';
+
   const { alertCount, categories } = props;
 
   const matchList = [];
