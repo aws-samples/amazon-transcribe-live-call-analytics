@@ -33,11 +33,20 @@ Parameters:
     Default: lca-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
-  
+
+  CallAnalyticsPrefix:
+    Type: String
+    Default: lca-call-analytics/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
   CallDataStreamName:
     Type: String
     Description: >-
       The Name of Kinesis Data Stream to write the call data to.
+  CallDataStreamArn:
+    Type: String
+    Description: >-
+      The Arn of Kinesis Data Stream to write the call data to.
 
   CloudFrontPriceClass:
     Type: String
@@ -119,6 +128,33 @@ Parameters:
     Description: >-
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If yes, the custom language model must pre-exist in your account.
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      Value of PCA stack "InputBucket". Effective only Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: mp3/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: Value of PCA stack "WebAppURL". 
+
+  PcaWebAppCallPathPrefix:
+    Type: String
+    Default: dashboard/parsedFiles/
+    Description: PCA path prefix for call detail pages.
 
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
@@ -177,6 +213,7 @@ Conditions:
   ShouldEnableContentRedaction: !And
     - !Equals [!Ref IsContentRedactionEnabled, 'true']
     - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
 
 Outputs:
   S3BucketName:
@@ -196,6 +233,8 @@ Outputs:
     Value: !Ref SecretsManagerAPIClientSecret
 
 Resources:
+
+
   ##########################################################################
   # CodeBuild
   ##########################################################################
@@ -513,6 +552,33 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
+  TranscriberCallEventTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AttributeDefinitions:
+        # primary key attributes
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ExpiresAfter
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+        
   ##########################################################################
   # VPC
   ##########################################################################
@@ -968,7 +1034,11 @@ Resources:
               - !Sub
                 - "arn:aws:s3:::${bucket}/*"
                 - bucket: !Ref S3BucketName
-
+          - Action:
+              - iam:PassRole
+            Effect: Allow
+            Resource:
+              - !GetAtt TcaDataAccessRole.Arn
           - Action: 
               - secretsmanager:GetResourcePolicy
               - secretsmanager:GetSecretValue
@@ -1000,6 +1070,16 @@ Resources:
               - !Sub 
                 - "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${streamName}"
                 - streamName: !Ref CallDataStreamName
+
+          - Action: Allow
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              Effect: Allow
+              Resource:
+                - !GetAtt TranscriberCallEventTable.Arn
           - Action:
               - logs:CreateLogStream
               - logs:PutLogEvents
@@ -1015,6 +1095,45 @@ Resources:
           - id: W12
             reason: comprehend, translate, and connect do not support resource-level permissions.
 
+  TcaDataAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - transcribe.streaming.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: tca-post-call-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !Ref S3BucketName          
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              Transcribe does not support resource-level permissions and KVS streams are dynamic
+
   TranscriberAudiohookTaskDef:
     Type: AWS::ECS::TaskDefinition
     DependsOn: CodeBuildRun
@@ -1029,12 +1148,20 @@ Resources:
               Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX
               Value: !Ref AudioFilePrefix
+            - Name: CALL_ANALYTICS_FILE_PREFIX
+              Value: !Ref CallAnalyticsPrefix
+            - Name: TCA_DATA_ACCESS_ROLE_ARN
+              Value: !GetAtt TcaDataAccessRole.Arn
+            - Name: POST_CALL_CONTENT_REDACTION_OUTPUT
+              Value: 'redacted'
             - Name: SERVERHOST
               Value: '0.0.0.0'
             - Name: SERVERPORT
               Value: '8080'
             - Name: KINESIS_STREAM_NAME
               Value: !Ref CallDataStreamName
+            - Name: TRANSCRIBER_CALL_EVENT_TABLE_NAME
+              Value: !Ref TranscriberCallEventTable
             - Name: API_KEY_ARN
               Value: !Ref SecretsManagerAPIKey
             - Name: CLIENT_SECRET_ARN
@@ -1317,3 +1444,26 @@ Resources:
         rules_to_suppress:
           - id: W70
             reason: This is using Cloudfront default TLS, can be changed by customer if needed.
+
+  DeployPcaIntegration:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallPcaIntegration
+    Properties:
+      TemplateURL: pca-integration.yaml
+      Parameters:
+        KinesisDataStreamName: !Ref CallDataStreamName
+        KinesisDataStreamArn: !Ref CallDataStreamArn
+        CallTranscriberEventTableName: !Ref TranscriberCallEventTable
+        CallTranscriberEventTableArn: !GetAtt TranscriberCallEventTable.Arn
+        IsContentRedactionEnabled:
+              Value: !If
+                - ShouldEnableContentRedaction
+                - 'true'
+                - 'false'
+        LCAS3BucketName: !Ref S3BucketName
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix

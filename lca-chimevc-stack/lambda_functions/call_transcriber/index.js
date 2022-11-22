@@ -585,18 +585,14 @@ const go = async function go(callData) {
         const channelDefinitions = [];
         channelDefinitions.push(channel0);
         channelDefinitions.push(channel1);
-        let configurationEvent = {
-          ChannelDefinitions: channelDefinitions,
+        const postCallAnalyticsSettings = {
+          OutputLocation: tcaOutputLocation,
+          DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
         };
-        if (IS_TCA_POST_CALL_ANALYTICS_ENABLED) {
-          configurationEvent.PostCallAnalyticsSettings = {
-            OutputLocation: tcaOutputLocation,
-            DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
-          };
-          if (IS_CONTENT_REDACTION_ENABLED) {
-            configurationEvent.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
-          }
-        }
+        const configurationEvent = {
+          ChannelDefinitions: channelDefinitions,
+          PostCallAnalyticsSettings: postCallAnalyticsSettings,
+        };
         console.log('Sending TCA configuration event');
         console.log(JSON.stringify(configurationEvent));
         yield { ConfigurationEvent: configurationEvent };

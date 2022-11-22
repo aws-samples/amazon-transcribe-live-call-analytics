@@ -775,7 +775,9 @@ Resources:
       Parameters:
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -784,6 +786,11 @@ Resources:
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
