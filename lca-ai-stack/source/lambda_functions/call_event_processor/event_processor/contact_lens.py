@@ -27,7 +27,7 @@ from graphql_helpers import (
 )
 from lex_utils import recognize_text_lex
 from lambda_utils import invoke_lambda
-
+from sns_utils import publish_sns
 
 # pylint: enable=import-error
 
@@ -67,6 +67,7 @@ LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
 DYNAMODB_TABLE_NAME: str
 
+SNS_TOPIC_ARN = getenv("SNS_TOPIC_ARN", "")
 
 # Contact Lens doesn't include call metadata so we attempt to use API lookups
 # to retrieve numbers from defined contact attributes on receipt of STARTED event.
@@ -351,6 +352,115 @@ def add_transcript_segments(
 
     return tasks
 
+##########################################################################
+# Call Categories
+##########################################################################
+
+
+async def send_call_category(
+    transcript_segment_args: Dict[str, Any],
+    category: str,
+    appsync_session: AppsyncAsyncClientSession
+):
+    """Send Call Category Transcript Segment"""
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    transcript_segment = {**transcript_segment_args, "Transcript": category}
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                *transcript_segment_fields(schema),
+            )
+        )
+    )
+
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    return result
+
+
+async def publish_sns_category(
+    sns_client: SNSClient,
+    category_name: str,
+    call_id: str
+):
+    LOGGER.debug("Publishing Call Category to SNS")
+    result = await publish_sns(category_name=category_name,
+                               call_id=call_id,
+                               sns_topic_arn=SNS_TOPIC_ARN,
+                               sns_client=sns_client,
+                               )
+    return result
+
+
+def add_call_category(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient
+) -> List[Coroutine]:
+    """Add Categories GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    LOGGER.debug("Detected Call Category")
+    send_call_category_args = []
+    tasks = []
+    call_id = message["ContactId"]
+
+    for segment in message.get("Segments", []):
+        # only handle categories and transcripts with issues
+        if (
+            "Transcript" in segment and not segment["Transcript"].get("IssuesDetected")
+        ) and "Categories" not in segment:
+            continue
+
+        categories = segment.get("Categories", {})
+        for category in categories.get("MatchedCategories", []):
+            category_details = categories["MatchedDetails"][category]
+            category_segment = transform_segment_to_categories_agent_assist(
+                category=category,
+                category_details=category_details,
+                call_id=call_id,
+            )
+
+            end_time = category_segment['StartTime'] + 0.1
+
+            send_call_category_args.append(
+                dict(
+                    category=category_segment['Transcript'],
+                    transcript_segment_args=dict(
+                        CallId=message["CallId"],
+                        Channel="CATEGORY_MATCH",
+                        CreatedAt=category_segment["CreatedAt"],
+                        EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
+                        SegmentId=str(uuid.uuid4()),
+                        StartTime=category_segment['StartTime'],
+                        IsPartial=category_segment['IsPartial'],
+                        Status="TRANSCRIBING",
+                    ),
+                )
+            )
+
+    for call_category_args in send_call_category_args:
+        task = send_call_category(
+            appsync_session=appsync_session,
+            **call_category_args,
+        )
+        tasks.append(task)
+        sns_task = publish_sns_category(
+            sns_client=sns_client,
+            category_name=category,
+            call_id=message["CallId"]
+        )
+        tasks.append(sns_task)
+
+    return tasks
 
 ##########################################################################
 # Contact Lens Agent Assist
@@ -988,6 +1098,12 @@ async def execute_process_event_api_mutation(
             appsync_session=appsync_session,
         )
 
+        add_call_category_tasks = add_call_category(
+            message=message_normalized,
+            appsync_session=appsync_session,
+            sns_client=sns_client,
+        )
+
         add_contact_lens_agent_assist_tasks = add_contact_lens_agent_assistances(
             message=message_normalized,
             appsync_session=appsync_session,
@@ -1013,6 +1129,7 @@ async def execute_process_event_api_mutation(
 
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
+            *add_call_category_tasks,
             *add_contact_lens_agent_assist_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
