@@ -5,6 +5,7 @@ import {
   Button,
   ButtonDropdown,
   CollectionPreferences,
+  Icon,
   Link,
   SpaceBetween,
   StatusIndicator,
@@ -99,6 +100,27 @@ export const COLUMN_DEFINITIONS_MAIN = [
     sortingField: 'conversationDurationTimeStamp',
   },
   {
+    id: 'menu',
+    header: '',
+    cell: (item) => (
+      <ButtonDropdown
+        items={[
+          {
+            text: 'Open in PCA',
+            href: item.pcaUrl,
+            external: true,
+            disabled: !item.pcaUrl,
+            externalIconAriaLabel: '(opens in new tab)',
+          },
+        ]}
+        expandToViewport
+      >
+        <Icon name="menu" />
+      </ButtonDropdown>
+    ),
+    width: 120,
+  },
+  {
     id: 'callCategories',
     header: 'Categories',
     cell: (item) => <CategoryPills categories={item.callCategories} />,
@@ -136,6 +158,7 @@ const VISIBLE_CONTENT_OPTIONS = [
       { id: 'agentSentiment', label: 'Agent Sentiment' },
       { id: 'agentSentimentTrend', label: 'Agent Sentiment Trend' },
       { id: 'conversationDuration', label: 'Duration' },
+      { id: 'menu', label: 'Menu' },
       { id: 'callCategories', label: 'Categories' },
     ],
   },
@@ -150,6 +173,7 @@ const VISIBLE_CONTENT = [
   'callerSentiment',
   'callerSentimentTrend',
   'conversationDuration',
+  'menu',
 ];
 
 export const DEFAULT_PREFERENCES = {
