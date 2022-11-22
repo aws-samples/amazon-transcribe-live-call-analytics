@@ -10,7 +10,7 @@ const logger = new Logger('SentimentCharts');
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 3;
+  const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
@@ -27,7 +27,8 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
         .reduce(
           (p, c) => [...p, { x: new Date(c.endTime * 1000), y: c.sentimentWeighted }],
           [{ x: new Date(0), y: 0 }],
-        ),
+        )
+        .sort((a, b) => a.x - b.x),
     ); // eslint-disable-line function-paren-newline
 
   logger.debug('sentimentPerChannel', sentimentPerChannel);
@@ -74,7 +75,7 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 };
 
 export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 3;
+  const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)

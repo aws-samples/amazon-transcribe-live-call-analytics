@@ -153,7 +153,7 @@ async def transform_segment_to_add_sentiment(message: Dict, sentiment_analysis_a
             SentimentScore=SENTIMENT_SCORE,
             SentimentWeighted=None,
         )
-        if sentimentlabel in ["POSITIVE", "NEGATIVE"]:
+        if sentimentlabel in ["POSITIVE", "NEGATIVE", "NEUTRAL"]:
             sentiment["SentimentWeighted"] = SENTIMENT_WEIGHT.get(sentimentlabel, 0)
     else: # did not receive sentiment label, so call Comprehend to figure out sentiment
 
