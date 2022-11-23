@@ -861,3 +861,7 @@ Outputs:
   RecordingsS3Bucket:
     Description: Bucket contains all the call recordings
     Value: !GetAtt AISTACK.Outputs.S3BucketName
+
+  SNSTopicName:
+    Description: The name of the SNS Topic that LCA publishes category events to
+    Value: !GetAtt AISTACK.Outputs.SNSTopic

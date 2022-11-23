@@ -8,7 +8,33 @@ When Live Call Analytics receives a category match event from Transcribe Call An
 
 Amazon SNS is a managed service that provides message delivery from publishers (LCA) to subscribers (also known as producers and consumers). 
 
-Additionally, LCA contains a CloudFormation parameter called `CategoryAlertRegEx` that allows you to define a Regular Expression that will distinguish whether a category match is an alert, or not an alert. 
+## Subscriptions
+
+LCA creates a new [SNS topic](https://docs.aws.amazon.com/sns/latest/dg/sns-create-topic.html) for each stack that is created, and the name of the SNS topic can be found in the CloudFormation outputs. To subscribe to messages that LCA publishes to SNS, you must [subscribe to the SNS topic](https://docs.aws.amazon.com/sns/latest/dg/sns-create-subscribe-endpoint-to-topic.html). 
+
+SNS subscription types include:
+
+- Application-to-application messaging destinations
+  - Amazon Kinesis Data Firehose
+  - AWS Lambda
+  - Amazon SQS
+  - Amazon Event Fork Pipelines
+  - HTTP/S endpoints
+  
+- Application-to-person notifications
+  - SMS
+  - Email
+  - Mobile Push Notifications
+  - AWS Chatbot
+  - PagerDuty
+
+All category matches will be published to the SNS topic.
+
+## Alerts
+
+LCA contains a CloudFormation parameter called `CategoryAlertRegEx` that allows you to define a [regular expression](https://en.wikipedia.org/wiki/Regular_expression) that will distinguish whether a category match is an alert, or not an alert. This can be used for high-priority notifications, for example, if the agent uses profanity or the caller wants to speak to a supervisor.
+
+Alert category matches will show as a different color within the LCA user interface, and will also show as a red notification icon with a count within the call-list user interface.
 
 The schema that is published by LCA to SNS is as follows:
 
@@ -21,20 +47,4 @@ The schema that is published by LCA to SNS is as follows:
 ```
 
 You can configure SNS with [SNS Filters](https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html) to only send messages to subscribers if `alert` is true.
-
-SNS messages can be sent downstream to subscribers such as
-
-- Application-to-application messaging destinations:
-  - Amazon Kinesis Data Firehose
-  - AWS Lambda
-  - Amazon SQS
-  - Amazon Event Fork Pipelines
-  - HTTP/S endpoints
-  
-- Application-to-person notifications:
-  - SMS
-  - Email
-  - Mobile Push Notifications
-  - AWS Chatbot
-  - PagerDuty
 

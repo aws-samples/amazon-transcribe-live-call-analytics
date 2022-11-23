@@ -301,6 +301,9 @@ Outputs:
   CallEventProcessorFunctionRoleName:
     Description: The Name of the IAM role used by CallEventProcessorFunction
     Value: !Ref CallEventProcessorFunctionRole
+  SNSTopic:
+    Description: The SNS topic name that LCA publishes category events to
+    Value: !GetAtt CategorySNSTopic.TopicName
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
