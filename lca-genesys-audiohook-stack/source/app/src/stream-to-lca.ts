@@ -53,6 +53,14 @@ import dotenv from 'dotenv';
 import { CallEndEvent, CallStartEvent } from './lca/entities-lca';
 dotenv.config();
 
+const formatPath = function(path:string) {
+    let pathOut = path;
+    if (path.length > 0 && path.charAt(path.length - 1) != '/') {
+        pathOut += '/';
+    }
+    return pathOut;
+};
+
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
 const CUSTOM_VOCABULARY_NAME = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
@@ -61,17 +69,23 @@ const IS_CONTENT_REDACTION_ENABLED = (process.env['IS_CONTENT_REDACTION_ENABLED'
 const CONTENT_REDACTION_TYPE = process.env['CONTENT_REDACTION_TYPE'] || 'PII';
 const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
 const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
+const TCA_DATA_ACCESS_ROLE_ARN = process.env['TCA_DATA_ACCESS_ROLE_ARN'] || '';
+const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env['CALL_ANALYTICS_FILE_PREFIX'] || 'lca-call-analytics-json/');
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
+const tcaOutputLocation = `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_FILE_PREFIX}`
+
 // optional - provide custom Transcribe endpoint via env var
 const TRANSCRIBE_ENDPOINT = process.env['TRANSCRIBE_ENDPOINT'] || '';
 // optional - disable post call analytics output
-// const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYTICS_ENABLED'] || 'true') === 'true';
+const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYTICS_ENABLED'] || 'true') === 'true';
 // optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
-// const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env['POST_CALL_CONTENT_REDACTION_OUTPUT'] || 'redacted';
+const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env['POST_CALL_CONTENT_REDACTION_OUTPUT'] || 'redacted';
 
 type transcribeInput<TCAEnabled> = TCAEnabled extends true 
     ? StartCallAnalyticsStreamTranscriptionCommandInput
     : StartStreamTranscriptionCommandInput;
+
+
 
 export const addStreamToLCA = (session: Session) => {
 
@@ -106,6 +120,15 @@ export const addStreamToLCA = (session: Session) => {
                 channel_definitions.push(channel0);
                 channel_definitions.push(channel1);
                 const configuration_event: ConfigurationEvent = { ChannelDefinitions: channel_definitions };
+                if (IS_TCA_POST_CALL_ANALYTICS_ENABLED) {
+                    configuration_event.PostCallAnalyticsSettings = {
+                        OutputLocation: tcaOutputLocation,
+                        DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
+                    };
+                    if (IS_CONTENT_REDACTION_ENABLED) {
+                        configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
+                    }
+                }
                 yield { ConfigurationEvent: configuration_event };
             }
             for await (const audiodata of audioDataIterator) {
