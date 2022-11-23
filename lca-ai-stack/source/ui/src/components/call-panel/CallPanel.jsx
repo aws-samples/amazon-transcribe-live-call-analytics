@@ -9,6 +9,7 @@ import {
   Container,
   Grid,
   Header,
+  Link,
   Popover,
   SpaceBetween,
   StatusIndicator,
@@ -162,7 +163,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
     </ColumnLayout>
   </Container>
 );
-const CallCategories = ({ item, setToolsOpen }) => {
+const CallCategories = ({ item }) => {
   const categories = item.callCategories || [];
 
   const categoryComponents = categories.map((t, i) => {
@@ -186,7 +187,18 @@ const CallCategories = ({ item, setToolsOpen }) => {
   return (
     <Container
       header={
-        <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
+        <Header
+          variant="h4"
+          info={
+            <Link
+              variant="info"
+              target="_blank"
+              href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-create-categories.html"
+            >
+              Info
+            </Link>
+          }
+        >
           Call Categories
         </Header>
       }
@@ -199,11 +211,22 @@ const CallCategories = ({ item, setToolsOpen }) => {
 };
 
 // eslint-disable-next-line arrow-body-style
-const CallSummary = ({ item, setToolsOpen }) => {
+const CallSummary = ({ item }) => {
   return (
     <Container
       header={
-        <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
+        <Header
+          variant="h4"
+          info={
+            <Link
+              variant="info"
+              target="_blank"
+              href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-summarization"
+            >
+              Info
+            </Link>
+          }
+        >
           Call Summary
         </Header>
       }
@@ -476,10 +499,21 @@ const CallTranscriptContainer = ({ setToolsOpen, item, callTranscriptPerCallId }
   );
 };
 
-const CallStatsContainer = ({ setToolsOpen, item, callTranscriptPerCallId }) => (
+const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
   <Container
     header={
-      <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
+      <Header
+        variant="h4"
+        info={
+          <Link
+            variant="info"
+            target="_blank"
+            href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
+          >
+            Info
+          </Link>
+        }
+      >
         Call Sentiment Analysis
       </Header>
     }
@@ -532,8 +566,10 @@ const CallStatsContainer = ({ setToolsOpen, item, callTranscriptPerCallId }) => 
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => (
   <SpaceBetween size="s">
     <CallAttributes item={item} setToolsOpen={setToolsOpen} />
-    <CallCategories item={item} setToolsOpen={setToolsOpen} />
-    <CallSummary item={item} setToolsOpen={setToolsOpen} />
+    <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
+      <CallSummary item={item} />
+      <CallCategories item={item} />
+    </Grid>
     <CallStatsContainer
       item={item}
       setToolsOpen={setToolsOpen}
