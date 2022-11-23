@@ -13,8 +13,6 @@ const useParameterStore = (creds) => {
     let lcaSettings = {};
 
     if (credentials) {
-      console.log('TEST GET PARAMETER', LCA_PARAMETER_NAME);
-
       const ssmClient = new SSMClient({ credentials, region: awsExports.aws_project_region });
       const getParameterCmd = new GetParameterCommand({ Name: LCA_PARAMETER_NAME });
       const response = await ssmClient.send(getParameterCmd);

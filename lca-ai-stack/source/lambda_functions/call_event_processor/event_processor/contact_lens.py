@@ -8,7 +8,6 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
-import re
 
 # third-party imports from Lambda layer
 import boto3
@@ -67,6 +66,7 @@ IS_LAMBDA_AGENT_ASSIST_ENABLED = False
 LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
 DYNAMODB_TABLE_NAME: str
+SETTINGS: Dict[str, Any]
 
 SNS_TOPIC_ARN = getenv("SNS_TOPIC_ARN", "")
 
@@ -83,11 +83,6 @@ CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv(
 
 # Get value for DynamboDB TTL field
 DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
-
-category_regex = None
-CATEGORY_REGEX = getenv("CATEGORY_REGEX", "")
-if CATEGORY_REGEX != "":
-    category_regex = re.compile(CATEGORY_REGEX)
 
 def get_ttl():
     return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
@@ -390,7 +385,6 @@ async def send_call_category(
 
     return result
 
-
 async def publish_sns_category(
     sns_client: SNSClient,
     category_name: str,
@@ -398,8 +392,8 @@ async def publish_sns_category(
 ):
     LOGGER.debug("Publishing Call Category to SNS")
     isAlert = False
-    if category_regex is not None:
-        isMatch = category_regex.match(category_name)
+    if "AlertRegEx" in SETTINGS:
+        isMatch = SETTINGS["AlertRegEx"].match(category_name)
         if isMatch:
             isAlert = True
     
@@ -1062,6 +1056,7 @@ def invoke_transcript_lambda_hook(
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
+    settings: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
     sns_client: SNSClient,
     agent_assist_args: Dict[str, Any],
@@ -1077,6 +1072,7 @@ async def execute_process_event_api_mutation(
     global LAMBDA_CLIENT
     global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
     global DYNAMODB_TABLE_NAME
+    global SETTINGS
 
     # pylint: enable=global-statement
 
@@ -1089,7 +1085,7 @@ async def execute_process_event_api_mutation(
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
     LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
     DYNAMODB_TABLE_NAME = agent_assist_args.get("dynamodb_table_name", "")
-
+    SETTINGS = settings
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],

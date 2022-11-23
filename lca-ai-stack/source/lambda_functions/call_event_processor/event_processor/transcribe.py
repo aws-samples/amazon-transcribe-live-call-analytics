@@ -8,7 +8,6 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
 import uuid
 import json
-import re
 
 # third-party imports from Lambda layer
 import boto3
@@ -42,7 +41,7 @@ if TYPE_CHECKING:
     from mypy_boto3_lambda.client import LambdaClient
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
     from mypy_boto3_sns.client import SNSClient
-
+    from mypy_boto3_ssm.client import SSMClient
     from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
@@ -51,6 +50,7 @@ else:
     InvocationResponseTypeDef = object
     Boto3Session = object
     SNSClient = object
+    SSMClient = object
 
 SNS_TOPIC_ARN = getenv("SNS_TOPIC_ARN", "")
 
@@ -77,6 +77,8 @@ LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
 DYNAMODB_TABLE_NAME: str
 
+SETTINGS: Dict[str, Any]
+
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 EVENT_LOOP = asyncio.get_event_loop()
 
@@ -89,11 +91,6 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
-
-category_regex = None
-CATEGORY_REGEX = getenv("CATEGORY_REGEX", "")
-if CATEGORY_REGEX != "":
-    category_regex = re.compile(CATEGORY_REGEX)
 
 ##########################################################################
 # Transcripts
@@ -473,8 +470,8 @@ async def publish_sns_category(
 ):
     LOGGER.debug("Publishing Call Category to SNS")
     isAlert = False
-    if category_regex is not None:
-        isMatch = category_regex.match(category_name)
+    if "AlertRegEx" in SETTINGS:
+        isMatch = SETTINGS["AlertRegEx"].match(category_name)
         if isMatch:
             isAlert = True
     
@@ -484,6 +481,7 @@ async def publish_sns_category(
                                sns_client=sns_client,
                                alert=isAlert
                                )
+                        
     return result
 
 
@@ -821,6 +819,7 @@ def invoke_transcript_lambda_hook(
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
+    settings: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
     sns_client: SNSClient,
     agent_assist_args: Dict[str, Any],
@@ -837,6 +836,7 @@ async def execute_process_event_api_mutation(
     global LAMBDA_CLIENT
     global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
     global DYNAMODB_TABLE_NAME
+    global SETTINGS
     # pylint: enable=global-statement
 
     LEXV2_CLIENT = agent_assist_args.get("lex_client")
@@ -848,6 +848,7 @@ async def execute_process_event_api_mutation(
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
     LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
     DYNAMODB_TABLE_NAME = agent_assist_args.get("dynamodb_table_name", "")
+    SETTINGS = settings
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],

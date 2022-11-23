@@ -719,6 +719,10 @@ Resources:
               Resource: !Ref CategorySNSTopic
             - Effect: Allow
               Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
+            - Effect: Allow
+              Action:
                 - appsync:GraphQL
               Resource:
                 # XXX specific mutation - addEnrichment
@@ -1224,10 +1228,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - "ssm:GetParameter"
+                  - ssm:GetParameter
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
-                  -  
     Metadata:
       cfn_nag:
         rules_to_suppress:
