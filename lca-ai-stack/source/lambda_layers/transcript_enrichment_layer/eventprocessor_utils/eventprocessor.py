@@ -116,6 +116,7 @@ def normalize_transcript_segment(message: Dict) -> Dict[str, object]:
         StartTime=start_time,
         EndTime=end_time,
         Transcript=transcript,
+        OriginalTranscript=transcript,
         IsPartial=is_partial,
         Sentiment=sentiment,
         IssuesDetected=issuesdetected,
@@ -157,7 +158,7 @@ async def transform_segment_to_add_sentiment(message: Dict, sentiment_analysis_a
             sentiment["SentimentWeighted"] = SENTIMENT_WEIGHT.get(sentimentlabel, 0)
     else: # did not receive sentiment label, so call Comprehend to figure out sentiment
 
-        text = message.get("Transcript", "")
+        text = message.get("OriginalTranscript", message.get("Transcript", ""))
         comprehend_client: ComprehendClient = sentiment_analysis_args.get("comprehend_client")
         comprehend_language_code = sentiment_analysis_args.get("comprehend_language_code", "en")
 

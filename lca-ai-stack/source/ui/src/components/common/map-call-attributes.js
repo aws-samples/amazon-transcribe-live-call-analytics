@@ -3,12 +3,12 @@
 import getRecordingStatus from './get-recording-status';
 import { getSentimentTrendLabel, getWeightedSentimentLabel } from './sentiment';
 
-const regex = process.env.REACT_APP_CATEGORY_REGEX;
-const countAlerts = (categories) => categories.filter((category) => category.match(regex)).length;
-
 /* Maps call attributes from API to a format that can be used in tables and panel */
 // eslint-disable-next-line arrow-body-style
-const mapCallsAttributes = (calls) => {
+const mapCallsAttributes = (calls, settings) => {
+  const regex = settings?.CategoryAlertRegex ?? '.*';
+  const countAlerts = (categories) => categories.filter((category) => category.match(regex)).length;
+
   return calls.map((item) => {
     const {
       CallId: callId,

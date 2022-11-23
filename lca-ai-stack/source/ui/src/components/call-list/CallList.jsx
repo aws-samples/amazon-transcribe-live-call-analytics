@@ -6,6 +6,7 @@ import { useCollection } from '@awsui/collection-hooks';
 import { Logger } from 'aws-amplify';
 
 import useCallsContext from '../../contexts/calls';
+import useSettingsContext from '../../contexts/settings';
 
 import mapCallsAttributes from '../common/map-call-attributes';
 import { paginationLabels } from '../common/labels';
@@ -29,6 +30,7 @@ const logger = new Logger('CallList');
 
 const CallList = () => {
   const [callList, setCallList] = useState([]);
+  const { settings } = useSettingsContext();
 
   const {
     calls,
@@ -64,7 +66,7 @@ const CallList = () => {
   useEffect(() => {
     if (!isCallsListLoading) {
       logger.debug('setting call list', calls);
-      setCallList(mapCallsAttributes(calls));
+      setCallList(mapCallsAttributes(calls, settings));
     } else {
       logger.debug('call list is loading');
     }

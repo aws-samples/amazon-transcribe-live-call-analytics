@@ -2,12 +2,16 @@
 import React from 'react';
 import { PropTypes } from 'prop-types';
 
+import useSettingsContext from '../../contexts/settings';
+
 import './CategoryPill.css';
 
 // eslint-disable-next-line import/prefer-default-export, arrow-body-style
 export const CategoryPills = (props) => {
   const { categories } = props;
-  const regex = process.env.REACT_APP_CATEGORY_REGEX;
+  const { settings } = useSettingsContext();
+
+  const regex = settings.CategoryAlertRegex ?? '.*';
 
   if (categories) {
     let alerts = [];
