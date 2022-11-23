@@ -928,7 +928,7 @@ async def execute_process_event_api_mutation(
         )
 
         add_transcript_sentiment_tasks = []
-        if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
+        if (IS_SENTIMENT_ANALYSIS_ENABLED or utteranceEvent) and not normalized_message["IsPartial"]:
             LOGGER.debug("Add Sentiment Analysis")
             add_transcript_sentiment_tasks = add_transcript_sentiment_analysis(
                 message=normalized_message,
