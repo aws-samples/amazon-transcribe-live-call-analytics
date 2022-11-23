@@ -1,5 +1,6 @@
 import fastify from 'fastify';
-import websocket from 'fastify-websocket';
+import websocket from '@fastify/websocket';
+
 import { S3 } from 'aws-sdk';
 import { pino } from 'pino';
 import { RecordedSession, RecordingBucket } from './recordedsession';

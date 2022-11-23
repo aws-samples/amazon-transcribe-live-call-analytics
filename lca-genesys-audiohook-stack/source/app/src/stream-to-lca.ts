@@ -27,6 +27,7 @@ import {
     StartStreamTranscriptionCommand, 
     TranscriptResultStream,
     TranscriptEvent,
+    TranscribeStreamingClientConfig,
     StartCallAnalyticsStreamTranscriptionCommand,
     StartCallAnalyticsStreamTranscriptionCommandInput,
     CallAnalyticsTranscriptResultStream,
@@ -38,15 +39,8 @@ import {
 
 import {
     DynamoDBClient,
-    GetItemCommand,
     PutItemCommand
 } from '@aws-sdk/client-dynamodb';
-
-import {
-    S3Client,
-    PutObjectCommand,
-    CopyObjectCommand
-} from '@aws-sdk/client-s3';
 
 import { normalizeError } from './utils';
 import dotenv from 'dotenv';
@@ -60,6 +54,9 @@ const formatPath = function(path:string) {
     }
     return pathOut;
 };
+const getExpiration = function getExpiration(numberOfDays:number) {
+    return Math.round(Date.now() / 1000) + numberOfDays * 24 * 3600;
+};
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
@@ -71,9 +68,8 @@ const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] |
 const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
 const TCA_DATA_ACCESS_ROLE_ARN = process.env['TCA_DATA_ACCESS_ROLE_ARN'] || '';
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env['CALL_ANALYTICS_FILE_PREFIX'] || 'lca-call-analytics-json/');
-const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
-const tcaOutputLocation = `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_FILE_PREFIX}`
-
+const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || null;
+const TRANSCRIBER_CALL_EVENT_TABLE_NAME = process.env['TRANSCRIBER_CALL_EVENT_TABLE_NAME'];
 // optional - provide custom Transcribe endpoint via env var
 const TRANSCRIBE_ENDPOINT = process.env['TRANSCRIBE_ENDPOINT'] || '';
 // optional - disable post call analytics output
@@ -81,11 +77,24 @@ const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYT
 // optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
 const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env['POST_CALL_CONTENT_REDACTION_OUTPUT'] || 'redacted';
 
+const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
+const tcaOutputLocation = `s3://${RECORDINGS_BUCKET_NAME}/${CALL_ANALYTICS_FILE_PREFIX}`;
+
 type transcribeInput<TCAEnabled> = TCAEnabled extends true 
     ? StartCallAnalyticsStreamTranscriptionCommandInput
     : StartStreamTranscriptionCommandInput;
 
-
+type SessionData = {
+    sessionId: string | undefined,
+    callId: string,
+    fromNumber: string,
+    agentId?: string,
+    callStreamingStartTime: string,
+    tcaOutputLocation: string,
+    tsParms: transcribeInput<typeof isTCAEnabled>    
+};
+    
+const dynamoClient = new DynamoDBClient( { region: AWS_REGION });
 
 export const addStreamToLCA = (session: Session) => {
 
@@ -95,7 +104,7 @@ export const addStreamToLCA = (session: Session) => {
         session.logger.info(`Conversation Id: ${openparms.conversationId}`);
         session.logger.info(`Channels supported: ${selectedMedia?.channels}`);
         session.logger.info('Call Participant: ');
-
+        
         const callEvent: CallStartEvent = {
             EventType: 'START',
             CallId: openparms.conversationId,
@@ -106,9 +115,14 @@ export const addStreamToLCA = (session: Session) => {
 
         await writeCallEvent(callEvent);
         
-        const client = new TranscribeStreamingClient({
-            region: AWS_REGION 
-        });
+        const clientArgs:TranscribeStreamingClientConfig = {
+            region: AWS_REGION
+        };
+        if (TRANSCRIBE_ENDPOINT) {
+            session.logger.info(`Using custom Transcribe endpoint: ${TRANSCRIBE_ENDPOINT}`);
+            clientArgs.endpoint = TRANSCRIBE_ENDPOINT;
+        }
+        const client = new TranscribeStreamingClient(clientArgs);
 
         const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio'); 
         
@@ -162,6 +176,7 @@ export const addStreamToLCA = (session: Session) => {
             tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
         }
 
+        let sessionId;
         if (isTCAEnabled) {
             const response = await client.send(
                 new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
@@ -169,6 +184,7 @@ export const addStreamToLCA = (session: Session) => {
             session.logger.info(
                 `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
             );
+            sessionId = response.SessionId;
             outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
         } else {
             (tsParams as StartStreamTranscriptionCommandInput).EnableChannelIdentification = true;
@@ -179,8 +195,20 @@ export const addStreamToLCA = (session: Session) => {
             session.logger.info(
                 `=== Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`
             );
+            sessionId = response.SessionId;
             outputTranscriptStream = response.TranscriptResultStream;
         }
+
+        const sessionData: SessionData = {
+            sessionId: sessionId || undefined,
+            callId: openparms.conversationId,
+            fromNumber: openparms.participant.ani,
+            agentId: undefined,
+            callStreamingStartTime: new Date().toISOString(),
+            tcaOutputLocation: tcaOutputLocation,
+            tsParms: tsParams
+        };
+        await writeSessionDataToDdb(sessionData);
 
         if (isTCAEnabled) {
             (async () => {
@@ -238,4 +266,25 @@ export const addStreamToLCA = (session: Session) => {
         };
     
     });
+};
+
+const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData:SessionData) {
+    const expiration = getExpiration(1);
+    const now = new Date().toISOString();
+    const putParams = {
+        TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+        Item: {
+            PK: { S: `sd#${sessionData.sessionId}` },
+            SK: { S: 'TRANSCRIBE SESSION' },
+            CreatedAt: { S: now },
+            ExpiresAfter: { N: expiration.toString() },
+            SessionData: { S: JSON.stringify(sessionData) },
+        },
+    };
+    const putCmd = new PutItemCommand(putParams);
+    try {
+        await dynamoClient.send(putCmd);
+    } catch (error) {
+        console.error('Error writing Session Data to Ddb', error);
+    }
 };
