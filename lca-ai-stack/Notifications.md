@@ -32,7 +32,7 @@ All category matches will be published to the SNS topic.
 
 ## Alerts
 
-LCA contains a CloudFormation parameter called `CategoryAlertRegEx` that allows you to define a Regular Expression that will distinguish whether a category match is an alert, or not an alert. This can be used for high-priority notifications, for example, if the agent uses profanity or the caller wants to speak to a supervisor.
+LCA contains a CloudFormation parameter called `CategoryAlertRegEx` that allows you to define a [regular expression](https://en.wikipedia.org/wiki/Regular_expression) that will distinguish whether a category match is an alert, or not an alert. This can be used for high-priority notifications, for example, if the agent uses profanity or the caller wants to speak to a supervisor.
 
 Alert category matches will show as a different color within the LCA user interface, and will also show as a red notification icon with a count within the call-list user interface.
 
