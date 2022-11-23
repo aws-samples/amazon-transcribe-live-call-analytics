@@ -1034,6 +1034,11 @@ Resources:
               - !Sub
                 - "arn:aws:s3:::${bucket}/*"
                 - bucket: !Ref S3BucketName
+          - Action:
+              - iam:PassRole
+            Effect: Allow
+            Resource:
+              - !GetAtt TcaDataAccessRole.Arn
           - Action: 
               - secretsmanager:GetResourcePolicy
               - secretsmanager:GetSecretValue
@@ -1066,15 +1071,15 @@ Resources:
                 - "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${streamName}"
                 - streamName: !Ref CallDataStreamName
 
-          - Action: Allow
+          - Action:  
               - dynamodb:Query
               - dynamodb:Scan
               - dynamodb:GetItem
               - dynamodb:PutItem
               - dynamodb:UpdateItem
-              Effect: Allow
-              Resource:
-                - !GetAtt TranscriberCallEventTable.Arn
+            Effect: Allow
+            Resource:
+              - !GetAtt TranscriberCallEventTable.Arn
           - Action:
               - logs:CreateLogStream
               - logs:PutLogEvents
