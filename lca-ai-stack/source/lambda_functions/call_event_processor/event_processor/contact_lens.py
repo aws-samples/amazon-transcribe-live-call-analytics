@@ -304,6 +304,7 @@ def transform_segment_to_add_transcript(segment: Dict) -> Dict[str, object]:
         StartTime=start_time,
         Status="TRANSCRIBING",
         Transcript=transcript,
+        OriginalTranscript=transcript,
         **sentiment_args,
     )
 
