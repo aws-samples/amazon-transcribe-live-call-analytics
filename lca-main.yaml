@@ -224,7 +224,7 @@ Parameters:
     Type: String
     Default: 'true'
     Description: >-
-      Use Amazon Comprehend to detect positive, negative and neutral sentiment within calls
+      Enable sentiment analysis
     AllowedValues:
       - 'true'
       - 'false'
@@ -462,7 +462,7 @@ Metadata:
       DemoAsteriskAgentAudioURL:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
-        default: Enable Sentiment Analysis using Amazon Comprehend
+        default: Enable Sentiment Analysis
       TranscriptLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
