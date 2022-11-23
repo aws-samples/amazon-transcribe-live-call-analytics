@@ -161,7 +161,7 @@ Parameters:
         - analytics
     Description: >-
       Set the default API mode for Transcribe. 
-      Must be set to 'analytics' when "Enable PCA Integration" is 'true'.
+      Set to 'analytics' to enable Callegories, Alerts, Detected Issues, and PCA Integration.
 
   CategoryAlertRegEx:
     Type: String
