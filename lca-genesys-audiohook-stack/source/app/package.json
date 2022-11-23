@@ -2,7 +2,7 @@
   "name": "audiohook-sample-server",
   "version": "1.0.0",
   "private": true,
-  "author": "felix.wyss@genesys.com",
+  "author": "Babu Srinivasan, Felix Wyss",
   "license": "MIT",
   "description": "",
   "main": "src/index.ts",
