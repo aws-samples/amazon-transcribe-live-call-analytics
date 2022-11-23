@@ -161,7 +161,8 @@ Parameters:
         - analytics
     Description: >-
       Set the default API mode for Transcribe. 
-      Set to 'analytics' to enable Callegories, Alerts, Detected Issues, and PCA Integration.
+      Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support 
+      call categories and alerts, call summarization, and PCA integration. 
 
   CategoryAlertRegEx:
     Type: String
