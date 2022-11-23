@@ -45,7 +45,7 @@ Parameters:
     Type: String
     Default: 'true'
     Description: >-
-      Enable sentiment analysis using Amazon Comprehend
+      Enable sentiment analysis
     AllowedValues:
       - 'true'
       - 'false'
@@ -257,7 +257,7 @@ Metadata:
       CloudFrontAllowedGeos:
         default: CloudFront Allowed Geographies
       IsSentimentAnalysisEnabled:
-        default: Enable Sentiment Analysis with Comprehend
+        default: Enable Sentiment Analysis
       ComprehendLanguageCode:
         default: Comprehend Sentiment Analysis Language Code
       TranscriptLambdaHookFunctionArn:
@@ -301,6 +301,9 @@ Outputs:
   CallEventProcessorFunctionRoleName:
     Description: The Name of the IAM role used by CallEventProcessorFunction
     Value: !Ref CallEventProcessorFunctionRole
+  SNSTopic:
+    Description: The SNS topic name that LCA publishes category events to
+    Value: !GetAtt CategorySNSTopic.TopicName
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
