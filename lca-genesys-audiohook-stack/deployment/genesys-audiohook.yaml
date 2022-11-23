@@ -1034,7 +1034,11 @@ Resources:
               - !Sub
                 - "arn:aws:s3:::${bucket}/*"
                 - bucket: !Ref S3BucketName
-
+          - Action:
+              - iam:PassRole
+            Effect: Allow
+            Resource:
+              - !GetAtt TcaDataAccessRole.Arn
           - Action: 
               - secretsmanager:GetResourcePolicy
               - secretsmanager:GetSecretValue
@@ -1441,25 +1445,124 @@ Resources:
           - id: W70
             reason: This is using Cloudfront default TLS, can be changed by customer if needed.
 
-  DeployPcaIntegration:
-    Type: AWS::CloudFormation::Stack
-    Condition: ShouldInstallPcaIntegration
+  PCAIntegrationFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      TemplateURL: pca-integration.yaml
-      Parameters:
-        KinesisDataStreamName: !Ref CallDataStreamName
-        KinesisDataStreamArn: !Ref CallDataStreamArn
-        CallTranscriberEventTableName: !Ref TranscriberCallEventTable
-        CallTranscriberEventTableArn: !GetAtt TranscriberCallEventTable.Arn
-        IsContentRedactionEnabled:
-              Value: !If
-                - ShouldEnableContentRedaction
-                - 'true'
-                - 'false'
-        LCAS3BucketName: !Ref S3BucketName
-        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        PcaS3BucketName: !Ref PcaS3BucketName
-        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
-        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
-        PcaWebAppURL: !Ref PcaWebAppURL
-        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+      Architectures:
+        - arm64
+      Description: >-
+        AWS Lambda Function that will be triggered Transcribe Call Analytics completes after end of streaming session
+      Handler: index.handler
+      Layers:
+        # periodically update the Lambda Insights Layer
+        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
+        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+      Role: !GetAtt PCAIntegrationFunctionRole.Arn
+      Runtime: nodejs14.x
+      MemorySize: 768
+      Timeout: 900
+      Tracing: Active
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          KINESIS_STREAM_NAME: !Ref CallDataStreamName
+          TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
+          LCA_BUCKET_NAME: !Ref S3BucketName
+          CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
+          PCA_S3_BUCKET_NAME: !Ref PcaS3BucketName
+          PCA_TRANSCRIPTS_PREFIX: !Ref PcaTranscriptsPrefix
+          PCA_AUDIO_PLAYBACK_FILE_PREFIX: !Ref PcaPlaybackAudioFilePrefix
+          PCA_WEB_APP_URL: !Ref PcaWebAppURL
+          PCA_WEB_APP_CALL_PATH_PREFIX: !Ref PcaWebAppCallPathPrefix
+          IS_CONTENT_REDACTION_ENABLED: !Ref IsContentRedactionEnabled
+      CodeUri: ../source/lambda_functions/pca_integration
+
+  PCAIntegrationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        # CloudWatch Insights Managed Policy
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt TranscriberCallEventTable.Arn
+              - Action:
+                  - kinesis:PutRecord
+                Effect: Allow
+                Resource:  
+                  - !Ref CallDataStreamArn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !Ref S3BucketName
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:PutObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !Ref PcaS3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !Ref PcaS3BucketName
+
+  AllowEventBridgeToCallPCAIntegrationFunction:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref PCAIntegrationFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRuleToTriggerPCAIntegrationFunction.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  EventBridgeRuleToTriggerPCAIntegrationFunction:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This rule is triggered when TCA post call output job completes"
+      EventPattern:
+        detail-type:
+          - "Call Analytics Post Call Job State Change"
+        source:
+          - aws.transcribe
+      Targets:
+        - Id: PCAIntegrationTarget
+          Arn: !GetAtt PCAIntegrationFunction.Arn
+      State: "ENABLED"
