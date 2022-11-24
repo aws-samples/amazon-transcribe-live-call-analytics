@@ -257,7 +257,6 @@ export const addStreamToLCA = (session: Session) => {
                 CallId: openparms.conversationId,
                 CustomerPhoneNumber: openparms.participant.ani,
                 SystemPhoneNumber: openparms.participant.dnis,
-                UpdatedAt: new Date().toISOString(),
             };
             
             await writeCallEvent(callEvent);
