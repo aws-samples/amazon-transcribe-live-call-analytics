@@ -311,7 +311,7 @@ Parameters:
   PcaS3BucketName:
     Type: String
     Description: >
-      Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+      (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
     # yamllint disable rule:line-length
     AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
     # yamllint enable rule:line-length
@@ -329,7 +329,7 @@ Parameters:
   PcaWebAppURL:
     Type: String
     AllowedPattern: '^(|https:\/\/.*)$'
-    Description: Value of PCA stack "WebAppURL". 
+    Description: (Optional) Value of PCA stack "WebAppURL". 
   
   PcaWebAppCallPathPrefix:
     Type: String
@@ -869,6 +869,6 @@ Outputs:
     Description: Bucket contains all the call recordings
     Value: !GetAtt AISTACK.Outputs.S3BucketName
 
-  SNSTopicName:
-    Description: The name of the SNS Topic that LCA publishes category events to
+  SNSCategoryTopicName:
+    Description: The name of the SNS Topic for matched category and alert notifications
     Value: !GetAtt AISTACK.Outputs.SNSTopic
