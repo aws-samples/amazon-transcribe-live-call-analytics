@@ -41,7 +41,9 @@ Your bot provide intents, slots, and integration with backend data and knowledge
 
 A second alternative allows you to implement your own Agent Assist logic using an AWS Lambda function instead of a Lex bot. Choose `Bring your own AWS Lambda function` when deploying or updating the LCA stack. Identify your Lambda function using the parameter `AgentAssistExistingLambdaFunctionArn`.
 
-LCA interacts uses the Lambda Invoke API to synchronously invoke your function (request mode), passing each caller utterance along with additional call metadata in the event payload, and expecting an Agent Assist message in the Lambda response, in the following JSON format. 
+LCA interacts uses the Lambda Invoke API to synchronously invoke your function (request mode), passing each caller utterance along with additional call metadata in the event payload. The payload includes `dynamodb_table_name` and `dynamodb_pk`, so your function can query the LCA Call Event table in DynamoDB to retrieve additional call metadata as needed (eg caller number, agentId, etc.).   
+
+Your function returns an Agent Assist message in the Lambda response, in the following JSON format. 
 ```
 {
   "message": "<agent assist message>"
