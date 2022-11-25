@@ -323,7 +323,7 @@ Parameters:
 
   PcaPlaybackAudioFilePrefix:
     Type: String
-    Default: mp3/
+    Default: playbackAudio/
     Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
 
   PcaWebAppURL:
