@@ -158,7 +158,6 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
             CallId: callId,
             CategoryEvent: categoryEvent,
             CreatedAt: now,
-            UpdatedAt: now,
         };
 
         const putParams = {
