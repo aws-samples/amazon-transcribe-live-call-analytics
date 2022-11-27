@@ -368,7 +368,7 @@ async def execute_add_issues_detected_mutation(
         offsets = issues_detected[0].get("CharacterOffsets")
         start = int(offsets.get("Begin"))
         end = int(offsets.get("End"))
-        if (start > 0 and end > 0):
+        if (start >= 0 and end >= 0):
             transcript = message["Transcript"]
             issueText = transcript[start:end]
 
