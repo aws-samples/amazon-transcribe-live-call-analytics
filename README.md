@@ -2,7 +2,7 @@
 *Companion AWS blog post: [Live call analytics and agent assist for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
 ## Overview
 
-*Update September 2022 (v0.6.0) – Now supports real-time Detected Issues, real-time Call Categories, real-time Supervisor Alerts and integration with the companion Post Call Analytics (PCA) solution v0.4.0 or later, using the new Amazon Transcribe Real-time Call Analytics service.*  
+*Update September 2022 (v0.6.0) – Now supports real-time Detected Issues, real-time Call Categories, real-time Supervisor Alerts and integration with the companion Post Call Analytics (PCA) solution v0.4.0 or later, using the new [Amazon Transcribe Real-time Call Analytics](https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-streaming.html) service.*  
 *See [CHANGELOG](./CHANGELOG.md) for latest features and fixes.*
 
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
