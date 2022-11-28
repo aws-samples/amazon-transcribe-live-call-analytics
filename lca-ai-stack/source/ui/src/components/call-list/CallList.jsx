@@ -6,9 +6,11 @@ import { useCollection } from '@awsui/collection-hooks';
 import { Logger } from 'aws-amplify';
 
 import useCallsContext from '../../contexts/calls';
+import useSettingsContext from '../../contexts/settings';
 
 import mapCallsAttributes from '../common/map-call-attributes';
 import { paginationLabels } from '../common/labels';
+import useLocalStorage from '../common/local-storage';
 
 import {
   CallsPreferences,
@@ -28,6 +30,7 @@ const logger = new Logger('CallList');
 
 const CallList = () => {
   const [callList, setCallList] = useState([]);
+  const { settings } = useSettingsContext();
 
   const {
     calls,
@@ -39,7 +42,10 @@ const CallList = () => {
     periodsToLoad,
   } = useCallsContext();
 
-  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const [preferences, setPreferences] = useLocalStorage(
+    'call-list-preferences',
+    DEFAULT_PREFERENCES,
+  );
 
   // prettier-ignore
   const {
@@ -60,7 +66,7 @@ const CallList = () => {
   useEffect(() => {
     if (!isCallsListLoading) {
       logger.debug('setting call list', calls);
-      setCallList(mapCallsAttributes(calls));
+      setCallList(mapCallsAttributes(calls, settings));
     } else {
       logger.debug('call list is loading');
     }

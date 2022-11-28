@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2022-11-27
+### Added
+- Supports new [Amazon Transcribe Real-time Call Analytics](https://aws.amazon.com/transcribe/call-analytics/) streaming API
+- Real-time Detected Issues, Call Categories, and Alerts
+- Real-time Category and Alert Notifications via Amazon SNS subscriptions. See [Category Notifications](./lca-ai-stack/Notifications.md).
+- Post call analytics (without additional transcription costs) through integration with the companion [Post Call Analytics (PCA)](www.amazon.com/post-call-analytics) solution.
+- QnABot designer markdown answers enable rich text and media in Agent Assist messages
+### Changed
+- Latest QnABot (v5.2.4) now used for agent assist 
+- Improved logging in Call Transcriber lambda
+- Extend payload for Agent Assist Lambda to include `dynamodb_table_name` and `dynamodb_pk`, so Lambdas can query the LCA Call Event table in DynamoDB to retrieve call metadata.
+
 ## [0.5.2] - 2022-10-20
 ### Added
 - Support for using Transcribe Custom Language Models.
@@ -146,7 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.2...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...develop
+[0.6.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...v0.5.2
 [0.5.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.1...v0.5.0

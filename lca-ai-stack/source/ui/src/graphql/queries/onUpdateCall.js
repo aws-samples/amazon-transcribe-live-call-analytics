@@ -9,12 +9,15 @@ export default gql`
       SK
       CallId
       AgentId
+      CallCategories
+      IssuesDetected
       Status
       UpdatedAt
       CreatedAt
       CustomerPhoneNumber
       SystemPhoneNumber
       RecordingUrl
+      PcaUrl
       TotalConversationDurationMillis
       Sentiment {
         OverallSentiment {

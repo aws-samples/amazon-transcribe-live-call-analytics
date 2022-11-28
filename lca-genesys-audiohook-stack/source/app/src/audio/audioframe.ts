@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { ulawToL16, ulawFromL16 } from './ulaw';
 
 const int16ArrayFromUInt8 = (src: Uint8Array): Int16Array => {

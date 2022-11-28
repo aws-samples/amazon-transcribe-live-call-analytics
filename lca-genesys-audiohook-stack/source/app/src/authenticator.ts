@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { randomBytes } from 'crypto';
 import { IncomingMessage } from 'http';
 import { Logger } from './types';

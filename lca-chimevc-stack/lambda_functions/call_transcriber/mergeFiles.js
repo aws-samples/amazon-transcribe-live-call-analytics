@@ -21,7 +21,7 @@ const outSampleRate = 8000;
 const outNumChannels = 2;
 
 // based on https://github.com/mattdiamond/Recorderjs/blob/master/src/recorder.js
-const createHeader = function (length) {
+const createHeader = function createHeader(length) {
   const buffer = Buffer.alloc(44);
 
   // RIFF identifier 'RIFF'
@@ -53,14 +53,14 @@ const createHeader = function (length) {
   return buffer;
 };
 
-const mergeFiles = async function (event) {
+const mergeFiles = async function mergeFiles(event) {
   let totalSize = 0;
   const combinedRawFilename = `${tempFilePath + event.callId}-combined.raw`;
   const combinedWavFilename = `${tempFilePath + event.callId}.wav`;
   const combinedStream = fs.createWriteStream(combinedRawFilename);
 
   // download and write each file to the stream
-  for (let i = 0; i <= event.lambdaCount; i++) {
+  for (let i = 0; i <= event.lambdaCount; i += 1) {
     const key = `${event.rawPrefix + event.callId}-${i}.raw`;
     console.log(`Downloading ${key}`);
     const bucketParams = {
@@ -68,7 +68,9 @@ const mergeFiles = async function (event) {
       Key: key,
     };
 
+    // eslint-disable-next-line no-await-in-loop
     const data = await s3Client.send(new GetObjectCommand(bucketParams));
+    // eslint-disable-next-line no-restricted-syntax, no-await-in-loop
     for await (const chunk of data.Body) {
       totalSize += chunk.length;
       combinedStream.write(chunk);
@@ -84,6 +86,7 @@ const mergeFiles = async function (event) {
   console.log('Writing header');
   writeStream.write(header);
   console.log('Writing body chunks');
+  // eslint-disable-next-line no-restricted-syntax
   for await (const chunk of readStream) {
     writeStream.write(chunk);
   }
@@ -104,13 +107,14 @@ const mergeFiles = async function (event) {
   const data = await s3Client.send(new PutObjectCommand(uploadParams));
   console.log('Deleting old files');
   // delete old files
-  for (let i = 0; i <= event.lambdaCount; i++) {
+  for (let i = 0; i <= event.lambdaCount; i += 1) {
     const key = `${event.rawPrefix + event.callId}-${i}.raw`;
     console.log(`Deleting ${key}`);
     const bucketParams = {
       Bucket: event.bucketName,
       Key: key,
     };
+    // eslint-disable-next-line no-await-in-loop
     await s3Client.send(new DeleteObjectCommand(bucketParams));
   }
 

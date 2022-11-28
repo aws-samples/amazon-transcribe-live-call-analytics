@@ -61,18 +61,22 @@ Parameters:
     Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
 
+  S3BucketName:
+    Type: String
+    Description: >-
+      S3 Bucket name for recordings
+
   AudioFilePrefix:
     Type: String
     Default: lca-audio-recordings/
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
 
-  MonoAudioFilePrefix:
+  CallAnalyticsPrefix:
     Type: String
-    Default: lca-mono-audio-recordings/
-    Description: >-
-      The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
-   
+    Default: lca-call-analytics/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -82,11 +86,6 @@ Parameters:
     Type: String
     Description: >-
       Arn of Kinesis Data Stream to publish events to
- 
-  S3BucketName:
-    Type: String
-    Description: >-
-      S3 Bucket name for recordings
 
   IsPartialTranscriptEnabled:
     Type: String
@@ -97,6 +96,14 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: Set the default operational mode for Transcribe
 
   IsContentRedactionEnabled:
     Type: String
@@ -159,6 +166,34 @@ Parameters:
       custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
       match the Language Code selected above, and use the 'Narrow Band' base model.
 
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      Value of PCA stack "InputBucket". Effective only Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: mp3/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: Value of PCA stack "WebAppURL". 
+
+  PcaWebAppCallPathPrefix:
+    Type: String
+    Default: dashboard/parsedFiles/
+    Description: PCA path prefix for call detail pages.
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -173,6 +208,7 @@ Conditions:
   ShouldInstallDemoAsteriskServer:
     !Equals [!Ref InstallDemoAsteriskServer, 'true']
   ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
+  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
 
 Resources:
   DeployChimeVCAsteriskDemo:
@@ -198,7 +234,9 @@ Resources:
     Properties:
       TemplateURL: ./cloudformation-templates/chime-vc-call-transcriber.yaml
       Parameters:
+        TranscribeApiMode: !Ref TranscribeApiMode
         AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
         S3BucketName: !Ref S3BucketName
@@ -210,6 +248,25 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+
+  DeployPcaIntegration:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallPcaIntegration
+    Properties:
+      TemplateURL: ./cloudformation-templates/pca-integration.yaml
+      Parameters:
+        KinesisDataStreamName: !Ref KinesisDataStreamName
+        KinesisDataStreamArn: !Ref KinesisDataStreamArn
+        CallTranscriberEventTableName: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
+        CallTranscriberEventTableArn: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
+        IsContentRedactionEnabled: !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+        LCAS3BucketName: !Ref S3BucketName
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
 Outputs:
   DemoPBXIPAddress:

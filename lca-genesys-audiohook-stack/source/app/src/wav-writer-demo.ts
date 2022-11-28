@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { Session, OpenHandler } from './session';
 import { MediaDataFrame, MediaFormat, MediaChannel } from './audiohook';
 import { WavFileWriter } from './audio';

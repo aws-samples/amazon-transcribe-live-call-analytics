@@ -10,12 +10,11 @@ Parameters:
     Description: >-
       The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
 
-  MonoAudioFilePrefix:
+  CallAnalyticsPrefix:
     Type: String
-    Default: lca-mono-audio-recordings/
-    Description: >-
-      The Amazon S3 prefix where the mono output audio files will be saved (must end in "/")
-    
+    Default: lca-call-analytics/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -31,6 +30,14 @@ Parameters:
     Description: >-
       S3 Bucket name for recordings
 
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: Set the default operational mode for Transcribe
+    
   IsPartialTranscriptEnabled:
     Type: String
     Default: 'true'
@@ -112,6 +119,7 @@ Parameters:
       The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
       The function must return a True/False flag to indicate if the call should be processed or ignored, 
       a mapped CallId, an AgentId, and may be extended to support additional features in future.
+
         
 Resources:
   ##########################################################################
@@ -166,15 +174,18 @@ Resources:
       Tracing: Active
       Environment:
         Variables:
+          TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
           BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
-          RECORDING_FILE_PREFIS3BucketNameX: !Ref AudioFilePrefix
-          MONO_RECORDING_FILE_PREFIX: !Ref MonoAudioFilePrefix
           RAW_FILE_PREFIX: 'lca-audio-raw/'
+          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
+          CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
+          TCA_DATA_ACCESS_ROLE_ARN: !GetAtt TcaDataAccessRole.Arn
+          POST_CALL_CONTENT_REDACTION_OUTPUT: 'redacted'
           TEMP_FILE_PATH: '/tmp/'
           SAVE_PARTIAL_TRANSCRIPTS: !Ref IsPartialTranscriptEnabled
           IS_CONTENT_REDACTION_ENABLED: !If
@@ -218,12 +229,18 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt TcaDataAccessRole.Arn
+              - Effect: Allow
+                Action:
                   - transcribe:DeleteTranscriptionJob
                   - transcribe:GetTranscriptionJob
                   - transcribe:GetVocabulary
                   - transcribe:ListTranscriptionJobs
                   - transcribe:ListVocabularies
                   - transcribe:StartStreamTranscription
+                  - transcribe:StartCallAnalyticsStreamTranscription
                   - transcribe:StartTranscriptionJob
                 Resource: "*"
               - Action:
@@ -249,13 +266,11 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - !GetAtt TranscriberCallEventTable.Arn
-
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
                 Resource:  
                   - !Ref KinesisDataStreamArn
-                  
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -269,13 +284,46 @@ Resources:
                   - !Sub
                     - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName
-              - !If 
+              - !If
                 - ShouldEnableLambdaHook
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
                   Resource: !Sub "${SiprecLambdaHookFunctionArn}"
                 - Ref: AWS::NoValue
+
+  TcaDataAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - transcribe.streaming.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: tca-post-call-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !Ref S3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !Ref S3BucketName          
+
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -346,3 +394,17 @@ Conditions:
   - !Equals [!Ref IsContentRedactionEnabled, 'true']
   - !Equals [!Ref TranscribeLanguageCode, 'en-US']
   ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
+
+Outputs:
+
+  CallTranscriberEventTableName:
+    Value: !Ref TranscriberCallEventTable
+
+  CallTranscriberEventTableArn:
+    Value: !GetAtt TranscriberCallEventTable.Arn
+
+  IsContentRedactionEnabled: 
+    Value: !If
+      - ShouldEnableContentRedaction
+      - 'true'
+      - 'false'

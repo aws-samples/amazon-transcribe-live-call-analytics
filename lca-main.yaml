@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.5.2) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.6.0) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -56,12 +56,15 @@ Parameters:
     AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
     # yamllint enable rule:line-length
     Description: >
+      Ignored if Install Demo Asterisk Server is true.
+      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
+      Example: '198.51.100.0/27, 203.0.113.128/27'
 
   ConnectInstanceArn:
     Type: String
     AllowedPattern: '^(|arn:aws:connect:.*)$'
     Description: >
-      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'
+      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'.
       Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
 
   AgentAssistOption:
@@ -124,6 +127,11 @@ Parameters:
     Type: String
     Default: lca-audio-recordings/
     Description: The Amazon S3 prefix where the audio files will be saved (must end in "/")
+  
+  CallAnalyticsPrefix:
+    Type: String
+    Default: lca-call-analytics/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
 
   IsPartialTranscriptEnabled:
     Type: String
@@ -144,7 +152,26 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+  
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+        - standard
+        - analytics
+    Description: >-
+      Set the default API mode for Transcribe. 
+      Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support 
+      call categories and alerts, call summarization, and PCA integration. 
 
+  CategoryAlertRegEx:
+    Type: String
+    Default: .*
+    Description: >
+      If using the 'analytics' Transcribe API Mode, this regular expression will be used to show
+      an alert in red in the web user interface if it matches a call category. This defaults to 
+      matching all categories.
+    
   TranscribeContentRedactionType:
     Type: String
     Default: PII
@@ -197,7 +224,7 @@ Parameters:
     Type: String
     Default: 'true'
     Description: >-
-      Use Amazon Comprehend to detect positive, negative and neutral sentiment within calls
+      Enable sentiment analysis
     AllowedValues:
       - 'true'
       - 'false'
@@ -232,10 +259,12 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      Email address domain (example.com) or comma separated list of email domains 
+      (example1.com, example2.com) allowed to signin and signup using the web UI.
       If left empty, signup via the web UI is disabled and users will have to be created using
       Cognito.
-    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6}(, *([\w-]+\.)+[\w-]{2,6})*)$'
+
 
   DemoAsteriskDownloadUrl:
     Type: String
@@ -279,6 +308,34 @@ Parameters:
     Description: >-
       Number of days to retain call records. Records will be automatically deleted from LCA after this time.
 
+  PcaS3BucketName:
+    Type: String
+    Description: >
+      (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+    # yamllint disable rule:line-length
+    AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
+    # yamllint enable rule:line-length
+
+  PcaTranscriptsPrefix:
+    Type: String
+    Default: originalTranscripts/
+    Description: Value of PCA stack "InputBucketTranscriptPrefix".
+
+  PcaPlaybackAudioFilePrefix:
+    Type: String
+    Default: playbackAudio/
+    Description: Value of PCA stack "InputBucketPlaybackAudioPrefix".
+
+  PcaWebAppURL:
+    Type: String
+    AllowedPattern: '^(|https:\/\/.*)$'
+    Description: (Optional) Value of PCA stack "WebAppURL". 
+  
+  PcaWebAppCallPathPrefix:
+    Type: String
+    Default: dashboard/parsedFiles/
+    Description: PCA path prefix for call detail pages.
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -308,10 +365,12 @@ Metadata:
         Parameters:
           - S3BucketName
           - AudioFilePrefix
+          - CallAnalyticsPrefix
       - Label:
           default: Amazon Transcribe Configuration
         Parameters:
           - IsPartialTranscriptEnabled
+          - TranscribeApiMode
           - IsContentRedactionEnabled
           - TranscribeLanguageCode
           - TranscribeContentRedactionType
@@ -338,15 +397,30 @@ Metadata:
           default: Record retention
         Parameters:
           - DynamoDbExpirationInDays
+      - Label:
+          default: User Experience
+        Parameters:
+          - CategoryAlertRegEx
+      - Label:
+          default: Post Call Analytics (PCA) Integration
+        Parameters:
+          - PcaS3BucketName
+          - PcaTranscriptsPrefix
+          - PcaPlaybackAudioFilePrefix
+          - PcaWebAppURL
+          - PcaWebAppCallPathPrefix
+  
     ParameterLabels:
       S3BucketName:
         default: Call Audio Recordings Bucket Name
       AudioFilePrefix:
         default: Audio File Prefix
+      CallAnalyticsPrefix:
+        default: Call Analytics Output File Prefix
       AdminEmail:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
-        default: Authorized Account Email Domain
+        default: Authorized Account Email Domain(s)
       CallAudioSource:
         default: Call Audio Source
       DemoSoftphoneAllowedCidr:
@@ -369,6 +443,8 @@ Metadata:
         default: Agent Assist Lambda Function ARN (existing)
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
+      TranscribeApiMode:
+        default: Transcribe API mode
       IsContentRedactionEnabled:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
@@ -386,7 +462,7 @@ Metadata:
       DemoAsteriskAgentAudioURL:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
-        default: Enable Sentiment Analysis using Amazon Comprehend
+        default: Enable Sentiment Analysis
       TranscriptLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
@@ -397,6 +473,18 @@ Metadata:
         default: CloudFront Allowed Geographies
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
+      CategoryAlertRegEx:
+        default: Category Alert Regular Expression
+      PcaS3BucketName:
+        default: PCA InputBucket
+      PcaTranscriptsPrefix:
+        default: PCA InputBucket Transcript prefix
+      PcaPlaybackAudioFilePrefix:
+        default: PCA InputBucket Playback AudioFile prefix
+      PcaWebAppUrl:
+        default: PCA Web App URL
+      PcaWebAppCallPathPrefix:
+        default: PCA Web App Call Path Prefix
 
 Conditions:
   ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
@@ -576,7 +664,7 @@ Resources:
         S3BucketName: !Ref S3BucketName
         AdminEmail: !Ref AdminEmail
         AllowedSignUpEmailDomain: !Ref AllowedSignUpEmailDomain
-
+        CategoryAlertRegEx: !Ref CategoryAlertRegEx
         ComprehendLanguageCode:
           !FindInMap [
             TranscribeToComprehendLanguage,
@@ -659,10 +747,12 @@ Resources:
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
+        TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
@@ -670,6 +760,11 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack
@@ -681,14 +776,22 @@ Resources:
       Parameters:
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
@@ -765,3 +868,7 @@ Outputs:
   RecordingsS3Bucket:
     Description: Bucket contains all the call recordings
     Value: !GetAtt AISTACK.Outputs.S3BucketName
+
+  SNSCategoryTopicName:
+    Description: The name of the SNS Topic for matched category and alert notifications
+    Value: !GetAtt AISTACK.Outputs.SNSTopic

@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { MediaParameter, MediaFormat, MediaRate, MediaChannel } from './message';
 import { AudioFrame, createAudioFrame } from '../audio';
 

@@ -10,12 +10,13 @@ const logger = new Logger('SentimentCharts');
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 3;
+  const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
-    .filter((c) => c !== 'AGENT_ASSISTANT');
+    .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentPerChannel = transcriptChannels
     .map((channel) => transcriptsForThisCallId[channel])
@@ -26,14 +27,15 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
         .reduce(
           (p, c) => [...p, { x: new Date(c.endTime * 1000), y: c.sentimentWeighted }],
           [{ x: new Date(0), y: 0 }],
-        ),
+        )
+        .sort((a, b) => a.x - b.x),
     ); // eslint-disable-line function-paren-newline
 
   logger.debug('sentimentPerChannel', sentimentPerChannel);
 
   return (
     <LineChart
-      height="150"
+      height="80"
       hideFilter
       series={[
         {
@@ -73,12 +75,13 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 };
 
 export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 3;
+  const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
-    .filter((c) => c !== 'AGENT_ASSISTANT');
+    .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentByQuarterPerChannel = transcriptChannels
     .map((channel) => item?.sentiment?.SentimentByPeriod?.QUARTER[channel] || [])
@@ -96,7 +99,7 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
 
   return (
     <LineChart
-      height="150"
+      height="80"
       hideFilter
       series={[
         {

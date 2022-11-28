@@ -1,3 +1,7 @@
+/*
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0
+ */
 module.exports={
     type:"object",
     description:"Question and Answer document",
@@ -27,11 +31,11 @@ module.exports={
             maxLength:8000,
             propertyOrder: 3
         },
-        /* -- LCA - not needed
         alt:{
             type:"object",
             description:"Alternate Answers",
             properties:{
+                /* -- LCA - not needed
                 ssml:{
                     type:"string",
                     title:"SSML Answer",
@@ -39,6 +43,7 @@ module.exports={
                     maxLength:8000,
                     propertyOrder: 1
                 },
+                */
                 markdown:{
                     type:"string",
                     title:"Markdown Answer",
@@ -49,7 +54,6 @@ module.exports={
             },
             propertyOrder: 4
         },
-        */
         t:{
             type:"string",
             description:"Assign a topic to this item, to support follow up questions on the same topic. (Sets session attribute 'topic' in response). Topics cannot be used if enableLexIntent is enabled.",

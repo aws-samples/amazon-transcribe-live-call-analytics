@@ -27,9 +27,12 @@ type Call implements DynamoDbBase @aws_cognito_user_pools
 	SystemPhoneNumber: String
 	Status: CallStatus
 	RecordingUrl: String
+	PcaUrl: String
 	TotalConversationDurationMillis: Float
 	AgentId: String
 	Metadatajson: String
+	CallCategories: [String]
+	IssuesDetected: String
 }
 
 type CallList @aws_cognito_user_pools
@@ -59,6 +62,7 @@ enum Channel {
 	CALLER
 	AGENT
 	AGENT_ASSISTANT
+	CATEGORY_MATCH
 }
 
 input CreateCallInput {
@@ -87,7 +91,10 @@ type Mutation @aws_iam {
 	updateCallStatus(input: UpdateCallStatusInput!): Call
 	updateCallAggregation(input: UpdateCallAggregationInput!): Call
 	updateRecordingUrl(input: UpdateRecordingUrlInput!): Call
+	updatePcaUrl(input: UpdatePcaUrlInput!): Call
 	updateAgent(input: UpdateAgentInput!): Call
+	addCallCategory(input: AddCallCategoryInput!): Call
+	addIssuesDetected(input: AddIssuesDetectedInput!): Call
 	addTranscriptSegment(input: AddTranscriptSegmentInput!): TranscriptSegment
 }
 
@@ -181,7 +188,7 @@ type Subscription {
 	onCreateCall: CreateCallOutput
 		@aws_subscribe(mutations: ["createCall"])
 	onUpdateCall(CallId: ID): Call
-		@aws_subscribe(mutations: ["updateCallStatus","updateCallAggregation","updateRecordingUrl","updateAgent"])
+		@aws_subscribe(mutations: ["updateCallStatus","updateCallAggregation","updateRecordingUrl","updatePcaUrl","updateAgent", "addCallCategory", "addIssuesDetected"])
 	onAddTranscriptSegment(CallId: ID, Channel: String): TranscriptSegment
 		@aws_subscribe(mutations: ["addTranscriptSegment"])
 }
@@ -217,6 +224,17 @@ input UpdateAgentInput {
 	UpdatedAt: AWSDateTime
 }
 
+input AddCallCategoryInput {
+	CallId: ID!
+	CallCategories: [String]
+	UpdatedAt: AWSDateTime
+}
+
+input AddIssuesDetectedInput {
+	CallId: ID!
+	IssuesDetected: String!
+	UpdatedAt: AWSDateTime
+}
 input UpdateCallAggregationInput {
 	CallId: ID!
 	Status: CallStatus!
@@ -234,6 +252,12 @@ input UpdateCallStatusInput {
 input UpdateRecordingUrlInput {
 	CallId: ID!
 	RecordingUrl: String!
+	UpdatedAt: AWSDateTime
+}
+
+input UpdatePcaUrlInput {
+	CallId: ID!
+	PcaUrl: String!
 	UpdatedAt: AWSDateTime
 }
 

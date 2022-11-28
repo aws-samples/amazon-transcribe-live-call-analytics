@@ -7,12 +7,15 @@ export default gql`
     getCall(CallId: $callId) {
       CallId
       AgentId
+      CallCategories
+      IssuesDetected
       CreatedAt
       CustomerPhoneNumber
       Status
       SystemPhoneNumber
       UpdatedAt
       RecordingUrl
+      PcaUrl
       TotalConversationDurationMillis
       Sentiment {
         OverallSentiment {

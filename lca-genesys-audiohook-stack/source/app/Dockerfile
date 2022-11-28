@@ -13,6 +13,7 @@ COPY [\
     "./tsconfig.json",\
     "/app/"\
 ]
+COPY "./client-transcribe-streaming" "/app/client-transcribe-streaming"
 
 RUN npm ci
 

@@ -5,6 +5,7 @@ import {
   Button,
   ButtonDropdown,
   CollectionPreferences,
+  Icon,
   Link,
   SpaceBetween,
   StatusIndicator,
@@ -14,6 +15,8 @@ import { TableHeader } from '../common/table';
 import { CALLS_PATH } from '../../routes/constants';
 import { SentimentIndicator } from '../sentiment-icon/SentimentIcon';
 import { SentimentTrendIndicator } from '../sentiment-trend-icon/SentimentTrendIcon';
+import { CategoryAlertPill } from './CategoryAlertPill';
+import { CategoryPills } from './CategoryPills';
 
 export const KEY_COLUMN_ID = 'callId';
 
@@ -24,6 +27,15 @@ export const COLUMN_DEFINITIONS_MAIN = [
     cell: (item) => <Link href={`#${CALLS_PATH}/${item.callId}`}>{item.callId}</Link>,
     sortingField: 'callId',
     width: 325,
+  },
+  {
+    id: 'alerts',
+    header: '⚠',
+    cell: (item) => (
+      <CategoryAlertPill alertCount={item.alertCount} categories={item.callCategories} />
+    ),
+    sortingField: 'alertCount',
+    width: 85,
   },
   {
     id: 'agentId',
@@ -87,9 +99,37 @@ export const COLUMN_DEFINITIONS_MAIN = [
     cell: (item) => item.conversationDurationTimeStamp,
     sortingField: 'conversationDurationTimeStamp',
   },
+  {
+    id: 'menu',
+    header: '',
+    cell: (item) => (
+      <ButtonDropdown
+        items={[
+          {
+            text: 'Open in PCA',
+            href: item.pcaUrl,
+            external: true,
+            disabled: !item.pcaUrl,
+            externalIconAriaLabel: '(opens in new tab)',
+          },
+        ]}
+        expandToViewport
+      >
+        <Icon name="menu" />
+      </ButtonDropdown>
+    ),
+    width: 120,
+  },
+  {
+    id: 'callCategories',
+    header: 'Categories',
+    cell: (item) => <CategoryPills categories={item.callCategories} />,
+    sortingField: 'callCategoryCount',
+    width: 200,
+  },
 ];
 
-export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[2];
+export const DEFAULT_SORT_COLUMN = COLUMN_DEFINITIONS_MAIN[3];
 
 export const SELECTION_LABELS = {
   itemSelectionLabel: (data, row) => `select ${row.callId}`,
@@ -108,6 +148,7 @@ const VISIBLE_CONTENT_OPTIONS = [
     label: 'Call list properties',
     options: [
       { id: 'callId', label: 'Call ID', editable: false },
+      { id: 'alerts', label: 'Alerts' },
       { id: 'agentId', label: 'Agent' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
@@ -117,11 +158,14 @@ const VISIBLE_CONTENT_OPTIONS = [
       { id: 'agentSentiment', label: 'Agent Sentiment' },
       { id: 'agentSentimentTrend', label: 'Agent Sentiment Trend' },
       { id: 'conversationDuration', label: 'Duration' },
+      { id: 'menu', label: 'Menu' },
+      { id: 'callCategories', label: 'Categories' },
     ],
   },
 ];
 
 const VISIBLE_CONTENT = [
+  'alerts',
   'agentId',
   'initiationTimeStamp',
   'callerPhoneNumber',
@@ -129,6 +173,7 @@ const VISIBLE_CONTENT = [
   'callerSentiment',
   'callerSentimentTrend',
   'conversationDuration',
+  'menu',
 ];
 
 export const DEFAULT_PREFERENCES = {

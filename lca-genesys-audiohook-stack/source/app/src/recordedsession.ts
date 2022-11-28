@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { FastifyLoggerInstance, LogLevel } from 'fastify';
 import { IncomingHttpHeaders } from 'http';
 import { WriteStream, createWriteStream, createReadStream } from 'fs';
@@ -5,7 +8,8 @@ import { unlink, stat } from 'fs/promises';
 import { S3 } from 'aws-sdk';
 import { Session, StatisticsInfo } from './session';
 import { createSession, SessionWebSocket } from './sessionimpl';
-import { writeRecordingUrlToKds } from './lca/lca';
+import { writeCallEvent } from './lca/lca';
+import { CallRecordingEvent } from './lca/entities-lca';
 
 import { 
     StreamDuration, 
@@ -18,7 +22,10 @@ import {
 import { normalizeError, uuid } from './utils';
 import { Logger } from './types';
 import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config();
 
+const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
 
 export type RecordingBucket = {
     readonly service: S3;
@@ -247,15 +254,17 @@ export class RecordedSession {
                     outerLogger.warn(`Error copying "${this.filePathWav}" to bucket=${this.recordingBucket.name}, key=${key}: ${normalizeError(err).message}`);
                 }
                 const callid = path.parse(this.filePathWav).name;
-
-                await writeRecordingUrlToKds({
-                    callId: callid,
-                    eventType: 'ADD_S3_RECORDING_URL',
-                    recordingsBucket: this.recordingBucket.name ?? '',
-                    recordingsKeyPrefix: this.recordingBucket.keyprefix ?? '',
-                    recordingsKey: key
-                }); 
-                outerLogger.info('Successfully written to KDS');
+                const url = new URL(this.recordingBucket.keyprefix+key, `https://${this.recordingBucket.name}.s3.${awsRegion}.amazonaws.com`);
+                const recordingUrl = url.href;
+                
+                const callEvent: CallRecordingEvent = {
+                    EventType: 'ADD_S3_RECORDING_URL',
+                    CallId: callid,
+                    RecordingUrl: recordingUrl
+                };
+                await writeCallEvent(callEvent);
+                outerLogger.info('Written Add s3 recording event to KDS');
+                outerLogger.debug(JSON.stringify(callEvent));
             }
 
             try {

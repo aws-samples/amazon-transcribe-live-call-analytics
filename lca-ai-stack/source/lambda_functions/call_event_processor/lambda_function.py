@@ -6,12 +6,15 @@
 import asyncio
 from os import environ, getenv
 from typing import TYPE_CHECKING, Dict, List
+import json
+import re
 
 # third-party imports from Lambda layer
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
 import boto3
 from botocore.config import Config as BotoCoreConfig
+
 
 # imports from Lambda layer
 # pylint: disable=import-error
@@ -29,6 +32,9 @@ if TYPE_CHECKING:
     from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource, Table as DynamoDbTable
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.client import LambdaClient
+    from mypy_boto3_comprehend.client import ComprehendClient
+    from mypy_boto3_sns.client import SNSClient
+    from mypy_boto3_ssm.client import SSMClient
     from boto3 import Session as Boto3Session
 else:
     Boto3Session = object
@@ -36,6 +42,9 @@ else:
     DynamoDbTable = object
     LexRuntimeV2Client = object
     LambdaClient = object
+    ComprehendClient = object
+    SNSClient = object
+    SSMClient = object
 
 
 APPSYNC_GRAPHQL_URL = environ["APPSYNC_GRAPHQL_URL"]
@@ -75,6 +84,15 @@ else:
     LAMBDA_CLIENT = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN = environ["LAMBDA_AGENT_ASSIST_FUNCTION_ARN"]
 
+IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
+if IS_SENTIMENT_ANALYSIS_ENABLED:
+    COMPREHEND_CLIENT: ComprehendClient = BOTO3_SESSION.client("comprehend", config=CLIENT_CONFIG)
+else:
+    COMPREHEND_CLIENT = None
+COMPREHEND_LANGUAGE_CODE = getenv("COMPREHEND_LANGUAGE_CODE", "en")
+
+SNS_CLIENT:SNSClient = BOTO3_SESSION.client("sns", config=CLIENT_CONFIG)
+SSM_CLIENT:SSMClient = BOTO3_SESSION.client("ssm", config=CLIENT_CONFIG)
 
 CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
 MUTATION_FUNCTION_MAPPING = {
@@ -88,6 +106,12 @@ MUTATION_FUNCTION_NAME = MUTATION_FUNCTION_MAPPING.get(CALL_AUDIO_SOURCE)
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 EVENT_LOOP = asyncio.get_event_loop()
+
+setting_response = SSM_CLIENT.get_parameter(Name=getenv("PARAMETER_STORE_NAME"))
+SETTINGS = json.loads(setting_response["Parameter"]["Value"])
+if "CategoryAlertRegex" in SETTINGS:
+    SETTINGS['AlertRegEx'] = re.compile(SETTINGS["CategoryAlertRegex"])
+
 
 async def update_state(event, event_processor_results) -> Dict[str, object]:
     """Updates the Lambda Tumbling Window State"""
@@ -113,7 +137,7 @@ async def update_state(event, event_processor_results) -> Dict[str, object]:
 
 
 async def process_event(event) -> Dict[str, List]:
-    """Processes a Batch of Transcript Records""" 
+    """Processes a Batch of Transcript Records"""
     async with TranscriptBatchProcessor(
         appsync_client=APPSYNC_CLIENT,
         agent_assist_args=dict(
@@ -122,10 +146,17 @@ async def process_event(event) -> Dict[str, List]:
             lex_bot_alias_id=LEX_BOT_ALIAS_ID,
             lex_bot_locale_id=LEX_BOT_LOCALE_ID,
             lambda_client=LAMBDA_CLIENT,
-            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN
+            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
+            dynamodb_table_name=STATE_DYNAMODB_TABLE_NAME,
+        ),
+        sentiment_analysis_args=dict(
+            comprehend_client=COMPREHEND_CLIENT,
+            comprehend_language_code=COMPREHEND_LANGUAGE_CODE
         ),
         # called for each record right before the context manager exits
         api_mutation_fn=MUTATION_FUNCTION_NAME,
+        sns_client=SNS_CLIENT,
+        settings=SETTINGS
     ) as processor:
         await processor.handle_event(event=event)
 

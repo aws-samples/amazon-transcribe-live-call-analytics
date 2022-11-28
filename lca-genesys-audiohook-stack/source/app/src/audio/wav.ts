@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { open, FileHandle } from 'fs/promises';
 import { WriteStream, createWriteStream } from 'fs';
 import { once } from 'events';

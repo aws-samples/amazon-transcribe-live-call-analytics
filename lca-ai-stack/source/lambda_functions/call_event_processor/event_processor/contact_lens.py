@@ -27,7 +27,7 @@ from graphql_helpers import (
 )
 from lex_utils import recognize_text_lex
 from lambda_utils import invoke_lambda
-
+from sns_utils import publish_sns
 
 # pylint: enable=import-error
 
@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from mypy_boto3_lexv2_runtime.client import LexRuntimeV2Client
     from mypy_boto3_lambda.type_defs import InvocationResponseTypeDef
     from mypy_boto3_lambda.client import LambdaClient
+    from mypy_boto3_sns.client import SNSClient
     from boto3 import Session as Boto3Session
 else:
     LexRuntimeV2Client = object
@@ -43,6 +44,7 @@ else:
     LambdaClient = object
     InvocationResponseTypeDef = object
     Boto3Session = object
+    SNSClient = object
 
 BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
@@ -63,7 +65,10 @@ LEX_BOT_LOCALE_ID: str
 IS_LAMBDA_AGENT_ASSIST_ENABLED = False
 LAMBDA_CLIENT: Optional[LexRuntimeV2Client] = None
 LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
+DYNAMODB_TABLE_NAME: str
+SETTINGS: Dict[str, Any]
 
+SNS_TOPIC_ARN = getenv("SNS_TOPIC_ARN", "")
 
 # Contact Lens doesn't include call metadata so we attempt to use API lookups
 # to retrieve numbers from defined contact attributes on receipt of STARTED event.
@@ -78,7 +83,6 @@ CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv(
 
 # Get value for DynamboDB TTL field
 DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
-
 
 def get_ttl():
     return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
@@ -300,6 +304,7 @@ def transform_segment_to_add_transcript(segment: Dict) -> Dict[str, object]:
         StartTime=start_time,
         Status="TRANSCRIBING",
         Transcript=transcript,
+        OriginalTranscript=transcript,
         **sentiment_args,
     )
 
@@ -348,6 +353,121 @@ def add_transcript_segments(
 
     return tasks
 
+##########################################################################
+# Call Categories
+##########################################################################
+
+
+async def send_call_category(
+    transcript_segment_args: Dict[str, Any],
+    category: str,
+    appsync_session: AppsyncAsyncClientSession
+):
+    """Send Call Category Transcript Segment"""
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    transcript_segment = {**transcript_segment_args, "Transcript": category}
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                *transcript_segment_fields(schema),
+            )
+        )
+    )
+
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    return result
+
+async def publish_sns_category(
+    sns_client: SNSClient,
+    category_name: str,
+    call_id: str
+):
+    LOGGER.debug("Publishing Call Category to SNS")
+    isAlert = False
+    if "AlertRegEx" in SETTINGS:
+        isMatch = SETTINGS["AlertRegEx"].match(category_name)
+        if isMatch:
+            isAlert = True
+    
+    result = await publish_sns(category_name=category_name,
+                               call_id=call_id,
+                               sns_topic_arn=SNS_TOPIC_ARN,
+                               sns_client=sns_client,
+                               isAlert=isAlert
+                               )
+    return result
+
+
+def add_call_category(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient
+) -> List[Coroutine]:
+    """Add Categories GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    LOGGER.debug("Detected Call Category")
+    send_call_category_args = []
+    tasks = []
+    call_id = message["ContactId"]
+
+    for segment in message.get("Segments", []):
+        # only handle categories and transcripts with issues
+        if (
+            "Transcript" in segment and not segment["Transcript"].get("IssuesDetected")
+        ) and "Categories" not in segment:
+            continue
+
+        categories = segment.get("Categories", {})
+        for category in categories.get("MatchedCategories", []):
+            category_details = categories["MatchedDetails"][category]
+            category_segment = transform_segment_to_categories_agent_assist(
+                category=category,
+                category_details=category_details,
+                call_id=call_id,
+            )
+
+            end_time = category_segment['StartTime'] + 0.1
+
+            send_call_category_args.append(
+                dict(
+                    category=category_segment['Transcript'],
+                    transcript_segment_args=dict(
+                        CallId=message["CallId"],
+                        Channel="CATEGORY_MATCH",
+                        CreatedAt=category_segment["CreatedAt"],
+                        EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
+                        SegmentId=str(uuid.uuid4()),
+                        StartTime=category_segment['StartTime'],
+                        IsPartial=category_segment['IsPartial'],
+                        Status="TRANSCRIBING",
+                    ),
+                )
+            )
+
+    for call_category_args in send_call_category_args:
+        task = send_call_category(
+            appsync_session=appsync_session,
+            **call_category_args,
+        )
+        tasks.append(task)
+        sns_task = publish_sns_category(
+            sns_client=sns_client,
+            category_name=category,
+            call_id=message["CallId"]
+        )
+        tasks.append(sns_task)
+
+    return tasks
 
 ##########################################################################
 # Contact Lens Agent Assist
@@ -740,7 +860,9 @@ async def send_lambda_agent_assist(
     payload = {
         'text': content,
         'call_id': call_id,
-        'transcript_segment_args': transcript_segment_args
+        'transcript_segment_args': transcript_segment_args,
+        'dynamodb_table_name': DYNAMODB_TABLE_NAME,
+        'dynamodb_pk': f"c#{call_id}",
     }
 
     LOGGER.debug("Agent Assist Lambda Request: %s", content)
@@ -935,8 +1057,11 @@ def invoke_transcript_lambda_hook(
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
+    settings: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient,
     agent_assist_args: Dict[str, Any],
+    sentiment_analysis_args: Dict[str, Any]
 ) -> Dict[Literal["successes", "errors"], List]:
     """Executes AppSync API Mutation"""
     # pylint: disable=global-statement
@@ -947,6 +1072,9 @@ async def execute_process_event_api_mutation(
     global LEX_BOT_LOCALE_ID
     global LAMBDA_CLIENT
     global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
+    global DYNAMODB_TABLE_NAME
+    global SETTINGS
+
     # pylint: enable=global-statement
 
     LEXV2_CLIENT = agent_assist_args.get("lex_client")
@@ -957,6 +1085,8 @@ async def execute_process_event_api_mutation(
     LAMBDA_CLIENT = agent_assist_args.get("lambda_client")
     IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
     LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
+    DYNAMODB_TABLE_NAME = agent_assist_args.get("dynamodb_table_name", "")
+    SETTINGS = settings
 
     return_value: Dict[Literal["successes", "errors"], List] = {
         "successes": [],
@@ -976,6 +1106,12 @@ async def execute_process_event_api_mutation(
         add_transcript_tasks = add_transcript_segments(
             message=message_normalized,
             appsync_session=appsync_session,
+        )
+
+        add_call_category_tasks = add_call_category(
+            message=message_normalized,
+            appsync_session=appsync_session,
+            sns_client=sns_client,
         )
 
         add_contact_lens_agent_assist_tasks = add_contact_lens_agent_assistances(
@@ -1003,6 +1139,7 @@ async def execute_process_event_api_mutation(
 
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
+            *add_call_category_tasks,
             *add_contact_lens_agent_assist_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,

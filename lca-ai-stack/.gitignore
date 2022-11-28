@@ -12,3 +12,4 @@ deployment/global-s3-assets/
 node_modules
 out
 .aws-sam
+.env

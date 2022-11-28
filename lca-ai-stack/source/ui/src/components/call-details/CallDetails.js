@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { Logger } from 'aws-amplify';
 
 import useCallsContext from '../../contexts/calls';
+import useSettingsContext from '../../contexts/settings';
 
 import mapCallsAttributes from '../common/map-call-attributes';
 import { IN_PROGRESS_STATUS } from '../common/get-recording-status';
@@ -25,13 +26,14 @@ const CallDetails = () => {
     setToolsOpen,
     setLiveTranscriptCallId,
   } = useCallsContext();
+  const { settings } = useSettingsContext();
 
   const [call, setCall] = useState(null);
 
   const sendInitCallRequests = async () => {
     const response = await getCallDetailsFromCallIds([callId]);
     logger.debug('call detail response', response);
-    const callsMap = mapCallsAttributes(response);
+    const callsMap = mapCallsAttributes(response, settings);
     const callDetails = callsMap[0];
     if (callDetails) {
       setCall(callDetails);
@@ -61,7 +63,7 @@ const CallDetails = () => {
     }
     const callsFiltered = calls.filter((c) => c.CallId === callId);
     if (callsFiltered && callsFiltered?.length) {
-      const callsMap = mapCallsAttributes([callsFiltered[0]]);
+      const callsMap = mapCallsAttributes([callsFiltered[0]], settings);
       const callDetails = callsMap[0];
       if (callDetails?.updatedAt && call.updatedAt < callDetails.updatedAt) {
         logger.debug('Updating call', callDetails);

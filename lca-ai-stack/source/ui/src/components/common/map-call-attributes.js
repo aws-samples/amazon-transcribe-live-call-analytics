@@ -5,11 +5,16 @@ import { getSentimentTrendLabel, getWeightedSentimentLabel } from './sentiment';
 
 /* Maps call attributes from API to a format that can be used in tables and panel */
 // eslint-disable-next-line arrow-body-style
-const mapCallsAttributes = (calls) => {
+const mapCallsAttributes = (calls, settings) => {
+  const regex = settings?.CategoryAlertRegex ?? '.*';
+  const countAlerts = (categories) => categories.filter((category) => category.match(regex)).length;
+
   return calls.map((item) => {
     const {
       CallId: callId,
       AgentId: agentId,
+      CallCategories: callCategories,
+      IssuesDetected: issuesDetected,
       CreatedAt: callTimestamp,
       CustomerPhoneNumber: callerPhoneNumber,
       SystemPhoneNumber: systemPhoneNumber,
@@ -17,6 +22,7 @@ const mapCallsAttributes = (calls) => {
       RecordingUrl: recordingUrl,
       TotalConversationDurationMillis: totalConversationDurationMillis = 0,
       Sentiment: sentiment = {},
+      PcaUrl: pcaUrl,
     } = item;
     const recordingStatus = getRecordingStatus(item);
 
@@ -29,14 +35,21 @@ const mapCallsAttributes = (calls) => {
     const callerSentimentTrendLabel = getSentimentTrendLabel(callerSentimentByQuarter);
     const agentSentimentByQuarter = sentiment?.SentimentByPeriod?.QUARTER?.AGENT || [];
     const agentSentimentTrendLabel = getSentimentTrendLabel(agentSentimentByQuarter);
+    const callCategoryCount = callCategories?.length || 0;
+    const alertCount = callCategories?.length ? countAlerts(callCategories) : 0;
 
     return {
       callId,
       agentId,
+      callCategories,
+      callCategoryCount,
+      alertCount,
+      issuesDetected,
       callerPhoneNumber,
       systemPhoneNumber,
       updatedAt,
       recordingUrl,
+      pcaUrl,
       totalConversationDurationMillis,
       conversationDurationTimeStamp: new Date(totalConversationDurationMillis)
         .toISOString()

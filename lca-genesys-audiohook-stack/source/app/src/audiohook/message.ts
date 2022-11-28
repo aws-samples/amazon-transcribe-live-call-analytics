@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 export type Uuid = string;             // UUID as defined by RFC#4122
 
 export type SequenceNumber = number;   // Non-negative integer

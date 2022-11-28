@@ -45,7 +45,7 @@ Parameters:
     Type: String
     Default: 'true'
     Description: >-
-      Enable sentiment analysis using Amazon Comprehend
+      Enable sentiment analysis
     AllowedValues:
       - 'true'
       - 'false'
@@ -124,10 +124,11 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      Email address domain (e.g. example.com) that is allowed to signin and signup using the web UI.
+      Email address domain (example.com) or comma separated list of email domains 
+      (example1.com, example2.com) allowed to signin and signup using the web UI.
       If left empty, signup via the web UI is disabled and users will have to be created using
       Cognito.
-    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6})$'
+    AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6}(, *([\w-]+\.)+[\w-]{2,6})*)$'
 
   IsLexAgentAssistEnabled:
     Type: String
@@ -225,10 +226,16 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.5.2
+    Default: 0.6.000
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
+
+  CategoryAlertRegEx:
+    Type: String
+    Default: .*
+    Description: >
+      A regular expression that will be used to show an alert in the UI if a category matches
 
 Metadata:
   "AWS::CloudFormation::Interface":
@@ -250,7 +257,7 @@ Metadata:
       CloudFrontAllowedGeos:
         default: CloudFront Allowed Geographies
       IsSentimentAnalysisEnabled:
-        default: Enable Sentiment Analysis with Comprehend
+        default: Enable Sentiment Analysis
       ComprehendLanguageCode:
         default: Comprehend Sentiment Analysis Language Code
       TranscriptLambdaHookFunctionArn:
@@ -294,6 +301,9 @@ Outputs:
   CallEventProcessorFunctionRoleName:
     Description: The Name of the IAM role used by CallEventProcessorFunction
     Value: !Ref CallEventProcessorFunctionRole
+  SNSTopic:
+    Description: The SNS topic name that LCA publishes category events to
+    Value: !GetAtt CategorySNSTopic.TopicName
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
@@ -392,6 +402,16 @@ Resources:
             Action:
               - "kms:*"
             Resource: "*"
+
+  ##########################################################################
+  # ParameterStore
+  ##########################################################################
+
+  LCASettingsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: !Sub '{"CategoryAlertRegex":"${CategoryAlertRegEx}"}'
 
   ##########################################################################
   # CodeBuild
@@ -534,6 +554,8 @@ Resources:
           # aws-exports.js Amplify config. The values are embedded in the
           # code at build time. See:
           # https://create-react-app.dev/docs/adding-custom-environment-variables/
+          - Name: REACT_APP_SETTINGS_PARAMETER
+            Value: !Ref LCASettingsParameter
           - Name: REACT_APP_USER_POOL_ID
             Value: !Ref UserPool
           - Name: REACT_APP_USER_POOL_CLIENT_ID
@@ -645,6 +667,13 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
 
+        
+  ##########################################################################
+  # SNS Topic for Category Event Notifications
+  ##########################################################################
+  CategorySNSTopic:
+    Type:  AWS::SNS::Topic
+
   ##########################################################################
   # Call Event Processor
   ##########################################################################
@@ -687,6 +716,14 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref EventSourcingTable
         - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref CategorySNSTopic
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
             - Effect: Allow
               Action:
                 - appsync:GraphQL
@@ -745,6 +782,8 @@ Resources:
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+          SNS_TOPIC_ARN: !Ref CategorySNSTopic
+          PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 
   ##########################################################################
   # Transcript Enrichment Lambda Layers
@@ -947,6 +986,17 @@ Resources:
       FieldName: updateRecordingUrl
       RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
       ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  UpdatePcaUrlAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: updatePcaUrl
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
   
   UpdateAgentAppSyncResolver:
     Type: AWS::AppSync::Resolver
@@ -956,6 +1006,28 @@ Resources:
       DataSourceName: !GetAtt AppSyncDataSource.Name
       TypeName: Mutation
       FieldName: updateAgent
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  AddCallCategoryAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: addCallCategory
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+
+  AddIssuesDetectedAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: addIssuesDetected
       RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
       ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
 
@@ -1153,6 +1225,15 @@ Resources:
                         - ShouldCreateRecordingBucket
                         - !Ref RecordingsBucket
                         - !Ref S3BucketName
+        - PolicyName: accessParameterStore
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -1200,19 +1281,23 @@ Resources:
       Timeout: 3
       Environment:
         Variables:
-          ALLOWED_SIGNUP_EMAIL_DOMAIN: !Ref AllowedSignUpEmailDomain
+          ALLOWED_SIGNUP_EMAIL_DOMAINS: !Ref AllowedSignUpEmailDomain
       InlineCode: |
         exports.handler = async (event, context) => {
           console.log(event);
+          const allowed_domains = (
+              process.env?.ALLOWED_SIGNUP_EMAIL_DOMAINS
+              .split(",").map(domain => {return domain.trim()})
+          );
           const { email } = event.request?.userAttributes;
           if (!email || !email.includes('@')) {
             throw Error('Username does not exists or invalid email address');
           }
           const emailDomain = email?.split('@')[1];
-          if (!emailDomain || !process.env?.ALLOWED_SIGNUP_EMAIL_DOMAIN) {
+          if (!emailDomain || !allowed_domains) {
             throw new Error('Server error - invalid configuration');
           }
-          if (emailDomain !== process.env?.ALLOWED_SIGNUP_EMAIL_DOMAIN) {
+          if (!allowed_domains.includes(emailDomain)) {
             throw new Error('Invalid email address domain');
           }
           return event;
