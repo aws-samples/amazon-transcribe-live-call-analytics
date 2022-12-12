@@ -1,0 +1,5 @@
+sedona/
+node_modules/
+dist/
+.eslintcache
+.DS_Store
