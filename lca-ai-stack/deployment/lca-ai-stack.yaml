@@ -271,6 +271,7 @@ Conditions:
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
+  ShouldEnableEndOfCallLambdaHookFunction: !Not [!Equals [!Ref EndOfCallLambdaHookFunctionArn, ""]]
 
 Outputs:
   CallDataStreamName:
@@ -755,6 +756,13 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !Sub "${TranscriptLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
+            - !If 
+              - ShouldEnableEndOfCallLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${EndOfCallLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -782,6 +790,7 @@ Resources:
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+          ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN: !Ref EndOfCallLambdaHookFunctionArn
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 

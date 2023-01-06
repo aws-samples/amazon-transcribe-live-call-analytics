@@ -61,9 +61,11 @@ CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
+ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN = getenv("ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN", "")
+
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
     "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
-if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN:
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN:
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
@@ -812,10 +814,36 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
+
+
+##########################################################################
+# End of Call Lambda Hook
+# User provided function 
+##########################################################################
+
+def invoke_end_of_call_lambda_hook(
+    message: Dict[str, Any]
+):
+    LOGGER.debug("End of Call Lambda Hook Arn: %s", ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN)
+    LOGGER.debug("End of Call Lambda Hook Request: %s", message)
+    lambda_response = LAMBDA_HOOK_CLIENT.invoke(
+        FunctionName=ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(message)
+    )
+    LOGGER.debug("End of Call Lambda Hook Response: ", extra=lambda_response)
+    try:
+        message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+    except Exception as error:
+        LOGGER.error(
+            "End of Call Lambda Hook result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
+            extra=error,
+        )
+    return message
+
 ##########################################################################
 # Main event processing
 ##########################################################################
-
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
@@ -876,6 +904,11 @@ async def execute_process_event_api_mutation(
         "END",
     ]:
         # UPDATE STATUS
+        if (ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN):
+            call_summary = invoke_end_of_call_lambda_hook(message)
+            LOGGER.debug("Call summary: ")
+            LOGGER.debug(call_summary)
+
         LOGGER.debug("update status")
         response = await execute_update_call_status_mutation(
             message=message,
@@ -902,12 +935,13 @@ async def execute_process_event_api_mutation(
             if not participantRole:
                 return return_value
         # Invoke custom lambda hook (if any) and use returned version of message.
-        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
-            message = invoke_transcript_lambda_hook(message)
 
         normalized_message = {
             **normalize_transcript_segment({**message}),
         }
+
+        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
+            message = invoke_transcript_lambda_hook(message)
 
         issues_detected = normalized_message.get("IssuesDetected", None)
         if issues_detected and len(issues_detected) > 0:
