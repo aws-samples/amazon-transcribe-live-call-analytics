@@ -248,6 +248,14 @@ Parameters:
       Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
       both Partial and Non-Partial transcript segments (false).
 
+  EndOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for end of call event. The function gets CallId as input.
+      This function can implement custom logic that are relevant to end of call processing, for example, creating a call summary.
+
   AdminEmail:
     Type: String
     Description: >-
@@ -383,6 +391,7 @@ Metadata:
           - IsSentimentAnalysisEnabled
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
+          - EndOfCallLambdaHookFunctionArn
       - Label:
           default: Download locations
         Parameters:
@@ -467,6 +476,8 @@ Metadata:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
         default: Lambda Hook Function Mode Non-Partial only
+      EndOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       CloudFrontPriceClass:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
@@ -689,6 +700,7 @@ Resources:
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+        EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -728,6 +740,7 @@ Resources:
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+        EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
 
   CHIMEVCSTACK:
