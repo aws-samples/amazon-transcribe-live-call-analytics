@@ -242,7 +242,7 @@ const CallSummary = ({ item }) => {
             content: (
               <div>
                 {/* eslint-disable-next-line react/no-array-index-key */}
-                <TextContent color="gray" className="issue-detected">
+                <TextContent color="gray">
                   <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.callSummaryText}</ReactMarkdown>
                 </TextContent>
               </div>
