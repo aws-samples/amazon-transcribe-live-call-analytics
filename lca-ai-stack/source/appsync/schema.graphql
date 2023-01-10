@@ -33,6 +33,7 @@ type Call implements DynamoDbBase @aws_cognito_user_pools
 	Metadatajson: String
 	CallCategories: [String]
 	IssuesDetected: String
+	CallSummaryText: String
 }
 
 type CallList @aws_cognito_user_pools
@@ -95,6 +96,7 @@ type Mutation @aws_iam {
 	updateAgent(input: UpdateAgentInput!): Call
 	addCallCategory(input: AddCallCategoryInput!): Call
 	addIssuesDetected(input: AddIssuesDetectedInput!): Call
+	addCallSummaryText(input: AddCallSummaryTextInput!): Call
 	addTranscriptSegment(input: AddTranscriptSegmentInput!): TranscriptSegment
 }
 
@@ -188,7 +190,7 @@ type Subscription {
 	onCreateCall: CreateCallOutput
 		@aws_subscribe(mutations: ["createCall"])
 	onUpdateCall(CallId: ID): Call
-		@aws_subscribe(mutations: ["updateCallStatus","updateCallAggregation","updateRecordingUrl","updatePcaUrl","updateAgent", "addCallCategory", "addIssuesDetected"])
+		@aws_subscribe(mutations: ["updateCallStatus","updateCallAggregation","updateRecordingUrl","updatePcaUrl","updateAgent", "addCallCategory", "addIssuesDetected", "addCallSummaryText"])
 	onAddTranscriptSegment(CallId: ID, Channel: String): TranscriptSegment
 		@aws_subscribe(mutations: ["addTranscriptSegment"])
 }
@@ -235,6 +237,13 @@ input AddIssuesDetectedInput {
 	IssuesDetected: String!
 	UpdatedAt: AWSDateTime
 }
+
+input AddCallSummaryTextInput {
+	CallId: ID!
+	CallSummaryText: String!
+	UpdatedAt: AWSDateTime
+}
+
 input UpdateCallAggregationInput {
 	CallId: ID!
 	Status: CallStatus!

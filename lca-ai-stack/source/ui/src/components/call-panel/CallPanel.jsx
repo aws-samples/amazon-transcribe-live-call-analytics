@@ -237,6 +237,18 @@ const CallSummary = ({ item }) => {
       <Tabs
         tabs={[
           {
+            label: 'Summary',
+            id: 'summary',
+            content: (
+              <div>
+                {/* eslint-disable-next-line react/no-array-index-key */}
+                <TextContent color="gray" className="issue-detected">
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.callSummaryText}</ReactMarkdown>
+                </TextContent>
+              </div>
+            ),
+          },
+          {
             label: 'Issues',
             id: 'issues',
             content: (
