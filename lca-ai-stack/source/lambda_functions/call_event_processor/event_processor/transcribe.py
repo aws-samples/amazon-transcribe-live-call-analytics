@@ -397,6 +397,39 @@ async def execute_add_issues_detected_mutation(
 
     return result
 
+async def execute_add_call_summary_text_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    calltext = message.get("CallSummaryText", None)
+    call_summary_text = ""
+    if calltext and len(calltext) > 0:
+        call_summary_text = calltext
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addCallSummaryText.args(
+                input={**message, "CallSummaryText": call_summary_text}
+            ).select(*call_fields(schema))
+        )
+    )
+
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
+
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -908,6 +941,11 @@ async def execute_process_event_api_mutation(
             call_summary = invoke_end_of_call_lambda_hook(message)
             LOGGER.debug("Call summary: ")
             LOGGER.debug(call_summary)
+            message['CallSummaryText'] = call_summary
+            response = await execute_add_call_summary_text_mutation(
+                message=message,
+                appsync_session=appsync_session
+            )
 
         LOGGER.debug("update status")
         response = await execute_update_call_status_mutation(
