@@ -134,30 +134,6 @@ const languageCodes = [
   { value: 'cy', label: 'Welsh' },
 ];
 
-const translateTranscript = (translateClient, transcript, sourceLanguage, targetLanguage) => {
-  const [translate, setTranslate] = useState();
-
-  const params = {
-    Text: transcript,
-    SourceLanguageCode: sourceLanguage,
-    TargetLanguageCode: targetLanguage,
-  };
-  /* let translatedText = ''; */
-  const command = new TranslateTextCommand(params);
-
-  useEffect(() => {
-    translateClient.send(command).then(
-      (data) => {
-        setTranslate(data.TranslatedText);
-      },
-      (error) => {
-        logger.debug('Error from translate:', error);
-      },
-    );
-  }, [command, translate]);
-  return translate;
-};
-
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 const CallAttributes = ({ item, setToolsOpen }) => (
   <Container
@@ -413,32 +389,38 @@ const getTimestampFromSeconds = (secs) => {
   return new Date(secs * 1000).toISOString().substr(14, 7);
 };
 
-const TranscriptContent = ({ segment }) => {
+const TranscriptContent = ({ segment, translateCache, id }) => {
   const { settings } = useSettingsContext();
   const regex = settings?.CategoryAlertRegex ?? '.*';
 
-  const {
-    transcript,
-    segmentId,
-    channel,
-    translateClient,
-    translateOn,
-    targetLanguage,
-    agentTranscript,
-  } = segment;
+  const { transcript, segmentId, channel, targetLanguage, agentTranscript } = segment;
+  const k = id.concat(targetLanguage);
+  const cache = translateCache;
 
-  let r = '';
-  if (translateOn && targetLanguage && targetLanguage !== '') {
-    r = translateTranscript(translateClient, transcript, 'auto', targetLanguage);
-  }
+  // prettier-ignore
+  const lastTranslated = targetLanguage !== ''
+    && cache[k] !== undefined
+    && cache[k].lastTranslated !== undefined
+    ? cache[k].lastTranslated
+    : '';
 
-  const result = r !== undefined ? r : '';
+  // prettier-ignore
+  const currTranslated = targetLanguage !== ''
+    && cache[k] !== undefined
+    && cache[k].translated !== undefined
+    ? cache[k].translated
+    : lastTranslated;
+
+  const result = currTranslated !== undefined ? currTranslated : '';
+
   const transcriptPiiSplit = transcript.split(piiTypesSplitRegEx);
+
   const transcriptComponents = transcriptPiiSplit.map((t, i) => {
     if (piiTypes.includes(t)) {
       // eslint-disable-next-line react/no-array-index-key
       return <Badge key={`${segmentId}-pii-${i}`} color="red">{`${t}`}</Badge>;
     }
+
     let className = '';
     let text = t;
     let translatedText = result;
@@ -462,6 +444,7 @@ const TranscriptContent = ({ segment }) => {
       default:
         break;
     }
+
     return (
       // prettier-ignore
       // eslint-disable-next-line react/no-array-index-key
@@ -479,7 +462,7 @@ const TranscriptContent = ({ segment }) => {
   );
 };
 
-const TranscriptSegment = ({ segment }) => {
+const TranscriptSegment = ({ segment, translateCache, id }) => {
   const { channel } = segment;
 
   if (channel === 'CATEGORY_MATCH') {
@@ -495,7 +478,7 @@ const TranscriptSegment = ({ segment }) => {
       >
         {getSentimentImage(segment)}
         <SpaceBetween direction="vertical" size="xxs">
-          <TranscriptContent segment={newSegment} />
+          <TranscriptContent segment={newSegment} translateCache={translateCache} id={id} />
         </SpaceBetween>
       </Grid>
     );
@@ -519,7 +502,7 @@ const TranscriptSegment = ({ segment }) => {
               ${getTimestampFromSeconds(segment.endTime)}`}
           </TextContent>
         </SpaceBetween>
-        <TranscriptContent segment={segment} />
+        <TranscriptContent segment={segment} translateCache={translateCache} id={id} />
       </SpaceBetween>
     </Grid>
   );
@@ -530,17 +513,83 @@ const CallInProgressTranscript = ({
   callTranscriptPerCallId,
   autoScroll,
   translateClient,
-  translateOn,
   targetLanguage,
   agentTranscript,
 }) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
+  const [translateCache, setTranslateCache] = useState({});
+
   // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
   const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
+
+  const getSegments = () => {
+    const currentTurnByTurnSegments = transcriptChannels
+      .map((c) => {
+        const { segments } = transcriptsForThisCallId[c];
+        return segments;
+      })
+      // sort entries by end time
+      .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
+      .map((c) => {
+        const t = c;
+        return t;
+      });
+
+    return currentTurnByTurnSegments;
+  };
+
+  const updateTranslateCache = () => {
+    const seg = getSegments();
+    // prettier-ignore
+    for (let i = 0; i < seg.length; i += 1) {
+      const k = seg[i].segmentId.concat('-', seg[i].createdAt, targetLanguage);
+
+      // prettier-ignore
+      if (
+        (translateCache[k] === undefined
+         || (translateCache[k].transcript !== undefined
+             && seg[i].transcript !== undefined
+             && translateCache[k].transcript !== seg[i].transcript)
+         || translateCache[k].translated === undefined)
+      ) {
+        // Call the translate API
+        const params = {
+          Text: seg[i].transcript,
+          SourceLanguageCode: 'auto',
+          TargetLanguageCode: targetLanguage,
+        };
+        const command = new TranslateTextCommand(params);
+
+        logger.debug('Translate API being invoked for:', seg[i].transcript, targetLanguage);
+
+        translateClient.send(command).then(
+          (data) => {
+            logger.debug('Translated transcript:', data.TranslatedText);
+            translateCache[k] = {
+              cacheId: k,
+              transcript: seg[i].transcript,
+              lastTranslated: translateCache[k] !== undefined && translateCache[k].translated !== undefined ? translateCache[k].translated : '',
+              translated: data.TranslatedText,
+            };
+          },
+          (error) => {
+            logger.debug('Error from Translate API:', error);
+          },
+        );
+      }
+    }
+    return translateCache;
+  };
+
+  useEffect(() => {
+    if (targetLanguage !== '') {
+      setTranslateCache(updateTranslateCache);
+    }
+  }, [callTranscriptPerCallId, targetLanguage, agentTranscript]);
 
   const getTurnByTurnSegments = () => {
     const currentTurnByTurnSegments = transcriptChannels
@@ -553,9 +602,8 @@ const CallInProgressTranscript = ({
       .map((c) => {
         const t = c;
         t.translateClient = translateClient;
-        t.translateOn = translateOn;
-        t.targetLanguage = targetLanguage;
         t.agentTranscript = agentTranscript;
+        t.targetLanguage = targetLanguage;
         return t;
       })
       .map(
@@ -565,7 +613,7 @@ const CallInProgressTranscript = ({
           && s?.createdAt
           && (s.agentTranscript === undefined
               || s.agentTranscript || s.channel !== 'AGENT')
-          && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}}`} segment={s} />
+          && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} id={`${s.segmentId}-${s.createdAt}`} />
         ),
       );
 
@@ -575,15 +623,11 @@ const CallInProgressTranscript = ({
     return currentTurnByTurnSegments;
   };
 
+  logger.debug('Translate cache map*******:', translateCache);
+
   useEffect(() => {
-    setTurnByTurnSegments(getTurnByTurnSegments());
-  }, [
-    callTranscriptPerCallId,
-    item.recordingStatusLabel,
-    translateOn,
-    targetLanguage,
-    agentTranscript,
-  ]);
+    setTurnByTurnSegments(getTurnByTurnSegments);
+  }, [callTranscriptPerCallId, item.recordingStatusLabel, targetLanguage, agentTranscript]);
 
   useEffect(() => {
     // prettier-ignore
@@ -594,14 +638,7 @@ const CallInProgressTranscript = ({
     ) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [
-    turnByTurnSegments,
-    autoScroll,
-    item.recordingStatusLabel,
-    translateOn,
-    targetLanguage,
-    agentTranscript,
-  ]);
+  }, [turnByTurnSegments, autoScroll, item.recordingStatusLabel, targetLanguage, agentTranscript]);
 
   return (
     <Box className="transcript-box" padding="l">
@@ -617,7 +654,6 @@ const getTranscriptContent = ({
   callTranscriptPerCallId,
   autoScroll,
   translateClient,
-  translateOn,
   targetLanguage,
   agentTranscript,
 }) => {
@@ -631,7 +667,6 @@ const getTranscriptContent = ({
           callTranscriptPerCallId={callTranscriptPerCallId}
           autoScroll={autoScroll}
           translateClient={translateClient}
-          translateOn={translateOn}
           targetLanguage={targetLanguage}
           agentTranscript={agentTranscript}
         />
@@ -651,8 +686,8 @@ const CallTranscriptContainer = ({
     item.recordingStatusLabel !== IN_PROGRESS_STATUS,
   );
 
-  const [translateOn, setTranslateOn] = useState();
-  const [targetLanguage, setTargetLanguage] = useState();
+  const [translateOn, setTranslateOn] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState('');
   const [agentTranscript, setAgentTranscript] = useState(true);
 
   const handleLanguageSelect = (event) => {
@@ -724,7 +759,6 @@ const CallTranscriptContainer = ({
           callTranscriptPerCallId,
           autoScroll,
           translateClient,
-          translateOn,
           targetLanguage,
           agentTranscript,
         })}
