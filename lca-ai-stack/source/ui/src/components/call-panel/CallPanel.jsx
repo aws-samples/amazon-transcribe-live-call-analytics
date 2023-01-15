@@ -57,6 +57,7 @@ const piiTypes = [
 const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
 
 const languageCodes = [
+  { value: '', label: 'Choose a Language' },
   { value: 'af', label: 'Afrikaans' },
   { value: 'sq', label: 'Albanian' },
   { value: 'am', label: 'Amharic' },
@@ -393,23 +394,17 @@ const TranscriptContent = ({ segment, translateCache, id }) => {
   const { settings } = useSettingsContext();
   const regex = settings?.CategoryAlertRegex ?? '.*';
 
-  const { transcript, segmentId, channel, targetLanguage, agentTranscript } = segment;
+  const { transcript, segmentId, channel, targetLanguage, agentTranscript, translateOn } = segment;
+
   const k = id.concat(targetLanguage);
-  const cache = translateCache;
 
   // prettier-ignore
-  const lastTranslated = targetLanguage !== ''
-    && cache[k] !== undefined
-    && cache[k].lastTranslated !== undefined
-    ? cache[k].lastTranslated
+  const currTranslated = translateOn
+    && targetLanguage !== ''
+    && translateCache[k] !== undefined
+    && translateCache[k].translated !== undefined
+    ? translateCache[k].translated
     : '';
-
-  // prettier-ignore
-  const currTranslated = targetLanguage !== ''
-    && cache[k] !== undefined
-    && cache[k].translated !== undefined
-    ? cache[k].translated
-    : lastTranslated;
 
   const result = currTranslated !== undefined ? currTranslated : '';
 
@@ -515,6 +510,7 @@ const CallInProgressTranscript = ({
   translateClient,
   targetLanguage,
   agentTranscript,
+  translateOn,
 }) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
@@ -544,6 +540,7 @@ const CallInProgressTranscript = ({
 
   const updateTranslateCache = () => {
     const seg = getSegments();
+    const promises = [];
     // prettier-ignore
     for (let i = 0; i < seg.length; i += 1) {
       const k = seg[i].segmentId.concat('-', seg[i].createdAt, targetLanguage);
@@ -556,7 +553,7 @@ const CallInProgressTranscript = ({
              && translateCache[k].transcript !== seg[i].transcript)
          || translateCache[k].translated === undefined)
       ) {
-        // Call the translate API
+        // Now call translate API
         const params = {
           Text: seg[i].transcript,
           SourceLanguageCode: 'auto',
@@ -566,30 +563,35 @@ const CallInProgressTranscript = ({
 
         logger.debug('Translate API being invoked for:', seg[i].transcript, targetLanguage);
 
-        translateClient.send(command).then(
-          (data) => {
-            logger.debug('Translated transcript:', data.TranslatedText);
-            translateCache[k] = {
-              cacheId: k,
-              transcript: seg[i].transcript,
-              lastTranslated: translateCache[k] !== undefined && translateCache[k].translated !== undefined ? translateCache[k].translated : '',
-              translated: data.TranslatedText,
-            };
-          },
-          (error) => {
-            logger.debug('Error from Translate API:', error);
-          },
+        promises.push(
+          translateClient.send(command).then(
+            (data) => {
+              const n = {};
+              n[k] = { cacheId: k, transcript: seg[i].transcript, translated: data.TranslatedText };
+              return n;
+            },
+            (error) => {
+              logger.debug('Error from translate:', error);
+            },
+          ),
         );
       }
     }
-    return translateCache;
+    return promises;
   };
 
   useEffect(() => {
-    if (targetLanguage !== '') {
-      setTranslateCache(updateTranslateCache);
+    if (translateOn && targetLanguage !== '') {
+      const promises = updateTranslateCache();
+      Promise.all(promises).then((results) => {
+        // prettier-ignore
+        const r = results.length > 0
+          ? { ...translateCache, ...results.reduce((a, b) => ({ ...a, ...b })) }
+          : translateCache;
+        setTranslateCache(r);
+      });
     }
-  }, [callTranscriptPerCallId, targetLanguage, agentTranscript]);
+  }, [callTranscriptPerCallId, targetLanguage, agentTranscript, translateOn]);
 
   const getTurnByTurnSegments = () => {
     const currentTurnByTurnSegments = transcriptChannels
@@ -601,9 +603,9 @@ const CallInProgressTranscript = ({
       .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
       .map((c) => {
         const t = c;
-        t.translateClient = translateClient;
         t.agentTranscript = agentTranscript;
         t.targetLanguage = targetLanguage;
+        t.translateOn = translateOn;
         return t;
       })
       .map(
@@ -619,15 +621,19 @@ const CallInProgressTranscript = ({
 
     // this element is used for scrolling to bottom and to provide padding
     currentTurnByTurnSegments.push(<div key="bottom" ref={bottomRef} />);
-
     return currentTurnByTurnSegments;
   };
 
-  logger.debug('Translate cache map*******:', translateCache);
-
   useEffect(() => {
     setTurnByTurnSegments(getTurnByTurnSegments);
-  }, [callTranscriptPerCallId, item.recordingStatusLabel, targetLanguage, agentTranscript]);
+  }, [
+    callTranscriptPerCallId,
+    item.recordingStatusLabel,
+    targetLanguage,
+    agentTranscript,
+    translateCache,
+    translateOn,
+  ]);
 
   useEffect(() => {
     // prettier-ignore
@@ -638,7 +644,15 @@ const CallInProgressTranscript = ({
     ) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [turnByTurnSegments, autoScroll, item.recordingStatusLabel, targetLanguage, agentTranscript]);
+  }, [
+    turnByTurnSegments,
+    autoScroll,
+    item.recordingStatusLabel,
+    targetLanguage,
+    agentTranscript,
+    translateCache,
+    translateOn,
+  ]);
 
   return (
     <Box className="transcript-box" padding="l">
@@ -656,6 +670,7 @@ const getTranscriptContent = ({
   translateClient,
   targetLanguage,
   agentTranscript,
+  translateOn,
 }) => {
   switch (item.recordingStatusLabel) {
     case DONE_STATUS:
@@ -669,6 +684,7 @@ const getTranscriptContent = ({
           translateClient={translateClient}
           targetLanguage={targetLanguage}
           agentTranscript={agentTranscript}
+          translateOn={translateOn}
         />
       );
   }
@@ -695,24 +711,17 @@ const CallTranscriptContainer = ({
   };
 
   useEffect(() => {
-    if (translateOn === undefined || !translateOn) {
-      setTargetLanguage('');
-    }
-  }, [translateOn]);
-
-  useEffect(() => {
     setAutoScrollDisabled(item.recordingStatusLabel !== IN_PROGRESS_STATUS);
     setAutoScroll(item.recordingStatusLabel === IN_PROGRESS_STATUS);
   }, [item.recordingStatusLabel]);
 
   const languageChoices = () => {
-    if (translateOn !== undefined && translateOn === true) {
+    if (translateOn) {
       return (
         // prettier-ignore
         // eslint-disable-jsx-a11y/control-has-associated-label
         <div>
-          <select onChange={handleLanguageSelect}>
-            <option value="">Choose a Language</option>
+          <select value={targetLanguage} onChange={handleLanguageSelect}>
             {languageCodes.map(({ value, label }) => <option value={value}>{label}</option>)}
           </select>
         </div>
@@ -761,6 +770,7 @@ const CallTranscriptContainer = ({
           translateClient,
           targetLanguage,
           agentTranscript,
+          translateOn,
         })}
       </Container>
     </Grid>
@@ -843,6 +853,7 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
      for an extended period.
    */
   useEffect(() => {
+    logger.debug('Translate client with refreshed credentials');
     translateClient = new TranslateClient({
       region: awsExports.aws_project_region,
       credentials: currentCredentials,
