@@ -89,6 +89,25 @@ Parameters:
       Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
       both Partial and Non-Partial transcript segments (false).
 
+  EndOfCallTranscriptSummary:
+    Default: 'DISABLED'
+    Type: String
+    AllowedValues:
+      - 'DISABLED'
+      - 'SAGEMAKER'
+      - 'OPENAI'
+      - 'LAMBDA'
+    Description: >
+      Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
+      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type. The OPENAI option requires you to provide your OpenAI API Key, and 
+      will send the transcript to OpenAI GPT-3 text-davinci-003 model with the promt 'Summarize the above call'. The 
+      LAMBDA option requires you to provide a function ARN below.
+
+  OpenAIAPIKey:
+    Default: ''
+    Type: String
+    Description: Your OpenAI API Key to be used to generate a transcript summary of the call.
+    
   EndOfCallLambdaHookFunctionArn:
     Default: ''
     Type: String
@@ -274,14 +293,19 @@ Metadata:
         default: Lambda Hook Function Mode Non-Partial only
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
-
+      EndOfCallTranscriptSummary:
+        default: End of Call Transcript Summary
+      OpenAIAPIKey:
+        default: OpenAI API Key
+        
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldAllowSignUpEmailDomain: !Not [!Equals [!Ref AllowedSignUpEmailDomain, ""]]
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
-  ShouldEnableEndOfCallLambdaHookFunction: !Not [!Equals [!Ref EndOfCallLambdaHookFunctionArn, ""]]
+  ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
+  ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
 
 Outputs:
   CallDataStreamName:
@@ -678,7 +702,17 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
 
-        
+  ##########################################################################
+  # Transcript Summary
+  ##########################################################################
+  SageMakerTranscriptSummaryStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldDeploySageMakerSummarizer
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/sagemaker-summary-stack.yaml
+      # yamllint enable rule:line-length
+
   ##########################################################################
   # SNS Topic for Category Event Notifications
   ##########################################################################
@@ -773,6 +807,13 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !Sub "${EndOfCallLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
+            - !If 
+              - ShouldDeploySageMakerSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+              - Ref: AWS::NoValue
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -800,7 +841,7 @@ Resources:
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
-          ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN: !Ref EndOfCallLambdaHookFunctionArn
+          ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 
