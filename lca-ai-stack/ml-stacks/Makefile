@@ -1,0 +1,18 @@
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  SPDX-License-Identifier: Apache-2.0
+
+VERSION_FILE ?= ../VERSION
+AWS_REGION ?= us-east-1
+RELEASE_S3_BUCKET := $(RELEASE_S3_BUCKET_BASE)-$(AWS_REGION)
+RELEASE_S3_PREFIX ?= release
+RELEASE_VERSION ?= $(shell cat $(VERSION_FILE))
+
+SAGEMAKER_STACK_TEMPLATE := sagemaker-summary-stack.yaml
+RELEASE_TEMPLATE_SAGEMAKER_S3_URL := s3://$(RELEASE_S3_BUCKET)/$(RELEASE_S3_PREFIX)/$(RELEASE_VERSION)/$(SAGEMAKER_TEMPLATE_FILE)
+
+sagemaker-stack: $(SAGEMAKER_STACK_TEMPLATE)
+	echo '[INFO] uploading $(SAGEMAKER_STACK_TEMPLATE) to $(RELEASE_TEMPLATE_SAGEMAKER_S3_URL)'
+	aws s3 cp '$(SAGEMAKER_STACK_TEMPLATE)' '$(RELEASE_TEMPLATE_SAGEMAKER_S3_URL)'
+
+release: sagemaker-stack
+.PHONY: release

@@ -1,0 +1,194 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  InitialInstanceCount:
+    Type: Number
+    Description: Number of instances to launch initially.
+    Default: 1
+  InstanceType:
+    Type: String
+    Description: The ML compute instance type.
+    Default: ml.m5.xlarge
+  CallEventsTable:
+    Type: String
+    Description: Name of the LCA Call Events Table to look up transcripts.
+
+Outputs:
+  EndpointName: 
+    Description: Summarizer Model Endpoint Name
+    Value: !GetAtt SageMakerSummarizationEndpoint.EndpointName
+  InvokeLambdaArn: 
+    Description: ARN of the Lambda that invokes the summarizer endpoint
+    Value: !GetAtt SummaryLambda.Arn
+
+Resources:
+  # 763104351884.dkr.ecr.us-west-2.amazonaws.com/huggingface-pytorch-inference:1.7.1-transformers4.6.1-gpu-py36-cu110-ubuntu18.04
+  SageMakerSummarizationModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      PrimaryContainer:
+        # image resource found at https://github.com/aws/deep-learning-containers/blob/master/available_images.md
+        # old: Image: !Sub 763104351884.dkr.ecr.${AWS::Region}.amazonaws.com/huggingface-pytorch-inference:1.10.2-transformers4.17.0-cpu-py38-ubuntu20.04
+        Image: !Sub 763104351884.dkr.ecr.${AWS::Region}.amazonaws.com/huggingface-pytorch-inference:1.7.1-transformers4.6.1-gpu-py36-cu110-ubuntu18.04
+        Mode: SingleModel
+        ModelDataUrl: !Sub s3://jumpstart-cache-prod-${AWS::Region}/huggingface-infer/infer-huggingface-summarization-bart-large-cnn-samsum.tar.gz
+      ExecutionRoleArn: !GetAtt SageMakerModelExecutionRole.Arn
+
+  SageMakerSummarizationEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      # EndpointConfigName: !Sub ${AWS::StackName}-EndpointConfig
+      ProductionVariants:
+        - ModelName: !GetAtt SageMakerSummarizationModel.ModelName
+          InitialInstanceCount: !Ref InitialInstanceCount
+          InitialVariantWeight: 1
+          InstanceType: !Ref InstanceType
+          VariantName: primary
+  SageMakerSummarizationEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointConfigName: !GetAtt SageMakerSummarizationEndpointConfig.EndpointConfigName
+
+  SageMakerModelExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - sagemaker.amazonaws.com
+        Version: '2012-10-17'
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      #RoleName: !Sub ${AWS::StackName}-SumRole
+
+  # Lambda Function to call the summarizer. 
+  SummaryLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: This function summarizes a string from the events object called 'inputs'
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt 'LambdaRole.Arn'
+      Timeout: 240
+      Environment:
+        Variables:
+          ENDPOINT_NAME: !GetAtt SageMakerSummarizationEndpoint.EndpointName
+      Code:
+        ZipFile: |
+          import os
+          import io
+          import boto3
+          from boto3.dynamodb.conditions import Key, Attr
+          from botocore.exceptions import ClientError
+          import json
+          import csv
+          import logging
+          
+          
+          # grab environment variables
+          ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
+          LCA_CALL_EVENTS_TABLE = os.environ['LCA_CALL_EVENTS_TABLE']
+          
+          runtime= boto3.client('runtime.sagemaker')
+          logger = logging.getLogger(__name__)
+          ddb = boto3.resource('dynamodb')
+          
+          lca_call_events = ddb.Table(LCA_CALL_EVENTS_TABLE)
+          
+          def get_transcripts(callid):
+              
+              pk = 'trs#'+callid
+              print(pk)
+              
+              try:
+                  response = lca_call_events.query(KeyConditionExpression=Key('PK').eq(pk), FilterExpression=(Attr('Channel').eq('AGENT') | Attr('Channel').eq('CALLER')) & Attr('IsPartial').eq(False))
+                  # response = lca_call_events.query(KeyConditionExpression=Key('PK').eq(pk)) 
+              except ClientError as err:
+                  logger.error("Error getting transcripts from LCA Call Events table %s: %s", 
+                          err.response['Error']['Code'], err.response['Error']['Message'])
+                  raise 
+              else:
+                  # print(response['Items'])
+                  return response['Items']
+          
+          def preprocess_transcripts(transcripts):
+              data = []
+          
+              transcripts.sort(key=lambda x: x['StartTime'])
+          
+              for row in transcripts:
+                  transcript = row['Channel'] +" : " + row['Transcript']
+                  data.append(transcript)
+              return data
+          
+          
+          def lambda_handler(event, context):
+              print("Received event: " + json.dumps(event, indent=2))
+              
+              # Setup model input data using text (utterances) received from LCA
+              data = json.loads(json.dumps(event))
+              callid = data['CallId']
+              print(callid)
+              print("\n")
+              
+              transcripts = get_transcripts(callid)
+              transcripts = preprocess_transcripts(transcripts)
+              transcript_string = ''.join(transcripts)
+              
+              payload = { 'inputs': transcript_string }
+              
+              summaryText = ""
+              try:
+                  data = json.dumps(event)
+                  response = runtime.invoke_endpoint(EndpointName=ENDPOINT_NAME,
+                                                      ContentType='application/json',
+                                                      Body=bytes(json.dumps(payload), 'utf-8'))
+                  print(response)
+                  result = json.loads(response['Body'].read().decode())
+              
+                  if len(result) > 0:
+                      summary = result[0]
+                      print("Summary: " + summary["generated_text"])
+                      summaryText = summary["generated_text"]
+                  else:
+                      print("No Summary")
+                      summaryText = "No summary"
+                      
+              except Exception as e:
+                  print("An exception occurred:", e)
+                  summaryText = "An exception has occurred"
+          
+              return { "summary": summaryText }
+        
+  
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Summary Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-InvokeSummarizer
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "sagemaker:InvokeEndpoint"
+                Resource: !Ref SageMakerSummarizationEndpoint
+              - Effect: "Allow"
+                Action: "dynamodb:Query"
+                Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CallEventsTable}"

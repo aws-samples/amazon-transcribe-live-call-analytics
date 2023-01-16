@@ -941,7 +941,7 @@ async def execute_process_event_api_mutation(
             call_summary = invoke_end_of_call_lambda_hook(message)
             LOGGER.debug("Call summary: ")
             LOGGER.debug(call_summary)
-            message['CallSummaryText'] = call_summary
+            message['CallSummaryText'] = call_summary['summary']
             response = await execute_add_call_summary_text_mutation(
                 message=message,
                 appsync_session=appsync_session
