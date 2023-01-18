@@ -598,9 +598,12 @@ const CallInProgressTranscript = ({
       Promise.all(promises).then((results) => {
         // prettier-ignore
         const r = results.length > 0
-          ? { ...translateCache, ...results.reduce((a, b) => ({ ...a, ...b })) }
-          : translateCache;
-        setTranslateCache(r);
+          ? results.reduce((a, b) => ({ ...a, ...b }))
+          : {};
+        setTranslateCache((state) => ({
+          ...state,
+          ...r,
+        }));
       });
     }
   }, [callTranscriptPerCallId, targetLanguage, agentTranscript, translateOn]);
@@ -859,6 +862,7 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   let translateClient = new TranslateClient({
     region: awsExports.aws_project_region,
     credentials: currentCredentials,
+    maxAttempts: 100,
   });
 
   /* Get a client with refreshed credentials. Credentials can go stale when user is logged in
