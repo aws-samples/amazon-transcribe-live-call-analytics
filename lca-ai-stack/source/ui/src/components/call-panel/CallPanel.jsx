@@ -550,8 +550,7 @@ const CallInProgressTranscript = ({
     return currentTurnByTurnSegments;
   };
 
-  const updateTranslateCache = () => {
-    const seg = getSegments();
+  const updateTranslateCache = (seg) => {
     const promises = [];
     // prettier-ignore
     for (let i = 0; i < seg.length; i += 1) {
@@ -594,19 +593,34 @@ const CallInProgressTranscript = ({
 
   useEffect(() => {
     if (translateOn && targetLanguage !== '') {
-      const promises = updateTranslateCache();
+      const promises = updateTranslateCache(getSegments());
       Promise.all(promises).then((results) => {
         // prettier-ignore
-        const r = results.length > 0
-          ? results.reduce((a, b) => ({ ...a, ...b }))
-          : {};
-        setTranslateCache((state) => ({
-          ...state,
-          ...r,
-        }));
+        if (results.length > 0) {
+          setTranslateCache((state) => ({
+            ...state,
+            ...results.reduce((a, b) => ({ ...a, ...b })),
+          }));
+        }
       });
     }
-  }, [callTranscriptPerCallId, targetLanguage, agentTranscript, translateOn]);
+  }, [targetLanguage, agentTranscript, translateOn]);
+
+  useEffect(() => {
+    const c = getSegments();
+    if (translateOn && targetLanguage !== '' && c.length > 0) {
+      const promises = updateTranslateCache([c[c.length - 1]]);
+      Promise.all(promises).then((results) => {
+        // prettier-ignore
+        if (results.length > 0) {
+          setTranslateCache((state) => ({
+            ...state,
+            ...results.reduce((a, b) => ({ ...a, ...b })),
+          }));
+        }
+      });
+    }
+  }, [callTranscriptPerCallId]);
 
   const getTurnByTurnSegments = () => {
     const currentTurnByTurnSegments = transcriptChannels
