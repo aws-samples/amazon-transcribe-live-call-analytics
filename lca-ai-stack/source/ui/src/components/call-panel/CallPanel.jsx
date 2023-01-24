@@ -22,6 +22,7 @@ import ReactMarkdown from 'react-markdown';
 
 import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
 import { Logger } from 'aws-amplify';
+import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
 
 import RecordingPlayer from '../recording-player';
 import useSettingsContext from '../../contexts/settings';
@@ -55,6 +56,9 @@ const piiTypes = [
   'SSN',
 ];
 const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
+
+const MAXIMUM_ATTEMPTS = 100;
+const MAXIMUM_RETRY_DELAY = 1000000;
 
 const languageCodes = [
   { value: '', label: 'Choose a Language' },
@@ -580,7 +584,7 @@ const CallInProgressTranscript = ({
   };
 
   useEffect(() => {
-    if (translateOn && targetLanguage !== '') {
+    if (translateOn && targetLanguage !== '' && item.recordingStatusLabel !== IN_PROGRESS_STATUS) {
       const promises = updateTranslateCache(getSegments());
       Promise.all(promises).then((results) => {
         // prettier-ignore
@@ -592,7 +596,7 @@ const CallInProgressTranscript = ({
         }
       });
     }
-  }, [targetLanguage, agentTranscript, translateOn]);
+  }, [targetLanguage, agentTranscript, translateOn, item.recordingStatusLabel]);
 
   useEffect(() => {
     const c = getSegments();
@@ -861,10 +865,22 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   const { currentCredentials } = useAppContext();
 
+  // prettier-ignore
+  const customRetryStrategy = new StandardRetryStrategy(
+    async () => MAXIMUM_ATTEMPTS,
+    {
+      delayDecider:
+        (_, attempts) => Math.floor(
+          Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 1100),
+        ),
+    },
+  );
+
   let translateClient = new TranslateClient({
     region: awsExports.aws_project_region,
     credentials: currentCredentials,
-    maxAttempts: 100,
+    maxAttempts: MAXIMUM_ATTEMPTS,
+    retryStrategy: customRetryStrategy,
   });
 
   /* Get a client with refreshed credentials. Credentials can go stale when user is logged in
@@ -875,6 +891,8 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
     translateClient = new TranslateClient({
       region: awsExports.aws_project_region,
       credentials: currentCredentials,
+      maxAttempts: MAXIMUM_ATTEMPTS,
+      retryStrategy: customRetryStrategy,
     });
   }, [currentCredentials]);
 
