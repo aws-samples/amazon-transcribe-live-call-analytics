@@ -254,18 +254,11 @@ Parameters:
     AllowedValues:
       - 'DISABLED'
       - 'SAGEMAKER'
-      - 'OPENAI'
       - 'LAMBDA'
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
-      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type. The OPENAI option requires you to provide your OpenAI API Key, and 
-      will send the transcript to OpenAI GPT-3 text-davinci-003 model with the promt 'Summarize the above call'. The 
-      LAMBDA option requires you to provide a function ARN below.
-
-  OpenAIAPIKey:
-    Default: ''
-    Type: String
-    Description: (Optional) Only valid if End of Call Transcript Summary is set to OPENAI. Your OpenAI API Key to be used to generate a transcript summary of the call.
+      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
+      to provide a function ARN below.
 
   EndOfCallLambdaHookFunctionArn:
     Default: ''
@@ -412,7 +405,6 @@ Metadata:
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
           - EndOfCallLambdaHookFunctionArn
-          - OpenAIAPIKey
       - Label:
           default: Download locations
         Parameters:
@@ -499,8 +491,6 @@ Metadata:
         default: Lambda Hook Function Mode Non-Partial only
       EndOfCallTranscriptSummary:
         default: End of Call Transcript Summary
-      OpenAIAPIKey:
-        default: OpenAI API Key
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       CloudFrontPriceClass:
@@ -727,7 +717,6 @@ Resources:
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
-        OpenAIAPIKey: !Ref OpenAIAPIKey
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
