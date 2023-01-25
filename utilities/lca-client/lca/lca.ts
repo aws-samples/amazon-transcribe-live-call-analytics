@@ -78,6 +78,8 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 Sentiment: undefined,
                 TranscriptEvent: undefined,
                 UtteranceEvent: undefined,
+                StreamArn: '<DEPRECATED>',
+                TransactionId: callId
             };
 
             const putParams = {

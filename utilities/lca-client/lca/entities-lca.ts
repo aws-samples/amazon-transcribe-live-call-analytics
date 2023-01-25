@@ -22,11 +22,13 @@ export type CallEventBase<Type extends EventType = EventType> = {
     CallId: Uuid,
     CreatedAt?: string,
     UpdatedAt?: string,
+    AgentId?: string,
 };
 
 export type CallStartEvent = CallEventBase<'START'> & {
     CustomerPhoneNumber: string,
-    SystemPhoneNumber: string
+    SystemPhoneNumber: string,
+    Metadatajson: string
 };
 
 export type CallEndEvent = CallEventBase<'END'> & {
@@ -48,6 +50,8 @@ export type AddTranscriptSegmentEvent = CallEventBase<'ADD_TRANSCRIPT_SEGMENT'> 
     Sentiment?: string,
     TranscriptEvent?: TranscriptEvent,
     UtteranceEvent?: UtteranceEvent,
+    StreamArn?: string,
+    TransactionId?: string
 };
 
 export type AddCallCategoryEvent = CallEventBase<'ADD_CALL_CATEGORY'> & {
