@@ -58,7 +58,7 @@ const piiTypes = [
 const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
 
 const MAXIMUM_ATTEMPTS = 100;
-const MAXIMUM_RETRY_DELAY = 1000000;
+const MAXIMUM_RETRY_DELAY = 1000;
 
 const languageCodes = [
   { value: '', label: 'Choose a Language' },
@@ -406,13 +406,13 @@ const getTimestampFromSeconds = (secs) => {
   return new Date(secs * 1000).toISOString().substr(14, 7);
 };
 
-const TranscriptContent = ({ segment, translateCache, id }) => {
+const TranscriptContent = ({ segment, translateCache }) => {
   const { settings } = useSettingsContext();
   const regex = settings?.CategoryAlertRegex ?? '.*';
 
   const { transcript, segmentId, channel, targetLanguage, agentTranscript, translateOn } = segment;
 
-  const k = id.concat(targetLanguage);
+  const k = segmentId.concat('-', targetLanguage);
 
   // prettier-ignore
   const currTranslated = translateOn
@@ -473,7 +473,7 @@ const TranscriptContent = ({ segment, translateCache, id }) => {
   );
 };
 
-const TranscriptSegment = ({ segment, translateCache, id }) => {
+const TranscriptSegment = ({ segment, translateCache }) => {
   const { channel } = segment;
 
   if (channel === 'CATEGORY_MATCH') {
@@ -489,7 +489,7 @@ const TranscriptSegment = ({ segment, translateCache, id }) => {
       >
         {getSentimentImage(segment)}
         <SpaceBetween direction="vertical" size="xxs">
-          <TranscriptContent segment={newSegment} translateCache={translateCache} id={id} />
+          <TranscriptContent segment={newSegment} translateCache={translateCache} />
         </SpaceBetween>
       </Grid>
     );
@@ -513,7 +513,7 @@ const TranscriptSegment = ({ segment, translateCache, id }) => {
               ${getTimestampFromSeconds(segment.endTime)}`}
           </TextContent>
         </SpaceBetween>
-        <TranscriptContent segment={segment} translateCache={translateCache} id={id} />
+        <TranscriptContent segment={segment} translateCache={translateCache} />
       </SpaceBetween>
     </Grid>
   );
@@ -558,14 +558,14 @@ const CallInProgressTranscript = ({
     const promises = [];
     // prettier-ignore
     for (let i = 0; i < seg.length; i += 1) {
-      const k = seg[i].segmentId.concat('-', seg[i].createdAt, targetLanguage);
+      const k = seg[i].segmentId.concat('-', targetLanguage);
 
       // prettier-ignore
       if (
         (translateCache[k] === undefined
          || (translateCache[k].transcript !== undefined
              && seg[i].transcript !== undefined
-             && translateCache[k].transcript !== seg[i].transcript)
+             && translateCache[k].transcript.length < seg[i].transcript.length)
          || translateCache[k].translated === undefined)
       ) {
         // Now call translate API
@@ -582,6 +582,7 @@ const CallInProgressTranscript = ({
           translateClient.send(command).then(
             (data) => {
               const n = {};
+              logger.debug('Translate API response:', seg[i].transcript, targetLanguage, data.TranslatedText);
               n[k] = { cacheId: k, transcript: seg[i].transcript, translated: data.TranslatedText };
               return n;
             },
@@ -648,7 +649,7 @@ const CallInProgressTranscript = ({
           && s?.createdAt
           && (s.agentTranscript === undefined
               || s.agentTranscript || s.channel !== 'AGENT')
-          && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} id={`${s.segmentId}-${s.createdAt}`} />
+          && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} />
         ),
       );
 
@@ -883,7 +884,7 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
     {
       delayDecider:
         (_, attempts) => Math.floor(
-          Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 1100),
+          Math.min(MAXIMUM_RETRY_DELAY, 2 ** attempts * 10),
         ),
     },
   );
