@@ -66,6 +66,8 @@ export class CallSimulator {
             CustomerPhoneNumber: 'Customerphone',
             SystemPhoneNumber: 'Systemphone',
             CreatedAt: now,
+            AgentId: '',
+            Metadatajson: JSON.stringify({})
         };
         await writeCallEvent(callEvent);
     }
