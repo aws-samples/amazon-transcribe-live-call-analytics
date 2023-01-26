@@ -59,6 +59,7 @@ const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
 
 const MAXIMUM_ATTEMPTS = 100;
 const MAXIMUM_RETRY_DELAY = 1000;
+const LOOKBACK = 4;
 
 const languageCodes = [
   { value: '', label: 'Choose a Language' },
@@ -550,7 +551,7 @@ const CallInProgressTranscript = ({
       const k = seg[i].segmentId.concat('-', targetLanguage);
 
       // prettier-ignore
-      if (translateCache[k] === undefined && cacheSeen[k] === undefined) {
+      if (translateCache[k] === undefined) {
         // Now call translate API
         const params = {
           Text: seg[i].transcript,
@@ -603,28 +604,32 @@ const CallInProgressTranscript = ({
       translateOn
       && targetLanguage !== ''
       && c.length > 0
-      && c[c.length - 1].isPartial === false
       && item.recordingStatusLabel === IN_PROGRESS_STATUS
     ) {
-      const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
-      const n = {};
-      n[k] = { seen: true };
-      setCacheSeen((state) => ({
-        ...state,
-        ...n,
-      }));
+      const lookback = c.length > LOOKBACK ? LOOKBACK : c.length;
+      for (let i = c.length - lookback; i < c.length; i += 1) {
+        const k = c[i].segmentId.concat('-', targetLanguage);
+        const n = {};
+        if (c[i].isPartial === false && cacheSeen[k] === undefined) {
+          n[k] = { seen: true };
+          setCacheSeen((state) => ({
+            ...state,
+            ...n,
+          }));
 
-      const promises = updateTranslateCache([c[c.length - 1]]);
-      if (promises.length > 0) {
-        promises[0].then((results) => {
-          // prettier-ignore
-          if (results) {
-            setTranslateCache((state) => ({
-              ...state,
-              ...results,
-            }));
+          const promises = updateTranslateCache([c[i]]);
+          if (promises.length > 0) {
+            promises[0].then((results) => {
+              // prettier-ignore
+              if (results) {
+                setTranslateCache((state) => ({
+                  ...state,
+                  ...results,
+                }));
+              }
+            });
           }
-        });
+        }
       }
     }
   }, [callTranscriptPerCallId]);
