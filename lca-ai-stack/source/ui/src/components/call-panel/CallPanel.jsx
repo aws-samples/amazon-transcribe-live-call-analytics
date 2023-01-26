@@ -519,6 +519,7 @@ const CallInProgressTranscript = ({
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
   const [translateCache, setTranslateCache] = useState({});
+  const [cacheSeen, setCacheSeen] = useState({});
 
   // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
   const maxChannels = 4;
@@ -549,13 +550,7 @@ const CallInProgressTranscript = ({
       const k = seg[i].segmentId.concat('-', targetLanguage);
 
       // prettier-ignore
-      if (
-        (translateCache[k] === undefined
-         || (translateCache[k].transcript !== undefined
-             && seg[i].transcript !== undefined
-             && translateCache[k].transcript.length < seg[i].transcript.length)
-         || translateCache[k].translated === undefined)
-      ) {
+      if (translateCache[k] === undefined && cacheSeen[k] === undefined) {
         // Now call translate API
         const params = {
           Text: seg[i].transcript,
@@ -584,6 +579,7 @@ const CallInProgressTranscript = ({
     return promises;
   };
 
+  // Translate all segments when the call is completed.
   useEffect(() => {
     if (translateOn && targetLanguage !== '' && item.recordingStatusLabel !== IN_PROGRESS_STATUS) {
       const promises = updateTranslateCache(getSegments());
@@ -599,19 +595,37 @@ const CallInProgressTranscript = ({
     }
   }, [targetLanguage, agentTranscript, translateOn, item.recordingStatusLabel]);
 
+  // Translate real-time segments when the call is in progress.
   useEffect(() => {
     const c = getSegments();
-    if (translateOn && targetLanguage !== '' && c.length > 0) {
+    // prettier-ignore
+    if (
+      translateOn
+      && targetLanguage !== ''
+      && c.length > 0
+      && c[c.length - 1].isPartial === false
+      && item.recordingStatusLabel === IN_PROGRESS_STATUS
+    ) {
+      const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
+      const n = {};
+      n[k] = { seen: true };
+      setCacheSeen((state) => ({
+        ...state,
+        ...n,
+      }));
+
       const promises = updateTranslateCache([c[c.length - 1]]);
-      Promise.all(promises).then((results) => {
-        // prettier-ignore
-        if (results.length > 0) {
-          setTranslateCache((state) => ({
-            ...state,
-            ...results.reduce((a, b) => ({ ...a, ...b })),
-          }));
-        }
-      });
+      if (promises.length > 0) {
+        promises[0].then((results) => {
+          // prettier-ignore
+          if (results) {
+            setTranslateCache((state) => ({
+              ...state,
+              ...results,
+            }));
+          }
+        });
+      }
     }
   }, [callTranscriptPerCallId]);
 
