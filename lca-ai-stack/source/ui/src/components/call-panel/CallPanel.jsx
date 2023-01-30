@@ -764,11 +764,14 @@ const CallTranscriptContainer = ({
   );
 
   const [translateOn, setTranslateOn] = useState(false);
-  const [targetLanguage, setTargetLanguage] = useState('');
+  const [targetLanguage, setTargetLanguage] = useState(
+    localStorage.getItem('targetLanguage') || '',
+  );
   const [agentTranscript, setAgentTranscript] = useState(true);
 
   const handleLanguageSelect = (event) => {
     setTargetLanguage(event.target.value);
+    localStorage.setItem('targetLanguage', event.target.value);
   };
 
   useEffect(() => {
