@@ -59,7 +59,6 @@ const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
 
 const MAXIMUM_ATTEMPTS = 100;
 const MAXIMUM_RETRY_DELAY = 1000;
-const LOOKBACK = 4;
 
 const languageCodes = [
   { value: '', label: 'Choose a Language' },
@@ -521,6 +520,8 @@ const CallInProgressTranscript = ({
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
   const [translateCache, setTranslateCache] = useState({});
   const [cacheSeen, setCacheSeen] = useState({});
+  const [lastUpdated, setLastUpdated] = useState(Date.now());
+  const [updateFlag, setUpdateFlag] = useState(false);
 
   // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
   const maxChannels = 4;
@@ -591,13 +592,14 @@ const CallInProgressTranscript = ({
             ...state,
             ...results.reduce((a, b) => ({ ...a, ...b })),
           }));
+          setUpdateFlag((state) => !state);
         }
       });
     }
   }, [targetLanguage, agentTranscript, translateOn, item.recordingStatusLabel]);
 
   // Translate real-time segments when the call is in progress.
-  useEffect(() => {
+  useEffect(async () => {
     const c = getSegments();
     // prettier-ignore
     if (
@@ -606,32 +608,51 @@ const CallInProgressTranscript = ({
       && c.length > 0
       && item.recordingStatusLabel === IN_PROGRESS_STATUS
     ) {
-      const lookback = c.length > LOOKBACK ? LOOKBACK : c.length;
-      for (let i = c.length - lookback; i < c.length; i += 1) {
-        const k = c[i].segmentId.concat('-', targetLanguage);
-        const n = {};
-        if (c[i].isPartial === false && cacheSeen[k] === undefined) {
-          n[k] = { seen: true };
-          setCacheSeen((state) => ({
-            ...state,
-            ...n,
-          }));
+      const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
+      const n = {};
+      if (c[c.length - 1].isPartial === false && cacheSeen[k] === undefined) {
+        n[k] = { seen: true };
+        setCacheSeen((state) => ({
+          ...state,
+          ...n,
+        }));
 
-          const promises = updateTranslateCache([c[i]]);
-          if (promises.length > 0) {
-            promises[0].then((results) => {
-              // prettier-ignore
-              if (results) {
-                setTranslateCache((state) => ({
-                  ...state,
-                  ...results,
-                }));
-              }
-            });
+        // prettier-ignore
+        if (translateCache[k] === undefined) {
+          // Now call translate API
+          const params = {
+            Text: c[c.length - 1].transcript,
+            SourceLanguageCode: 'auto',
+            TargetLanguageCode: targetLanguage,
+          };
+          const command = new TranslateTextCommand(params);
+
+          logger.debug('Translate API being invoked for:', c[c.length - 1].transcript, targetLanguage);
+
+          try {
+            const data = await translateClient.send(command);
+            const o = {};
+            logger.debug('Translate API response:', c[c.length - 1].transcript, data.TranslatedText);
+            o[k] = {
+              cacheId: k,
+              transcript: c[c.length - 1].transcript,
+              translated: data.TranslatedText,
+            };
+            setTranslateCache((state) => ({
+              ...state,
+              ...o,
+            }));
+          } catch (error) {
+            logger.debug('Error from translate:', error);
           }
         }
       }
+      if (Date.now() - lastUpdated > 500) {
+        setUpdateFlag((state) => !state);
+        logger.debug('Updating turn by turn with latest cache');
+      }
     }
+    setLastUpdated(Date.now());
   }, [callTranscriptPerCallId]);
 
   const getTurnByTurnSegments = () => {
@@ -672,8 +693,8 @@ const CallInProgressTranscript = ({
     item.recordingStatusLabel,
     targetLanguage,
     agentTranscript,
-    translateCache,
     translateOn,
+    updateFlag,
   ]);
 
   useEffect(() => {
@@ -691,7 +712,6 @@ const CallInProgressTranscript = ({
     item.recordingStatusLabel,
     targetLanguage,
     agentTranscript,
-    translateCache,
     translateOn,
   ]);
 
