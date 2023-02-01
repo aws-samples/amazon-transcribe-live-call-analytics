@@ -28,7 +28,7 @@ export type CallEventBase<Type extends EventType = EventType> = {
 export type CallStartEvent = CallEventBase<'START'> & {
     CustomerPhoneNumber: string,
     SystemPhoneNumber: string,
-    Metadatajson: string
+    Metadatajson: string,
 };
 
 export type CallEndEvent = CallEventBase<'END'> & {
@@ -49,7 +49,7 @@ export type AddTranscriptSegmentEvent = CallEventBase<'ADD_TRANSCRIPT_SEGMENT'> 
     IsPartial?: boolean,
     Sentiment?: string,
     TranscriptEvent?: TranscriptEvent,
-    UtteranceEvent?: UtteranceEvent
+    UtteranceEvent?: UtteranceEvent,
 };
 
 export type AddCallCategoryEvent = CallEventBase<'ADD_CALL_CATEGORY'> & {
