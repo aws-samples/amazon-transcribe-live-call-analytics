@@ -49,9 +49,7 @@ export type AddTranscriptSegmentEvent = CallEventBase<'ADD_TRANSCRIPT_SEGMENT'> 
     IsPartial?: boolean,
     Sentiment?: string,
     TranscriptEvent?: TranscriptEvent,
-    UtteranceEvent?: UtteranceEvent,
-    StreamArn?: string,
-    TransactionId?: string
+    UtteranceEvent?: UtteranceEvent
 };
 
 export type AddCallCategoryEvent = CallEventBase<'ADD_CALL_CATEGORY'> & {
