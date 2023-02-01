@@ -77,9 +77,7 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 UpdatedAt: now,
                 Sentiment: undefined,
                 TranscriptEvent: undefined,
-                UtteranceEvent: undefined,
-                StreamArn: '<DEPRECATED>',
-                TransactionId: callId
+                UtteranceEvent: undefined
             };
 
             const putParams = {
