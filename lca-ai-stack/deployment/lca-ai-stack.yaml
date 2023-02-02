@@ -703,6 +703,8 @@ Resources:
       # yamllint disable rule:line-length
       TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/sagemaker-summary-stack.yaml
       # yamllint enable rule:line-length
+      Parameters:
+        CallEventsTable: !Ref EventSourcingTable
 
   ##########################################################################
   # SNS Topic for Category Event Notifications
