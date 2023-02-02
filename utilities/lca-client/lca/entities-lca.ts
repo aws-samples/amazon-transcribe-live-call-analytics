@@ -22,11 +22,13 @@ export type CallEventBase<Type extends EventType = EventType> = {
     CallId: Uuid,
     CreatedAt?: string,
     UpdatedAt?: string,
+    AgentId?: string,
 };
 
 export type CallStartEvent = CallEventBase<'START'> & {
     CustomerPhoneNumber: string,
-    SystemPhoneNumber: string
+    SystemPhoneNumber: string,
+    Metadatajson: string,
 };
 
 export type CallEndEvent = CallEventBase<'END'> & {
