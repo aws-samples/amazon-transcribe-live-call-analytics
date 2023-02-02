@@ -756,7 +756,6 @@ Resources:
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
-        EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
 
   CHIMEVCSTACK:
