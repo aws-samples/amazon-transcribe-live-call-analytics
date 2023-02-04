@@ -1,0 +1,39 @@
+{
+  "name": "lca-client",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Babu Srinivasan",
+  "license": "SEE LICENSE IN LICENSE file",
+  "description": "client simulator for testing LCA",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "setup": "npm install",
+    "exec": "ts-node src/index.ts",
+    "build": "tsc --project tsconfig.json --pretty && npm run lint",
+    "buildcheck": "tsc --project tsconfig.json --pretty --noEmit && npm run lint",
+    "lint": "eslint . --ext .ts --cache --max-warnings 0",
+    "update": "ncu -t minor -u && npm install",
+    "clean": "rm -r dist/"
+  },
+  "keywords": [],
+  "dependencies": {
+    "@aws-sdk/client-kinesis": "^3.178.0",
+    "@aws-sdk/client-transcribe-streaming": "^3.226.0",
+    "commander": "^9.4.0",
+    "dotenv": "^16.0.3",
+    "stream-chain": "^2.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.1",
+    "@types/stream-chain": "^2.0.1",
+    "@typescript-eslint/eslint-plugin": "^4.33.0",
+    "@typescript-eslint/parser": "^4.33.0",
+    "eslint": "^7.32.0",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.4.4"
+  }
+}
