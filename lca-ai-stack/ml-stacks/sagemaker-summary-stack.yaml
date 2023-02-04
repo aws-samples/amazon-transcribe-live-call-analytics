@@ -90,6 +90,7 @@ Resources:
           import json
           import csv
           import logging
+          import re
           
           
           # grab environment variables
@@ -99,6 +100,9 @@ Resources:
           runtime= boto3.client('runtime.sagemaker')
           logger = logging.getLogger(__name__)
           ddb = boto3.resource('dynamodb')
+          
+          html_remover = re.compile('<[^>]*>')
+          filler_remover = re.compile('([Uu]m|[Uu]h|[Ll]ike)[,]?')
           
           lca_call_events = ddb.Table(LCA_CALL_EVENTS_TABLE)
           
@@ -121,12 +125,33 @@ Resources:
           def preprocess_transcripts(transcripts):
               data = []
           
-              transcripts.sort(key=lambda x: x['StartTime'])
+              transcripts.sort(key=lambda x: x['EndTime'])
           
+              last_channel = 'start'
               for row in transcripts:
-                  transcript = row['Channel'] +" : " + row['Transcript']
+                  if row['Channel'] == 'AGENT_ASSISTANT':
+                      continue
+                  
+                  if row['Channel'] == last_channel:
+                      transcript = ' ' + row['Transcript']
+                  else:
+                      transcript = '\n' + row['Channel'] + ": " + row['Transcript']
+                      last_channel = row['Channel']
                   data.append(transcript)
+              
               return data
+          
+          def remove_html(transcript_string):
+              return re.sub(html_remover, '', transcript_string)
+          
+          def remove_filler_words(transcript_string):
+              return re.sub(filler_remover, '', transcript_string)
+          
+          def truncate_number_of_words(transcript_string):
+              #findall can retain carriage returns
+              data = re.findall(r'\S+|\n|.|,',transcript_string)
+              data = data[0:1024]
+              return ' '.join(data)
           
           
           def lambda_handler(event, context):
@@ -141,6 +166,10 @@ Resources:
               transcripts = get_transcripts(callid)
               transcripts = preprocess_transcripts(transcripts)
               transcript_string = ''.join(transcripts)
+              transcript_string = remove_html(transcript_string)
+              transcript_string = remove_filler_words(transcript_string)
+              transcript_string = truncate_number_of_words(transcript_string)
+              print('Transcript:\n' + transcript_string)
               
               payload = { 'inputs': transcript_string }
               
@@ -166,6 +195,7 @@ Resources:
                   summaryText = "An exception has occurred"
           
               return { "summary": summaryText }
+        
         
   
   LambdaRole:
