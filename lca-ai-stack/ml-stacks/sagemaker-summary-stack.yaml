@@ -79,6 +79,7 @@ Resources:
       Environment:
         Variables:
           ENDPOINT_NAME: !GetAtt SageMakerSummarizationEndpoint.EndpointName
+          LCA_CALL_EVENTS_TABLE: !Ref CallEventsTable
       Code:
         ZipFile: |
           import os
