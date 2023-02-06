@@ -91,21 +91,21 @@ Resources:
           import csv
           import logging
           import re
-          
-          
+
+
           # grab environment variables
           ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
           LCA_CALL_EVENTS_TABLE = os.environ['LCA_CALL_EVENTS_TABLE']
-          
+
           runtime= boto3.client('runtime.sagemaker')
           logger = logging.getLogger(__name__)
           ddb = boto3.resource('dynamodb')
-          
+
           html_remover = re.compile('<[^>]*>')
-          filler_remover = re.compile('([Uu]m|[Uu]h|[Ll]ike)[,]?')
-          
+          filler_remover = re.compile('([Uu]m|[Uu]h|[Ll]ike|[Mm]hm)[,]?')
+
           lca_call_events = ddb.Table(LCA_CALL_EVENTS_TABLE)
-          
+
           def get_transcripts(callid):
               
               pk = 'trs#'+callid
@@ -121,12 +121,12 @@ Resources:
               else:
                   # print(response['Items'])
                   return response['Items']
-          
+
           def preprocess_transcripts(transcripts):
               data = []
-          
+
               transcripts.sort(key=lambda x: x['EndTime'])
-          
+
               last_channel = 'start'
               for row in transcripts:
                   if row['Channel'] == 'AGENT_ASSISTANT':
@@ -140,20 +140,20 @@ Resources:
                   data.append(transcript)
               
               return data
-          
+
           def remove_html(transcript_string):
               return re.sub(html_remover, '', transcript_string)
-          
+
           def remove_filler_words(transcript_string):
               return re.sub(filler_remover, '', transcript_string)
-          
+
           def truncate_number_of_words(transcript_string):
               #findall can retain carriage returns
               data = re.findall(r'\S+|\n|.|,',transcript_string)
-              data = data[0:1024]
-              return ' '.join(data)
-          
-          
+              data = data[0:1000]
+              return ''.join(data)
+
+
           def lambda_handler(event, context):
               print("Received event: " + json.dumps(event, indent=2))
               
@@ -193,10 +193,8 @@ Resources:
               except Exception as e:
                   print("An exception occurred:", e)
                   summaryText = "An exception has occurred"
-          
+
               return { "summary": summaryText }
-        
-        
   
   LambdaRole:
     Type: AWS::IAM::Role
