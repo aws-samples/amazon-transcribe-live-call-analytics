@@ -260,13 +260,21 @@ Parameters:
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
       to provide a function ARN below.
 
+  SummarizationSageMakerInitialInstanceCount:
+    Type: Number
+    MinValue: 0
+    Default: 1
+    Description: >
+      (Optional) If 'End Of Call Transcript Summary' is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
   EndOfCallLambdaHookFunctionArn:
     Default: ''
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
-      (Optional) Only valid if End of Call Transcript Summary is set to LAMBDA. If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for end of call event. The function gets CallId as input.
-      This function can implement custom logic that are relevant to end of call processing, for example, creating a call summary.
+      (Optional) If 'End Of Call Transcript Summary' is LAMBDA, provide ARN for a Lambda function. The specified Lambda function is invoked by the LCA Call Event Processor Lambda function 
+      for end of call event. The function is passed en event with CallId as input.
+      This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
 
   AdminEmail:
     Type: String
@@ -404,6 +412,7 @@ Metadata:
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
+          - SummarizationSageMakerInitialInstanceCount
           - EndOfCallLambdaHookFunctionArn
       - Label:
           default: Download locations
@@ -491,6 +500,8 @@ Metadata:
         default: Lambda Hook Function Mode Non-Partial only
       EndOfCallTranscriptSummary:
         default: End of Call Transcript Summary
+      SummarizationSageMakerInitialInstanceCount:
+        default: Initial Instance Count for Summarization SageMaker Endpoint
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       CloudFrontPriceClass:
@@ -716,6 +727,7 @@ Resources:
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+        SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
 
   AGENTASSISTSETUP:

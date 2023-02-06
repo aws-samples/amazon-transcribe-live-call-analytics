@@ -4,7 +4,7 @@ Transform: AWS::Serverless-2016-10-31
 Parameters:
   InitialInstanceCount:
     Type: Number
-    Description: Number of instances to launch initially.
+    Description: Number of instances to launch initially. Specify 0 to provision a serverless endpoint.
     Default: 1
   InstanceType:
     Type: String
@@ -14,17 +14,29 @@ Parameters:
     Type: String
     Description: Name of the LCA Call Events Table to look up transcripts.
 
+Conditions:
+  ServerlessSageMakerEndpoint: !Equals
+    - !Ref 'InitialInstanceCount'
+    - 0
+  ProvisionedSageMakerEndpoint: !Not
+    - !Equals
+      - !Ref 'InitialInstanceCount'
+      - 0
+
 Outputs:
   EndpointName: 
     Description: Summarizer Model Endpoint Name
-    Value: !GetAtt SageMakerSummarizationEndpoint.EndpointName
+    Value: !If
+      - ProvisionedSageMakerEndpoint
+      - !GetAtt LCASMProvisionedSummarizationEndpoint.EndpointName
+      - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName 
   InvokeLambdaArn: 
     Description: ARN of the Lambda that invokes the summarizer endpoint
     Value: !GetAtt SummaryLambda.Arn
 
 Resources:
   # 763104351884.dkr.ecr.us-west-2.amazonaws.com/huggingface-pytorch-inference:1.7.1-transformers4.6.1-gpu-py36-cu110-ubuntu18.04
-  SageMakerSummarizationModel:
+  LCASMSummarizationModel:
     Type: AWS::SageMaker::Model
     Properties:
       PrimaryContainer:
@@ -35,20 +47,40 @@ Resources:
         ModelDataUrl: !Sub s3://jumpstart-cache-prod-${AWS::Region}/huggingface-infer/infer-huggingface-summarization-bart-large-cnn-samsum.tar.gz
       ExecutionRoleArn: !GetAtt SageMakerModelExecutionRole.Arn
 
-  SageMakerSummarizationEndpointConfig:
+  LCASMProvisionedSummarizationEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
+    Condition: ProvisionedSageMakerEndpoint
     Properties:
-      # EndpointConfigName: !Sub ${AWS::StackName}-EndpointConfig
       ProductionVariants:
-        - ModelName: !GetAtt SageMakerSummarizationModel.ModelName
+        - ModelName: !GetAtt LCASMSummarizationModel.ModelName
           InitialInstanceCount: !Ref InitialInstanceCount
           InitialVariantWeight: 1
           InstanceType: !Ref InstanceType
-          VariantName: primary
-  SageMakerSummarizationEndpoint:
-    Type: AWS::SageMaker::Endpoint
+          VariantName: AllTraffic
+
+  LCASMServerlessSummarizationEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Condition: ServerlessSageMakerEndpoint
     Properties:
-      EndpointConfigName: !GetAtt SageMakerSummarizationEndpointConfig.EndpointConfigName
+      ProductionVariants:
+        - ModelName: !GetAtt LCASMSummarizationModel.ModelName
+          InitialVariantWeight: 1
+          VariantName: AllTraffic
+          ServerlessConfig:
+            MaxConcurrency: 50
+            MemorySizeInMB: 4096
+
+  LCASMProvisionedSummarizationEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Condition: ProvisionedSageMakerEndpoint
+    Properties:
+      EndpointConfigName: !GetAtt LCASMProvisionedSummarizationEndpointConfig.EndpointConfigName
+
+  LCASMServerlessSummarizationEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Condition: ServerlessSageMakerEndpoint
+    Properties:
+      EndpointConfigName: !GetAtt 'LCASMServerlessSummarizationEndpointConfig.EndpointConfigName'
 
   SageMakerModelExecutionRole:
     Type: AWS::IAM::Role
@@ -65,7 +97,6 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
-      #RoleName: !Sub ${AWS::StackName}-SumRole
 
   # Lambda Function to call the summarizer. 
   SummaryLambda:
@@ -78,7 +109,10 @@ Resources:
       Timeout: 240
       Environment:
         Variables:
-          ENDPOINT_NAME: !GetAtt SageMakerSummarizationEndpoint.EndpointName
+          ENDPOINT_NAME: !If
+            - ProvisionedSageMakerEndpoint
+            - !GetAtt LCASMProvisionedSummarizationEndpoint.EndpointName
+            - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName 
           LCA_CALL_EVENTS_TABLE: !Ref CallEventsTable
       Code:
         ZipFile: |
@@ -219,7 +253,10 @@ Resources:
             Statement:
               - Effect: "Allow"
                 Action: "sagemaker:InvokeEndpoint"
-                Resource: !Ref SageMakerSummarizationEndpoint
+                Resource: !If
+                  - ProvisionedSageMakerEndpoint
+                  - !Ref LCASMProvisionedSummarizationEndpoint
+                  - !Ref LCASMServerlessSummarizationEndpoint
               - Effect: "Allow"
                 Action: "dynamodb:Query"
                 Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CallEventsTable}"
