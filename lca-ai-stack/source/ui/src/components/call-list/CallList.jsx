@@ -11,6 +11,7 @@ import useSettingsContext from '../../contexts/settings';
 import mapCallsAttributes from '../common/map-call-attributes';
 import { paginationLabels } from '../common/labels';
 import useLocalStorage from '../common/local-storage';
+import { exportToExcel } from '../common/download-func';
 
 import {
   CallsPreferences,
@@ -91,6 +92,7 @@ const CallList = () => {
           setIsLoading={setIsCallsListLoading}
           periodsToLoad={periodsToLoad}
           setPeriodsToLoad={setPeriodsToLoad}
+          downloadToExcel={()=> exportToExcel(callList, "Call-List")}
         />
       }
       columnDefinitions={COLUMN_DEFINITIONS_MAIN}
