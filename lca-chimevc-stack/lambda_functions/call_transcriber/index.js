@@ -132,7 +132,7 @@ const deleteTempFile = async function deleteTempFile(sourceFile) {
 };
 
 // Retrieve Chime stream event for specified channel, waiting for up to 10s
-const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(callId, channel) {
+const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(callId, channel, retries) {
   // Set the parameters
   const params = {
     Key: {
@@ -151,14 +151,17 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
   let loopCount = 0;
 
   // eslint-disable-next-line no-plusplus
-  while (agentStreamArn === undefined && loopCount++ < 100) {
+  while (agentStreamArn === undefined && loopCount++ < retries) {
     const data = await dynamoClient.send(command);
     console.log('GetItem result: ', JSON.stringify(data));
     if (data.Item) {
       if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
     } else {
-      console.log(loopCount, `${channel} stream not yet available. Sleeping 100ms.`);
-      await sleep(100);
+      console.log(`${channel} stream not yet available.`);
+      if (loopCount < retries) {
+        console.log(loopCount, `Sleeping 100ms.`);
+        await sleep(100);
+      }
     }
   }
   return agentStreamArn;
@@ -166,7 +169,7 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
 
 const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(callEvent) {
   const callerStreamArn = callEvent.detail.streamArn;
-  const agentStreamArn = await getChannelStreamFromDynamo(callEvent.detail.callId, 'AGENT');
+  const agentStreamArn = await getChannelStreamFromDynamo(callEvent.detail.callId, 'AGENT', 100);
   if (agentStreamArn === undefined) {
     console.log('Timed out waiting for AGENT stream event after 10s. Exiting.');
     return undefined;
@@ -794,6 +797,23 @@ const handler = async function handler(event, context) {
     await writeCallStartEventToKds(kinesisClient, callData);
   } else if (event.source === 'aws.chime') {
     if (event.detail.streamingStatus === 'STARTED') {
+
+      if (event.detail.isCaller === undefined) {
+        console.log('Indeterminate channel (isCaller field is missing). Assuming this is a test script call. Proceed with arbitrary channel assignment.');
+        const interval = Math.floor(Math.random() * 10000);
+        console.log(`Waiting random interval (${interval} msecs) to avoid race condition with matching event for other channel.`)
+        await sleep(interval);
+        console.log("Check if other stream channel event has already been stored as AGENT role");
+        const otherStreamArn = await getChannelStreamFromDynamo(event.detail.callId, 'AGENT', 1);
+        if (otherStreamArn === undefined) {
+          console.log('This is the first event => Assigning AGENT channel role to this event');
+          event.detail.isCaller = false;
+        } else {
+          console.log('This is the second event => Assigning CALLER channel role to this event');
+          event.detail.isCaller = true;
+        }
+      }
+
       console.log('AWS Chime stream STARTED event received. Save event record to DynamoDB.');
       await writeChimeCallStartEventToDdb(event);
 
