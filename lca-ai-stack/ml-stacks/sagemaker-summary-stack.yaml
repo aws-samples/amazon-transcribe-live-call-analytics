@@ -226,7 +226,7 @@ Resources:
                       
               except Exception as e:
                   print("An exception occurred:", e)
-                  summaryText = "An exception has occurred"
+                  summaryText = ""
 
               return { "summary": summaryText }
   
