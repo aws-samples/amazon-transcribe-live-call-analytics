@@ -92,7 +92,7 @@ const CallList = () => {
           setIsLoading={setIsCallsListLoading}
           periodsToLoad={periodsToLoad}
           setPeriodsToLoad={setPeriodsToLoad}
-          downloadToExcel={()=> exportToExcel(callList, "Call-List")}
+          downloadToExcel={() => exportToExcel(callList, 'Call-List')}
         />
       }
       columnDefinitions={COLUMN_DEFINITIONS_MAIN}
