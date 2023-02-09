@@ -333,7 +333,9 @@ const CallSummary = ({ item }) => {
               <div>
                 {/* eslint-disable-next-line react/no-array-index-key */}
                 <TextContent color="gray">
-                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.callSummaryText}</ReactMarkdown>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                    {item.callSummaryText ?? 'No summary available'}
+                  </ReactMarkdown>
                 </TextContent>
               </div>
             ),
