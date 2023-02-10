@@ -324,7 +324,9 @@ const CallSummary = ({ item }) => {
         </Header>
       }
     >
-      <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
+      <Grid
+        gridDefinition={[{ colspan: { default: 12, xs: 6 } }, { colspan: { default: 12, xs: 6 } }]}
+      >
         <Tabs
           tabs={[
             {
@@ -964,7 +966,9 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   return (
     <SpaceBetween size="s">
       <CallAttributes item={item} setToolsOpen={setToolsOpen} />
-      <Grid gridDefinition={[{ colspan: 8 }, { colspan: 4 }]}>
+      <Grid
+        gridDefinition={[{ colspan: { default: 12, xs: 8 } }, { colspan: { default: 12, xs: 4 } }]}
+      >
         <CallSummary item={item} />
         <CallCategories item={item} />
       </Grid>
