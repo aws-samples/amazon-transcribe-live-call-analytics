@@ -13,6 +13,9 @@ Parameters:
   CallEventsTable:
     Type: String
     Description: Name of the LCA Call Events Table to look up transcripts.
+  FetchTranscriptArn:
+    Type: String
+    Description: Arn of the Lambda function that fetches the transcript as a string.
 
 Conditions:
   ServerlessSageMakerEndpoint: !Equals
@@ -113,7 +116,10 @@ Resources:
             - ProvisionedSageMakerEndpoint
             - !GetAtt LCASMProvisionedSummarizationEndpoint.EndpointName
             - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName 
-          LCA_CALL_EVENTS_TABLE: !Ref CallEventsTable
+          FETCH_TRANSCRIPT_LAMBDA_ARN: !Ref FetchTranscriptArn
+          PROCESS_TRANSCRIPT: "True"
+          TOKEN_COUNT: "1024"
+
       Code:
         ZipFile: |
           import os
@@ -125,97 +131,53 @@ Resources:
           import csv
           import logging
           import re
-
-
+          
           # grab environment variables
           ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
           LCA_CALL_EVENTS_TABLE = os.environ['LCA_CALL_EVENTS_TABLE']
-
-          runtime= boto3.client('runtime.sagemaker')
+          FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
+          PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
+          TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0'))
+          
+          runtime = boto3.client('runtime.sagemaker')
           logger = logging.getLogger(__name__)
           ddb = boto3.resource('dynamodb')
-
+          lambda_client = boto3.client('lambda')
+          
           html_remover = re.compile('<[^>]*>')
           filler_remover = re.compile('([Uu]m|[Uu]h|[Ll]ike|[Mm]hm)[,]?')
-
-          lca_call_events = ddb.Table(LCA_CALL_EVENTS_TABLE)
-
-          def get_transcripts(callid):
-              
-              pk = 'trs#'+callid
-              print(pk)
-              
-              try:
-                  response = lca_call_events.query(KeyConditionExpression=Key('PK').eq(pk), FilterExpression=(Attr('Channel').eq('AGENT') | Attr('Channel').eq('CALLER')) & Attr('IsPartial').eq(False))
-                  # response = lca_call_events.query(KeyConditionExpression=Key('PK').eq(pk)) 
-              except ClientError as err:
-                  logger.error("Error getting transcripts from LCA Call Events table %s: %s", 
-                          err.response['Error']['Code'], err.response['Error']['Message'])
-                  raise 
-              else:
-                  # print(response['Items'])
-                  return response['Items']
-
-          def preprocess_transcripts(transcripts):
-              data = []
-
-              transcripts.sort(key=lambda x: x['EndTime'])
-
-              last_channel = 'start'
-              for row in transcripts:
-                  if row['Channel'] == 'AGENT_ASSISTANT':
-                      continue
-                  
-                  if row['Channel'] == last_channel:
-                      transcript = ' ' + row['Transcript']
-                  else:
-                      transcript = '\n' + row['Channel'] + ": " + row['Transcript']
-                      last_channel = row['Channel']
-                  data.append(transcript)
-              
-              return data
-
-          def remove_html(transcript_string):
-              return re.sub(html_remover, '', transcript_string)
-
-          def remove_filler_words(transcript_string):
-              return re.sub(filler_remover, '', transcript_string)
-
-          def truncate_number_of_words(transcript_string):
-              #findall can retain carriage returns
-              data = re.findall(r'\S+|\n|.|,',transcript_string)
-              data = data[0:1000]
-              return ''.join(data)
-
-
+          
+          def get_transcripts(callId):
+              payload = {
+                  'CallId': callId, 
+                  'ProcessTranscript': PROCESS_TRANSCRIPT, 
+                  'TokenCount': TOKEN_COUNT 
+              }
+              response = lambda_client.invoke(
+                  FunctionName=FETCH_TRANSCRIPT_LAMBDA_ARN,
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps(payload)
+              )
+              return response
+          
           def lambda_handler(event, context):
               print("Received event: " + json.dumps(event, indent=2))
-              
+          
               # Setup model input data using text (utterances) received from LCA
               data = json.loads(json.dumps(event))
-              callid = data['CallId']
-              print(callid)
-              print("\n")
-              
-              transcripts = get_transcripts(callid)
-              transcripts = preprocess_transcripts(transcripts)
-              transcript_string = ''.join(transcripts)
-              transcript_string = remove_html(transcript_string)
-              transcript_string = remove_filler_words(transcript_string)
-              transcript_string = truncate_number_of_words(transcript_string)
-              print('Transcript:\n' + transcript_string)
-              
-              payload = { 'inputs': transcript_string }
-              
+              callId = data['CallId']
+              transcript_response = get_transcripts(callId)
+              payload = {'inputs': transcript_response.transcript}
+          
               summaryText = ""
               try:
                   data = json.dumps(event)
                   response = runtime.invoke_endpoint(EndpointName=ENDPOINT_NAME,
-                                                      ContentType='application/json',
-                                                      Body=bytes(json.dumps(payload), 'utf-8'))
+                                                    ContentType='application/json',
+                                                    Body=bytes(json.dumps(payload), 'utf-8'))
                   print(response)
                   result = json.loads(response['Body'].read().decode())
-              
+          
                   if len(result) > 0:
                       summary = result[0]
                       print("Summary: " + summary["generated_text"])
@@ -223,12 +185,13 @@ Resources:
                   else:
                       print("No Summary")
                       summaryText = "No summary"
-                      
+          
               except Exception as e:
                   print("An exception occurred:", e)
                   summaryText = ""
-
-              return { "summary": summaryText }
+          
+              return {"summary": summaryText}
+        
   
   LambdaRole:
     Type: AWS::IAM::Role

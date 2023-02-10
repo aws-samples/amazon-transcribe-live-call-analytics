@@ -912,3 +912,7 @@ Outputs:
   SNSCategoryTopicName:
     Description: The name of the SNS Topic for matched category and alert notifications
     Value: !GetAtt AISTACK.Outputs.SNSTopic
+
+  FetchTranscriptLambdaArn:
+    Description: The ARN of a Lambda function that will process and export a call transcript as a string.
+    Value: !GetAtt AISTACK.Outputs.FetchTranscriptArn
