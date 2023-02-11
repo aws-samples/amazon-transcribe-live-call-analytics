@@ -1224,12 +1224,14 @@ async def execute_process_event_api_mutation(
         )
         # UPDATE STATUS
         if (ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN):
-            call_summary = invoke_end_of_call_lambda_hook(message)
+            call_id = message_normalized["ContactId"]
+            summary_message = {"CallId": call_id, **message_normalized }
+            call_summary = invoke_end_of_call_lambda_hook(summary_message)
             LOGGER.debug("Call summary: ")
             LOGGER.debug(call_summary)
-            message['CallSummaryText'] = call_summary['summary']
+            summary_message['CallSummaryText'] = call_summary['summary']
             response = await execute_add_call_summary_text_mutation(
-                message=message_normalized,
+                message=summary_message,
                 appsync_session=appsync_session
             )
 
