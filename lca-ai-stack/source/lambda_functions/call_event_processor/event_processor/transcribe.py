@@ -670,12 +670,6 @@ def add_lex_agent_assistances(
     created_at = datetime.utcnow().astimezone().isoformat()
     status: str = message["Status"]
 
-    tasks = []
-
-    if status == "ENDED":
-        LOGGER.error("The call is ended, so we will not do agent assist.")
-        return tasks
-
     send_lex_agent_assist_args = []
     if (channel == "CALLER" and not is_partial):
         send_lex_agent_assist_args.append(
@@ -695,6 +689,7 @@ def add_lex_agent_assistances(
             )
         )
 
+    tasks = []
     for agent_assist_args in send_lex_agent_assist_args:
         task = send_lex_agent_assist(
             appsync_session=appsync_session,
