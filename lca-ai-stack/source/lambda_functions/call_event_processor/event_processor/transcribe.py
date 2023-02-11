@@ -936,6 +936,12 @@ async def execute_process_event_api_mutation(
     elif event_type in [
         "END",
     ]:
+        LOGGER.debug("update status")
+        response = await execute_update_call_status_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
+        
         # UPDATE STATUS
         if (ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN):
             call_summary = invoke_end_of_call_lambda_hook(message)
@@ -946,12 +952,7 @@ async def execute_process_event_api_mutation(
                 message=message,
                 appsync_session=appsync_session
             )
-
-        LOGGER.debug("update status")
-        response = await execute_update_call_status_mutation(
-            message=message,
-            appsync_session=appsync_session
-        )
+        
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
