@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2023-02-12
+### Added
+- Experimental abstractive Transcript Summary feature generates a short paragraph summarizing the completed call. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
+- New utility Lambda function that retrieves call transcription from DynamoDB. See [Fetch Transcription Lambda](./lca-ai-stack/FetchTranscriptLambda.md).
+- Real-time translation of call transcripts using Amazon Translate.
+- Ability to disable agent transcripts in the Call Transcript pane.
+- Test scripts for similating phone calls. See [Asterisk Test Scripts](./lca-chimevc-stack/asterisk-test-scripts/README.md).
+- Test LCA client utility to make it easier to test Call Event Processors and LCA UI without having to actually make a phone call. See [LCA Client](./utilities/lca-client/README.md).
+- Call List Download button to save call list to local Excel file.
+
+### Changed
+- Fix bug in Call Transcriber Lambda that caused double transcription when Chime Voice Connector soesn't differentiate between caller and agent streams (caused by SBC not configured to use RFC 7865 metadata).
+- Miscellanous dependabot updates
+
+
+
 ## [0.6.0] - 2022-11-27
 ### Added
 - Supports new [Amazon Transcribe Real-time Call Analytics](https://aws.amazon.com/transcribe/call-analytics/) streaming API
@@ -158,7 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...develop
+[0.7.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...v0.6.0
 [0.6.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...v0.5.2
 [0.5.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...v0.5.1
