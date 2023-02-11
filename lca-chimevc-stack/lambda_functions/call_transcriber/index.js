@@ -797,9 +797,9 @@ const handler = async function handler(event, context) {
     await writeCallStartEventToKds(kinesisClient, callData);
   } else if (event.source === 'aws.chime') {
     if (event.detail.streamingStatus === 'STARTED') {
-
       if (event.detail.isCaller === undefined) {
-        console.log('Indeterminate channel (isCaller field is missing). Assuming this is a test script call. Proceed with arbitrary channel assignment.');
+        console.log('WARNING: Indeterminate channel (isCaller field is missing). If this is a production call, use RFC-1785 standard for SipRec Recording Metadata.');
+        console.log('Assuming this is a test script call. Proceed with arbitrary channel assignment.');
         const interval = Math.floor(Math.random() * 10000);
         console.log(`Waiting random interval (${interval} msecs) to avoid race condition with matching event for other channel.`)
         await sleep(interval);
