@@ -330,7 +330,7 @@ const CallSummary = ({ item }) => {
         <Tabs
           tabs={[
             {
-              label: 'Summary',
+              label: 'Transcript Summary',
               id: 'summary',
               content: (
                 <div>
