@@ -4,17 +4,18 @@ LCA can now generate and display a short abstractive call transcript summarizati
 
 Currently the transcript summarization feature is 'experimental'. In later releases we may adopt different techniques and add capabilities based on feedback from early adoption. We encourage experimentation, and feedback!
   
-Here is an example of a Transcript Summary:
+Example Transcript Summary:
    
 ![TranscriptSummary](./images/TranscriptSummary.png)
    
+Transcript Summaries are generated after the call has ended, and can take 20-30 seconds to appear on the UI.
 
-When a call ends, LCA's Event Processor Lambda function will check to see if the stack has been configured for summarization. Summarization is configured by choosing an value for the `EndOfCallTranscriptSummary` CloudFormation parameter. Valid values are 
+Configure Transcript Summarization by choosing a value for the `EndOfCallTranscriptSummary` CloudFormation parameter when deploying or updating your LCA stack. Valid values are 
 `DISABLED`, `SAGEMAKER`, and `LAMBDA`.
 
 ### **DISABLED** (default)
 
-This option disables call transcript summarization.
+This option (the default) disables call transcript summarization.
 
 ### **SAGEMAKER**
 
@@ -26,7 +27,9 @@ By setting the parameter `SummarizationSageMakerInitialInstanceCount` to `0`, a 
 
 The `CallEventProcessor` Lambda invokes a pre-configured `SummaryLambda` at the end of a call. The `SummaryLambda` invokes the `FetchTranscript` Lambda (see more details below) to fetch a text based transcript of the call. The transcript is sent to the SageMaker endpoint to generate a summary.  The summary is returned from the `SummaryLambda` to the `CallEventProcessor` and mutated/persisted to AppSync/DynamoDB.
 
-NOTE: The summarization model used in this release limits the input text to 1024 'tokens'. Tokens are words, punctuation, and new lines. Transcriopts that are longer that 1024 tokens are automatically truncated by the `FetchTranscript` lambda to avoid errors when summarizing. This does affect the accuracy of the summary for long calls. We hope to be able to increase this limit by adopting newer models in future releases.
+NOTES: 
+- The summarization model used in this release limits the input text to 1024 'tokens'. Tokens are words, punctuation, and new lines. Transcriopts that are longer that 1024 tokens are automatically truncated by the `FetchTranscript` lambda to avoid errors when summarizing. This does affect the accuracy of the summary for long calls. We hope to be able to increase this limit by adopting newer models in future releases.
+- The summarization model used in this release was trained and tested in English language only. We hope to support additional languages in future releases.
 
 ### **LAMBDA**
 
