@@ -134,7 +134,6 @@ Resources:
           
           # grab environment variables
           ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
-          LCA_CALL_EVENTS_TABLE = os.environ['LCA_CALL_EVENTS_TABLE']
           FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
           PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
           TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0'))
