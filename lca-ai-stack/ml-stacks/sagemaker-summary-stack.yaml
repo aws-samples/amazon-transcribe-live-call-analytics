@@ -220,3 +220,7 @@ Resources:
               - Effect: "Allow"
                 Action: "dynamodb:Query"
                 Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CallEventsTable}"
+              - Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource: !Ref FetchTranscriptArn
+
