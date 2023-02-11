@@ -166,7 +166,10 @@ Resources:
               data = json.loads(json.dumps(event))
               callId = data['CallId']
               transcript_response = get_transcripts(callId)
-              payload = {'inputs': transcript_response.transcript}
+              transcript_data = transcript_response['Payload'].read().decode()
+              transcript_json = json.loads(transcript_data)
+              # print(transcript_json)
+              payload = {'inputs': transcript_json['transcript']}
           
               summaryText = ""
               try:
@@ -174,12 +177,12 @@ Resources:
                   response = runtime.invoke_endpoint(EndpointName=ENDPOINT_NAME,
                                                     ContentType='application/json',
                                                     Body=bytes(json.dumps(payload), 'utf-8'))
-                  print(response)
+                  # print(response)
                   result = json.loads(response['Body'].read().decode())
           
                   if len(result) > 0:
                       summary = result[0]
-                      print("Summary: " + summary["generated_text"])
+                      # print("Summary: " + summary["generated_text"])
                       summaryText = summary["generated_text"]
                   else:
                       print("No Summary")
@@ -190,6 +193,7 @@ Resources:
                   summaryText = ""
           
               return {"summary": summaryText}
+        
         
   
   LambdaRole:

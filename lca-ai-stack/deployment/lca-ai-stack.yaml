@@ -731,7 +731,7 @@ Resources:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
       Timeout: 60
       MemorySize: 128
-      Handler: index.handler
+      Handler: index.lambda_handler
       CodeUri: ../source/lambda_functions/fetch_transcript
       Description: This AWS Lambda Function fetches the call transcript for processing.
     Metadata:

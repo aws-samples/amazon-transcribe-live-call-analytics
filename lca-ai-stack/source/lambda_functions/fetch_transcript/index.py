@@ -83,8 +83,13 @@ def lambda_handler(event, context):
     # Setup model input data using text (utterances) received from LCA
     data = json.loads(json.dumps(event))
     callid = data['CallId']
-    tokenCount = data['TokenCount'] if data.has_key('TokenCount') else 0
-    preProcess = data['ProcessTranscript'] if data.has_key('ProcessTranscript') else False
+    tokenCount = 0
+    if 'TokenCount' in data:
+        tokenCount = data['TokenCount']
+    
+    preProcess = False
+    if 'ProcessTranscript' in data:
+        preProcess = data['ProcessTranscript']
 
     transcripts = get_transcripts(callid)
     transcripts = preprocess_transcripts(transcripts, preProcess)
