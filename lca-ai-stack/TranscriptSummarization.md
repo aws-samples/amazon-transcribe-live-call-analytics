@@ -1,8 +1,10 @@
 # Transcript Summarization (Experimental Feature)
 
-LCA now supports generating and displaying a short abstractive call transcript summarization (rendered in markdown) in addition to the extractive summarization from Transcribe Call Analytics that provides (real time) detected issues, and (post call) detected action items, and outcomes. Currently this feature is 'experimental'. In later releases we may adopt different techniques and add capabilities based on feedback from early adoption. We encourage experimentation, and feedback!
+LCA can now generate and display a short abstractive call transcript summarization (rendered in markdown) in addition to the extractive summarization from Transcribe Call Analytics that provides (real time) detected issues, and (post call) detected action items, and outcomes. 
+
+Currently the transcript summarization feature is 'experimental'. In later releases we may adopt different techniques and add capabilities based on feedback from early adoption. We encourage experimentation, and feedback!
   
-Heres an example of a Transcript Summary:
+Here is an example of a Transcript Summary:
    
 ![TranscriptSummary](./images/TranscriptSummary.png)
    
