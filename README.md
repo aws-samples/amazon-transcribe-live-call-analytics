@@ -2,7 +2,7 @@
 *Companion AWS blog post: [Live call analytics and agent assist for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
 ## Overview
 
-*Update September 2022 (v0.6.0) – Now supports real-time Detected Issues, real-time Call Categories, real-time Supervisor Alerts and integration with the companion Post Call Analytics (PCA) solution v0.4.0 or later, using the new [Amazon Transcribe Real-time Call Analytics](https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-streaming.html) service.*  
+*Update February 2023 (v0.7.0) – This release introduces (experimental) generative transcript summarization to provide a short paragraph with a synopsis of each completed call; use the built-in summarization model or experiment with custom language models or APIs of your choice. Also, with this update you can now choose to view call transcriptions translated to a second language of your choice using Amazon Translate, for live or completed calls. Other new features include: a utility Lambda function that returns the transcript for any in-progress or completed call, a UI selector that allows agents to disable display of their own voice transcription, a new download button on the UI Calls page, and more! See New features.*  
 *See [CHANGELOG](./CHANGELOG.md) for latest features and fixes.*
 
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
@@ -10,9 +10,9 @@ Your contact center connects your business to your community, enabling customers
 Naturally, you want to do what you can to ensure that your callers have a good experience. There are two aspects to this:
 
 - **Help supervisors assess the quality of your caller’s experiences in real time** – For example, your supervisors need to know if initially unhappy callers become happier as the call progresses. And if not, why? What actions can be taken, before the call ends, to assist the agent to improve the customer experience for calls that aren’t going well?
-- **Help agents optimize the quality of your caller’s experiences** – For example, can you deploy live call transcription or AI powered Agent Assistance? This removes the need for your agents to take notes, and provides them with contextually relevant information and guidance during calls, freeing them to focus more attention on providing positive customer interactions.
+- **Help agents optimize the quality of your caller’s experiences** – For example, can you deploy live call transcription, call summarization, or AI powered Agent Assistance? This removes the need for your agents to take notes, and provides them with contextually relevant information and guidance during calls, freeing them to focus more attention on providing positive customer interactions.
 
-Amazon machine learning services like Amazon Transcribe and Amazon Comprehend provide feature-rich APIs that you can use to transcribe and extract insights from your contact center audio at scale. Amazon Lex provides conversational AI capabilities that can capture intents and context from conversations, and Amazon Kendra offers intelligent search features that can provide useful information to agents based on callers' needs. Although you could build your own custom call analytics solution using these services, that requires time and resources. You figure that someone must have done this before, and that with luck you’ll find a solution that you can re-use.
+Amazon machine learning services like Amazon Transcribe, Amazon Comprehend and Amazon SageMaker provide feature-rich APIs that you can use to transcribe and extract insights from your contact center audio at scale. Amazon Lex provides conversational AI capabilities that can capture intents and context from conversations, and Amazon Kendra offers intelligent search features that can provide useful information to agents based on callers' needs. Although you could build your own custom call analytics solution using these services, that requires time and resources. You figure that someone must have done this before, and that with luck you’ll find a solution that you can re-use.
 
 Contact Lens for Amazon Connect provides real-time supervisor and agent assist features that could be just what you need, but you may not yet be using Amazon Connect. You need a solution that will also work with your existing contact center.
 
@@ -31,13 +31,13 @@ When a new caller or agent Kinesis Video stream is initiated, an event is fired 
 
 Each call processing session runs until the call ends. Any session that lasts longer than the maximum duration of an AWS Lambda function invocation (15 minutes) is automatically and seamlessly transitioned to a new ‘chained’ invocation of the same function, while maintaining a continuous transcription session with Amazon Transcribe. This function chaining repeats as needed until the call ends. At the end of the call the function creates a stereo recording file in Amazon S3.
 
-Another Lambda function, the Call Event Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Call Event Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics).  
+Another Lambda function, the Call Event Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Call Event Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics).The Call Event Processor also invokes the (optional) Transcript Summarization lambda when the call ends, to generate a summary of the call from the full transcript.
   
 The Call Event Processor function interfaces with AWS AppSync to persist changes (mutations) in DynamoDB and to send real-time updates to logged in web clients.
 
 The LCA web UI assets are hosted on Amazon S3 and served via Amazon CloudFront. Authentication is provided by Amazon Cognito. In demo mode, user identities are configured in an Amazon Cognito user pool. In a production setting, you would likely configure Amazon Cognito to integrate with your existing identity provider (IdP) so authorized users can log in with their corporate credentials.
 
-When the user is authenticated, the web application establishes a secure GraphQL connection to the AWS AppSync API, and subscribes to receive real-time events such as new calls and call status changes for the calls list page, and new or updated transcription segments, agent assist messages, and computed analytics for the call details page.
+When the user is authenticated, the web application establishes a secure GraphQL connection to the AWS AppSync API, and subscribes to receive real-time events such as new calls and call status changes for the calls list page, and new or updated transcription segments, agent assist messages, and computed analytics for the call details page. When translation is enabled, the web application also interacts securely with Amazon Translate to translate the call transcription into the selected language
 
 The entire processing flow, from ingested speech to live webpage updates, is event driven, and so the end-to-end latency is small—typically just a few seconds.
 
@@ -118,24 +118,27 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     21. `Enable Sentiment Analysis` - Enable or disable display of sentiment analysis.
     22. `Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)` - If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each 
       transcript segment. See [TranscriptLambdaHookFunction.md](./lca-ai-stack/TranscriptLambdaHookFunction.md).
-    23. `Lambda Hook Function Mode Non-Partial only` - Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for both Partial and Non-Partial transcript segments (false).  
+    23. `Lambda Hook Function Mode Non-Partial only` - Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for both Partial and Non-Partial transcript segments (false). 
+    24. `End of Call Transcript Summary` - Choose SAGEMAKER to automatically deploy a state of the art summarization model. Alternatively, choose LAMBDA to use your own Lambda function to generate summaries using other models, or choose DISABLED if you are not interested in exploring the new Transcript Summarization feature. 
+    25. `Initial Instance Count for Summarization SageMaker Endpoint` - When SAGEMAKER option is chosen (above) enter 0 for a SageMaker Serverless Inference endpoint, or 1 or greater for a provisioned endpoint with the specified number of instances. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+    26. `Lambda Hook Function ARN for Custom End of Call Processing (existing)` - When LAMBDA option is chosen (above) enter the ARN for your custom summarization Lambda function. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
     **Download locations**  
-    24. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
-    25. `Demo Asterisk Agent Audio URL` - (Optional)
+    27. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
+    28. `Demo Asterisk Agent Audio URL` - (Optional)
     URL for audio (agent.wav) file download for demo Asterisk server. Audio file is automatically played when an agent is not connected with a softphone  
     **Amazon CloudFront Configuration**  
-    26. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
-    27. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).  
+    29. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
+    30. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).  
     **Record retention**  
-    28. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.  
+    31. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.  
     **User Experience**  
-    29. `Category Alert Regular Expression` - If using the 'analytics' Transcribe API Mode, this regular expression will be used to show an alert in red in the web user interface if it matches a call category. This defaults to matching all categories.  
+    32. `Category Alert Regular Expression` - If using the 'analytics' Transcribe API Mode, this regular expression will be used to show an alert in red in the web user interface if it matches a call category. This defaults to matching all categories.  
     **Post Call Analytics (PCA) Integration**  
-    30. `PCA InputBucket` - (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
-    31. `PCA InputBucket Transcript prefix` - Value of PCA stack "InputBucketTranscriptPrefix".
-    32. `PCA InputBucket Playback AudioFile prefix` - Value of PCA stack "InputBucketPlaybackAudioPrefix".
-    33. `PcaWebAppURL` - (Optional) Value of PCA stack "WebAppURL" - allows PCA UI to be launched from LCA UI.
-    34. `PCA Web App Call Path Prefix` - PCA path prefix for call detail pages.
+    33. `PCA InputBucket` - (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+    34. `PCA InputBucket Transcript prefix` - Value of PCA stack "InputBucketTranscriptPrefix".
+    35. `PCA InputBucket Playback AudioFile prefix` - Value of PCA stack "InputBucketPlaybackAudioPrefix".
+    36. `PcaWebAppURL` - (Optional) Value of PCA stack "WebAppURL" - allows PCA UI to be launched from LCA UI.
+    37. `PCA Web App Call Path Prefix` - PCA path prefix for call detail pages.
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**.  This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
@@ -176,11 +179,16 @@ You can test this solution if you installed the demo asterisk server during depl
 4. You will see the phone call show up on the LCA web page as follows ![CallList](./images/call-list-with-categories-and-alerts.png)
 5. Try the built-in agent assist demo using the [agent assist demo script](lca-agentassist-setup-stack/agent-assist-demo-script.md). For more detail and tutorials on Agent Assist, see [Agent Assist README](lca-agentassist-setup-stack/README.md)
 
+For automated testing, see
+1. Test scripts for similating phone calls. See [Asterisk Test Scripts](./lca-chimevc-stack/asterisk-test-scripts/README.md).
+2. LCA client utility to make it easier to test Call Event Processors and LCA UI without having to actually make a phone call. See [LCA Client](./utilities/lca-client/README.md).
+
 ## Additional Customization options
 - [SIPREC Call Initialization Lambda Hook](./lca-chimevc-stack/LambdaHookFunction.md)
 - [Delay start of call processing](./lca-chimevc-stack/StartCallProcessingEvent.md)
 - [Assign an AgentID to a call](./lca-chimevc-stack/SettingAgentId.md)
 - [Customize transcript processing](./lca-ai-stack/TranscriptLambdaHookFunction.md)
+- [Customize transcript summarization](./lca-ai-stack/TranscriptSummarization.md)
 
 ## Post Call Analytics: Companion solution
 Our companion solution, Post Call Analytics (PCA), offers additional insights and analytics capabilities by using the Amazon Transcribe Call Analytics batch API to detect common issues, interruptions, silences, speaker loudness, call categories, and more. Unlike LCA, which transcribes and analyzes streaming audio in real time, PCA analyzes your calls after the call has ended. The new Amazon Transcribe Real-time Call Analytics service provides post-call analytics output from your streaming sessions just a few minutes after the call has ended. LCA can now send this post-call analytics data to the latest version of PCA (v0.4.0) to provide analytics visualizations for your streaming sessions without needing to transcribe the audio a second time. Configure LCA to integrate with PCA v0.4.0 or later using the LCA CloudFormation tempate parameters labeled **Post Call Analytics (PCA) Integration**. Use the two solutions together to get the best of both worlds. For more information, see [Post call analytics for your contact center with Amazon language AI services](https://www.amazon.com/post-call-analytics).

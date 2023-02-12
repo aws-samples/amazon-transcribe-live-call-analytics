@@ -1,6 +1,6 @@
 # Transcript Summarization (Experimental Feature)
 
-LCA can now generate and display a short abstractive call transcript summary (rendered in markdown) in addition to the existing extractive summarization from Transcribe Call Analytics. 
+LCA can now generate and display a short abstractive call transcript summary (rendered in markdown) in addition to the existing extractive summarization from Real Time Transcribe Call Analytics. 
 
 Currently the transcript summarization feature is 'experimental'. In later releases we may adopt different techniques and add capabilities based on feedback from early adoption. We encourage experimentation, and feedback!
   
