@@ -64,6 +64,8 @@ This example function trivially returns a hardcoded string as the summary. Your 
   
 Use the provided [FetchTranscript utility Lambda function ](./FetchTranscriptLambda.md) in your custom summarization Lambda to retrieve the call transcript, optionally truncated to the maximum input token limit imposed by your summarization model.
 
+Use the provided SageMaker based `SummaryLambda` function as a reference for creating your own. The function is defined as resource `SummaryLambda` in the CloudFormation template [sagemaker-summary-stack.yaml](./ml-stacks/sagemaker-summary-stack.yaml).
+
 If your custom Lambda fails at runtime, or you do not want to return a summary for the call, return an empty string for the value of the summary field.
 
 ## FetchTranscript Utility Lambda
