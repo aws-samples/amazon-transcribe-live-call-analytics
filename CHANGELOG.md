@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Supports new [Amazon Transcribe Real-time Call Analytics](https://aws.amazon.com/transcribe/call-analytics/) streaming API
 - Real-time Detected Issues, Call Categories, and Alerts
 - Real-time Category and Alert Notifications via Amazon SNS subscriptions. See [Category Notifications](./lca-ai-stack/Notifications.md).
-- Post call analytics (without additional transcription costs) through integration with the companion [Post Call Analytics (PCA)](www.amazon.com/post-call-analytics) solution.
+- Post call analytics (without additional transcription costs) through integration with the companion [Post Call Analytics (PCA)](https://www.amazon.com/post-call-analytics) solution.
 - QnABot designer markdown answers enable rich text and media in Agent Assist messages
 ### Changed
 - Latest QnABot (v5.2.4) now used for agent assist 
