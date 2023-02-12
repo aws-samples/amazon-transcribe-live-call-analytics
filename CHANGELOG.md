@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Fix bug in Call Transcriber Lambda that caused double transcription if Chime Voice Connector can't differentiate between caller and agent streams (caused by SBC not configured to use RFC 7865 metadata).
+- Fixed issue where multiple LCA stacks in the same region processed calls from each other's Chime VS streams. Now each stack uses only it's own Chime VC instance, so you can run multiple stacks in the same account and region.
 - Miscellaneous dependabot updates
 
 
