@@ -246,7 +246,6 @@ input AddCallSummaryTextInput {
 
 input UpdateCallAggregationInput {
 	CallId: ID!
-	Status: CallStatus!
 	UpdatedAt: AWSDateTime
 	TotalConversationDurationMillis: Float
 	Sentiment: SentimentAggregationInput
