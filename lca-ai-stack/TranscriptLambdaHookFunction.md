@@ -86,9 +86,11 @@ def lambda_handler(event, context):
 
 This example function trivially converts the transcript to uppercase while preserving the original for use with agent assist. Your function will be much smarter, and will implement your custom rules or models.
 
-The CallEventProcessor function calls your Lambda syncronously, waiting for a valid response. If your Lambda fails or times out before completing, the CallEventProcessor Lambda throws an exception and drops the transcript. Be sure to test your function properly using test events, and log messages so you can check that it fucntions as expected.  
+The CallEventProcessor function calls your Lambda syncronously, waiting for a valid response. If your Lambda fails or times out before completing, the CallEventProcessor Lambda throws an exception and drops the transcript. Be sure to test your function properly using test events, and log messages so you can check that it functions as expected.  
 Your function is invoked for every non-partial transcript segment (by default), or for every partial and non-partial segment (by setting **Lambda Hook Function Mode Non-Partial only** to *false*). Make your function as lightweight and fast as possible to minimize latency and cost. 
 
+## Accessing cumulative transcript for the call
+You can use the [Fetch Transcript](./FetchTranscriptLambda.md) function to retrieve the cumulative transcript of the call, up to but not including the current transcription segment. This may be useful when your processing function requires prior context to process the current segment.
 
 ## Register the Lambda function with LCA
 
