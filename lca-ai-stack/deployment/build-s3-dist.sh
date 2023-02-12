@@ -47,3 +47,6 @@ export TEMPLATE_FILE="$TEMPLATE_DIR/lca-ai-stack.yaml"
 cd "${TEMPLATE_DIR}/.."
 
 make release
+
+cd ml-stacks
+make release

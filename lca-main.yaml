@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.6.0) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.7.0) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -248,6 +248,34 @@ Parameters:
       Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
       both Partial and Non-Partial transcript segments (false).
 
+  EndOfCallTranscriptSummary:
+    Default: 'DISABLED'
+    Type: String
+    AllowedValues:
+      - 'DISABLED'
+      - 'SAGEMAKER'
+      - 'LAMBDA'
+    Description: >
+      Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
+      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
+      to provide a function ARN below.
+
+  SummarizationSageMakerInitialInstanceCount:
+    Type: Number
+    MinValue: 0
+    Default: 1
+    Description: >
+      (Optional) If 'End Of Call Transcript Summary' is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
+  EndOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) If 'End Of Call Transcript Summary' is LAMBDA, provide ARN for a Lambda function. The specified Lambda function is invoked by the LCA Call Event Processor Lambda function 
+      for end of call event. The function is passed en event with CallId as input.
+      This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
+
   AdminEmail:
     Type: String
     Description: >-
@@ -383,6 +411,9 @@ Metadata:
           - IsSentimentAnalysisEnabled
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
+          - EndOfCallTranscriptSummary
+          - SummarizationSageMakerInitialInstanceCount
+          - EndOfCallLambdaHookFunctionArn
       - Label:
           default: Download locations
         Parameters:
@@ -467,6 +498,12 @@ Metadata:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
         default: Lambda Hook Function Mode Non-Partial only
+      EndOfCallTranscriptSummary:
+        default: End of Call Transcript Summary
+      SummarizationSageMakerInitialInstanceCount:
+        default: Initial Instance Count for Summarization SageMaker Endpoint
+      EndOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       CloudFrontPriceClass:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
@@ -689,6 +726,9 @@ Resources:
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+        EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+        SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+        EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -872,3 +912,7 @@ Outputs:
   SNSCategoryTopicName:
     Description: The name of the SNS Topic for matched category and alert notifications
     Value: !GetAtt AISTACK.Outputs.SNSTopic
+
+  FetchTranscriptLambdaArn:
+    Description: The ARN of a Lambda function that will process and export a call transcript as a string.
+    Value: !GetAtt AISTACK.Outputs.FetchTranscriptArn

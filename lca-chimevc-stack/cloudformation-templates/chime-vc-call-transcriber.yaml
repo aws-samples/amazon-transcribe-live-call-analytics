@@ -120,6 +120,11 @@ Parameters:
       The function must return a True/False flag to indicate if the call should be processed or ignored, 
       a mapped CallId, an AgentId, and may be extended to support additional features in future.
 
+  VoiceConnectorId:
+    Type: String
+    Default: ''
+    Description: >-
+      Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
         
 Resources:
   ##########################################################################
@@ -345,6 +350,9 @@ Resources:
     Properties:
       Description: "This rule is triggered when the ChimeVC streaming status changes, or when a START_CALL_PROCESSING event is sent from IVR"
       EventPattern:
+        detail:
+          voiceConnectorId:
+            - !Ref VoiceConnectorId
         detail-type:
           - "Chime VoiceConnector Streaming Status"
           - "START_CALL_PROCESSING"
