@@ -15,29 +15,29 @@ Configure Transcript Summarization by choosing a value for the `EndOfCallTranscr
 
 ### **DISABLED** (default)
 
-This option (the default) disables call transcript summarization.
+This option (default) disables call transcript summarization.
 
 ### **SAGEMAKER**
 
-If you choose the `SAGEMAKER` option, LCA will deploy a Lambda function and  SageMaker endpoint with the [bart-large-cnn-samsum](https://huggingface.co/philschmid/bart-large-cnn-samsum) model. 
+Choose the `SAGEMAKER` option to deploy a Lambda function and a SageMaker endpoint with the [bart-large-cnn-samsum](https://huggingface.co/philschmid/bart-large-cnn-samsum) model. 
 
-By default a 1-node ml.m5.xlarge endpoint is automatically provisioned. For large volume deployments, add additional nodes by setting the parameter `SummarizationSageMakerInitialInstanceCount`. Please check [SageMaker pricing documentation](https://aws.amazon.com/sagemaker/pricing/) for relevant costs and information on Free Tier eligibility. 
+By default a 1-node ml.m5.xlarge endpoint is provisioned. For high call volume deployments, add additional nodes by increasing the parameter `SummarizationSageMakerInitialInstanceCount`. Please check [SageMaker pricing documentation](https://aws.amazon.com/sagemaker/pricing/) for relevant costs and information on Free Tier eligibility. (We have not yet tested summarization with high call volumes, so we don't yet have any scaling guidance. Please experiment and share your feedback.) 
   
 By setting the parameter `SummarizationSageMakerInitialInstanceCount` to `0`, a [Serverless Sagemaker endpoint](https://docs.aws.amazon.com/sagemaker/latest/dg/serverless-endpoints.html) is enabled. A serverless endpoint can save you money by scaling down to zero when not in use, however, there is a 'cold start' time of approximately 1-2 minutes which can delay the availability of the summary when used after a period of inactivity. LCA creates the serverless endpoint with default 4GB model memory, and max concurrency of 50 requests.  
 
-The `CallEventProcessor` Lambda invokes a pre-configured `SummaryLambda` at the end of a call. The `SummaryLambda` invokes the `FetchTranscript` Lambda (see more details below) to fetch a text based transcript of the call. The transcript is sent to the SageMaker endpoint to generate a summary.  The summary is returned from the `SummaryLambda` to the `CallEventProcessor` and mutated/persisted to AppSync/DynamoDB.
+The `CallEventProcessor` Lambda invokes a `SummaryLambda` function at the end of a call. The `SummaryLambda` in turn invokes the `FetchTranscript` Lambda (see more details below) to fetch the full transcript of the call from the DynamoDB table. The transcript is then passed to the SageMaker endpoint to generate a summary.  The summary is returned from the `SummaryLambda` to the `CallEventProcessor`, mutated and persisted to AppSync/DynamoDB, and displayed in the Call Detail page for the call in the LCA UI, as shown above.
 
 NOTES: 
-- The summarization model used in this release limits the input text to 1024 'tokens'. Tokens are words, punctuation, and new lines. Transcriopts that are longer that 1024 tokens are automatically truncated by the `FetchTranscript` lambda to avoid errors when summarizing. This does affect the accuracy of the summary for long calls. We hope to be able to increase this limit by adopting newer models in future releases.
-- The summarization model used in this release was trained and tested in English language only. We hope to support additional languages in future releases.
+- The summarization model used in this release limits the input text length to 1024 'tokens'. Tokens are words, punctuation, and new lines. Transcripts that are longer that 1024 tokens are automatically truncated to 1024 tokens by the `FetchTranscript` lambda to avoid errors when summarizing. This, unfortunately, reduces the accuracy of the summary for long calls. We hope to be able to increase this limit by adopting newer models in future releases.
+- The summarization model used in this release was trained and tested in **English** only. We hope to support additional languages in future releases.
 
 ### **LAMBDA**
 
-Use the LAMBDA option to provide your own summarization functions and/or machine learning models. This option allows you to experiment with different models and techniques to customized the summary as you need.
+Use the LAMBDA option to provide your own summarization functions and/or machine learning models. This option allows you to experiment with different models and techniques to customize the summary as you need.
 
 When you choose the `LAMBDA` option, you must provide the Arn of your custom Lambda function in the `EndOfCallLambdaHookFunctionArn` CloudFormation parameter. At the end of a call, the `CallEventProcessor` Lambda function will invoke the custom Lambda and pass in the CallId of the call.
 
-The custom Lambda function must return the summary in the following format:
+Your custom Lambda function must return the summary in the following JSON format:
 
 ```
 {
@@ -45,11 +45,11 @@ The custom Lambda function must return the summary in the following format:
 }
 ```
 
-The summary text can optionally use Markdown syntax to include rich text- and/or embedded hyperlinks, images, media, etc.
+The summary can optionally use Markdown syntax to include rich text, hyperlinks, images, media, etc.
   
-Use the provided [FetchTranscript utility Lambda function ](./FetchTranscriptLambda.md) to retrieve the call transcript, optionally truncated to the maximum input token limit of your summarization model.
+Use the provided [FetchTranscript utility Lambda function ](./FetchTranscriptLambda.md) in your custom summarization Lambda to retrieve the call transcript, optionally truncated to the maximum input token limit imposed by your summarization model.
 
-If the custom Lambda fails, or you do not want to return a summary for the call, return an empty string for the value of the summary.
+If your custom Lambda fails at runtime, or you do not want to return a summary for the call, return an empty string for the value of the summary field.
 
 ## FetchTranscript Utility Lambda
 
