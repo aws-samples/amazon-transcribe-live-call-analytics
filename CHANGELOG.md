@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test scripts for similating phone calls. See [Asterisk Test Scripts](./lca-chimevc-stack/asterisk-test-scripts/README.md).
 - LCA client utility to make it easier to test Call Event Processors and LCA UI without having to actually make a phone call. See [LCA Client](./utilities/lca-client/README.md).
 - Download button on Calls page to save call list to local Excel file.
+- Default audio recording used by demo Asterisk server now plays the agent side of the [Agent Assist demo script](./lca-agentassist-setup-stack/agent-assist-demo-script.md).
 
 ### Changed
 - Fix bug in Call Transcriber Lambda that caused double transcription if Chime Voice Connector can't differentiate between caller and agent streams (caused by SBC not configured to use RFC 7865 metadata).
