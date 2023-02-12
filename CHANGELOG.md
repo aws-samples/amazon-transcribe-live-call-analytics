@@ -8,16 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2023-02-12
 ### Added
-- Experimental abstractive Transcript Summary feature generates a short paragraph summarizing the completed call. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
-- New utility Lambda function that retrieves call transcription from DynamoDB. See [Fetch Transcription Lambda](./lca-ai-stack/FetchTranscriptLambda.md).
-- Real-time translation of call transcripts using Amazon Translate.
-- Ability to disable agent transcripts in the Call Transcript pane.
+- Experimental abstractive transcript summary feature provides a short paragraph summarizing each completed call. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
+- Utility Lambda function that retrieves call transcription from DynamoDB. See [Fetch Transcription Lambda](./lca-ai-stack/FetchTranscriptLambda.md).
+- Optional translation of live or completed call transcripts into language of choice, using Amazon Translate.
+- Ability to disable display of agent channel transcription in the call transcript pane.
 - Test scripts for similating phone calls. See [Asterisk Test Scripts](./lca-chimevc-stack/asterisk-test-scripts/README.md).
-- Test LCA client utility to make it easier to test Call Event Processors and LCA UI without having to actually make a phone call. See [LCA Client](./utilities/lca-client/README.md).
-- Call List Download button to save call list to local Excel file.
+- LCA client utility to make it easier to test Call Event Processors and LCA UI without having to actually make a phone call. See [LCA Client](./utilities/lca-client/README.md).
+- Download button on Calls page to save call list to local Excel file.
 
 ### Changed
-- Fix bug in Call Transcriber Lambda that caused double transcription when Chime Voice Connector soesn't differentiate between caller and agent streams (caused by SBC not configured to use RFC 7865 metadata).
+- Fix bug in Call Transcriber Lambda that caused double transcription if Chime Voice Connector can't differentiate between caller and agent streams (caused by SBC not configured to use RFC 7865 metadata).
 - Miscellanous dependabot updates
 
 
