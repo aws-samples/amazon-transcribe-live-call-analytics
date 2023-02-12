@@ -46,6 +46,21 @@ Your custom Lambda function must return the summary in the following JSON format
 ```
 
 The summary can optionally use Markdown syntax to include rich text, hyperlinks, images, media, etc.
+
+Here is a minimal example of a valid custom summarization Lambda function, written in Python. 
+```
+import json
+
+def lambda_handler(event, context):
+    print(json.dumps(event))
+    summary = "Placeholder for actual summary" 
+    # call your own model, APIs, or summarization functions here...
+    return {
+      "summary": summary
+    }
+``` 
+
+This example function trivially returns a hardcoded string as the summary. Your function will be much smarter, and will implement your custom rules or models.
   
 Use the provided [FetchTranscript utility Lambda function ](./FetchTranscriptLambda.md) in your custom summarization Lambda to retrieve the call transcript, optionally truncated to the maximum input token limit imposed by your summarization model.
 
