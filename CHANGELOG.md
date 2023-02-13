@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2023-02-12
 ### Added
-- Experimental generative transcript summary feature provides a short paragraph summarizing each completed call. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
+- Experimental generative transcript summarization to provide a short paragraph with a synopsis of each completed call; use the built-in summarization model or experiment with custom language models or APIs of your choice. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
 - Utility Lambda function that retrieves call transcription from DynamoDB. See [Fetch Transcription Lambda](./lca-ai-stack/FetchTranscriptLambda.md).
 - Optional translation of live or completed call transcripts into language of choice, using Amazon Translate.
 - Ability to disable display of agent channel transcription in the call transcript pane.
