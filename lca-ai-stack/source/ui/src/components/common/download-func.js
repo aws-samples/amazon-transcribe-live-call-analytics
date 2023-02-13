@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+
 export const onImportExcelAsync = (file) => {
     return new Promise((resolve, reject) => {
         // Obtener el objeto del archivo cargado
@@ -31,17 +32,12 @@ export const onImportExcelAsync = (file) => {
     })
 }
 
-export const  exportToExcel = async (data, nameFile) =>{
- 
-       if(data.length > 0){
-
-           var wb = XLSX.utils.book_new();
-           
-           var ws = XLSX.utils.json_to_sheet(data, { origin: 'A2', });
-           XLSX.utils.sheet_add_aoa(ws,[]); //heading: array of arrays
-           
-           XLSX.utils.book_append_sheet(wb, ws); 
-           
-           XLSX.writeFile(wb, `${nameFile}.xlsx`) 
-       }
-   }
+export const exportToExcel = async (data, nameFile) => {
+    if (data.length > 0) {
+        var wb = XLSX.utils.book_new();
+        var ws = XLSX.utils.json_to_sheet(data, { origin: 'A2', });
+        XLSX.utils.sheet_add_aoa(ws, []); //heading: array of arrays 
+        XLSX.utils.book_append_sheet(wb, ws);
+        XLSX.writeFile(wb, `${nameFile}.xlsx`)
+    }
+}

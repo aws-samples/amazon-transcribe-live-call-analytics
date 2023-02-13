@@ -32,7 +32,7 @@ import { SentimentFluctuationChart, SentimentPerQuarterChart } from './sentiment
 import './CallPanel.css';
 import { SentimentTrendIcon } from '../sentiment-trend-icon/SentimentTrendIcon';
 import { SentimentIcon } from '../sentiment-icon/SentimentIcon';
-
+import { exportToExcel } from '../common/download-func';
 // comprehend PII types
 const piiTypes = [
   'BANK_ACCOUNT_NUMBER',
@@ -54,7 +54,16 @@ const CallAttributes = ({ item, setToolsOpen }) => (
   <Container
     header={
       <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
-        Call Attributes
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div>Call Attributes</div>
+          <div style={{ marginLeft: 7 }}>
+            <Button
+              iconName="download"
+              variant="normals"
+              onClick={() => exportToExcel([item], 'call-details')}
+            />
+          </div>
+        </div>
       </Header>
     }
   >
