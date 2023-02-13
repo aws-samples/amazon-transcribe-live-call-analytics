@@ -239,7 +239,7 @@ export const CallsCommonHeader = ({ resourceName = 'Calls', ...props }) => {
     props.setPeriodsToLoad(shardCount);
     localStorage.setItem(PERIODS_TO_LOAD_STORAGE_KEY, JSON.stringify(shardCount));
   };
- 
+
   // eslint-disable-next-line
   const periodText =
     TIME_PERIOD_DROPDOWN_ITEMS.filter((i) => i.count === props.periodsToLoad)[0]?.text || '';
@@ -262,7 +262,7 @@ export const CallsCommonHeader = ({ resourceName = 'Calls', ...props }) => {
             loading={props.loading}
             onClick={() => props.setIsLoading(true)}
           />
-            <Button
+          <Button
             iconName="download"
             variant="normal"
             loading={props.loading}
