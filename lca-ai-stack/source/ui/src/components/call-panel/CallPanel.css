@@ -67,3 +67,15 @@ span.issue-pill {
     color:white;
 }
 
+.flex{
+    display: flex;
+}
+.items-center {
+    align-items: center;
+}
+.items-start {
+    align-items: flex-start;
+}  
+.btn-download-right{
+    margin-left: 0.5em;
+}

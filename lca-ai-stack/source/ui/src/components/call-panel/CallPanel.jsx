@@ -54,9 +54,9 @@ const CallAttributes = ({ item, setToolsOpen }) => (
   <Container
     header={
       <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="flex items-center">
           <div>Call Attributes</div>
-          <div style={{ marginLeft: 7 }}>
+          <div className="btn-download-right">
             <Button
               iconName="download"
               variant="normals"
@@ -402,7 +402,30 @@ const TranscriptSegment = ({ segment }) => {
     </Grid>
   );
 };
+const formatTranscriptExcel = (item, callTranscriptPerCallId) => {
+  // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
+  const maxChannels = 4;
+  const { callId } = item;
+  const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
+  const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
+  const data = transcriptChannels
+    .map((c) => {
+      const { segments } = transcriptsForThisCallId[c];
+      return segments;
+    })
+    // sort entries by end time
+    .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
+    .map(
+      // prettier-ignore
+      (s) => (
+        s?.segmentId
+        && s?.createdAt
+        && s
+      ),
+    );
 
+  return data;
+};
 const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll }) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
@@ -505,7 +528,21 @@ const CallTranscriptContainer = ({ setToolsOpen, item, callTranscriptPerCallId }
             </SpaceBetween>
           }
         >
-          Call Transcript
+          <div className="flex items-center">
+            <div> Call Transcript </div>
+            <div className="btn-download-right">
+              <Button
+                iconName="download"
+                variant="normals"
+                onClick={() => {
+                  exportToExcel(
+                    formatTranscriptExcel(item, callTranscriptPerCallId),
+                    'call-transcript',
+                  );
+                }}
+              />
+            </div>
+          </div>
         </Header>
       }
     >
