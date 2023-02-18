@@ -114,8 +114,12 @@ const mergeFiles = async function mergeFiles(event) {
       Bucket: event.bucketName,
       Key: key,
     };
-    // eslint-disable-next-line no-await-in-loop
-    await s3Client.send(new DeleteObjectCommand(bucketParams));
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await s3Client.send(new DeleteObjectCommand(bucketParams));
+    } catch (error) {
+      console.log(`Error deleting ${key}:`, JSON.stringify(error));
+    }
   }
 
   console.log('Done', data);

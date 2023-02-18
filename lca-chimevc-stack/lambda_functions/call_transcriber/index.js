@@ -612,7 +612,7 @@ const go = async function go(callData) {
         yield { AudioEvent: { AudioChunk: payloadChunk } };
       }
     } catch (error) {
-      console.log('Error reading passthrough stream or yielding audio chunk.');
+      console.log('Error reading passthrough stream or yielding audio chunk. SessionId: ', sessionId, JSON.stringify(error));
     }
   };
 
@@ -801,7 +801,7 @@ const handler = async function handler(event, context) {
         console.log('WARNING: Indeterminate channel (isCaller field is missing). If this is a production call, use RFC-1785 standard for SipRec Recording Metadata.');
         console.log('Assuming this is a test script call. Proceed with arbitrary channel assignment.');
         const interval = Math.floor(Math.random() * 10000);
-        console.log(`Waiting random interval (${interval} msecs) to avoid race condition with matching event for other channel.`)
+        console.log(`Waiting random interval (${interval} msecs) to avoid race condition with matching event for other channel.`);
         await sleep(interval);
         console.log("Check if other stream channel event has already been stored as AGENT role");
         const otherStreamArn = await getChannelStreamFromDynamo(event.detail.callId, 'AGENT', 1);
@@ -884,13 +884,17 @@ const handler = async function handler(event, context) {
       await writeToS3(result.tempFileName);
       await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
       if (!timeToStop) {
-        await mergeFiles({
-          bucketName: OUTPUT_BUCKET,
-          recordingPrefix: RECORDING_FILE_PREFIX,
-          rawPrefix: RAW_FILE_PREFIX,
-          callId: callData.callId,
-          lambdaCount: callData.lambdaCount,
-        });
+        try {
+          await mergeFiles({
+            bucketName: OUTPUT_BUCKET,
+            recordingPrefix: RECORDING_FILE_PREFIX,
+            rawPrefix: RAW_FILE_PREFIX,
+            callId: callData.callId,
+            lambdaCount: callData.lambdaCount,
+          });
+        } catch (error) {
+          console.log('Error merging S3 recording files:', JSON.stringify(error));
+        }
         await writeS3UrlToKds(kinesisClient, callData.callId);
       }
     }
