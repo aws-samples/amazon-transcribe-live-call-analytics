@@ -115,7 +115,7 @@ const writeToS3 = async function writeToS3(tempFileName) {
     data = await s3Client.send(new PutObjectCommand(uploadParams));
     console.log('Uploading to S3 complete: ', data);
   } catch (err) {
-    console.error('S3 upload error: ', JSON.stringify(err));
+    console.error('S3 upload error: ', err);
   } finally {
     fileStream.destroy();
   }
@@ -560,7 +560,7 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
       }
     }
   } catch (error) {
-    console.error('Error processing transcribe stream. SessionId: ', sessionId, JSON.stringify(error));
+    console.error('Error processing transcribe stream. SessionId: ', sessionId, error);
   }
 };
 
@@ -612,7 +612,7 @@ const go = async function go(callData) {
         yield { AudioEvent: { AudioChunk: payloadChunk } };
       }
     } catch (error) {
-      console.log('Error reading passthrough stream or yielding audio chunk. SessionId: ', sessionId, JSON.stringify(error));
+      console.log('Error reading passthrough stream or yielding audio chunk. SessionId: ', sessionId, error);
     }
   };
 
@@ -893,7 +893,7 @@ const handler = async function handler(event, context) {
             lambdaCount: callData.lambdaCount,
           });
         } catch (error) {
-          console.log('Error merging S3 recording files:', JSON.stringify(error));
+          console.log('Error merging S3 recording files:', error);
         }
         await writeS3UrlToKds(kinesisClient, callData.callId);
       }
