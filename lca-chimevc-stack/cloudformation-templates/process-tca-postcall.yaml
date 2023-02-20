@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Process TCA PostCall
+
+Parameters:
+
+  KinesisDataStreamName:
+    Type: String
+    Description: >-
+      Name of Kinesis Data Stream to publish events to
+
+  KinesisDataStreamArn:
+    Type: String
+    Description: >-
+      Arn of Kinesis Data Stream to publish events to
+
+  CallTranscriberEventTableName:
+    Type: String
+    Description: >-
+      Name of CallTranscriber DynamobDB table
+
+  CallTranscriberEventTableArn:
+    Type: String
+    Description: >-
+      Arn of CallTranscriber DynamobDB table
+
+  LCAS3BucketName:
+    Type: String
+    Description: >-
+      S3 Bucket name for LCA post call files
+
+  CallAnalyticsPrefix:
+    Type: String
+    Default: lca-call-analytics/
+    Description: The Amazon S3 prefix in the LCA S3 Bucket where the post-call analytics files will be saved
+
+  IsContentRedactionEnabled:
+    Type: String
+    Description: Is Content Redaction enabled 'true' or 'false' 
+        
+Resources:
+  ##########################################################################
+  # Call Transcriber
+  ##########################################################################
+ 
+  ProcessTCAPostCallFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Architectures:
+        - arm64
+      Description: >-
+        AWS Lambda Function that will be triggered when Transcribe Call Analytics completes after end of streaming session
+      Handler: index.handler
+      Layers:
+        # periodically update the Lambda Insights Layer
+        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
+        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+      Role: !GetAtt ProcessTCAPostCallFunctionRole.Arn
+      Runtime: nodejs14.x
+      MemorySize: 768
+      Timeout: 900
+      Tracing: Active
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
+          TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref CallTranscriberEventTableName
+          LCA_BUCKET_NAME: !Ref LCAS3BucketName
+          CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
+          IS_CONTENT_REDACTION_ENABLED: !Ref IsContentRedactionEnabled
+      CodeUri: ../lambda_functions/process_tca_postcall
+
+  ProcessTCAPostCallFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        # CloudWatch Insights Managed Policy
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                Resource:
+                  - !Ref CallTranscriberEventTableArn
+              - Action:
+                  - kinesis:PutRecord
+                Effect: Allow
+                Resource:  
+                  - !Ref KinesisDataStreamArn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}"
+                    - bucket: !Ref LCAS3BucketName
+                  - !Sub
+                    - "arn:aws:s3:::${bucket}/*"
+                    - bucket: !Ref LCAS3BucketName
+
+  AllowEventBridgeToCallProcessTCAPostCallFunction:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref ProcessTCAPostCallFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRuleToTriggerProcessTCAPostCallFunction.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  EventBridgeRuleToTriggerProcessTCAPostCallFunction:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This rule is triggered when TCA post call output job completes"
+      EventPattern:
+        detail-type:
+          - "Call Analytics Post Call Job State Change"
+        source:
+          - aws.transcribe
+      Targets:
+        - Id: ProcessTCAPostCallTarget
+          Arn: !GetAtt ProcessTCAPostCallFunction.Arn
+      State: "ENABLED"
