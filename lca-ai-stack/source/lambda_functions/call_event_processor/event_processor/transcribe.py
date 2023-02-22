@@ -981,7 +981,7 @@ async def execute_process_event_api_mutation(
         }
 
         if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
-            message = invoke_transcript_lambda_hook(message)
+            normalized_message = invoke_transcript_lambda_hook(normalized_message)
 
         issues_detected = normalized_message.get("IssuesDetected", None)
         if issues_detected and len(issues_detected) > 0:
