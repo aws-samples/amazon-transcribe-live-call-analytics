@@ -69,6 +69,10 @@ const TRANSCRIBE_ENDPOINT = process.env.TRANSCRIBE_ENDPOINT || '';
 const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env.IS_TCA_POST_CALL_ANALYTICS_ENABLED || 'true') === 'true';
 // optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
 const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env.POST_CALL_CONTENT_REDACTION_OUTPUT || 'redacted';
+// optional - set retry count and delay if exceptions thrown by Start Stream api
+const START_STREAM_MAX_RETRIES = parseInt(process.env.START_STREAM_RETRIES || '5', 10);
+const START_STREAM_RETRY_WAIT_MS = parseInt(process.env.START_STREAM_RETRY_WAIT || '1000', 10);
+
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -655,17 +659,28 @@ const go = async function go(callData) {
     tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
   }
 
-  /* start the stream */
+  /* start the stream - retry on exceptions */
   let tsResponse;
-  if (isTCAEnabled) {
-    console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
-    tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
-    tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
-  } else {
-    console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
-    tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
-    tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
+  let retryCount = 1;
+  while (true) {
+    try {
+      if (isTCAEnabled) {
+        console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
+        tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
+        tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
+      } else {
+        console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
+        tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
+        tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
+      }
+      break;
+    } catch (e) {
+      console.log(`StartStream threw exception on attempt ${retryCount} of ${START_STREAM_MAX_RETRIES}: `, e);
+      if (++retryCount > START_STREAM_MAX_RETRIES) throw e;
+      sleep(START_STREAM_RETRY_WAIT_MS);
+    }
   }
+
   sessionId = tsResponse.SessionId;
   console.log('Transcribe SessionId: ', sessionId);
 
