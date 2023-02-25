@@ -145,11 +145,12 @@ aws cloudformation validate-template --template-url $template > /dev/null || exi
 
 if $PUBLIC; then
   echo "Setting public read ACLs on published artifacts"
-  files=$(aws s3api list-objects --bucket ${BUCKET} --prefix ${PREFIX} --query "(Contents)[].[Key]" --output text)
+  files=$(aws s3api list-objects --bucket ${BUCKET} --prefix ${PREFIX_AND_VERSION} --query "(Contents)[].[Key]" --output text)
   for file in $files
     do
     aws s3api put-object-acl --acl public-read --bucket ${BUCKET} --key $file
     done
+  aws s3api put-object-acl --acl public-read --bucket ${BUCKET} --key ${PREFIX}/${MAIN_TEMPLATE}
 fi
 
 echo "OUTPUTS"
