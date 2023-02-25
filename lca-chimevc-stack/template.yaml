@@ -273,6 +273,19 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
+  DeployProcessTCAPostCall:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./cloudformation-templates/process-tca-postcall.yaml
+      Parameters:
+        KinesisDataStreamName: !Ref KinesisDataStreamName
+        KinesisDataStreamArn: !Ref KinesisDataStreamArn
+        CallTranscriberEventTableName: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
+        CallTranscriberEventTableArn: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
+        IsContentRedactionEnabled: !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+        LCAS3BucketName: !Ref S3BucketName
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+
 Outputs:
   DemoPBXIPAddress:
     Value: !If

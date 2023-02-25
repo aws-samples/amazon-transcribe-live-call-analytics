@@ -759,6 +759,13 @@ Resources:
           - !Ref AgentAssistExistingLexV2BotAliasId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
         # Changes to Params below force AgentAssist Setup to update.
+        CallAudioSource: !Ref CallAudioSource
+        ComprehendLanguageCode:
+          !FindInMap [
+            TranscribeToComprehendLanguage,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
         AgentAssistOption: !Ref AgentAssistOption
         AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
         AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
@@ -769,6 +776,11 @@ Resources:
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+        EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+        SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+        EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
+
+
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

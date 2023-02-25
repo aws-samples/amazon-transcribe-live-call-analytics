@@ -1035,7 +1035,8 @@ Resources:
         #set( $listPk = "cls#${!date}#s#${!shardPad}" )
         #set( $listSk = "ts#${!now}#id#${!ctx.args.input.CallId}" )
 
-        $util.qr($ctx.args.input.put("CreatedAt", $now))
+        #set( $CreatedAt = $util.defaultIfNullOrBlank($ctx.args.input.CreatedAt, $util.time.nowISO8601()) )
+
         $util.qr($ctx.args.input.put("UpdatedAt", $now))
         $util.qr($ctx.args.input.put("Status", "STARTED"))
 

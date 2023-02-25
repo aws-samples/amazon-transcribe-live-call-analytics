@@ -327,17 +327,15 @@ async def execute_add_call_category_mutation(
     appsync_session: AppsyncAsyncClientSession,
 ) -> Dict:
 
-    category = message["CategoryEvent"]["MatchedCategories"][0]
-    if not category:
-        error_message = "Category does not exist in ADD_CALL_CATEGORY event"
-        raise TypeError(error_message)
-
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
-    categories = []
-    categories.append(category)
+    categories = message["CategoryEvent"]["MatchedCategories"]
+    if (len(categories) == 0):
+        error_message = "No MatchedCategories in ADD_CALL_CATEGORY event"
+        raise TypeError(error_message)
+
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addCallCategory.args(
@@ -529,41 +527,47 @@ def add_call_category(
     # pylint: disable=too-many-locals
     LOGGER.debug("Detected Call Category")
 
-    category = message["CategoryEvent"]["MatchedCategories"][0]
-    start_time = message["CategoryEvent"]["MatchedDetails"][category]["TimestampRanges"][0]["EndOffsetMillis"]/1000
-    end_time = start_time + 0.1
-    send_call_category_args = []
-
-    send_call_category_args.append(
-        dict(
-            category=category,
-            transcript_segment_args=dict(
-                CallId=message["CallId"],
-                Channel="CATEGORY_MATCH",
-                CreatedAt=message["CreatedAt"],
-                EndTime=end_time,
-                ExpiresAfter=get_ttl(),
-                SegmentId=str(uuid.uuid4()),
-                StartTime=start_time,
-                IsPartial=False,
-                Status="TRANSCRIBING",
-            ),
-        )
-    )
-
     tasks = []
-    for call_category_args in send_call_category_args:
-        task = send_call_category(
-            appsync_session=appsync_session,
-            **call_category_args,
-        )
-        tasks.append(task)
+    for category in message["CategoryEvent"]["MatchedCategories"]:
+        # Publish SNS message for the category
         sns_task = publish_sns_category(
             sns_client=sns_client,
             category_name=category,
             call_id=message["CallId"]
         )
         tasks.append(sns_task)
+        # Insert Category marker into transcript, if timestamps are provided in the event.
+        try:
+            timestampRanges = message["CategoryEvent"]["MatchedDetails"][category]["TimestampRanges"]
+        except KeyError:
+            LOGGER.debug("Category: %s has no TimestampRanges. Skip transcript insertion.", category)
+            continue
+        for timestampRange in timestampRanges:
+            start_time = timestampRange["EndOffsetMillis"]/1000
+            end_time = start_time + 0.1
+            send_call_category_args = []
+            send_call_category_args.append(
+                dict(
+                    category=category,
+                    transcript_segment_args=dict(
+                        CallId=message["CallId"],
+                        Channel="CATEGORY_MATCH",
+                        CreatedAt=message["CreatedAt"],
+                        EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
+                        SegmentId=str(uuid.uuid4()),
+                        StartTime=start_time,
+                        IsPartial=False,
+                        Status="TRANSCRIBING",
+                    ),
+                )
+            )
+            for call_category_args in send_call_category_args:
+                task = send_call_category(
+                    appsync_session=appsync_session,
+                    **call_category_args,
+                )
+                tasks.append(task)
 
     return tasks
 

@@ -69,6 +69,10 @@ const TRANSCRIBE_ENDPOINT = process.env.TRANSCRIBE_ENDPOINT || '';
 const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env.IS_TCA_POST_CALL_ANALYTICS_ENABLED || 'true') === 'true';
 // optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
 const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env.POST_CALL_CONTENT_REDACTION_OUTPUT || 'redacted';
+// optional - set retry count and delay if exceptions thrown by Start Stream api
+const START_STREAM_MAX_RETRIES = parseInt(process.env.START_STREAM_RETRIES || '5', 10);
+const START_STREAM_RETRY_WAIT_MS = parseInt(process.env.START_STREAM_RETRY_WAIT || '1000', 10);
+
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -115,7 +119,7 @@ const writeToS3 = async function writeToS3(tempFileName) {
     data = await s3Client.send(new PutObjectCommand(uploadParams));
     console.log('Uploading to S3 complete: ', data);
   } catch (err) {
-    console.error('S3 upload error: ', JSON.stringify(err));
+    console.error('S3 upload error: ', err);
   } finally {
     fileStream.destroy();
   }
@@ -560,7 +564,7 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
       }
     }
   } catch (error) {
-    console.error('Error processing transcribe stream. SessionId: ', sessionId, JSON.stringify(error));
+    console.error('Error processing transcribe stream. SessionId: ', sessionId, error);
   }
 };
 
@@ -612,7 +616,7 @@ const go = async function go(callData) {
         yield { AudioEvent: { AudioChunk: payloadChunk } };
       }
     } catch (error) {
-      console.log('Error reading passthrough stream or yielding audio chunk.');
+      console.log('Error reading passthrough stream or yielding audio chunk. SessionId: ', sessionId, error);
     }
   };
 
@@ -655,17 +659,28 @@ const go = async function go(callData) {
     tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
   }
 
-  /* start the stream */
+  /* start the stream - retry on exceptions */
   let tsResponse;
-  if (isTCAEnabled) {
-    console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
-    tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
-    tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
-  } else {
-    console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
-    tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
-    tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
+  let retryCount = 1;
+  while (true) {
+    try {
+      if (isTCAEnabled) {
+        console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
+        tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
+        tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
+      } else {
+        console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
+        tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
+        tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
+      }
+      break;
+    } catch (e) {
+      console.log(`StartStream threw exception on attempt ${retryCount} of ${START_STREAM_MAX_RETRIES}: `, e);
+      if (++retryCount > START_STREAM_MAX_RETRIES) throw e;
+      sleep(START_STREAM_RETRY_WAIT_MS);
+    }
   }
+
   sessionId = tsResponse.SessionId;
   console.log('Transcribe SessionId: ', sessionId);
 
@@ -801,7 +816,7 @@ const handler = async function handler(event, context) {
         console.log('WARNING: Indeterminate channel (isCaller field is missing). If this is a production call, use RFC-1785 standard for SipRec Recording Metadata.');
         console.log('Assuming this is a test script call. Proceed with arbitrary channel assignment.');
         const interval = Math.floor(Math.random() * 10000);
-        console.log(`Waiting random interval (${interval} msecs) to avoid race condition with matching event for other channel.`)
+        console.log(`Waiting random interval (${interval} msecs) to avoid race condition with matching event for other channel.`);
         await sleep(interval);
         console.log("Check if other stream channel event has already been stored as AGENT role");
         const otherStreamArn = await getChannelStreamFromDynamo(event.detail.callId, 'AGENT', 1);
@@ -884,13 +899,17 @@ const handler = async function handler(event, context) {
       await writeToS3(result.tempFileName);
       await deleteTempFile(TEMP_FILE_PATH + result.tempFileName);
       if (!timeToStop) {
-        await mergeFiles({
-          bucketName: OUTPUT_BUCKET,
-          recordingPrefix: RECORDING_FILE_PREFIX,
-          rawPrefix: RAW_FILE_PREFIX,
-          callId: callData.callId,
-          lambdaCount: callData.lambdaCount,
-        });
+        try {
+          await mergeFiles({
+            bucketName: OUTPUT_BUCKET,
+            recordingPrefix: RECORDING_FILE_PREFIX,
+            rawPrefix: RAW_FILE_PREFIX,
+            callId: callData.callId,
+            lambdaCount: callData.lambdaCount,
+          });
+        } catch (error) {
+          console.log('Error merging S3 recording files:', error);
+        }
         await writeS3UrlToKds(kinesisClient, callData.callId);
       }
     }

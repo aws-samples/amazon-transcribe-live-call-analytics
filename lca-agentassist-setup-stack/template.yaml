@@ -69,6 +69,10 @@ Parameters:
       Comma separated list of public web sites to crawl automatically - for Agent assist demo
 
   # Changes to Params below force AgentAssist Setup to update.
+  CallAudioSource:
+    Type: String
+  ComprehendLanguageCode:
+    Type: String
   AgentAssistOption:
     Type: String
   AgentAssistExistingKendraIndexId:
@@ -88,6 +92,12 @@ Parameters:
   TranscriptLambdaHookFunctionNonPartialOnly:
     Type: String
   DynamoDbExpirationInDays:
+    Type: String
+  EndOfCallTranscriptSummary:
+    Type: String
+  SummarizationSageMakerInitialInstanceCount:
+    Type: String
+  EndOfCallLambdaHookFunctionArn:
     Type: String
 
 Conditions:
@@ -384,6 +394,8 @@ Resources:
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
       # Changes to Params below force AgentAssist Setup to execute.
+      CallAudioSource: !Ref CallAudioSource
+      ComprehendLanguageCode: !Ref ComprehendLanguageCode
       AgentAssistOption: !Ref AgentAssistOption
       AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
       AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
@@ -394,6 +406,9 @@ Resources:
       TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
       TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
       DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+      EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+      SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+      EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
