@@ -27,7 +27,7 @@ Before continuing, please read the blog post [Live call analytics and agent assi
 
 ### Amazon Lex and Amazon Kendra using QnABot
 
-The default agent assist configuration works by sending the transcription of a caller’s utterances to a chatbot, powered by Amazon Lex and Amazon Kendra, using the [QnABot on AWS solution](https://aws.amazon.com/solutions/implementations/aws-qnabot/) to simplify configuration and orchestration. Lex tracks the callers intents and can advise the agent to elicit additional information as needed to fulfil an intent, while Kendra is used to query frequently asked questions and knowledge base documents. Bot responses are shown in real time to the agent, along with the transcription of the conversation. It is easily configured to support customized intents, FAQs, and knowledgebase content.
+The default agent assist configuration works by sending the transcription of a caller’s utterances to a chatbot, powered by Amazon Lex and Amazon Kendra, using the [QnABot on AWS solution](https://aws.amazon.com/solutions/implementations/aws-qnabot/) to simplify configuration and orchestration. Lex tracks the callers intents and can advise the agent to elicit additional information as needed to fulfil an intent, QnABot uses OpenSearch with text embeddings to match stored frequently asked questions (FAQs), while Kendra is used to query indexed knowledge base documents. Bot responses are shown in real time to the agent, along with the transcription of the conversation. It is easily configured to support customized intents, FAQs, and knowledgebase content.
 
 This body of this README describes how to use and customise this default configuration. 
 
@@ -60,7 +60,7 @@ Here is the LCA architecture overview showing how Agent Assist fits into the ove
   
 <img src="../images/lca-chimevc-architecture.png" alt="Agent Assist Architecture" width="800"/>
 
-The default LCA Agent Assist configuration uses the QnABot on AWS solution (v5.2.0 or later) to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra. The QnABot provides a single administrative interface, the Content Designer, which is used to create Lex Intents, and Kendra FAQs. 
+The default LCA Agent Assist configuration uses the QnABot on AWS solution (v5.3.0 or later) to handle the architecture deployment and configuration of Amazon Lex and Amazon Kendra. The QnABot provides a single administrative interface, the Content Designer, which is used to create Lex Intents, and Kendra FAQs. 
 Learn about QnABot on AWS by reviewing the solution [Landing page](https://aws.amazon.com/solutions/implementations/aws-qnabot/) and [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/welcome.html). 
 
 QnABot uses **Amazon Lex** to manage conversational requests and reponses. 
@@ -69,11 +69,14 @@ Amazon Lex is an AWS service for building conversational interfaces - see [Amazo
 
 Typically, a Lex bot is used in a contact center to automate a conversation with a caller, where the caller and the bot communicate directly. However, in the Agent Assist scenario we use Lex differently. Here, the caller and the agent communicate directly. The bot 'listens in' but does not directly interact with the caller. Instead, based on what the caller says, the bot provides advice to the agent, to help them guide the conversation. You've already seen this in action in the [LCA blog post tutorial](www.amazon.com/live-call-analytics).
 
-QnABot also uses **Amazon Kendra** as an integrated knowledge base and ML powered intelligent search service that finds the best response to a caller's enquiry from either a list of prepopulated FAQs, or from other 'unstructured' documements such as crawled web pages, word documents, or other sources that have been ingested into a Kendra search index using a Kendra data source connector. See [Amazon Kendra features](https://aws.amazon.com/kendra/features/) to to learn about the key concepts, such as Indexes, FAQs, Connectors, etc.  
+By default, QnABot uses a pretrained language model to generate text embeddings for FAQs which you create or import using the QnABot Content Designer UI. For more on how text embeddings work, see [Semantic Question Matching](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/use-qnabot-on-aws.html#semantic-question-matching). If you elect not to use embeddings, choose `DISABLED` for **Agent Assist QnAbot Embeddings API** when deploying or updating the LCA stack, and QnABot will use Amazon Kendra for FAQ matches instead. Feel free to experiment to determine which approach works best for you. 
 
-Now that you are familiar with the main concepts related to Lex and Kendra, read the following QnABot Implementation Guide chapters to learn how QnABot uses Kendra to answer questions:
+QnABot also uses **Amazon Kendra** as an integrated knowledge base and ML powered intelligent search service that finds the best response to a caller's enquiry from 'unstructured' documents such as crawled web pages, word documents, or other sources that have been ingested into a Kendra search index using a Kendra data source connector. See [Amazon Kendra features](https://aws.amazon.com/kendra/features/) to to learn about the key concepts, such as Indexes, FAQs, Connectors, etc.  
+
+Now that you are familiar with the main concepts related to Lex and Kendra, read the following QnABot Implementation Guide chapters to learn how QnABot uses either Text Embeddings for semantic FAQ matching, or Amazon Kendra to answer questions:
  - [Populate the chatbot with your questions and answers](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/create-chatbot-content-and-load-sample-qanda-data.html)
- - [Integrate Amazon Kendra](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/integrate-amazon-kendra.html)
+ - [Semantic Utterance Matching](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/use-qnabot-on-aws.html#semantic-question-matching)
+ - [Integrate Amazon Kendra](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/integrate-amazon-kendra.html) (NOTE: In the default Agent Assist setup we use the Kendra Fallback feature to find answers from documents. If you disable QnABot embeddings during deployment, your FAQs are then synchronized to Kendra and QnABot queries Kendra for each caller utterance to see if the utterances matches a  preconfigured FAQ.)
   
 Also read the QnABot Implementation Guide at [Configure intent and slot matching](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/intent-and-slot-matching.html) to learn how QnABot (v5.2.0 and later) creates Lex intents and slots directly from the ContentDesigner UI. LCA agent assist uses this feature to identify caller intents and to guide the agent to ask for additional information (slots) when needed. 
 
@@ -140,9 +143,8 @@ Agent Assist responses can be categorized into 5 types:
 |Dynamic - Context aware response	|This is a response that requires more information (slots) before it can provide an appropriate suggested answer.  Agent Assist may ask for the values of the slots before providing the final suggested response. Responses can be dynamic and formatted with [handlebars](https://catalog.us-east-1.prod.workshops.aws/workshops/20c56f9e-9c0a-4174-a661-9f40d9f063ac/en-US/qna/handlebars).	|
 |Dynamic - knowledge base query response	|This will look up a response from Amazon Kendra with a specified Query. Queries can be simple static text or dynamic text with handlebars. Queries also support Amazon Kendra Query Arguments, such as AttributeFilters. 	|
 |Dynamic - custom business logic response	|This will call an AWS Lambda function, along with the entire context, so that you can write custom business logic in the function, such as look up information in a 3rd party database or API.	|
-|Amazon Kendra fallback response	|If no response from the above is found, the caller's utterance is directly sent to Amazon Kendra. If the Amazon Kendra confidence score returns `HIGH` or `VERY_HIGH`, the response is sent to the agent. The confidence score threshold can be configured in the QnABot on AWS settings.	|
+|Amazon Kendra fallback response	| If no response with sufficient confidence is found, then caller's utterance is then directly sent to Amazon Kendra. If the Amazon Kendra confidence score returns `HIGH` or `VERY_HIGH`, the response is sent to the agent. The confidence score threshold can be configured in the QnABot on AWS settings.	|
 
-The first four types, static and dynamic responses, are synced to Amazon Kendra FAQs. This provides a semantic aware search for any of the utterances and responses in these items.  
 
 ### **Static FAQ Response**
 
@@ -155,9 +157,8 @@ To begin configuring a new static response inside QnABot Designer, select the **
 * Add one or more **Question/Utterance** values. These are examples of phrases that a caller may say to the agent.
 * Add the suggested agent response in the **Answer** text box.  This will appear as the AGENT_ASSISTANT message inside of LCA.
 * Select **Create** to save your new Agent Assist response.
-* Select the menu icon in the top right of the QnABot Designer (⋮), then select **Sync Kendra FAQ**
 
-<img src="../images/lca-agentassist-qnabot-syncfaq.png" alt="Sync Kendra FAQ" width="200"/>
+Use the Designer TEST tab to try a variety of questions that you want to test to see if you get the expected results. Tune the items by editing and adding / modifying sample questions. 
 
 ### **Dynamic Response**
 
@@ -196,6 +197,8 @@ Once you have completed creating your slot types (or have skipped because you wi
         **Second Note**: Slot sample utterances are not required for the built-in LexV2 responses.
 * When complete with entering in all slots, scroll to the very bottom and select **Create** to save your new slot-based Agent Assist suggested response. 
 
+You cannot use the Designer TEST tab to test these context aware items, since they are implemented as Lex bot intents rather than QnABot queries. After you Rebuild the Lex Bot as described below, you can test using the QnABot web client, or by making test phone calls using the LCA demo asterisk server.
+
 #### ***Dynamic Knowledge Base Query***
 
 Agent Assist responses can look up answers with an Amazon Kendra query to provide a dynamic answer. After configuring the response’s utterances, slots and a default answer, expand the ‘Advanced’ section and scroll down to the Amazon Kendra section, seen in the following screenshot:
@@ -214,15 +217,18 @@ Custom business logic is accomplished by writing a custom AWS Lambda Function. T
 
 ### **Amazon Kendra Fallback Response**
 
-If all else fails, and there are no matching Agent Assist responses found, the user’s utterance will be sent to Amazon Kendra. The Amazon Kendra confidence threshold for Kendra Fallback responses can be configured in the QnABot on AWS settings, under the setting name `ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE.`
+If all else fails, and there are no matching Agent Assist responses found based on the items you configured usiong Content Designer (above), the user’s utterance will be sent to Amazon Kendra. Kendra searches its index of unstructured documents such as crawled web pages, word or PDF documents, or documents ingested from any of Kendra's wide variety of other data source connectors. The Amazon Kendra confidence threshold for Kendra Fallback responses can be configured in the QnABot on AWS settings, under the setting name `ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE.`
 
 
-### **Rebuild Lex & Sync FAQs to Kendra**
+### **Rebuild Lex Bot**
 
-Once all the Agent Assist responses have been defined, the last step is to rebuild the Lex bot and sync Amazon Kendra.  Choose the menu in the upper right corner (⋮), and choose **Rebuild Lex**.
+Once all the Agent Assist responses have been defined, you must rebuild the Lex bot.  Choose the menu in the upper right corner (⋮), and choose **Rebuild Lex**.
 
 <img src="../images/lca-agentassist-qnabot-lexrebuild.png" alt="Rebuild Lex" width="200"/>
 
-After rebuilding Lex, also resync Kendra FAQs, which will sync all the FAQ items to Kendra.
+### **Sync Kendra FAQs**
+
+This step is required if you selected DISABLED for Agent Assist QnAbot Embeddings API during deployment, in which case Kendra FAQ queries are used by QnABot to check if the caller's utterance matches a preconfigured, and synchronized, FAQ item.
 
 <img src="../images/lca-agentassist-qnabot-syncfaq.png" alt="Sync Kendra FAQ" width="200"/>
+

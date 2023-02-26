@@ -80,7 +80,8 @@ Parameters:
     Description: >
       Choose to enable optional Agent Assist capability, powered by a nested QnABot stack, or your own LexV2 bot. 
       QnABot uses Amazon Lex and Amazon Kendra to provide real time agent assist messages based on intents, slots,
-      FAQs, and general search index that you configure using the included ContentDesigner UI.
+      FAQs, and general search index that you configure using the included ContentDesigner UI. Now QnABot also uses 
+      text embeddings to provide additional options for matching FAQs - accept the defaults below, or customize and experiment.
 
   AgentAssistExistingKendraIndexId:
     Default: ''
@@ -113,6 +114,38 @@ Parameters:
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
       Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
+  
+  # Options for QnABot Embeddings
+  AgentAssistQnABotEmbeddingsApi:
+    Type: String
+    Description: Optionally enable QnABot Semantics Search using Embeddings
+      from a pre-trained Large Language Model. If set to SAGEMAKER, an ml.m5.xlarge
+      Sagemaker endpoint is automatically provisioned with Hugging Face e5-large model.
+      To use a custom LAMBDA function, provide additional parameters below.
+    AllowedValues:
+      - DISABLED
+      - SAGEMAKER
+      - LAMBDA
+    Default: SAGEMAKER
+  AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
+    Type: Number
+    MinValue: 0
+    Description: 'Optional: If EmbeddingsApi is SAGEMAKER, provide initial instance
+      count. Set to ''0'' to enable Serverless Inference (for cold-start delay tolerant
+      deployments only).'
+    Default: 1
+  AgentAssistQnABotEmbeddingsLambdaArn:
+    Type: String
+    AllowedPattern: ^(|arn:aws:lambda:.*)$
+    Description: 'Optional: If EmbeddingsApi is LAMBDA, provide ARN for a Lambda function
+      that takes JSON {"inputtext":"string"}, and returns JSON {"embedding":[...]}'
+    Default: ''
+  AgentAssistQnABotEmbeddingsLambdaDimensions:
+    Type: Number
+    MinValue: 1
+    Description: 'Optional: If EmbeddingsApi is LAMBDA, provide number of dimensions
+      for embeddings returned by the EmbeddingsLambda function specified above.'
+    Default: 4096
 
   S3BucketName:
     Type: String
@@ -388,6 +421,10 @@ Metadata:
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
+          - AgentAssistQnABotEmbeddingsApi
+          - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
+          - AgentAssistQnABotEmbeddingsLambdaArn
+          - AgentAssistQnABotEmbeddingsLambdaDimensions
       - Label:
           default: Amazon S3 Configuration
         Parameters:
@@ -472,6 +509,14 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      AgentAssistQnABotEmbeddingsApi:
+        default: Agent Assist QnABot Embeddings Api
+      AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
+        default: Agent Assist QnABot Embeddings SageMaker Instance Count
+      AgentAssistQnABotEmbeddingsLambdaArn:
+        default: Agent Assist QnABot Embeddings Lambda Function ARN (existing)
+      AgentAssistQnABotEmbeddingsLambdaDimensions:
+        default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
       TranscribeApiMode:
@@ -620,6 +665,12 @@ Rules:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLambdaFunctionArn, '']]
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
 
+  AgentAssistQnABotEmbeddingsExistingLambdaFunctionArn:
+    RuleCondition: !Equals [!Ref AgentAssistQnABotEmbeddingsApi, 'LAMBDA']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AgentAssistQnABotEmbeddingsLambdaArn, '']]
+        AssertDescription: AgentAssistQnABotEmbeddingsLambdaArn is required when AgentAssistQnABotEmbeddingsApi is 'LAMBDA'
+
 Resources:
 
   # Custom resource to enforce max length of StackName - prevent downstream failures                                             
@@ -688,6 +739,10 @@ Resources:
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
         InstallLexResponseBots: 'false'
+        EmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
+        SagemakerInitialInstanceCount: !Ref AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
+        EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
+        EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
@@ -771,6 +826,7 @@ Resources:
         AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
         AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+        AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
@@ -779,7 +835,6 @@ Resources:
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
-
 
 
   CHIMEVCSTACK:
