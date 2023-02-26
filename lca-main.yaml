@@ -116,34 +116,31 @@ Parameters:
       Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
   
   # Options for QnABot Embeddings
-  AgentAssistQnABotEmbeddingsApi:
+  AgentAssistQnABotItemMatchingApi:
     Type: String
-    Description: Optionally enable QnABot Semantics Search using Embeddings
-      from a pre-trained Large Language Model. If set to SAGEMAKER, an ml.m5.xlarge
-      Sagemaker endpoint is automatically provisioned with Hugging Face e5-large model.
-      To use a custom LAMBDA function, provide additional parameters below.
+    Description: Method used by QnABot for semantic matching of caller utterances to stored agent assist configuration items and FAQs.
     AllowedValues:
-      - DISABLED
-      - SAGEMAKER
-      - LAMBDA
-    Default: SAGEMAKER
+      - KENDRA FAQ
+      - EMBEDDINGS SAGEMAKER
+      - EMBEDDINGS LAMBDA
+    Default: KENDRA FAQ
   AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
     Type: Number
     MinValue: 0
-    Description: 'Optional: If EmbeddingsApi is SAGEMAKER, provide initial instance
-      count. Set to ''0'' to enable Serverless Inference (for cold-start delay tolerant
+    Description: 'Optional: If Item Matching Api is EMBEDDINGS SAGEMAKER, provide initial instance
+      count (ml.m5.xlarge). Set to ''0'' to enable Serverless Inference (for cold-start delay tolerant
       deployments only).'
     Default: 1
   AgentAssistQnABotEmbeddingsLambdaArn:
     Type: String
     AllowedPattern: ^(|arn:aws:lambda:.*)$
-    Description: 'Optional: If EmbeddingsApi is LAMBDA, provide ARN for a Lambda function
+    Description: 'Optional: If Item Matching Api is LAMBDA, provide ARN for a Lambda function
       that takes JSON {"inputtext":"string"}, and returns JSON {"embedding":[...]}'
     Default: ''
   AgentAssistQnABotEmbeddingsLambdaDimensions:
     Type: Number
     MinValue: 1
-    Description: 'Optional: If EmbeddingsApi is LAMBDA, provide number of dimensions
+    Description: 'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
       for embeddings returned by the EmbeddingsLambda function specified above.'
     Default: 4096
 
@@ -421,7 +418,7 @@ Metadata:
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
-          - AgentAssistQnABotEmbeddingsApi
+          - AgentAssistQnABotItemMatchingApi
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
           - AgentAssistQnABotEmbeddingsLambdaDimensions
@@ -509,8 +506,8 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
-      AgentAssistQnABotEmbeddingsApi:
-        default: Agent Assist QnABot Embeddings Api
+      AgentAssistQnABotItemMatchingApi:
+        default: Agent Assist QnABot Item Matching Api
       AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
         default: Agent Assist QnABot Embeddings SageMaker Instance Count
       AgentAssistQnABotEmbeddingsLambdaArn:
@@ -583,6 +580,10 @@ Conditions:
   ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with new Kendra Index (Enterprise Edition)']
   ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
   ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
+  QnABotEmbeddingsApiDisabled: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'KENDRA FAQ']
+  QnABotEmbeddingsApiSageMaker: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS SAGEMAKER']
+  QnABotEmbeddingsApiLambda: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
+
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -666,10 +667,10 @@ Rules:
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
 
   AgentAssistQnABotEmbeddingsExistingLambdaFunctionArn:
-    RuleCondition: !Equals [!Ref AgentAssistQnABotEmbeddingsApi, 'LAMBDA']
+    RuleCondition: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistQnABotEmbeddingsLambdaArn, '']]
-        AssertDescription: AgentAssistQnABotEmbeddingsLambdaArn is required when AgentAssistQnABotEmbeddingsApi is 'LAMBDA'
+        AssertDescription: AgentAssistQnABotEmbeddingsLambdaArn is required when AgentAssistQnABotItemMatchingApi is 'EMBEDDINGS LAMBDA'
 
 Resources:
 
@@ -739,7 +740,13 @@ Resources:
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
         InstallLexResponseBots: 'false'
-        EmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
+        EmbeddingsApi: !If
+          - QnABotEmbeddingsApiDisabled
+          - 'DISABLED'
+          - !If
+            - QnABotEmbeddingsApiSageMaker
+            - 'SAGEMAKER'
+            - 'LAMBDA'
         SagemakerInitialInstanceCount: !Ref AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
         EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
         EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
@@ -826,7 +833,13 @@ Resources:
         AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
         AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
-        AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
+        AgentAssistQnABotEmbeddingsApi: !If
+          - QnABotEmbeddingsApiDisabled
+          - 'DISABLED'
+          - !If
+            - QnABotEmbeddingsApiSageMaker
+            - 'SAGEMAKER'
+            - 'LAMBDA'
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
