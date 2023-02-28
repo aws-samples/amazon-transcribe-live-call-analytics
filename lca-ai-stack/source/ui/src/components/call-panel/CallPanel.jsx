@@ -977,6 +977,7 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
   </Container>
 );
 
+// eslint-disable-next-line import/prefer-default-export
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   const { currentCredentials } = useAppContext();
 
