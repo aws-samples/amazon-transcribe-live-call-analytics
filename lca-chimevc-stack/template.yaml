@@ -248,6 +248,11 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        VoiceConnectorId:
+          'Fn::If':
+            - ShouldInstallDemoAsteriskServer
+            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
 
   DeployPcaIntegration:
     Type: AWS::CloudFormation::Stack

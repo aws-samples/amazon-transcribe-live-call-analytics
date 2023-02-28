@@ -20,6 +20,10 @@ import {
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
 
+import RecordingPlayerimport, { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
+import { Logger } from 'aws-amplify';
+import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
+
 import RecordingPlayer from '../recording-player';
 import useSettingsContext from '../../contexts/settings';
 
@@ -33,6 +37,11 @@ import './CallPanel.css';
 import { SentimentTrendIcon } from '../sentiment-trend-icon/SentimentTrendIcon';
 import { SentimentIcon } from '../sentiment-icon/SentimentIcon';
 import { exportToExcel } from '../common/download-func';
+import useAppContext from '../../contexts/app';
+import awsExports from '../../aws-exports';
+
+const logger = new Logger('CallPanel');
+
 // comprehend PII types
 const piiTypes = [
   'BANK_ACCOUNT_NUMBER',
@@ -48,6 +57,88 @@ const piiTypes = [
   'SSN',
 ];
 const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
+
+const MAXIMUM_ATTEMPTS = 100;
+const MAXIMUM_RETRY_DELAY = 1000;
+
+const languageCodes = [
+  { value: '', label: 'Choose a Language' },
+  { value: 'af', label: 'Afrikaans' },
+  { value: 'sq', label: 'Albanian' },
+  { value: 'am', label: 'Amharic' },
+  { value: 'ar', label: 'Arabic' },
+  { value: 'hy', label: 'Armenian' },
+  { value: 'az', label: 'Azerbaijani' },
+  { value: 'bn', label: 'Bengali' },
+  { value: 'bs', label: 'Bosnian' },
+  { value: 'bg', label: 'Bulgarian' },
+  { value: 'ca', label: 'Catalan' },
+  { value: 'zh', label: 'Chinese (Simplified)' },
+  { value: 'zh-TW', label: 'Chinese (Traditional)' },
+  { value: 'hr', label: 'Croatian' },
+  { value: 'cs', label: 'Czech' },
+  { value: 'da', label: 'Danish' },
+  { value: 'fa-AF', label: 'Dari' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'en', label: 'English' },
+  { value: 'et', label: 'Estonian' },
+  { value: 'fa', label: 'Farsi (Persian)' },
+  { value: 'tl', label: 'Filipino, Tagalog' },
+  { value: 'fi', label: 'Finnish' },
+  { value: 'fr', label: 'French' },
+  { value: 'fr-CA', label: 'French (Canada)' },
+  { value: 'ka', label: 'Georgian' },
+  { value: 'de', label: 'German' },
+  { value: 'el', label: 'Greek' },
+  { value: 'gu', label: 'Gujarati' },
+  { value: 'ht', label: 'Haitian Creole' },
+  { value: 'ha', label: 'Hausa' },
+  { value: 'he', label: 'Hebrew' },
+  { value: 'hi', label: 'Hindi' },
+  { value: 'hu', label: 'Hungarian' },
+  { value: 'is', label: 'Icelandic' },
+  { value: 'id', label: 'Indonesian' },
+  { value: 'ga', label: 'Irish' },
+  { value: 'it', label: 'Italian' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'kn', label: 'Kannada' },
+  { value: 'kk', label: 'Kazakh' },
+  { value: 'ko', label: 'Korean' },
+  { value: 'lv', label: 'Latvian' },
+  { value: 'lt', label: 'Lithuanian' },
+  { value: 'mk', label: 'Macedonian' },
+  { value: 'ms', label: 'Malay' },
+  { value: 'ml', label: 'Malayalam' },
+  { value: 'mt', label: 'Maltese' },
+  { value: 'mr', label: 'Marathi' },
+  { value: 'mn', label: 'Mongolian' },
+  { value: 'no', label: 'Norwegian (Bokmål)' },
+  { value: 'ps', label: 'Pashto' },
+  { value: 'pl', label: 'Polish' },
+  { value: 'pt', label: 'Portuguese (Brazil)' },
+  { value: 'pt-PT', label: 'Portuguese (Portugal)' },
+  { value: 'pa', label: 'Punjabi' },
+  { value: 'ro', label: 'Romanian' },
+  { value: 'ru', label: 'Russian' },
+  { value: 'sr', label: 'Serbian' },
+  { value: 'si', label: 'Sinhala' },
+  { value: 'sk', label: 'Slovak' },
+  { value: 'sl', label: 'Slovenian' },
+  { value: 'so', label: 'Somali' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'es-MX', label: 'Spanish (Mexico)' },
+  { value: 'sw', label: 'Swahili' },
+  { value: 'sv', label: 'Swedish' },
+  { value: 'ta', label: 'Tamil' },
+  { value: 'te', label: 'Telugu' },
+  { value: 'th', label: 'Thai' },
+  { value: 'tr', label: 'Turkish' },
+  { value: 'uk', label: 'Ukrainian' },
+  { value: 'ur', label: 'Urdu' },
+  { value: 'uz', label: 'Uzbek' },
+  { value: 'vi', label: 'Vietnamese' },
+  { value: 'cy', label: 'Welsh' },
+];
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 const CallAttributes = ({ item, setToolsOpen }) => (
@@ -243,22 +334,46 @@ const CallSummary = ({ item }) => {
         </Header>
       }
     >
-      <Tabs
-        tabs={[
-          {
-            label: 'Issues',
-            id: 'issues',
-            content: (
-              <div>
-                {/* eslint-disable-next-line react/no-array-index-key */}
-                <TextContent color="gray" className="issue-detected">
-                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{item.issuesDetected}</ReactMarkdown>
-                </TextContent>
-              </div>
-            ),
-          },
-        ]}
-      />
+      <Grid
+        gridDefinition={[{ colspan: { default: 12, xs: 6 } }, { colspan: { default: 12, xs: 6 } }]}
+      >
+        <Tabs
+          tabs={[
+            {
+              label: 'Transcript Summary',
+              id: 'summary',
+              content: (
+                <div>
+                  {/* eslint-disable-next-line react/no-array-index-key */}
+                  <TextContent color="gray">
+                    <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                      {item.callSummaryText ?? 'No summary available'}
+                    </ReactMarkdown>
+                  </TextContent>
+                </div>
+              ),
+            },
+          ]}
+        />
+        <Tabs
+          tabs={[
+            {
+              label: 'Issues',
+              id: 'issues',
+              content: (
+                <div>
+                  {/* eslint-disable-next-line react/no-array-index-key */}
+                  <TextContent color="gray" className="issue-detected">
+                    <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                      {item.issuesDetected ?? 'No issue detected'}
+                    </ReactMarkdown>
+                  </TextContent>
+                </div>
+              ),
+            },
+          ]}
+        />
+      </Grid>
     </Container>
   );
 };
@@ -313,22 +428,42 @@ const getTimestampFromSeconds = (secs) => {
   return new Date(secs * 1000).toISOString().substr(14, 7);
 };
 
-const TranscriptContent = ({ segment }) => {
+const TranscriptContent = ({ segment, translateCache }) => {
   const { settings } = useSettingsContext();
   const regex = settings?.CategoryAlertRegex ?? '.*';
 
-  const { transcript, segmentId, channel } = segment;
+  const { transcript, segmentId, channel, targetLanguage, agentTranscript, translateOn } = segment;
+
+  const k = segmentId.concat('-', targetLanguage);
+
+  // prettier-ignore
+  const currTranslated = translateOn
+    && targetLanguage !== ''
+    && translateCache[k] !== undefined
+    && translateCache[k].translated !== undefined
+    ? translateCache[k].translated
+    : '';
+
+  const result = currTranslated !== undefined ? currTranslated : '';
+
   const transcriptPiiSplit = transcript.split(piiTypesSplitRegEx);
+
   const transcriptComponents = transcriptPiiSplit.map((t, i) => {
     if (piiTypes.includes(t)) {
       // eslint-disable-next-line react/no-array-index-key
       return <Badge key={`${segmentId}-pii-${i}`} color="red">{`${t}`}</Badge>;
     }
+
     let className = '';
     let text = t;
+    let translatedText = result;
     switch (channel) {
       case 'AGENT_ASSISTANT':
         className = 'transcript-segment-agent-assist';
+        break;
+      case 'AGENT':
+        text = agentTranscript !== undefined && agentTranscript ? text : '';
+        translatedText = agentTranscript !== undefined && agentTranscript ? translatedText : '';
         break;
       case 'CATEGORY_MATCH':
         if (text.match(regex)) {
@@ -342,10 +477,13 @@ const TranscriptContent = ({ segment }) => {
       default:
         break;
     }
+
     return (
+      // prettier-ignore
       // eslint-disable-next-line react/no-array-index-key
-      <TextContent key={`${segmentId}-text-${i}`} color="gray" className={className}>
+      <TextContent key={`${segmentId}-text-${i}`} color="red" className={className}>
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{text.trim()}</ReactMarkdown>
+        <ReactMarkdown className="translated-text" rehypePlugins={[rehypeRaw]}>{translatedText.trim()}</ReactMarkdown>
       </TextContent>
     );
   });
@@ -357,23 +495,23 @@ const TranscriptContent = ({ segment }) => {
   );
 };
 
-const TranscriptSegment = ({ segment }) => {
+const TranscriptSegment = ({ segment, translateCache }) => {
   const { channel } = segment;
 
   if (channel === 'CATEGORY_MATCH') {
     const categoryText = `${segment.transcript}`;
     const newSegment = segment;
     newSegment.transcript = categoryText;
-    // We will return a special version of the grid thats specifically only for category.
+    // We will return a special version of the grid that's specifically only for category.
     return (
       <Grid
         className="transcript-segment"
         disableGutters
-        gridDefinition={[{ colspan: 1 }, { colspan: 11 }]}
+        gridDefinition={[{ colspan: 1 }, { colspan: 10 }]}
       >
         {getSentimentImage(segment)}
         <SpaceBetween direction="vertical" size="xxs">
-          <TranscriptContent segment={newSegment} />
+          <TranscriptContent segment={newSegment} translateCache={translateCache} />
         </SpaceBetween>
       </Grid>
     );
@@ -384,7 +522,7 @@ const TranscriptSegment = ({ segment }) => {
     <Grid
       className="transcript-segment"
       disableGutters
-      gridDefinition={[{ colspan: 1 }, { colspan: 11 }]}
+      gridDefinition={[{ colspan: 1 }, { colspan: 10 }]}
     >
       {getSentimentImage(segment)}
       <SpaceBetween direction="vertical" size="xxs" className={channelClass}>
@@ -397,7 +535,7 @@ const TranscriptSegment = ({ segment }) => {
               ${getTimestampFromSeconds(segment.endTime)}`}
           </TextContent>
         </SpaceBetween>
-        <TranscriptContent segment={segment} />
+        <TranscriptContent segment={segment} translateCache={translateCache} />
       </SpaceBetween>
     </Grid>
   );
@@ -426,14 +564,154 @@ const formatTranscriptExcel = (item, callTranscriptPerCallId) => {
 
   return data;
 };
-const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll }) => {
+
+const CallInProgressTranscript = ({
+  item,
+  callTranscriptPerCallId,
+  autoScroll,
+  translateClient,
+  targetLanguage,
+  agentTranscript,
+  translateOn,
+}) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
+  const [translateCache, setTranslateCache] = useState({});
+  const [cacheSeen, setCacheSeen] = useState({});
+  const [lastUpdated, setLastUpdated] = useState(Date.now());
+  const [updateFlag, setUpdateFlag] = useState(false);
+
   // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
   const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
+
+  const getSegments = () => {
+    const currentTurnByTurnSegments = transcriptChannels
+      .map((c) => {
+        const { segments } = transcriptsForThisCallId[c];
+        return segments;
+      })
+      // sort entries by end time
+      .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
+      .map((c) => {
+        const t = c;
+        return t;
+      });
+
+    return currentTurnByTurnSegments;
+  };
+
+  const updateTranslateCache = (seg) => {
+    const promises = [];
+    // prettier-ignore
+    for (let i = 0; i < seg.length; i += 1) {
+      const k = seg[i].segmentId.concat('-', targetLanguage);
+
+      // prettier-ignore
+      if (translateCache[k] === undefined) {
+        // Now call translate API
+        const params = {
+          Text: seg[i].transcript,
+          SourceLanguageCode: 'auto',
+          TargetLanguageCode: targetLanguage,
+        };
+        const command = new TranslateTextCommand(params);
+
+        logger.debug('Translate API being invoked for:', seg[i].transcript, targetLanguage);
+
+        promises.push(
+          translateClient.send(command).then(
+            (data) => {
+              const n = {};
+              logger.debug('Translate API response:', seg[i].transcript, targetLanguage, data.TranslatedText);
+              n[k] = { cacheId: k, transcript: seg[i].transcript, translated: data.TranslatedText };
+              return n;
+            },
+            (error) => {
+              logger.debug('Error from translate:', error);
+            },
+          ),
+        );
+      }
+    }
+    return promises;
+  };
+
+  // Translate all segments when the call is completed.
+  useEffect(() => {
+    if (translateOn && targetLanguage !== '' && item.recordingStatusLabel !== IN_PROGRESS_STATUS) {
+      const promises = updateTranslateCache(getSegments());
+      Promise.all(promises).then((results) => {
+        // prettier-ignore
+        if (results.length > 0) {
+          setTranslateCache((state) => ({
+            ...state,
+            ...results.reduce((a, b) => ({ ...a, ...b })),
+          }));
+          setUpdateFlag((state) => !state);
+        }
+      });
+    }
+  }, [targetLanguage, agentTranscript, translateOn, item.recordingStatusLabel]);
+
+  // Translate real-time segments when the call is in progress.
+  useEffect(async () => {
+    const c = getSegments();
+    // prettier-ignore
+    if (
+      translateOn
+      && targetLanguage !== ''
+      && c.length > 0
+      && item.recordingStatusLabel === IN_PROGRESS_STATUS
+    ) {
+      const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
+      const n = {};
+      if (c[c.length - 1].isPartial === false && cacheSeen[k] === undefined) {
+        n[k] = { seen: true };
+        setCacheSeen((state) => ({
+          ...state,
+          ...n,
+        }));
+
+        // prettier-ignore
+        if (translateCache[k] === undefined) {
+          // Now call translate API
+          const params = {
+            Text: c[c.length - 1].transcript,
+            SourceLanguageCode: 'auto',
+            TargetLanguageCode: targetLanguage,
+          };
+          const command = new TranslateTextCommand(params);
+
+          logger.debug('Translate API being invoked for:', c[c.length - 1].transcript, targetLanguage);
+
+          try {
+            const data = await translateClient.send(command);
+            const o = {};
+            logger.debug('Translate API response:', c[c.length - 1].transcript, data.TranslatedText);
+            o[k] = {
+              cacheId: k,
+              transcript: c[c.length - 1].transcript,
+              translated: data.TranslatedText,
+            };
+            setTranslateCache((state) => ({
+              ...state,
+              ...o,
+            }));
+          } catch (error) {
+            logger.debug('Error from translate:', error);
+          }
+        }
+      }
+      if (Date.now() - lastUpdated > 500) {
+        setUpdateFlag((state) => !state);
+        logger.debug('Updating turn by turn with latest cache');
+      }
+    }
+    setLastUpdated(Date.now());
+  }, [callTranscriptPerCallId]);
 
   const getTurnByTurnSegments = () => {
     const currentTurnByTurnSegments = transcriptChannels
@@ -443,24 +721,39 @@ const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll })
       })
       // sort entries by end time
       .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
+      .map((c) => {
+        const t = c;
+        t.agentTranscript = agentTranscript;
+        t.targetLanguage = targetLanguage;
+        t.translateOn = translateOn;
+        return t;
+      })
       .map(
         // prettier-ignore
         (s) => (
           s?.segmentId
           && s?.createdAt
-          && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}}`} segment={s} />
+          && (s.agentTranscript === undefined
+            || s.agentTranscript || s.channel !== 'AGENT')
+          && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} />
         ),
       );
 
     // this element is used for scrolling to bottom and to provide padding
     currentTurnByTurnSegments.push(<div key="bottom" ref={bottomRef} />);
-
     return currentTurnByTurnSegments;
   };
 
   useEffect(() => {
-    setTurnByTurnSegments(getTurnByTurnSegments());
-  }, [callTranscriptPerCallId, item.recordingStatusLabel]);
+    setTurnByTurnSegments(getTurnByTurnSegments);
+  }, [
+    callTranscriptPerCallId,
+    item.recordingStatusLabel,
+    targetLanguage,
+    agentTranscript,
+    translateOn,
+    updateFlag,
+  ]);
 
   useEffect(() => {
     // prettier-ignore
@@ -471,7 +764,14 @@ const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll })
     ) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [turnByTurnSegments, autoScroll, item.recordingStatusLabel]);
+  }, [
+    turnByTurnSegments,
+    autoScroll,
+    item.recordingStatusLabel,
+    targetLanguage,
+    agentTranscript,
+    translateOn,
+  ]);
 
   return (
     <Box className="transcript-box" padding="l">
@@ -482,7 +782,15 @@ const CallInProgressTranscript = ({ item, callTranscriptPerCallId, autoScroll })
   );
 };
 
-const getTranscriptContent = ({ item, callTranscriptPerCallId, autoScroll }) => {
+const getTranscriptContent = ({
+  item,
+  callTranscriptPerCallId,
+  autoScroll,
+  translateClient,
+  targetLanguage,
+  agentTranscript,
+  translateOn,
+}) => {
   switch (item.recordingStatusLabel) {
     case DONE_STATUS:
     case IN_PROGRESS_STATUS:
@@ -492,62 +800,116 @@ const getTranscriptContent = ({ item, callTranscriptPerCallId, autoScroll }) => 
           item={item}
           callTranscriptPerCallId={callTranscriptPerCallId}
           autoScroll={autoScroll}
+          translateClient={translateClient}
+          targetLanguage={targetLanguage}
+          agentTranscript={agentTranscript}
+          translateOn={translateOn}
         />
       );
   }
 };
 
-const CallTranscriptContainer = ({ setToolsOpen, item, callTranscriptPerCallId }) => {
+const CallTranscriptContainer = ({
+  setToolsOpen,
+  item,
+  callTranscriptPerCallId,
+  translateClient,
+}) => {
   // defaults to auto scroll when call is in progress
   const [autoScroll, setAutoScroll] = useState(item.recordingStatusLabel === IN_PROGRESS_STATUS);
   const [autoScrollDisabled, setAutoScrollDisabled] = useState(
     item.recordingStatusLabel !== IN_PROGRESS_STATUS,
   );
 
+  const [translateOn, setTranslateOn] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState(
+    localStorage.getItem('targetLanguage') || '',
+  );
+  const [agentTranscript, setAgentTranscript] = useState(true);
+
+  const handleLanguageSelect = (event) => {
+    setTargetLanguage(event.target.value);
+    localStorage.setItem('targetLanguage', event.target.value);
+  };
+
   useEffect(() => {
     setAutoScrollDisabled(item.recordingStatusLabel !== IN_PROGRESS_STATUS);
     setAutoScroll(item.recordingStatusLabel === IN_PROGRESS_STATUS);
   }, [item.recordingStatusLabel]);
 
+  const languageChoices = () => {
+    if (translateOn) {
+      return (
+        // prettier-ignore
+        // eslint-disable-jsx-a11y/control-has-associated-label
+        <div>
+          <select value={targetLanguage} onChange={handleLanguageSelect}>
+            {languageCodes.map(({ value, label }) => <option value={value}>{label}</option>)}
+          </select>
+        </div>
+      );
+    }
+    return translateOn;
+  };
   return (
-    <Container
-      disableContentPaddings
-      header={
-        <Header
-          variant="h4"
-          info={<InfoLink onFollow={() => setToolsOpen(true)} />}
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Toggle
-                onChange={({ detail }) => setAutoScroll(detail.checked)}
-                checked={autoScroll}
-                disabled={autoScrollDisabled}
-              >
-                Auto scroll
-              </Toggle>
-            </SpaceBetween>
-          }
-        >
-          <div className="flex items-center">
-            <div> Call Transcript </div>
-            <div className="btn-download-right">
-              <Button
-                iconName="download"
-                variant="normals"
-                onClick={() => {
-                  exportToExcel(
-                    formatTranscriptExcel(item, callTranscriptPerCallId),
-                    'call-transcript',
-                  );
-                }}
-              />
+    <Grid gridDefinition={[{ colspan: 12 }]}>
+      <Container
+        disableContentPaddings
+        header={
+          <Header
+            variant="h4"
+            info={<InfoLink onFollow={() => setToolsOpen(true)} />}
+            actions={
+              <SpaceBetween direction="horizontal" size="xs">
+                <Toggle
+                  onChange={({ detail }) => setAutoScroll(detail.checked)}
+                  checked={autoScroll}
+                  disabled={autoScrollDisabled}
+                />
+                <span>Auto Scroll</span>
+                <Toggle
+                  onChange={({ detail }) => setAgentTranscript(detail.checked)}
+                  checked={agentTranscript}
+                />
+                <span>Show Agent Transcripts?</span>
+                <Toggle
+                  onChange={({ detail }) => setTranslateOn(detail.checked)}
+                  checked={translateOn}
+                />
+                <span>Enable Translation</span>
+                {languageChoices()}
+              </SpaceBetween>
+            }
+          >
+            <div className="flex items-center">
+              <div> Call Transcript </div>
+              <div className="btn-download-right">
+                <Button
+                  iconName="download"
+                  variant="normals"
+                  onClick={() => {
+                    exportToExcel(
+                      formatTranscriptExcel(item, callTranscriptPerCallId),
+                      'call-transcript',
+                    );
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        </Header>
-      }
-    >
-      {getTranscriptContent({ item, callTranscriptPerCallId, autoScroll })}
-    </Container>
+          </Header>
+        }
+      >
+        {getTranscriptContent({
+          item,
+          callTranscriptPerCallId,
+          autoScroll,
+          translateClient,
+          targetLanguage,
+          agentTranscript,
+          translateOn,
+        })}
+      </Container>
+    </Grid>
   );
 };
 
@@ -615,24 +977,60 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
   </Container>
 );
 
-export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => (
-  <SpaceBetween size="s">
-    <CallAttributes item={item} setToolsOpen={setToolsOpen} />
-    <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
-      <CallSummary item={item} />
-      <CallCategories item={item} />
-    </Grid>
-    <CallStatsContainer
-      item={item}
-      setToolsOpen={setToolsOpen}
-      callTranscriptPerCallId={callTranscriptPerCallId}
-    />
-    <CallTranscriptContainer
-      item={item}
-      setToolsOpen={setToolsOpen}
-      callTranscriptPerCallId={callTranscriptPerCallId}
-    />
-  </SpaceBetween>
-);
+export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
+  const { currentCredentials } = useAppContext();
 
-export default CallPanel;
+  // prettier-ignore
+  const customRetryStrategy = new StandardRetryStrategy(
+    async () => MAXIMUM_ATTEMPTS,
+    {
+      delayDecider:
+        (_, attempts) => Math.floor(
+          Math.min(MAXIMUM_RETRY_DELAY, 2 ** attempts * 10),
+        ),
+    },
+  );
+
+  let translateClient = new TranslateClient({
+    region: awsExports.aws_project_region,
+    credentials: currentCredentials,
+    maxAttempts: MAXIMUM_ATTEMPTS,
+    retryStrategy: customRetryStrategy,
+  });
+
+  /* Get a client with refreshed credentials. Credentials can go stale when user is logged in
+     for an extended period.
+   */
+  useEffect(() => {
+    logger.debug('Translate client with refreshed credentials');
+    translateClient = new TranslateClient({
+      region: awsExports.aws_project_region,
+      credentials: currentCredentials,
+      maxAttempts: MAXIMUM_ATTEMPTS,
+      retryStrategy: customRetryStrategy,
+    });
+  }, [currentCredentials]);
+
+  return (
+    <SpaceBetween size="s">
+      <CallAttributes item={item} setToolsOpen={setToolsOpen} />
+      <Grid
+        gridDefinition={[{ colspan: { default: 12, xs: 8 } }, { colspan: { default: 12, xs: 4 } }]}
+      >
+        <CallSummary item={item} />
+        <CallCategories item={item} />
+      </Grid>
+      <CallStatsContainer
+        item={item}
+        setToolsOpen={setToolsOpen}
+        callTranscriptPerCallId={callTranscriptPerCallId}
+      />
+      <CallTranscriptContainer
+        item={item}
+        setToolsOpen={setToolsOpen}
+        callTranscriptPerCallId={callTranscriptPerCallId}
+        translateClient={translateClient}
+      />
+    </SpaceBetween>
+  );
+};

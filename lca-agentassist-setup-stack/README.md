@@ -51,6 +51,8 @@ Your function returns an Agent Assist message in the Lambda response, in the fol
 ```
 If your function returns an empty message, or no message, in the response, then no agent assist message is displayed for that turn of the conversation.
 
+You can use the [Fetch Transcript](./FetchTranscriptLambda.md) function to retrieve the cumulative transcript of the call, up to but not including the current transcription segment. This may be useful when your agent assist function requires prior context to process the current segment.
+
 
 ## How it works
 

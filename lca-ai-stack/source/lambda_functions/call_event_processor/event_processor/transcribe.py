@@ -61,9 +61,11 @@ CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
+ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN = getenv("ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN", "")
+
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
     "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
-if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN:
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN:
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
@@ -395,6 +397,39 @@ async def execute_add_issues_detected_mutation(
 
     return result
 
+async def execute_add_call_summary_text_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    calltext = message.get("CallSummaryText", None)
+    call_summary_text = ""
+    if calltext and len(calltext) > 0:
+        call_summary_text = calltext
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.addCallSummaryText.args(
+                input={**message, "CallSummaryText": call_summary_text}
+            ).select(*call_fields(schema))
+        )
+    )
+
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("query result", extra=dict(query=query_string, result=result))
+
+    return result
+
 
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
@@ -633,6 +668,7 @@ def add_lex_agent_assistances(
     # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
     transcript: str = message.get("OriginalTranscript", message["Transcript"])
     created_at = datetime.utcnow().astimezone().isoformat()
+    status: str = message["Status"]
 
     send_lex_agent_assist_args = []
     if (channel == "CALLER" and not is_partial):
@@ -812,10 +848,36 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
+
+
+##########################################################################
+# End of Call Lambda Hook
+# User provided function 
+##########################################################################
+
+def invoke_end_of_call_lambda_hook(
+    message: Dict[str, Any]
+):
+    LOGGER.debug("End of Call Lambda Hook Arn: %s", ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN)
+    LOGGER.debug("End of Call Lambda Hook Request: %s", message)
+    lambda_response = LAMBDA_HOOK_CLIENT.invoke(
+        FunctionName=ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(message)
+    )
+    LOGGER.debug("End of Call Lambda Hook Response: ", extra=lambda_response)
+    try:
+        message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+    except Exception as error:
+        LOGGER.error(
+            "End of Call Lambda Hook result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
+            extra=error,
+        )
+    return message
+
 ##########################################################################
 # Main event processing
 ##########################################################################
-
 
 async def execute_process_event_api_mutation(
     message: Dict[str, Any],
@@ -875,12 +937,23 @@ async def execute_process_event_api_mutation(
     elif event_type in [
         "END",
     ]:
-        # UPDATE STATUS
         LOGGER.debug("update status")
         response = await execute_update_call_status_mutation(
             message=message,
             appsync_session=appsync_session
         )
+        
+        # UPDATE STATUS
+        if (ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN):
+            call_summary = invoke_end_of_call_lambda_hook(message)
+            LOGGER.debug("Call summary: ")
+            LOGGER.debug(call_summary)
+            message['CallSummaryText'] = call_summary['summary']
+            response = await execute_add_call_summary_text_mutation(
+                message=message,
+                appsync_session=appsync_session
+            )
+        
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
@@ -902,12 +975,13 @@ async def execute_process_event_api_mutation(
             if not participantRole:
                 return return_value
         # Invoke custom lambda hook (if any) and use returned version of message.
-        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
-            message = invoke_transcript_lambda_hook(message)
 
         normalized_message = {
             **normalize_transcript_segment({**message}),
         }
+
+        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
+            message = invoke_transcript_lambda_hook(message)
 
         issues_detected = normalized_message.get("IssuesDetected", None)
         if issues_detected and len(issues_detected) > 0:

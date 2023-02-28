@@ -6,12 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2023-02-12
+### Added
+- Experimental generative transcript summarization to provide a short paragraph with a synopsis of each completed call; use the built-in summarization model or experiment with custom language models or APIs of your choice. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
+- Utility Lambda function that retrieves call transcription from DynamoDB. See [Fetch Transcription Lambda](./lca-ai-stack/FetchTranscriptLambda.md).
+- Optional translation of live or completed call transcripts into language of choice, using Amazon Translate.
+- Ability to disable display of agent channel transcription in the call transcript pane.
+- Test scripts for simulating phone calls. See [Asterisk Test Scripts](./lca-chimevc-stack/asterisk-test-scripts/README.md).
+- LCA client utility to make it easier to test Call Event Processors and LCA UI without having to actually make a phone call. See [LCA Client](./utilities/lca-client/README.md).
+- Download button on Calls page to save call list to local Excel file.
+- Default audio recording used by demo Asterisk server now plays the agent side of the [Agent Assist demo script](./lca-agentassist-setup-stack/agent-assist-demo-script.md).
+
+### Changed
+- Fix bug in Call Transcriber Lambda that caused double transcription if Chime Voice Connector can't differentiate between caller and agent streams (caused by SBC not configured to use RFC 7865 metadata).
+- Fixed issue where multiple LCA stacks in the same region processed calls from each other's Chime VS streams. Now each stack uses only it's own Chime VC instance, so you can run multiple stacks in the same account and region.
+- Miscellaneous dependabot updates
+
+
+
 ## [0.6.0] - 2022-11-27
 ### Added
 - Supports new [Amazon Transcribe Real-time Call Analytics](https://aws.amazon.com/transcribe/call-analytics/) streaming API
 - Real-time Detected Issues, Call Categories, and Alerts
 - Real-time Category and Alert Notifications via Amazon SNS subscriptions. See [Category Notifications](./lca-ai-stack/Notifications.md).
-- Post call analytics (without additional transcription costs) through integration with the companion [Post Call Analytics (PCA)](www.amazon.com/post-call-analytics) solution.
+- Post call analytics (without additional transcription costs) through integration with the companion [Post Call Analytics (PCA)](https://www.amazon.com/post-call-analytics) solution.
 - QnABot designer markdown answers enable rich text and media in Agent Assist messages
 ### Changed
 - Latest QnABot (v5.2.4) now used for agent assist 
@@ -158,7 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...develop
+[0.7.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...v0.6.0
 [0.6.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...v0.5.2
 [0.5.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...v0.5.1

@@ -89,6 +89,34 @@ Parameters:
       Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
       both Partial and Non-Partial transcript segments (false).
 
+  EndOfCallTranscriptSummary:
+    Default: 'DISABLED'
+    Type: String
+    AllowedValues:
+      - 'DISABLED'
+      - 'SAGEMAKER'
+      - 'LAMBDA'
+    Description: >
+      Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
+      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type. The LAMBDA option requires you to 
+      provide a function ARN below.
+
+  SummarizationSageMakerInitialInstanceCount:
+    Type: Number
+    MinValue: 0
+    Default: 1
+    Description: >
+      (Optional) If "End Of Call Transcript Summary" is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
+  EndOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) If 'End Of Call Transcript Summary' is LAMBDA, provide ARN for a Lambda function. The specified Lambda function is invoked by the LCA Call Event Processor Lambda function 
+      for end of call event. The function is passed en event with CallId as input.
+      This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
+
   CloudFrontPriceClass:
     Type: String
     Default: PriceClass_100
@@ -226,7 +254,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.6.000
+    Default: 0.7.000
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -264,13 +292,21 @@ Metadata:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
         default: Lambda Hook Function Mode Non-Partial only
-
+      SummarizationSageMakerInitialInstanceCount:
+        default: Initial Instance Count for Summarization SageMaker Endpoint
+      EndOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
+      EndOfCallTranscriptSummary:
+        default: End of Call Transcript Summary
+        
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldAllowSignUpEmailDomain: !Not [!Equals [!Ref AllowedSignUpEmailDomain, ""]]
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
+  ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
+  ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
 
 Outputs:
   CallDataStreamName:
@@ -304,6 +340,9 @@ Outputs:
   SNSTopic:
     Description: The SNS topic name that LCA publishes category events to
     Value: !GetAtt CategorySNSTopic.TopicName
+  FetchTranscriptArn:
+    Description: The arn for a Lambda function that fetches a call transcript as a string
+    Value: !GetAtt FetchTranscript.Arn
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
@@ -667,7 +706,64 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
 
-        
+  ##########################################################################
+  # Transcript Summary
+  ##########################################################################
+  SageMakerTranscriptSummaryStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldDeploySageMakerSummarizer
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/sagemaker-summary-stack.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        CallEventsTable: !Ref EventSourcingTable
+        InitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+        FetchTranscriptArn: !GetAtt FetchTranscript.Arn
+
+  FetchTranscript:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaFetchTranscriptExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
+      Timeout: 60
+      MemorySize: 128
+      Handler: index.lambda_handler
+      CodeUri: ../source/lambda_functions/fetch_transcript
+      Description: This AWS Lambda Function fetches the call transcript for processing.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  LambdaFetchTranscriptExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Fetch Transcript Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-FetchTranscript
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "dynamodb:Query"
+                Resource: !GetAtt EventSourcingTable.Arn
+          
+
   ##########################################################################
   # SNS Topic for Category Event Notifications
   ##########################################################################
@@ -755,6 +851,20 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !Sub "${TranscriptLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
+            - !If 
+              - ShouldEnableEndOfCallLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${EndOfCallLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
+            - !If 
+              - ShouldDeploySageMakerSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+              - Ref: AWS::NoValue
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -782,6 +892,7 @@ Resources:
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
+          ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 
@@ -1031,6 +1142,17 @@ Resources:
       RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
       ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
 
+  AddCallSummaryTextAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Mutation
+      FieldName: addCallSummaryText
+      RequestMappingTemplateS3Location: ../source/appsync/updateCall.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/dDbPutCondition.response.vtl
+      
   UpdateCallAggregationAppSyncResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: AppSyncSchema
@@ -1234,6 +1356,16 @@ Resources:
                   - ssm:GetParameter
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
+        - PolicyName: accessTranslateAPI
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - translate:TranslateText
+                  - comprehend:DetectDominantLanguage
+                Resource: "*"
+
     Metadata:
       cfn_nag:
         rules_to_suppress:

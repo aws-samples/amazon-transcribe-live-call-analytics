@@ -209,7 +209,6 @@ class TranscriptStateManager(StateManager):
             call_state = self._state["StatePerCallId"][call_id]
             call_aggregation: Dict[str, object] = {
                 "CallId": call_id,
-                "Status": call_state.get("Status", "STARTED"),
             }
 
             total_duration = call_state.get("TotalConversationDurationMillis")
