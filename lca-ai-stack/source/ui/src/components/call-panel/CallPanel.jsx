@@ -20,7 +20,7 @@ import {
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
 
-import RecordingPlayerimport, { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
+import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
 import { Logger } from 'aws-amplify';
 import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
 
