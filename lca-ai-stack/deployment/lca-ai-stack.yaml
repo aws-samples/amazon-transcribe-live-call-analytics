@@ -778,6 +778,8 @@ Resources:
       Timeout: 60
       MemorySize: 128
       Handler: lambda_function.handler
+      Layers:
+        - !Ref TranscriptEnrichmentPythonLayer
       CodeUri: ../source/lambda_functions/async_transcript_summary_orchestrator
       Description: This AWS Lambda Function orchestrates call summary processing processing.
     Metadata:
