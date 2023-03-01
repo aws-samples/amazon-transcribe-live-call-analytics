@@ -913,7 +913,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !Getatt AsyncTranscriptSummaryOrchestrator.Arn
+                Resource: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
               - Ref: AWS::NoValue
 
       Runtime: python3.9
@@ -945,7 +945,7 @@ Resources:
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
 
           IS_TRANSCRIPT_SUMMARY_ENABLED: !Condition IsTranscriptSummaryEnabled
-          ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !Getatt AsyncTranscriptSummaryOrchestrator.Arn
+          ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
 
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
