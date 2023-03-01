@@ -949,6 +949,19 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
 
+    elif event_type == "ADD_SUMMARY":
+
+        LOGGER.debug("ADD_SUMMARY MUTATION ")
+        response = await execute_add_call_summary_text_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
+ 
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
+
     elif event_type == "ADD_TRANSCRIPT_SEGMENT":
 
         # ADD_TRANSCRIPT_SEGMENT event supports these 3 types of message structure.
