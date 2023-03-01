@@ -768,12 +768,14 @@ Resources:
           
   AsyncTranscriptSummaryOrchestrator:
     Type: AWS::Serverless::Function
+    Condition: IsTranscriptSummaryEnabled
     Properties:
       Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
       Runtime: python3.9
       Environment:
         Variables:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
+          CALL_DATA_STREAM_ARN: !GetAtt CallDataStream.Arn
       Timeout: 60
       MemorySize: 128
       Handler: lambda_function.handler
