@@ -410,6 +410,7 @@ async def execute_add_call_summary_text_mutation(
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
+    
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addCallSummaryText.args(
@@ -854,19 +855,6 @@ def invoke_transcript_lambda_hook(
     return message
 
 
-
-##########################################################################
-# End of Call Lambda Hook
-# User provided function 
-##########################################################################
-
-def invoke_end_of_call_lambda_hook(
-    message: Dict[str, Any]
-):
-
-
-    LOGGER
-    return
 
 ##########################################################################
 # Main event processing

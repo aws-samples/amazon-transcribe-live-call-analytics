@@ -39,7 +39,7 @@ KINESIS_CLIENT: KinesisClient = BOTO3_SESSION.client(
 )
 
 TRANSCRIPT_SUMMARY_FUNCTION_ARN = getenv("TRANSCRIPT_SUMMARY_FUNCTION_ARN", "")
-CALL_DATA_STREAM_ARN = getenv("CALL_DATA_STREAM_ARN", "")
+CALL_DATA_STREAM_NAME = getenv("CALL_DATA_STREAM_NAME", "")
 
 def get_call_summary(
     message: Dict[str, Any]
@@ -61,22 +61,16 @@ def get_call_summary(
 def write_call_summary_to_kds(
     message: Dict[str, Any]
 ):
-    callId = message['CallId']
-    try:
+    callId = message.get("CallId", None)    
+
+    if callId:
         KINESIS_CLIENT.put_record(
-            StreamName=CALL_DATA_STREAM_ARN,
+            StreamName=CALL_DATA_STREAM_NAME,
             PartitionKey=callId,
             Data=json.dumps(message)
         )
         LOGGER.info("ADD_SUMMARY event to KDS")
-    except Exception as error:
-        LOGGER.error(
-            "Error writing to KDS",
-            extra=error,
-        )
-    else:
-        return 
-
+    
     return
 
 @LOGGER.inject_lambda_context

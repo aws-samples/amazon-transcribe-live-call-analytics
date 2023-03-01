@@ -774,7 +774,7 @@ Resources:
       Environment:
         Variables:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
-          CALL_DATA_STREAM_ARN: !GetAtt CallDataStream.Arn
+          CALL_DATA_STREAM_NAME: !Ref CallDataStream
       Timeout: 60
       MemorySize: 128
       Handler: lambda_function.handler
