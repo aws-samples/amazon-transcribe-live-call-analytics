@@ -803,10 +803,11 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-AsyncTranscriptSummary
-        - Statement:
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
             - Effect: Allow
-              Action:
-                - kinesis:PutRecord
+              Action: kinesis:PutRecord
               Resource: !GetAtt CallDataStream.Arn
             - !If 
               - ShouldEnableEndOfCallLambdaHookFunction
