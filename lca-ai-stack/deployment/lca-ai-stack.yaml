@@ -804,6 +804,10 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-AsyncTranscriptSummary
         - Statement:
+            - Effect: Allow
+              Action:
+                - kinesis:PutRecord
+              Resource: !GetAtt CallDataStream.Arn
             - !If 
               - ShouldEnableEndOfCallLambdaHookFunction
               - Effect: Allow
