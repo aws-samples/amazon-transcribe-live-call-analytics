@@ -307,7 +307,7 @@ Conditions:
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
-  IsTranscriptSummaryEnabled: !And
+  IsTranscriptSummaryEnabled: !Or
     - !Condition ShouldEnableEndOfCallLambdaHookFunction
     - !Condition ShouldDeploySageMakerSummarizer
 
