@@ -776,7 +776,7 @@ Resources:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
       Timeout: 60
       MemorySize: 128
-      Handler: index.lambda_handler
+      Handler: lambda_function.handler
       CodeUri: ../source/lambda_functions/async_transcript_summary_orchestrator
       Description: This AWS Lambda Function orchestrates call summary processing processing.
     Metadata:
