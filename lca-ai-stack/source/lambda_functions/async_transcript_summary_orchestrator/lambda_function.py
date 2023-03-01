@@ -2,7 +2,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from os import environ, getenv
+from os import getenv
 from typing import TYPE_CHECKING, Dict, List, Any
 import json
 import re
@@ -18,10 +18,12 @@ LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 if TYPE_CHECKING:
     from mypy_boto3_lambda.client import LambdaClient
+    from mypy_boto3_kinesis.client import KinesisClient
     from boto3 import Session as Boto3Session
 else:
     Boto3Session = object
     LambdaClient = object
+    KinesisClient = object
 
 BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
@@ -32,7 +34,12 @@ LAMBDA_CLIENT: LambdaClient = BOTO3_SESSION.client(
     "lambda",
     config=CLIENT_CONFIG,
 )
-TRANSCRIPT_SUMMARY_FUNCTION_ARN = environ["TRANSCRIPT_SUMMARY_FUNCTION_ARN"]
+KINESIS_CLIENT: KinesisClient = BOTO3_SESSION.client(
+    "kinesis"
+)
+
+TRANSCRIPT_SUMMARY_FUNCTION_ARN = getenv("TRANSCRIPT_SUMMARY_FUNCTION_ARN", "")
+CALL_DATA_STREAM_ARN = getenv("CALL_DATA_STREAM_ARN", "")
 
 def get_call_summary(
     message: Dict[str, Any]
@@ -54,9 +61,21 @@ def get_call_summary(
 def write_call_summary_to_kds(
     message: Dict[str, Any]
 ):
-    
-    
-
+    callId = message['CallId']
+    try:
+        KINESIS_CLIENT.put_record(
+            StreamName=CALL_DATA_STREAM_ARN,
+            PartitionKey=callId,
+            Data=json.dumps(message)
+        )
+        LOGGER.info("ADD_SUMMARY event to KDS")
+    except Exception as error:
+        LOGGER.error(
+            "Error writing to KDS",
+            extra=error,
+        )
+    else:
+        return 
 
     return
 
