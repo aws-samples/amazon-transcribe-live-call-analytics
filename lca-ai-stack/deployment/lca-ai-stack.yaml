@@ -768,7 +768,6 @@ Resources:
           
   AsyncTranscriptSummaryOrchestrator:
     Type: AWS::Serverless::Function
-    Condition: IsTranscriptSummaryEnabled
     Properties:
       Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
       Runtime: python3.9
