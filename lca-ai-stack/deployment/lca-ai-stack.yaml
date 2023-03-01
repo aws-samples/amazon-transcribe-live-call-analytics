@@ -307,6 +307,9 @@ Conditions:
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
+  IsTranscriptSummaryEnabled: !And
+    - !Condition ShouldEnableEndOfCallLambdaHookFunction
+    - !Condition ShouldDeploySageMakerSummarizer
 
 Outputs:
   CallDataStreamName:
@@ -763,8 +766,60 @@ Resources:
                 Action: "dynamodb:Query"
                 Resource: !GetAtt EventSourcingTable.Arn
           
+  AsyncTranscriptSummaryOrchestrator:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
+      Timeout: 60
+      MemorySize: 128
+      Handler: index.lambda_handler
+      CodeUri: ../source/lambda_functions/async_transcript_summary_orchestrator
+      Description: This AWS Lambda Function orchestrates call summary processing processing.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
 
-  ##########################################################################
+  
+  AsyncTranscriptSummaryOrchestratorExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Async Transcript Summary Orchetrator Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-AsyncTranscriptSummary
+        - Statement:
+            - !If 
+              - ShouldEnableEndOfCallLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${EndOfCallLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
+            - !If 
+              - ShouldDeploySageMakerSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+              - Ref: AWS::NoValue
+
+  #####################################################
+  #####################
   # SNS Topic for Category Event Notifications
   ##########################################################################
   CategorySNSTopic:
@@ -852,19 +907,13 @@ Resources:
                 Resource: !Sub "${TranscriptLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
             - !If 
-              - ShouldEnableEndOfCallLambdaHookFunction
+              - IsTranscriptSummaryEnabled
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !Sub "${EndOfCallLambdaHookFunctionArn}"
+                Resource: !Getatt AsyncTranscriptSummaryOrchestrator.Arn
               - Ref: AWS::NoValue
-            - !If 
-              - ShouldDeploySageMakerSummarizer
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
-              - Ref: AWS::NoValue
+
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -892,7 +941,10 @@ Resources:
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
-          ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
+
+          IS_TRANSCRIPT_SUMMARY_ENABLED: !Condition IsTranscriptSummaryEnabled
+          ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !Getatt AsyncTranscriptSummaryOrchestrator.Arn
+
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 
