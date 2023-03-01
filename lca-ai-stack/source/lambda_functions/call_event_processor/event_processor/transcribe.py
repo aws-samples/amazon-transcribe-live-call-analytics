@@ -61,11 +61,12 @@ CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
-ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN = getenv("ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN", "")
+ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN = getenv("ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN", "")
+IS_TRANSCRIPT_SUMMARY_ENABLED = getenv("IS_TRANSCRIPT_SUMMARY_ENABLED", "")
 
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
     "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
-if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN:
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN:
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
@@ -862,22 +863,10 @@ def invoke_transcript_lambda_hook(
 def invoke_end_of_call_lambda_hook(
     message: Dict[str, Any]
 ):
-    LOGGER.debug("End of Call Lambda Hook Arn: %s", ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN)
-    LOGGER.debug("End of Call Lambda Hook Request: %s", message)
-    lambda_response = LAMBDA_HOOK_CLIENT.invoke(
-        FunctionName=ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN,
-        InvocationType='RequestResponse',
-        Payload=json.dumps(message)
-    )
-    LOGGER.debug("End of Call Lambda Hook Response: ", extra=lambda_response)
-    try:
-        message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
-    except Exception as error:
-        LOGGER.error(
-            "End of Call Lambda Hook result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
-            extra=error,
-        )
-    return message
+
+
+    LOGGER
+    return
 
 ##########################################################################
 # Main event processing
@@ -941,23 +930,20 @@ async def execute_process_event_api_mutation(
     elif event_type in [
         "END",
     ]:
-        LOGGER.debug("update status")
+        LOGGER.debug("END Event: update status")
         response = await execute_update_call_status_mutation(
             message=message,
             appsync_session=appsync_session
         )
         
-        # UPDATE STATUS
-        if (ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN):
-            call_summary = invoke_end_of_call_lambda_hook(message)
-            LOGGER.debug("Call summary: ")
-            LOGGER.debug(call_summary)
-            message['CallSummaryText'] = call_summary['summary']
-            response = await execute_add_call_summary_text_mutation(
-                message=message,
-                appsync_session=appsync_session
+        if (IS_TRANSCRIPT_SUMMARY_ENABLED):
+            LAMBDA_HOOK_CLIENT.invoke(
+                FunctionName=ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN,
+                InvocationType='Event',
+                Payload=json.dumps(message)
             )
-        
+            LOGGER.debug("END Event: Invoked Async Transcript Summary Lambda")
+      
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
