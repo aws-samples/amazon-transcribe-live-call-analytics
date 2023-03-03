@@ -889,7 +889,7 @@ Resources:
               Resource:
                 # XXX specific mutation - addEnrichment
                 - !Sub "${AppSyncApi.Arn}/types/Mutation/*"
-                - !Sub "${AppSyncApi.Arn}/types/Query/fields/__schema"
+                - !Sub "${AppSyncApi.Arn}/types/Query/*"
             - Effect: Allow
               Action:
                 - comprehend:DetectSentiment
@@ -1280,6 +1280,16 @@ Resources:
       RequestMappingTemplateS3Location: ../source/appsync/getTranscriptSegments.request.vtl
       ResponseMappingTemplateS3Location: ../source/appsync/getTranscriptSegments.response.vtl
 
+  GetTranscriptSegmentsWithSentimentAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: getTranscriptSegmentsWithSentiment
+      RequestMappingTemplateS3Location: ../source/appsync/getTranscriptSegmentsWithSentiment.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/getTranscriptSegmentsWithSentiment.response.vtl
   ##########################################################################
   # Cognito
   # Sample Cognito resources

@@ -1,0 +1,28 @@
+#set( $PK = "trs#${ctx.args.callId}" )
+#set( $isPartial = false )
+#set( $channels = ["AGENT", "CALLER"] )
+
+{
+  "version" : "2018-05-29",
+  "operation" : "Query",
+  "query" : {
+    "expression": "#PK = :PK",
+    "expressionNames": {
+      "#PK": "PK",
+    },
+    "expressionValues": {
+      ":PK": $util.dynamodb.toDynamoDBJson($PK),
+    },
+  },
+  "filter": {
+    "expression": "#IsPartial = :isPartial AND contains(#Channel, :channels)",
+    "expressionNames": {
+      "#IsPartial": "IsPartial",
+      "#Channel": "Channel"
+    },
+    "expressionValues": {
+      ":isPartial": $util.dynamodb.toDynamoDBJson($isPartial),
+      ":channels": $util.dynamodb.toDynamoDBJson($channels)
+    },
+  },
+}

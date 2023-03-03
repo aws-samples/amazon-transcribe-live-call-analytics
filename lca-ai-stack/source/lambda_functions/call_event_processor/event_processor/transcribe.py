@@ -4,8 +4,9 @@
 """
 import asyncio
 from datetime import datetime
+from statistics import fmean
 from os import getenv
-from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional, TypedDict
 import uuid
 import json
 
@@ -14,7 +15,7 @@ import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
-from gql.dsl import DSLMutation, DSLSchema, dsl_gql
+from gql.dsl import DSLMutation, DSLSchema, dsl_gql, DSLQuery
 from graphql.language.printer import print_ast
 
 # custom utils/helpers imports from Lambda layer
@@ -94,6 +95,37 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
+
+SentimentLabelType = Literal["NEGATIVE", "MIXED", "NEUTRAL", "POSITIVE"]
+ChannelType = Literal["AGENT", "CALLER"]
+StatusType = Literal["STARTED", "TRANSCRIBING", "ERRORED", "ENDED"]
+SentimentPeriodType = Literal["QUARTER"]
+
+class SentimentEntry(TypedDict):
+    """Sentiment Shape
+    Held in a list per channel
+    """
+    Id: str
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Sentiment: SentimentLabelType
+    Score: float
+class StatePerChannel(TypedDict, total=False):
+    """StatePerChannel Shape
+    Holds state per channel under StatePerCallId. Use to keep values needed
+    for statistics and aggregations.
+    """
+    SentimentList: List[SentimentEntry]
+class SentimentByPeriodEntry(TypedDict):
+    """Sentiment By Period Shape"""
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Score: float
+
+class Sentiment(TypedDict, total=False):
+    """Sentiment Shape"""
+    OverallSentiment: Dict[ChannelType, float]
+    SentimentByPeriod: Dict[SentimentPeriodType, Dict[ChannelType, List[SentimentByPeriodEntry]]]
 
 ##########################################################################
 # Transcripts
@@ -254,6 +286,123 @@ async def execute_update_call_status_mutation(
 
     return result
 
+async def execute_get_transcript_segments_query(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    # get_transcript_segments_input = {
+    #     "CallId": call_id
+    # }
+    query = dsl_gql(
+        DSLQuery(
+            schema.Query.getTranscriptSegmentsWithSentiment.args(callId=call_id).select(
+                schema.TranscriptSegmentsWithSentimentList.TranscriptSegmentsWithSentiment.select(
+                    schema.TranscriptSegmentWithSentiment.PK,
+                    schema.TranscriptSegmentWithSentiment.SK,
+                    schema.TranscriptSegmentWithSentiment.CallId,
+                    schema.TranscriptSegmentWithSentiment.Channel,
+                    schema.TranscriptSegmentWithSentiment.SegmentId,
+                    schema.TranscriptSegmentWithSentiment.StartTime,
+                    schema.TranscriptSegmentWithSentiment.EndTime,
+                    schema.TranscriptSegmentWithSentiment.Sentiment,
+                    schema.TranscriptSegmentWithSentiment.SentimentWeighted,
+                )
+            )
+        )
+    )
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("get transcript segments result", extra=dict(query=query_string, result=result))
+
+    return result
+
+def _get_sentiment_per_quarter(
+    sentiment_list: List[SentimentEntry],
+) -> List[SentimentByPeriodEntry]:
+    sorted_sentiment = sorted(sentiment_list, key=lambda i: i["BeginOffsetMillis"])
+    min_begin_time: float = (
+        min(
+            sorted_sentiment,
+            key=lambda i: i["BeginOffsetMillis"],
+        ).get("BeginOffsetMillis", 0.0)
+        if sorted_sentiment
+        else 0.0
+    )
+    max_end_time: float = (
+        max(sorted_sentiment, key=lambda i: i["EndOffsetMillis"]).get("EndOffsetMillis", 0.0)
+        if sorted_sentiment
+        else 0.0
+    )
+    time_range: float = max_end_time - min_begin_time
+    time_ranges = (
+        (
+            max((min_begin_time + time_range * i / 4), min_begin_time),
+            min((min_begin_time + time_range * (i + 1) / 4), max_end_time),
+        )
+        for i in range(4)
+    )
+    quarters = (
+        [
+            s
+            for s in sorted_sentiment
+            if s["EndOffsetMillis"] > time_range[0] and s["EndOffsetMillis"] <= time_range[1]
+        ]
+        for time_range in time_ranges
+    )
+    sentiment_per_quarter = [
+        SentimentByPeriodEntry(
+            {
+                "Score": fmean((i["Score"] for i in quarter)) if quarter else 0,
+                "BeginOffsetMillis": (
+                    min((i["BeginOffsetMillis"] for i in quarter)) if quarter else 0
+                ),
+                "EndOffsetMillis": (
+                    max((i["EndOffsetMillis"] for i in quarter)) if quarter else 0
+                ),
+            }
+        )
+        for quarter in quarters
+    ]
+
+    return sentiment_per_quarter
+
+async def execute_update_call_aggregation_mutation(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+ 
+    result = await execute_get_transcript_segments_query(
+        message=message,
+        appsync_session=appsync_session
+    )
+
+    # // To implement aggregation updates
+
+    return result
 
 async def execute_add_s3_recording_mutation(
     message: Dict[str, Any],
@@ -1029,6 +1178,17 @@ async def execute_process_event_api_mutation(
                 return_value["errors"].append(response)
             else:
                 return_value["successes"].append(response)
+
+
+        LOGGER.debug("Update Call Aggregation ")
+        response = await execute_update_call_aggregation_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
 
     elif event_type == "ADD_CALL_CATEGORY":
         LOGGER.debug("Add Call Category to Call details")
