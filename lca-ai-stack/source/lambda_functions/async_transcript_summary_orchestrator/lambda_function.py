@@ -88,5 +88,3 @@ def handler(event, context: LambdaContext):
     data['CallSummaryText'] = call_summary['summary']
 
     write_call_summary_to_kds(data)
-    
-    return
