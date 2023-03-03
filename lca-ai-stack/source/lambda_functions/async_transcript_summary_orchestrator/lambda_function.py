@@ -61,16 +61,22 @@ def get_call_summary(
 def write_call_summary_to_kds(
     message: Dict[str, Any]
 ):
-    callId = message.get("CallId", None)    
+    callId = message.get("CallId", None)  
+    message['EventType'] = "ADD_SUMMARY"  
 
     if callId:
-        KINESIS_CLIENT.put_record(
-            StreamName=CALL_DATA_STREAM_NAME,
-            PartitionKey=callId,
-            Data=json.dumps(message)
-        )
-        LOGGER.info("ADD_SUMMARY event to KDS")
-    
+        try: 
+            KINESIS_CLIENT.put_record(
+                StreamName=CALL_DATA_STREAM_NAME,
+                PartitionKey=callId,
+                Data=json.dumps(message)
+            )
+            LOGGER.info("Write ADD_SUMMARY event to KDS")
+        except Exception as error:
+            LOGGER.error(
+                "Error writing ADD_SUMMARY event to KDS ",
+                extra=error,
+            )
     return
 
 @LOGGER.inject_lambda_context

@@ -10,7 +10,7 @@ git clone the repo to your local environment.
 2. `npm run build` to build and check for build errors
 3.  Update environment variableS `KINESIS_STREAM_NAME` with LCA's KDS stream name and `SAVE_PARTIAL_TRANSCRIPTS` to either true or false
 
-    `export KINESIS_STREAM_NAME=XXXXXXXXXXXXXXXXXXXXXXXXXX`
+    `export KINESIS_STREAM_NAME=lca-v71-dev-AISTACK-U5YC0V5N9GN4-CallDataStream-WXYcCPtpD9Eq`
 
     `export SAVE_PARTIAL_TRANSCRIPTS=true`
 
