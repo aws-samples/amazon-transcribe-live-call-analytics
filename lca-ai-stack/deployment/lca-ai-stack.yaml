@@ -854,19 +854,20 @@ Resources:
           Type: Kinesis
           Properties:
             # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-kinesis.html#sam-property-function-kinesis--examples
-            BatchSize: 20
+            BatchSize: 200
             BisectBatchOnFunctionError: true
             # TODO Add SQS queue for discarded records
             # DestinationConfig:
             Enabled: true
             MaximumRetryAttempts: 2
             MaximumBatchingWindowInSeconds: 0
+            ParallelizationFactor: 10
             # XXX MaximumRecordAgeInSeconds: 900
             StartingPosition: LATEST
             Stream: !GetAtt CallDataStream.Arn
             # Tumbling Window is used for aggregations over different invocations
             # https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-windows
-            TumblingWindowInSeconds: 900
+            TumblingWindowInSeconds: 0
       Handler: lambda_function.handler
       Layers:
         - !Ref TranscriptEnrichmentPythonLayer
@@ -1056,6 +1057,16 @@ Resources:
       DynamoDBConfig:
         TableName: !Ref EventSourcingTable
         AwsRegion: !Ref AWS::Region
+
+  AppSyncApiCache: 
+    Type:  AWS::AppSync::ApiCache 
+    Properties: 
+      ApiId: !GetAtt AppSyncApi.ApiId
+      Type: R4_4XLARGE
+      ApiCachingBehavior: FULL_REQUEST_CACHING 
+      Ttl: 30
+      TransitEncryptionEnabled: false
+      AtRestEncryptionEnabled: false
 
   GetCallAppSyncResolver:
     Type: AWS::AppSync::Resolver

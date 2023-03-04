@@ -110,19 +110,31 @@ class SentimentEntry(TypedDict):
     EndOffsetMillis: float
     Sentiment: SentimentLabelType
     Score: float
-class StatePerChannel(TypedDict, total=False):
+
+class SentimentEntry(TypedDict):
+    """Sentiment Shape
+    Held in a list per channel
+    """
+    Id: str
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Sentiment: SentimentLabelType
+    Score: float
+class SentimentPerChannel(TypedDict):
     """StatePerChannel Shape
     Holds state per channel under StatePerCallId. Use to keep values needed
     for statistics and aggregations.
     """
+
     SentimentList: List[SentimentEntry]
+
 class SentimentByPeriodEntry(TypedDict):
     """Sentiment By Period Shape"""
     BeginOffsetMillis: float
     EndOffsetMillis: float
     Score: float
 
-class Sentiment(TypedDict, total=False):
+class Sentiment(TypedDict):
     """Sentiment Shape"""
     OverallSentiment: Dict[ChannelType, float]
     SentimentByPeriod: Dict[SentimentPeriodType, Dict[ChannelType, List[SentimentByPeriodEntry]]]
@@ -381,6 +393,75 @@ def _get_sentiment_per_quarter(
 
     return sentiment_per_quarter
 
+async def get_aggregated_sentiment(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+    
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+ 
+    result = await execute_get_transcript_segments_query(
+        message=message,
+        appsync_session=appsync_session
+    )
+ 
+    sentiment_entry_list_by_channel: Dict[ChannelType, SentimentPerChannel] = {}
+
+    for segment in result:
+        channel = segment.get("Channel", None)
+        if channel:
+            if segment.get("SentimentWeighted", None):
+                sentiment_entry : SentimentEntry = {
+                    "Id" : segment["SegmentId"],
+                    "BeginOffsetMillis": segment["StartTime"] * 1000,
+                    "EndOffsetMillis": segment["EndTime"] * 1000,
+                    "Sentiment": segment["Sentiment"],
+                    "Score": segment["SentimentWeighted"]
+                }
+                if channel in sentiment_entry_list_by_channel:
+                    tmp = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
+                    tmp.append(sentiment_entry)
+                    sentiment_list_obj = {
+                        "SentimentList": tmp
+                    }
+                else:
+                    sentiment_list_obj = {
+                        "SentimentList": [sentiment_entry]
+                    }
+
+                sentiment_entry_list_by_channel[channel] = sentiment_list_obj
+                
+
+    for channel in sentiment_entry_list_by_channel.keys():
+        sentiment_list = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
+        sentiment_scores = [i["Score"] for i in sentiment_list]
+        sentiment_average = fmean(sentiment_scores) if sentiment_scores else 0
+
+        sentiment_per_quarter = (
+            _get_sentiment_per_quarter(sentiment_list) if sentiment_list else []
+        )
+
+    aggregated_sentiment:Sentiment = {
+        "OverallSentiment": {
+            channel: sentiment_average,
+        },
+        "SentimentByPeriod": {
+            "QUARTER": {
+                channel: sentiment_per_quarter,
+            },
+        },
+    }
+
+    return aggregated_sentiment
+ 
+
 async def execute_update_call_aggregation_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -390,18 +471,41 @@ async def execute_update_call_aggregation_mutation(
     if not call_id:
         error_message = "callid does not exist"
         raise TypeError(error_message)
+    
+    total_duration = message.get("EndTime", 0.0) * 1000
+
+    sentiment = await get_aggregated_sentiment(
+        message=message,
+        appsync_session=appsync_session
+    ) 
+    
+    call_aggregation: Dict[str, object] = {
+        "CallId": call_id,
+        "TotalConversationDurationMillis": total_duration,
+        "Sentiment": sentiment
+    }
 
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
- 
-    result = await execute_get_transcript_segments_query(
-        message=message,
-        appsync_session=appsync_session
+
+    query = dsl_gql(
+        DSLMutation(
+            schema._ds.Mutation.updateCallAggregation.args(
+                input=call_aggregation
+            ).select(*call_fields(schema))
+        )
     )
-
-    # // To implement aggregation updates
-
+      
+    result = await execute_gql_query_with_retries(
+        query=query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+    query_string = print_ast(query)
+    LOGGER.debug(
+        "transcript aggregation mutation", extra=dict(query=query_string, result=result)
+    )
     return result
 
 async def execute_add_s3_recording_mutation(
