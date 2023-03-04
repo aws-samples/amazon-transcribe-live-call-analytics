@@ -414,10 +414,11 @@ async def get_aggregated_sentiment(
  
     sentiment_entry_list_by_channel: Dict[ChannelType, SentimentPerChannel] = {}
 
-    for segment in result:
+    for segment in result.get("getTranscriptSegmentsWithSentiment").get("TranscriptSegmentsWithSentiment"):
         channel = segment.get("Channel", None)
-        if channel:
+        if channel and channel in ["AGENT", "CALLER"] :
             if segment.get("SentimentWeighted", None):
+                LOGGER.debug("Aggregating sentiment entry", extra=segment)
                 sentiment_entry : SentimentEntry = {
                     "Id" : segment["SegmentId"],
                     "BeginOffsetMillis": segment["StartTime"] * 1000,
@@ -438,7 +439,10 @@ async def get_aggregated_sentiment(
 
                 sentiment_entry_list_by_channel[channel] = sentiment_list_obj
                 
-
+    aggregated_sentiment:Sentiment = {}
+    overall_sentiment:Dict[ChannelType, float] = {}
+    sentiment_by_period_by_channel:Dict[ChannelType, List[SentimentByPeriodEntry]] = {}
+    
     for channel in sentiment_entry_list_by_channel.keys():
         sentiment_list = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
         sentiment_scores = [i["Score"] for i in sentiment_list]
@@ -448,16 +452,16 @@ async def get_aggregated_sentiment(
             _get_sentiment_per_quarter(sentiment_list) if sentiment_list else []
         )
 
-    aggregated_sentiment:Sentiment = {
-        "OverallSentiment": {
-            channel: sentiment_average,
-        },
+        overall_sentiment[channel] = sentiment_average
+        sentiment_by_period_by_channel[channel] = sentiment_per_quarter
+        
+        
+    aggregated_sentiment = {
+        "OverallSentiment": overall_sentiment,
         "SentimentByPeriod": {
-            "QUARTER": {
-                channel: sentiment_per_quarter,
+                "QUARTER": sentiment_by_period_by_channel
             },
-        },
-    }
+        }
 
     return aggregated_sentiment
  
@@ -491,7 +495,7 @@ async def execute_update_call_aggregation_mutation(
 
     query = dsl_gql(
         DSLMutation(
-            schema._ds.Mutation.updateCallAggregation.args(
+            schema.Mutation.updateCallAggregation.args(
                 input=call_aggregation
             ).select(*call_fields(schema))
         )
