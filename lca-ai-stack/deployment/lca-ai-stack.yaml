@@ -713,7 +713,7 @@ Resources:
         Type: AWS::Kinesis::StreamConsumer
         Properties: 
             StreamARN: !GetAtt CallDataStream.Arn
-            ConsumerName: kds-shard-consumer
+            ConsumerName: KinesisStreamConsumer
   ##########################################################################
   # Transcript Summary
   ##########################################################################
