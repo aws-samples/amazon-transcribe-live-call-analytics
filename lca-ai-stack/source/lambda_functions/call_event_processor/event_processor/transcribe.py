@@ -1289,14 +1289,15 @@ async def execute_process_event_api_mutation(
 
 
         LOGGER.debug("Update Call Aggregation ")
-        response = await execute_update_call_aggregation_mutation(
-            message=message,
-            appsync_session=appsync_session
-        )
-        if isinstance(response, Exception):
-            return_value["errors"].append(response)
-        else:
-            return_value["successes"].append(response)
+        if not normalized_message["IsPartial"]:
+            response = await execute_update_call_aggregation_mutation(
+                message=message,
+                appsync_session=appsync_session
+            )
+            if isinstance(response, Exception):
+                return_value["errors"].append(response)
+            else:
+                return_value["successes"].append(response)
 
     elif event_type == "ADD_CALL_CATEGORY":
         LOGGER.debug("Add Call Category to Call details")
