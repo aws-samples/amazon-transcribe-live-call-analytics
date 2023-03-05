@@ -709,11 +709,11 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
   
-  KinesisStreamConsumer: 
+  KDSConsumerName: 
         Type: AWS::Kinesis::StreamConsumer
         Properties: 
             StreamARN: !GetAtt CallDataStream.Arn
-            ConsumerName: KinesisStreamConsumer
+            ConsumerName: KDSConsumerName
   ##########################################################################
   # Transcript Summary
   ##########################################################################
