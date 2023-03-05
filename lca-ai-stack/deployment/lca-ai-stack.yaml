@@ -709,7 +709,7 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
   
-  StreamConsumer: 
+  KinesisStreamConsumer: 
         Type: AWS::Kinesis::StreamConsumer
         Properties: 
             StreamARN: !GetAtt CallDataStream.Arn
@@ -869,7 +869,7 @@ Resources:
             ParallelizationFactor: 10
             # XXX MaximumRecordAgeInSeconds: 900
             StartingPosition: LATEST
-            Stream: !GetAtt StreamConsumer.ConsumerARN
+            Stream: !GetAtt KinesisStreamConsumer.ConsumerARN
             # Tumbling Window is used for aggregations over different invocations
             # https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-windows
             TumblingWindowInSeconds: 0
