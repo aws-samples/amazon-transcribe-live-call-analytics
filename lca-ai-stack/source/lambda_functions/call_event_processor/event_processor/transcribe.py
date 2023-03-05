@@ -1288,8 +1288,8 @@ async def execute_process_event_api_mutation(
                 return_value["successes"].append(response)
 
 
-        LOGGER.debug("Update Call Aggregation ")
         if not normalized_message["IsPartial"]:
+            LOGGER.debug("Update Call Aggregation ")
             response = await execute_update_call_aggregation_mutation(
                 message=message,
                 appsync_session=appsync_session
