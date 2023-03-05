@@ -454,7 +454,9 @@ async def get_aggregated_sentiment(
 
         overall_sentiment[channel] = sentiment_average
         sentiment_by_period_by_channel[channel] = sentiment_per_quarter
-        
+    
+    LOGGER.debug("Overall Sentiment: ", extra=dict(DebugOverallSentiment=overall_sentiment))
+    LOGGER.debug("Sentiment by Period: ", extra=dict(DebugSentimentByPeriod=sentiment_by_period_by_channel))
         
     aggregated_sentiment = {
         "OverallSentiment": overall_sentiment,
@@ -476,7 +478,7 @@ async def execute_update_call_aggregation_mutation(
         error_message = "callid does not exist"
         raise TypeError(error_message)
     
-    total_duration = message.get("EndTime", 0.0) * 1000
+    total_duration = float(message.get("EndTime", 0.0)) * 1000
 
     sentiment = await get_aggregated_sentiment(
         message=message,
@@ -1290,8 +1292,9 @@ async def execute_process_event_api_mutation(
 
         if not normalized_message["IsPartial"]:
             LOGGER.debug("Update Call Aggregation ")
+            LOGGER.debug("Normalized Message : ", extra=dict(DebugNormalizedMessage=normalized_message))
             response = await execute_update_call_aggregation_mutation(
-                message=message,
+                message=normalized_message,
                 appsync_session=appsync_session
             )
             if isinstance(response, Exception):
