@@ -49,6 +49,24 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+  
+  SentimentNegativeScoreThreshold:
+    Type: Number
+    Default: 0.9
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. 
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+
+  SentimentPositiveScoreThreshold:
+    Type: Number
+    Default: 0.4
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1.
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated). 
 
   ComprehendLanguageCode:
     Type: String
@@ -709,11 +727,11 @@ Resources:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
   
-  KinesisStreamConsumer: 
+  KDSConsumer: 
         Type: AWS::Kinesis::StreamConsumer
         Properties: 
             StreamARN: !GetAtt CallDataStream.Arn
-            ConsumerName: KinesisStreamConsumer
+            ConsumerName: KDSConsumer
   ##########################################################################
   # Transcript Summary
   ##########################################################################
@@ -869,7 +887,7 @@ Resources:
             ParallelizationFactor: 10
             # XXX MaximumRecordAgeInSeconds: 900
             StartingPosition: LATEST
-            Stream: !GetAtt KinesisStreamConsumer.ConsumerARN
+            Stream: !GetAtt KDSConsumer.ConsumerARN
             # Tumbling Window is used for aggregations over different invocations
             # https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-windows
             TumblingWindowInSeconds: 0
@@ -943,6 +961,8 @@ Resources:
           STATE_DYNAMODB_TABLE_NAME: !Ref EventSourcingTable
           COMPREHEND_LANGUAGE_CODE: !Ref ComprehendLanguageCode
           IS_SENTIMENT_ANALYSIS_ENABLED: !Ref IsSentimentAnalysisEnabled
+          SENTIMENT_NEGATIVE_THRESHOLD: !Ref SentimentNegativeScoreThreshold
+          SENTIMENT_POSITIVE_THRESHOLD: !Ref SentimentPositiveScoreThreshold
           CALL_AUDIO_SOURCE: !Ref CallAudioSource
           # Lex Agent Assist
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
