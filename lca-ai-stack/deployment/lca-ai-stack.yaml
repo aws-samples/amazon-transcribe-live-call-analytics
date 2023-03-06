@@ -765,7 +765,60 @@ Resources:
               - Effect: "Allow"
                 Action: "dynamodb:Query"
                 Resource: !GetAtt EventSourcingTable.Arn
-          
+
+  AsyncLexAgentAssistOrchestrator:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt AsyncLexAgentAssistOrchestratorExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          CALL_DATA_STREAM_NAME: !Ref CallDataStream
+          LEX_BOT_ID: !Ref LexAgentAssistBotId
+          LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
+          LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_function.handler
+      Layers:
+        - !Ref TranscriptEnrichmentPythonLayer
+      CodeUri: ../source/lambda_functions/async_lex_agent_assist_orchestrator
+      Description: This AWS Lambda Function orchestrates lex agent assist processing.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  AsyncLexAgentAssistOrchestratorExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Async Lex Agent Assist Orchestrator Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-AsyncLexAgentAssist
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: kinesis:PutRecord
+                Resource: !GetAtt CallDataStream.Arn
+              - Effect: Allow
+                Action:
+                  - lex:RecognizeText
+                Resource:
+                  # XXX make specific to bot passed in parameter
+                  "*"
+
   AsyncTranscriptSummaryOrchestrator:
     Type: AWS::Serverless::Function
     Properties:
@@ -894,13 +947,7 @@ Resources:
               Action:
                 - comprehend:DetectSentiment
               Resource: "*"
-            - Effect: Allow
-              Action:
-                - lex:RecognizeText
-              Resource:
-                # XXX make specific to bot passed in parameter
-                "*"
-            - !If 
+            - !If
               - ShouldEnableLambdaAgentAssist
               - Effect: Allow
                 Action:
@@ -921,6 +968,10 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
               - Ref: AWS::NoValue
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt AsyncLexAgentAssistOrchestrator.Arn
 
       Runtime: python3.9
       Timeout: 60
@@ -940,9 +991,6 @@ Resources:
           CALL_AUDIO_SOURCE: !Ref CallAudioSource
           # Lex Agent Assist
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
-          LEX_BOT_ID: !Ref LexAgentAssistBotId
-          LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
-          LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
           # Lambda Agent Assist
           IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
           LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
@@ -952,6 +1000,7 @@ Resources:
 
           IS_TRANSCRIPT_SUMMARY_ENABLED: !If [IsTranscriptSummaryEnabled, "true", "false"]
           ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
+          ASYNC_LEX_AGENT_ASSIST_ORCHESTRATOR_ARN: !GetAtt AsyncLexAgentAssistOrchestrator.Arn
 
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter

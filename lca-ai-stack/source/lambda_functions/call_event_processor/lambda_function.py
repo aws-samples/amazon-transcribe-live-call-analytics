@@ -63,16 +63,6 @@ STATE_DYNAMODB_RESOURCE: DynamoDBServiceResource = BOTO3_SESSION.resource(
 STATE_DYNAMODB_TABLE: DynamoDbTable = STATE_DYNAMODB_RESOURCE.Table(STATE_DYNAMODB_TABLE_NAME)
 
 IS_LEX_AGENT_ASSIST_ENABLED = getenv("IS_LEX_AGENT_ASSIST_ENABLED", "true").lower() == "true"
-if IS_LEX_AGENT_ASSIST_ENABLED:
-    LEXV2_CLIENT: LexRuntimeV2Client = BOTO3_SESSION.client(
-        "lexv2-runtime",
-        config=CLIENT_CONFIG,
-    )
-else:
-    LEXV2_CLIENT = None
-LEX_BOT_ID = environ["LEX_BOT_ID"]
-LEX_BOT_ALIAS_ID = environ["LEX_BOT_ALIAS_ID"]
-LEX_BOT_LOCALE_ID = environ["LEX_BOT_LOCALE_ID"]
 
 IS_LAMBDA_AGENT_ASSIST_ENABLED = getenv("IS_LAMBDA_AGENT_ASSIST_ENABLED", "true").lower() == "true"
 if IS_LAMBDA_AGENT_ASSIST_ENABLED:
@@ -141,10 +131,7 @@ async def process_event(event) -> Dict[str, List]:
     async with TranscriptBatchProcessor(
         appsync_client=APPSYNC_CLIENT,
         agent_assist_args=dict(
-            lex_client=LEXV2_CLIENT,
-            lex_bot_id=LEX_BOT_ID,
-            lex_bot_alias_id=LEX_BOT_ALIAS_ID,
-            lex_bot_locale_id=LEX_BOT_LOCALE_ID,
+            is_lex_agent_assist_enabled=IS_LEX_AGENT_ASSIST_ENABLED,
             lambda_client=LAMBDA_CLIENT,
             lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
             dynamodb_table_name=STATE_DYNAMODB_TABLE_NAME,
