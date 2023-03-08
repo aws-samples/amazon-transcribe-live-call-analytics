@@ -1300,6 +1300,7 @@ async def execute_process_event_api_mutation(
                 return_value["successes"].append(response)
 
 
+        add_transcript_tasks = []
         add_transcript_sentiment_tasks = []
         if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
             LOGGER.debug("Add Transcript Segment with Sentiment Analysis")
