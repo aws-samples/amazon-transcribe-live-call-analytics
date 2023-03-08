@@ -258,6 +258,24 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+  
+  SentimentNegativeScoreThreshold:
+    Type: Number
+    Default: 0.9
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. 
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+
+  SentimentPositiveScoreThreshold:
+    Type: Number
+    Default: 0.4
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1.
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated). 
 
   TranscriptLambdaHookFunctionArn:
     Default: ''
@@ -443,6 +461,8 @@ Metadata:
           default: Transcript Event Processing Configuration
         Parameters:
           - IsSentimentAnalysisEnabled
+          - SentimentNegativeScoreThreshold
+          - SentimentPositiveScoreThreshold
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
@@ -536,6 +556,10 @@ Metadata:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
         default: Enable Sentiment Analysis
+      SentimentNegativeScoreThreshold:
+        default: Sentiment Negative Score Threshold
+      SentimentPositiveScoreThreshold:
+        default: Sentiment Positive Score Threshold
       TranscriptLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
@@ -771,6 +795,8 @@ Resources:
             Value,
           ]
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
+        SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         CloudFrontAllowedGeos: !Ref CloudFrontAllowedGeos
         IsLexAgentAssistEnabled: !If
@@ -842,6 +868,8 @@ Resources:
             - 'LAMBDA'
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
+        SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
