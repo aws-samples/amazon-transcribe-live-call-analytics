@@ -61,24 +61,14 @@ LEX_BOT_ID = getenv("LEX_BOT_ID", "")
 LEX_BOT_ALIAS_ID = getenv("LEX_BOT_ALIAS_ID", "")
 LEX_BOT_LOCALE_ID = getenv("LEX_BOT_LOCALE_ID", "")
 
-# def get_call_summary(
-#     message: Dict[str, Any]
-# ):
-#     lambda_response = LAMBDA_CLIENT.invoke(
-#         FunctionName=TRANSCRIPT_SUMMARY_FUNCTION_ARN,
-#         InvocationType='RequestResponse',
-#         Payload=json.dumps(message)
-#     )
-#     try:
-#         message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
-#     except Exception as error:
-#         LOGGER.error(
-#             "Transcript summary result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
-#             extra=error,
-#         )
-#     return message
+LAMBDA_AGENT_ASSIST_FUNCTION_ARN = getenv("LAMBDA_AGENT_ASSIST_FUNCTION_ARN", "")
 
-def write_lex_agent_assist_to_kds(
+IS_LEX_AGENT_ASSIST_ENABLED = getenv("IS_LEX_AGENT_ASSIST_ENABLED", "false").lower() == "true"
+IS_LAMBDA_AGENT_ASSIST_ENABLED = getenv("IS_LAMBDA_AGENT_ASSIST_ENABLED", "false").lower() == "true"
+
+DYNAMODB_TABLE_NAME = getenv("DYNAMODB_TABLE_NAME", "")
+
+def write_agent_assist_to_kds(
     message: Dict[str, Any]
 ):
     callId = message.get("CallId", None)  
@@ -99,7 +89,7 @@ def write_lex_agent_assist_to_kds(
             )
     return
 
-def add_lex_agent_assistances(
+def get_lex_agent_assist_transcript_segment(
     message: Dict[str, Any],
 ):
     """Add Lex Agent Assist GraphQL Mutations"""
@@ -116,9 +106,7 @@ def add_lex_agent_assistances(
     created_at = datetime.utcnow().astimezone().isoformat()
     status: str = message["Status"]
 
-    send_lex_agent_assist_args = []
-    send_lex_agent_assist_args.append(
-        dict(
+    lex_agent_assist_input = dict(
             content=transcript,
             transcript_segment_args=dict(
                 CallId=call_id,
@@ -132,16 +120,12 @@ def add_lex_agent_assistances(
                 Status="TRANSCRIBING",
             ),
         )
+
+    transcript_segment = send_lex_agent_assist(
+        **lex_agent_assist_input,
     )
 
-    tasks = []
-    for agent_assist_args in send_lex_agent_assist_args:
-        task = send_lex_agent_assist(
-            **agent_assist_args,
-        )
-        tasks.append(task)
-
-    return tasks
+    return transcript_segment
 
 def send_lex_agent_assist(
     transcript_segment_args: Dict[str, Any],
@@ -164,13 +148,13 @@ def send_lex_agent_assist(
     LOGGER.debug("Bot Response: ", extra=bot_response)
 
     transcript_segment = {}
-    transcript = get_lex_agent_assist_message(bot_response)
+    transcript = process_lex_bot_response(bot_response)
     if transcript:
         transcript_segment = {**transcript_segment_args, "Transcript": transcript}
 
     return transcript_segment
 
-def get_lex_agent_assist_message(bot_response):
+def process_lex_bot_response(bot_response):
     message = ""
     if is_qnabot_noanswer(bot_response):
         # ignore 'noanswer' responses from QnABot
@@ -202,14 +186,104 @@ def is_qnabot_noanswer(bot_response):
         return True
     return False
 
+def get_lambda_agent_assist_transcript_segment(
+    message: Dict[str, Any],
+):
+    """Add Lambda Agent Assist GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    call_id: str = message["CallId"]
+    channel: str = message["Channel"]
+    is_partial: bool = message["IsPartial"]
+    segment_id: str = message["SegmentId"]
+    start_time: float = message["StartTime"]
+    end_time: float = message["EndTime"]
+    end_time = float(end_time) + 0.001  # UI sort order
+    # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
+    transcript: str = message.get("OriginalTranscript", message["Transcript"])
+    created_at = datetime.utcnow().astimezone().isoformat()
+
+    lambda_agent_assist_input = dict(
+            content=transcript,
+            transcript_segment_args=dict(
+                CallId=call_id,
+                Channel="AGENT_ASSISTANT",
+                CreatedAt=created_at,
+                EndTime=end_time,
+                ExpiresAfter=get_ttl(),
+                IsPartial=is_partial,
+                SegmentId=str(uuid.uuid4()),
+                StartTime=start_time,
+                Status="TRANSCRIBING",
+            ),
+        )
+
+    transcript_segment = send_lambda_agent_assist(
+        **lambda_agent_assist_input,
+    )
+
+    return transcript_segment
+
+def send_lambda_agent_assist(
+    transcript_segment_args: Dict[str, Any],
+    content: str,
+):
+    """Sends Lambda Agent Assist Requests"""
+    call_id = transcript_segment_args["CallId"]
+
+    payload = {
+        'text': content,
+        'call_id': call_id,
+        'transcript_segment_args': transcript_segment_args,
+        'dynamodb_table_name': DYNAMODB_TABLE_NAME,
+        'dynamodb_pk': f"c#{call_id}",
+    }
+
+    LOGGER.debug("Agent Assist Lambda Request: %s", content)
+
+    lambda_response = LAMBDA_CLIENT.invoke(
+        FunctionName=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(payload)
+    )
+
+    LOGGER.debug("Agent Assist Lambda Response: ", extra=lambda_response)
+
+    transcript_segment = {}
+    transcript = process_lambda_response(lambda_response)
+    if transcript:
+        transcript_segment = {**transcript_segment_args, "Transcript": transcript}
+
+    return transcript_segment
+
+def process_lambda_response(lambda_response):
+    message = ""
+    try:
+        payload = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+        # Lambda result payload should include field 'message'
+        message = payload["message"]
+    except Exception as error:
+        LOGGER.error(
+            "Agent assist Lambda result payload parsing exception. Lambda must return object with key 'message'",
+            extra=error,
+        )
+    return message
+
 @LOGGER.inject_lambda_context
 def handler(event, context: LambdaContext):
     # pylint: disable=unused-argument
     """Lambda handler"""
-    LOGGER.debug("LEX agent assist lambda event", extra={"event": event})
+    LOGGER.debug("Agent assist lambda event", extra={"event": event})
 
     data = json.loads(json.dumps(event))
 
-    transcripts = add_lex_agent_assistances(data)
-    for transcript in transcripts:
-        write_lex_agent_assist_to_kds(transcript)
+    if IS_LEX_AGENT_ASSIST_ENABLED:
+        LOGGER.debug("Invoking Lex agent assist")
+        agent_assist_transcript_segment = get_lex_agent_assist_transcript_segment(data)
+    elif IS_LAMBDA_AGENT_ASSIST_ENABLED:
+        LOGGER.debug("Invoking Lambda agent assist")
+        agent_assist_transcript_segment = get_lambda_agent_assist_transcript_segment(data)
+    else:
+        LOGGER.warning("Agent assist is not enabled but orchestrator invoked")
+        return
+
+    write_agent_assist_to_kds(agent_assist_transcript_segment)

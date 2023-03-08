@@ -766,10 +766,10 @@ Resources:
                 Action: "dynamodb:Query"
                 Resource: !GetAtt EventSourcingTable.Arn
 
-  AsyncLexAgentAssistOrchestrator:
+  AsyncAgentAssistOrchestrator:
     Type: AWS::Serverless::Function
     Properties:
-      Role: !GetAtt AsyncLexAgentAssistOrchestratorExecutionRole.Arn
+      Role: !GetAtt AsyncAgentAssistOrchestratorExecutionRole.Arn
       Runtime: python3.9
       Environment:
         Variables:
@@ -777,23 +777,29 @@ Resources:
           LEX_BOT_ID: !Ref LexAgentAssistBotId
           LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
           LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
+          # Lex Agent Assist
+          IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
+          # Lambda Agent Assist
+          IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
+          LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
+          DYNAMODB_TABLE_NAME: !Ref EventSourcingTable
       Timeout: 60
       MemorySize: 128
       Handler: lambda_function.handler
       Layers:
         - !Ref TranscriptEnrichmentPythonLayer
-      CodeUri: ../source/lambda_functions/async_lex_agent_assist_orchestrator
-      Description: This AWS Lambda Function orchestrates lex agent assist processing.
+      CodeUri: ../source/lambda_functions/async_agent_assist_orchestrator
+      Description: This AWS Lambda Function orchestrates agent assist processing.
     Metadata:
       cfn_nag:
         rules_to_suppress:
           - id: W89
             reason: Customer can use VPC if desired
 
-  AsyncLexAgentAssistOrchestratorExecutionRole:
+  AsyncAgentAssistOrchestratorExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: Async Lex Agent Assist Orchestrator Lambda Role
+      Description: Async Agent Assist Orchestrator Lambda Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -805,7 +811,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: !Sub ${AWS::StackName}-AsyncLexAgentAssist
+        - PolicyName: !Sub ${AWS::StackName}-AsyncAgentAssist
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -818,6 +824,13 @@ Resources:
                 Resource:
                   # XXX make specific to bot passed in parameter
                   "*"
+              - !If
+                - ShouldEnableLambdaAgentAssist
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
+                - Ref: AWS::NoValue
 
   AsyncTranscriptSummaryOrchestrator:
     Type: AWS::Serverless::Function
@@ -948,13 +961,6 @@ Resources:
                 - comprehend:DetectSentiment
               Resource: "*"
             - !If
-              - ShouldEnableLambdaAgentAssist
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
-              - Ref: AWS::NoValue
-            - !If 
               - ShouldEnableTranscriptLambdaHookFunction
               - Effect: Allow
                 Action:
@@ -971,7 +977,7 @@ Resources:
             - Effect: Allow
               Action:
                 - lambda:InvokeFunction
-              Resource: !GetAtt AsyncLexAgentAssistOrchestrator.Arn
+              Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
 
       Runtime: python3.9
       Timeout: 60
@@ -993,14 +999,13 @@ Resources:
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
           # Lambda Agent Assist
           IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
-          LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
 
           IS_TRANSCRIPT_SUMMARY_ENABLED: !If [IsTranscriptSummaryEnabled, "true", "false"]
           ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
-          ASYNC_LEX_AGENT_ASSIST_ORCHESTRATOR_ARN: !GetAtt AsyncLexAgentAssistOrchestrator.Arn
+          ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN: !GetAtt AsyncAgentAssistOrchestrator.Arn
 
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter

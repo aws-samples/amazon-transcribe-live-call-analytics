@@ -15,7 +15,6 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 import boto3
 from botocore.config import Config as BotoCoreConfig
 
-
 # imports from Lambda layer
 # pylint: disable=import-error
 from appsync_utils import AppsyncAioGqlClient
@@ -46,7 +45,6 @@ else:
     SNSClient = object
     SSMClient = object
 
-
 APPSYNC_GRAPHQL_URL = environ["APPSYNC_GRAPHQL_URL"]
 APPSYNC_CLIENT = AppsyncAioGqlClient(url=APPSYNC_GRAPHQL_URL, fetch_schema_from_transport=True)
 
@@ -65,14 +63,6 @@ STATE_DYNAMODB_TABLE: DynamoDbTable = STATE_DYNAMODB_RESOURCE.Table(STATE_DYNAMO
 IS_LEX_AGENT_ASSIST_ENABLED = getenv("IS_LEX_AGENT_ASSIST_ENABLED", "true").lower() == "true"
 
 IS_LAMBDA_AGENT_ASSIST_ENABLED = getenv("IS_LAMBDA_AGENT_ASSIST_ENABLED", "true").lower() == "true"
-if IS_LAMBDA_AGENT_ASSIST_ENABLED:
-    LAMBDA_CLIENT: LambdaClient = BOTO3_SESSION.client(
-        "lambda",
-        config=CLIENT_CONFIG,
-    )
-else:
-    LAMBDA_CLIENT = None
-LAMBDA_AGENT_ASSIST_FUNCTION_ARN = environ["LAMBDA_AGENT_ASSIST_FUNCTION_ARN"]
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 if IS_SENTIMENT_ANALYSIS_ENABLED:
@@ -102,7 +92,6 @@ SETTINGS = json.loads(setting_response["Parameter"]["Value"])
 if "CategoryAlertRegex" in SETTINGS:
     SETTINGS['AlertRegEx'] = re.compile(SETTINGS["CategoryAlertRegex"])
 
-
 async def update_state(event, event_processor_results) -> Dict[str, object]:
     """Updates the Lambda Tumbling Window State"""
     outgoing_state = event.get("state", {})
@@ -125,16 +114,13 @@ async def update_state(event, event_processor_results) -> Dict[str, object]:
 
     return outgoing_state
 
-
 async def process_event(event) -> Dict[str, List]:
     """Processes a Batch of Transcript Records"""
     async with TranscriptBatchProcessor(
         appsync_client=APPSYNC_CLIENT,
         agent_assist_args=dict(
             is_lex_agent_assist_enabled=IS_LEX_AGENT_ASSIST_ENABLED,
-            lambda_client=LAMBDA_CLIENT,
-            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
-            dynamodb_table_name=STATE_DYNAMODB_TABLE_NAME,
+            is_lambda_agent_assist_enabled=IS_LAMBDA_AGENT_ASSIST_ENABLED,
         ),
         sentiment_analysis_args=dict(
             comprehend_client=COMPREHEND_CLIENT,
@@ -148,7 +134,6 @@ async def process_event(event) -> Dict[str, List]:
         await processor.handle_event(event=event)
 
     return processor.results
-
 
 @LOGGER.inject_lambda_context
 def handler(event, context: LambdaContext):

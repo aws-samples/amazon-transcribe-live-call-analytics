@@ -25,7 +25,6 @@ from graphql_helpers import (
     transcript_segment_fields,
     transcript_segment_sentiment_fields,
 )
-from lex_utils import recognize_text_lex
 from sns_utils import publish_sns
 from lambda_utils import invoke_lambda
 from eventprocessor_utils import (
@@ -60,18 +59,16 @@ TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_AR
 ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN = getenv("ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN", "")
 IS_TRANSCRIPT_SUMMARY_ENABLED = getenv("IS_TRANSCRIPT_SUMMARY_ENABLED", "false").lower() == "true"
 
-ASYNC_LEX_AGENT_ASSIST_ORCHESTRATOR_ARN = getenv("ASYNC_LEX_AGENT_ASSIST_ORCHESTRATOR_ARN", "")
+ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN = getenv("ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN", "")
 
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
     "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
-if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN or ASYNC_LEX_AGENT_ASSIST_ORCHESTRATOR_ARN:
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN or ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN:
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
 
 IS_LAMBDA_AGENT_ASSIST_ENABLED = False
-LAMBDA_AGENT_ASSIST_FUNCTION_ARN: str
-DYNAMODB_TABLE_NAME: str
 
 SETTINGS: Dict[str, Any]
 
@@ -91,7 +88,6 @@ DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+180055
 ##########################################################################
 # Transcripts
 ##########################################################################
-
 
 def add_transcript_segments(
     message: Dict[str, object],
@@ -136,7 +132,6 @@ def add_transcript_segments(
 
     return tasks
 
-
 async def add_sentiment_to_transcript(
     message: Dict[str, Any],
     sentiment_analysis_args: Dict[str, Any],
@@ -166,7 +161,6 @@ async def add_sentiment_to_transcript(
 
     return result
 
-
 def add_transcript_sentiment_analysis(
     message: Dict[str, Any],
     sentiment_analysis_args: Dict[str, Any],
@@ -180,7 +174,6 @@ def add_transcript_sentiment_analysis(
     tasks.append(task)
 
     return tasks
-
 
 async def execute_create_call_mutation(
     message: Dict[str, Any],
@@ -209,7 +202,6 @@ async def execute_create_call_mutation(
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
-
 
 async def execute_update_call_status_mutation(
     message: Dict[str, Any],
@@ -247,7 +239,6 @@ async def execute_update_call_status_mutation(
 
     return result
 
-
 async def execute_add_s3_recording_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -280,7 +271,6 @@ async def execute_add_s3_recording_mutation(
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
-
 
 async def execute_add_pca_url_mutation(
     message: Dict[str, Any],
@@ -315,7 +305,6 @@ async def execute_add_pca_url_mutation(
 
     return result
 
-
 async def execute_add_call_category_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -348,7 +337,6 @@ async def execute_add_call_category_mutation(
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
     return result
-
 
 async def execute_add_issues_detected_mutation(
     message: Dict[str, Any],
@@ -452,7 +440,6 @@ async def execute_add_agent_assist_mutation(
 
     return result
 
-
 async def execute_update_agent_mutation(
     message: Dict[str, Any],
     appsync_session: AppsyncAsyncClientSession,
@@ -490,7 +477,6 @@ async def execute_update_agent_mutation(
 # Call Categories
 ##########################################################################
 
-
 async def send_call_category(
     transcript_segment_args: Dict[str, Any],
     category: str,
@@ -519,7 +505,6 @@ async def send_call_category(
 
     return result
 
-
 async def publish_sns_category(
     sns_client: SNSClient,
     category_name: str,
@@ -540,7 +525,6 @@ async def publish_sns_category(
                                )
                         
     return result
-
 
 def add_call_category(
     message: Dict[str, Any],
@@ -595,124 +579,6 @@ def add_call_category(
 
     return tasks
 
-
-##########################################################################
-# Lambda Agent Assist
-##########################################################################
-
-
-def get_lambda_agent_assist_message(lambda_response):
-    message = ""
-    try:
-        payload = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
-        # Lambda result payload should include field 'message'
-        message = payload["message"]
-    except Exception as error:
-        LOGGER.error(
-            "Agent assist Lambda result payload parsing exception. Lambda must return object with key 'message'",
-            extra=error,
-        )
-    return message
-
-
-async def send_lambda_agent_assist(
-    transcript_segment_args: Dict[str, Any],
-    content: str,
-    appsync_session: AppsyncAsyncClientSession,
-):
-    """Sends Lambda Agent Assist Requests"""
-    if not appsync_session.client.schema:
-        raise ValueError("invalid AppSync schema")
-    schema = DSLSchema(appsync_session.client.schema)
-
-    call_id = transcript_segment_args["CallId"]
-
-    payload = {
-        'text': content,
-        'call_id': call_id,
-        'transcript_segment_args': transcript_segment_args,
-        'dynamodb_table_name': DYNAMODB_TABLE_NAME,
-        'dynamodb_pk': f"c#{call_id}",
-    }
-
-    LOGGER.debug("Agent Assist Lambda Request: %s", content)
-
-    lambda_response: InvocationResponseTypeDef = await invoke_lambda(
-        payload=payload,
-        lambda_client=LAMBDA_CLIENT,
-        lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
-    )
-
-    LOGGER.debug("Agent Assist Lambda Response: ", extra=lambda_response)
-
-    result = {}
-    transcript = get_lambda_agent_assist_message(lambda_response)
-    if transcript:
-        transcript_segment = {**transcript_segment_args, "Transcript": transcript}
-
-        query = dsl_gql(
-            DSLMutation(
-                schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
-                    *transcript_segment_fields(schema),
-                )
-            )
-        )
-
-        result = await execute_gql_query_with_retries(
-            query,
-            client_session=appsync_session,
-            logger=LOGGER,
-        )
-
-    return result
-
-
-def add_lambda_agent_assistances(
-    message: Dict[str, Any],
-    appsync_session: AppsyncAsyncClientSession,
-) -> List[Coroutine]:
-    """Add Lambda Agent Assist GraphQL Mutations"""
-    # pylint: disable=too-many-locals
-    call_id: str = message["CallId"]
-    channel: str = message["Channel"]
-    is_partial: bool = message["IsPartial"]
-    segment_id: str = message["SegmentId"]
-    start_time: float = message["StartTime"]
-    end_time: float = message["EndTime"]
-    end_time = float(end_time) + 0.001  # UI sort order
-    # Use "OriginalTranscript", if defined (optionally set by transcript lambda hook fn)"
-    transcript: str = message.get("OriginalTranscript", message["Transcript"])
-    created_at = datetime.utcnow().astimezone().isoformat()
-
-    send_lambda_agent_assist_args = []
-    if (channel == "CALLER" and not is_partial):
-        send_lambda_agent_assist_args.append(
-            dict(
-                content=transcript,
-                transcript_segment_args=dict(
-                    CallId=call_id,
-                    Channel="AGENT_ASSISTANT",
-                    CreatedAt=created_at,
-                    EndTime=end_time,
-                    ExpiresAfter=get_ttl(),
-                    IsPartial=is_partial,
-                    SegmentId=str(uuid.uuid4()),
-                    StartTime=start_time,
-                    Status="TRANSCRIBING",
-                ),
-            )
-        )
-
-    tasks = []
-    for agent_assist_args in send_lambda_agent_assist_args:
-        task = send_lambda_agent_assist(
-            appsync_session=appsync_session,
-            **agent_assist_args,
-        )
-        tasks.append(task)
-
-    return tasks
-
 ##########################################################################
 # Transcript Lambda Hook
 # User provided function should return a copy of the input event with
@@ -722,7 +588,6 @@ def add_lambda_agent_assistances(
 # to be used as input for Agent Assist bot or Lambda, otherwise "Transcript"
 # field is used for Agent Assist input.
 ##########################################################################
-
 
 def invoke_transcript_lambda_hook(
     message: Dict[str, Any]
@@ -745,8 +610,6 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
-
-
 ##########################################################################
 # Main event processing
 ##########################################################################
@@ -763,17 +626,12 @@ async def execute_process_event_api_mutation(
     """Executes AppSync API Mutation"""
     # pylint: disable=global-statement
     global IS_LEX_AGENT_ASSIST_ENABLED
-    global LAMBDA_CLIENT
-    global LAMBDA_AGENT_ASSIST_FUNCTION_ARN
-    global DYNAMODB_TABLE_NAME
+    global IS_LAMBDA_AGENT_ASSIST_ENABLED
     global SETTINGS
     # pylint: enable=global-statement
 
     IS_LEX_AGENT_ASSIST_ENABLED = agent_assist_args.get("is_lex_agent_assist_enabled")
-    LAMBDA_CLIENT = agent_assist_args.get("lambda_client")
-    IS_LAMBDA_AGENT_ASSIST_ENABLED = LAMBDA_CLIENT is not None
-    LAMBDA_AGENT_ASSIST_FUNCTION_ARN = agent_assist_args.get("lambda_agent_assist_function_arn", "")
-    DYNAMODB_TABLE_NAME = agent_assist_args.get("dynamodb_table_name", "")
+    IS_LAMBDA_AGENT_ASSIST_ENABLED = agent_assist_args.get("is_lambda_agent_assist_enabled")
     SETTINGS = settings
 
     return_value: Dict[Literal["successes", "errors"], List] = {
@@ -849,7 +707,6 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
 
-
     elif event_type == "ADD_TRANSCRIPT_SEGMENT":
 
         # ADD_TRANSCRIPT_SEGMENT event supports these 3 types of message structure.
@@ -901,26 +758,16 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
-        add_lex_agent_assists_tasks = []
-        if IS_LEX_AGENT_ASSIST_ENABLED and normalized_message["Channel"] == "CALLER" and not normalized_message["IsPartial"]:
+        if (IS_LEX_AGENT_ASSIST_ENABLED or IS_LAMBDA_AGENT_ASSIST_ENABLED) and (normalized_message["Channel"] == "CALLER" and not normalized_message["IsPartial"]):
             LAMBDA_HOOK_CLIENT.invoke(
-                FunctionName=ASYNC_LEX_AGENT_ASSIST_ORCHESTRATOR_ARN,
+                FunctionName=ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN,
                 InvocationType='Event',
                 Payload=json.dumps(normalized_message)
-            )
-
-        add_lambda_agent_assists_tasks = []
-        if IS_LAMBDA_AGENT_ASSIST_ENABLED:
-            add_lambda_agent_assists_tasks = add_lambda_agent_assistances(
-                message=normalized_message,
-                appsync_session=appsync_session,
             )
 
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
-            *add_lex_agent_assists_tasks,
-            *add_lambda_agent_assists_tasks,
             # *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
