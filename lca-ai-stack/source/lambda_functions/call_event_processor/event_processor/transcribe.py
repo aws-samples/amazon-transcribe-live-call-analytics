@@ -466,13 +466,12 @@ async def get_aggregated_sentiment(
         }
 
     return aggregated_sentiment
- 
 
-async def execute_update_call_aggregation_mutation(
-    message: Dict[str, Any],
+async def get_aggregate_call_data(
+    message: Dict[str, object],
     appsync_session: AppsyncAsyncClientSession,
 ) -> Dict:
-
+    
     call_id = message.get("CallId")
     if not call_id:
         error_message = "callid does not exist"
@@ -490,6 +489,50 @@ async def execute_update_call_aggregation_mutation(
         "TotalConversationDurationMillis": total_duration,
         "Sentiment": sentiment
     }
+    return call_aggregation
+    
+async def get_call_aggregation_tasks(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+
+    call_aggregation = await get_aggregate_call_data(
+        message=message,
+        appsync_session=appsync_session
+    )
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateCallAggregation.args(
+                input=call_aggregation
+            ).select(*call_fields(schema))
+        )
+    )
+
+    tasks = []
+    tasks.append(
+        execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+        ),
+    )  
+
+    return tasks
+
+
+async def execute_update_call_aggregation_mutation(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_aggregation = await get_aggregate_call_data(
+        message=message,
+        appsync_session=appsync_session
+    )
 
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
@@ -502,12 +545,13 @@ async def execute_update_call_aggregation_mutation(
             ).select(*call_fields(schema))
         )
     )
-      
+
     result = await execute_gql_query_with_retries(
-        query=query,
+        query,
         client_session=appsync_session,
         logger=LOGGER,
     )
+
     query_string = print_ast(query)
     LOGGER.debug(
         "transcript aggregation mutation", extra=dict(query=query_string, result=result)
@@ -1182,6 +1226,10 @@ async def execute_process_event_api_mutation(
             message=message,
             appsync_session=appsync_session
         )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
         
         if (IS_TRANSCRIPT_SUMMARY_ENABLED):
             LAMBDA_HOOK_CLIENT.invoke(
@@ -1191,10 +1239,16 @@ async def execute_process_event_api_mutation(
             )
             LOGGER.debug("END Event: Invoked Async Transcript Summary Lambda")
       
+
+        response = await execute_update_call_aggregation_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
+        
 
     elif event_type == "ADD_SUMMARY":
 
@@ -1245,18 +1299,19 @@ async def execute_process_event_api_mutation(
             else:
                 return_value["successes"].append(response)
 
-        LOGGER.debug("Add Transcript Segment")
-        add_transcript_tasks = add_transcript_segments(
-            message=normalized_message,
-            appsync_session=appsync_session,
-        )
 
         add_transcript_sentiment_tasks = []
         if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
-            LOGGER.debug("Add Sentiment Analysis")
+            LOGGER.debug("Add Transcript Segment with Sentiment Analysis")
             add_transcript_sentiment_tasks = add_transcript_sentiment_analysis(
                 message=normalized_message,
                 sentiment_analysis_args=sentiment_analysis_args,
+                appsync_session=appsync_session,
+            )
+        else:
+            LOGGER.debug("Add Transcript Segment")
+            add_transcript_tasks = add_transcript_segments(
+                message=normalized_message,
                 appsync_session=appsync_session,
             )
 
@@ -1274,29 +1329,24 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
+        update_call_aggregation_tasks = []
+        if not normalized_message["IsPartial"]:
+            update_call_aggregation_tasks = await get_call_aggregation_tasks(
+                message=normalized_message,
+                appsync_session=appsync_session,
+            )
+
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
+            *update_call_aggregation_tasks,
             # *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
 
         for response in task_responses:
-            if isinstance(response, Exception):
-                return_value["errors"].append(response)
-            else:
-                return_value["successes"].append(response)
-
-
-        if not normalized_message["IsPartial"]:
-            LOGGER.debug("Update Call Aggregation ")
-            LOGGER.debug("Normalized Message : ", extra=dict(DebugNormalizedMessage=normalized_message))
-            response = await execute_update_call_aggregation_mutation(
-                message=normalized_message,
-                appsync_session=appsync_session
-            )
             if isinstance(response, Exception):
                 return_value["errors"].append(response)
             else:
