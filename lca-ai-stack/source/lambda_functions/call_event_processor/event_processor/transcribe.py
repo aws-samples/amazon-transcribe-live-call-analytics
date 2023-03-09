@@ -250,10 +250,13 @@ async def execute_create_call_mutation(
         )
     )
 
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
     result = await execute_gql_query_with_retries(
         query,
         client_session=appsync_session,
         logger=LOGGER,
+        should_ignore_exception_fn=ignore_exception_fn,
     )
 
     query_string = print_ast(query)
@@ -484,11 +487,19 @@ async def get_aggregate_call_data(
         appsync_session=appsync_session
     ) 
     
-    call_aggregation: Dict[str, object] = {
-        "CallId": call_id,
-        "TotalConversationDurationMillis": total_duration,
-        "Sentiment": sentiment
-    }
+    event_type = message.get("EventType", "")
+    if event_type == "END":
+        call_aggregation: Dict[str, object] = {
+            "CallId": call_id,
+            "Sentiment": sentiment
+        }
+    else:
+        call_aggregation: Dict[str, object] = {
+            "CallId": call_id,
+            "TotalConversationDurationMillis": total_duration,
+            "Sentiment": sentiment
+        }
+
     return call_aggregation
     
 async def get_call_aggregation_tasks(
