@@ -81,7 +81,7 @@ async def execute_gql_query_with_retries(
             # exponential backoff with jitter using base 2
             sleep_time = min_sleep_time * randint(1, 2**retries)  # nosec
             logger.warning(
-                "error on query - retry: [%d] - sleeping for [%f]ms - error: [%s]",
+                "error on query - retry: [%d] - sleeping for [%f]s - error: [%s]",
                 retries,
                 sleep_time,
                 error,

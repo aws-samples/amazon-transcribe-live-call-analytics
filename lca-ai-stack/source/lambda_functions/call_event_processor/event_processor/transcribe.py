@@ -524,13 +524,17 @@ async def get_call_aggregation_tasks(
     )
 
     tasks = []
+
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
     tasks.append(
         execute_gql_query_with_retries(
             query,
             client_session=appsync_session,
             logger=LOGGER,
+            should_ignore_exception_fn=ignore_exception_fn,
         ),
-    )  
+    )
 
     return tasks
 
@@ -557,10 +561,15 @@ async def execute_update_call_aggregation_mutation(
         )
     )
 
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
+    
     result = await execute_gql_query_with_retries(
         query,
         client_session=appsync_session,
         logger=LOGGER,
+        should_ignore_exception_fn=ignore_exception_fn,
+
     )
 
     query_string = print_ast(query)
