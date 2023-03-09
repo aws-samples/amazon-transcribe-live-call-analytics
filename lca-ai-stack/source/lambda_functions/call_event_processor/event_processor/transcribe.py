@@ -487,6 +487,7 @@ async def get_aggregate_call_data(
         appsync_session=appsync_session
     ) 
     
+    updated_at = message.get("UpdatedAt", datetime.utcnow().astimezone().isoformat())
     event_type = message.get("EventType", "")
     if event_type == "END":
         call_aggregation: Dict[str, object] = {
@@ -497,7 +498,8 @@ async def get_aggregate_call_data(
         call_aggregation: Dict[str, object] = {
             "CallId": call_id,
             "TotalConversationDurationMillis": total_duration,
-            "Sentiment": sentiment
+            "Sentiment": sentiment,
+            "UpdatedAt": updated_at
         }
 
     return call_aggregation

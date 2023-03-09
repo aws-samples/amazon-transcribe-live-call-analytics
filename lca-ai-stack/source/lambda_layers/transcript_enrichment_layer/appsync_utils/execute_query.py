@@ -60,6 +60,11 @@ async def execute_gql_query_with_retries(
                 extra=dict(query=query_string),
             )
             result = await client_session.execute(query)
+            logger.debug(
+                "query document retry: [%d] result - ",
+                retries,
+                extra=dict(result=result),
+            )
             break
         except Exception as error:  # pylint: disable=broad-except
             if retries >= max_retries:
