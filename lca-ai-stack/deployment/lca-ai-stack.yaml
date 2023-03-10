@@ -887,7 +887,7 @@ Resources:
             ParallelizationFactor: 10
             # XXX MaximumRecordAgeInSeconds: 900
             StartingPosition: LATEST
-            Stream: !GetAtt DatatreamConsumer.ConsumerARN
+            Stream: !GetAtt DataStreamConsumer.ConsumerARN
             # Tumbling Window is used for aggregations over different invocations
             # https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-windows
             TumblingWindowInSeconds: 0
