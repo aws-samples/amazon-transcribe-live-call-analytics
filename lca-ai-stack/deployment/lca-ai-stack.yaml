@@ -1087,8 +1087,8 @@ Resources:
     Type:  AWS::AppSync::ApiCache 
     Properties: 
       ApiId: !GetAtt AppSyncApi.ApiId
-      Type: R4_4XLARGE
-      ApiCachingBehavior: FULL_REQUEST_CACHING 
+      Type: R4_LARGE
+      ApiCachingBehavior: PER_RESOLVER_CACHING 
       Ttl: 30
       TransitEncryptionEnabled: false
       AtRestEncryptionEnabled: false
