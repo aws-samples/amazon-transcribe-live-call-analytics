@@ -99,6 +99,10 @@ Parameters:
     Type: String
   IsSentimentAnalysisEnabled:
     Type: String
+  SentimentNegativeScoreThreshold:
+    Type: String
+  SentimentPositiveScoreThreshold:
+    Type: String
   TranscriptLambdaHookFunctionArn:
     Type: String
   TranscriptLambdaHookFunctionNonPartialOnly:
