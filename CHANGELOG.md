@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update Agent Assist QnAbot version to v5.3.0 with [optional semantic search](https://github.com/aws-solutions/qnabot-on-aws/blob/main/docs/semantic_matching_using_LLM_embeddings/README.md) support for FAQs.
 ### Changed
 - Improved performance and scalability changes (tested to 300 concurrent calls):
-  - Refactor call aggregate logic to make call event processor fully stateless- removed dependency on Kinesis tumbling window to enable multiple concurrent inocations per shard.
+  - Refactor call aggregate logic to make call event processor fully stateless - removed dependency on Kinesis tumbling window to enable multiple concurrent inocations per shard.
   - enable AppSync resolver caching to enable fast/efficient call state queries from call event processor.
   - enable Kinesis Enhanced Fan Out to reduce message read latency.
   - increase call event processor Lambda memory to 5120M to reduce start time and enable greater message handling concurrency in each invocation.
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - retries for Start Transcription Stream if exceptions thrown, to allow improved tolearnace for call bursts resukting in temporary TPS limit exceeded errors.
 - Fix issue with START_CALL_PROCESSING event rule ( introduced in 0.7.0 with the multiple LCA stack fix). 
 - Fix issue introduced in 0.7.0 preventing invocation of custom transcript processing Lambda Hook function
-- Miscallaneous improvements to test scripts - see [README](./lca-chimevc-stack/asterisk-test-scripts/README.md)
+- Miscellaneous improvements to test scripts - see [README](./lca-chimevc-stack/asterisk-test-scripts/README.md)
 - Additional minor fixes - see commit history
 
 
