@@ -22,7 +22,6 @@ from appsync_utils import AppsyncAioGqlClient
 from transcript_batch_processor import TranscriptBatchProcessor
 
 # local imports
-from state_manager import TranscriptStateManager
 from event_processor import execute_process_contact_lens_event_api_mutation
 from event_processor import execute_process_transcribe_event_api_mutation
 
@@ -112,30 +111,6 @@ SETTINGS = json.loads(setting_response["Parameter"]["Value"])
 if "CategoryAlertRegex" in SETTINGS:
     SETTINGS['AlertRegEx'] = re.compile(SETTINGS["CategoryAlertRegex"])
 
-
-async def update_state(event, event_processor_results) -> Dict[str, object]:
-    """Updates the Lambda Tumbling Window State"""
-    outgoing_state = event.get("state", {})
-    async with TranscriptStateManager(
-        event=event,
-        appsync_client=APPSYNC_CLIENT,
-        dynamodb_table=STATE_DYNAMODB_TABLE,
-    ) as state_manager:
-        for result in event_processor_results.get("successes", []):
-            LOGGER.debug("event_processor result", extra=dict(result=result))
-            # each result contains nested "successes" and "errors"
-            # XXX refactor nested format to avoid confusion with event processor
-            for item in result.get("successes", []):
-                LOGGER.debug("event_processor item", extra=dict(result=result))
-                if item:
-                    updated_state = state_manager.update_state(input_item=item)
-                    LOGGER.debug("updated state", extra=dict(updated_state=updated_state))
-
-        outgoing_state = state_manager.state
-
-    return outgoing_state
-
-
 async def process_event(event) -> Dict[str, List]:
     """Processes a Batch of Transcript Records"""
     async with TranscriptBatchProcessor(
@@ -180,15 +155,4 @@ def handler(event, context: LambdaContext):
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("event processor exception")
 
-    # Lambda tumbling window state
-    outgoing_state = EVENT_LOOP.run_until_complete(
-        update_state(event=event, event_processor_results=event_processor_results),
-    )
-
-    # XXX set results metrics
-
-    incoming_state = event.get("state", {})  # type: ignore
-    LOGGER.debug("state", extra=dict(incoming_state=incoming_state, outgoing_state=outgoing_state))
-
-    # XXX add failures to return value
-    return {"state": outgoing_state}
+    return 

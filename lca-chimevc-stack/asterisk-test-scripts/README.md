@@ -1,6 +1,10 @@
 # Testing tools for Live Call Analytics - ChimeVC
 
-These scripts will let you run a short test call (`call_test.sh`), a long test call (`call_2hr_test.sh`), and multiple concurrent calls (`conc_call_test.sh`). These are meant to be run on the ChimeVC Asterisk EC2 instance that is preinstalled with Live Call Analytics.
+These scripts will let you run a short test call (`call_test.sh`), a long test call (`call_2hr_test.sh`), and multiple concurrent calls (`conc_call_test.sh`).  
+
+It's simplest to these scripts on the ChimeVC Asterisk EC2 instance that is preinstalled with Live Call Analytics. 
+
+You can also run them on a standalone server, however, you will need to configure your network security group to allow traffic (copy the Asterisk security group), and also modify the list of IP CIDRS allowed to register with the Chime VoicevConnector. 
 
 ## Steps
 
@@ -29,13 +33,18 @@ popd
 
 ### Download files to root folder of Asterisk EC2 instance
 
-1. Unzip and copy the recordings from the /recordings folder to into `/root/recordings/`.
-2. Copy `call_2hr_test.sh`, `call_test.sh`, and `conc_call_test.sh` into `/root`
-3. Copy all the recordings also into `/var/lib/asterisk/sounds/en/`
+Get the scripts and recording by cloning the LCA repo
+```shell
+git clone https://github.com/aws-samples/amazon-transcribe-live-call-analytics.git
+```
 
-### Edit the shell scripts
+### Edit the variables in common.sh
 
-Edit the .sh files with your favoite text editor.
+Go to the scripts directory:
+```shell
+cd ./lca-chimevc-stack/asterisk-test-scripts
+```
+Edit the common.sh file with your favoite text editor.
 
 Change the top three environment variables with the values from LCA:
 
@@ -52,6 +61,8 @@ AGENT_PHONE_NUMBER='+1618CCCDDDD'
 
 ### Run the scripts
 
-You can run any of the three scripts once they are edited to simulate phone calls. Do this by typing:
+Run any of the three scripts once they are edited to simulate phone calls. Do this by typing:
 
-`./call_test.sh` and pressing enter.
+`sh ./call_test.sh`
+OR
+`sh ./conc_call_test.sh 20` to run 20 concurrent calls

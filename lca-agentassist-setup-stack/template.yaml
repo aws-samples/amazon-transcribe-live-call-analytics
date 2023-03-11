@@ -67,8 +67,24 @@ Parameters:
     Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
     Description: >-
       Comma separated list of public web sites to crawl automatically - for Agent assist demo
+  
+  AgentAssistQnABotEmbeddingsApi:
+    Type: String
+    Description: Optionally enable QnABot Semantics Search using Embeddings
+      from a pre-trained Large Language Model. If set to SAGEMAKER, an ml.m5.xlarge
+      Sagemaker endpoint is automatically provisioned with Hugging Face e5-large model.
+      To use a custom LAMBDA function, provide additional parameters below.
+    AllowedValues:
+      - DISABLED
+      - SAGEMAKER
+      - LAMBDA
+    Default: SAGEMAKER
 
   # Changes to Params below force AgentAssist Setup to update.
+  CallAudioSource:
+    Type: String
+  ComprehendLanguageCode:
+    Type: String
   AgentAssistOption:
     Type: String
   AgentAssistExistingKendraIndexId:
@@ -83,11 +99,21 @@ Parameters:
     Type: String
   IsSentimentAnalysisEnabled:
     Type: String
+  SentimentNegativeScoreThreshold:
+    Type: String
+  SentimentPositiveScoreThreshold:
+    Type: String
   TranscriptLambdaHookFunctionArn:
     Type: String
   TranscriptLambdaHookFunctionNonPartialOnly:
     Type: String
   DynamoDbExpirationInDays:
+    Type: String
+  EndOfCallTranscriptSummary:
+    Type: String
+  SummarizationSageMakerInitialInstanceCount:
+    Type: String
+  EndOfCallLambdaHookFunctionArn:
     Type: String
 
 Conditions:
@@ -226,16 +252,18 @@ Resources:
             print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
 
           def setupQnABot(props, oldprops):
-            if propsChanged(props, oldprops, ["QNABOTSTACK", "KendraIndexId", "QnaAgentAssistDemoWebCrawlURLs"]):
-              configureQnabotSettings(props)
-            else:
-              print("Kendra info unchanged - skipping QnABot settings update.")
+            configureQnabotSettings(props)
             if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoJson"]):
               loadQnABotSamplePackage(props)
               buildQnABotLexBot(props)
-              syncQnABotSamplePackageToKendra(props)
             else:
               print("QnaBot demo data unchanged - skipping QnABot sample data update.")
+            if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoJson", "AgentAssistQnABotEmbeddingsApi"]):
+                if props["AgentAssistQnABotEmbeddingsApi"] == "DISABLED":
+                  # Stack configured to not use embeddings - sync FAQs to Kendra
+                  syncQnABotSamplePackageToKendra(props)
+                else:
+                  print("QnABot stack configured to use embeddings - skipping Kendra FAQ sync")
             if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoWebCrawlURLs"]):
               if props["QnaAgentAssistDemoWebCrawlURLs"]:
                 startKendraCrawler(props)
@@ -247,8 +275,14 @@ Resources:
             value = ssm.get_parameter(Name=ssmParamName)
             settings = json.loads(value["Parameter"]["Value"])
             # modify settings
+            # Enable Kendra Fallback
             settings["ALT_SEARCH_KENDRA_INDEXES"] = props["KendraIndexId"]
-            settings["KENDRA_FAQ_INDEX"] = props["KendraIndexId"]
+            if props["AgentAssistQnABotEmbeddingsApi"] == "DISABLED":
+              # Embeddings disabled.. Use Kendra FAQ instead
+              settings["KENDRA_FAQ_INDEX"] = props["KendraIndexId"]
+            else:
+              # Embeddings enabled - disable Kendra FAQ
+              settings["KENDRA_FAQ_INDEX"] = ""
             settings["ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE"] = "HIGH"
             settings["KENDRA_FAQ_ES_FALLBACK"] = "false"
             settings["ALT_SEARCH_KENDRA_ANSWER_MESSAGE"] = "Amazon Kendra suggestions."
@@ -260,6 +294,8 @@ Resources:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "true"
             else:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
+            # Set embedding distance score threshold
+            settings["EMBEDDINGS_SCORE_THRESHOLD"] = "0.90"
             # save back to SSM
             response = ssm.put_parameter(
               Name=ssmParamName,
@@ -383,7 +419,10 @@ Resources:
       KendraIndexId: !Ref KendraIndexId
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
+      AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
       # Changes to Params below force AgentAssist Setup to execute.
+      CallAudioSource: !Ref CallAudioSource
+      ComprehendLanguageCode: !Ref ComprehendLanguageCode
       AgentAssistOption: !Ref AgentAssistOption
       AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
       AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
@@ -394,6 +433,9 @@ Resources:
       TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
       TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
       DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+      EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+      SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+      EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 

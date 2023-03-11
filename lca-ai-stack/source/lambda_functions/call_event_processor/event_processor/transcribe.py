@@ -4,8 +4,9 @@
 """
 import asyncio
 from datetime import datetime
+from statistics import fmean
 from os import getenv
-from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional, TypedDict
 import uuid
 import json
 
@@ -14,7 +15,7 @@ import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
-from gql.dsl import DSLMutation, DSLSchema, dsl_gql
+from gql.dsl import DSLMutation, DSLSchema, dsl_gql, DSLQuery
 from graphql.language.printer import print_ast
 
 # custom utils/helpers imports from Lambda layer
@@ -61,11 +62,12 @@ CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
-ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN = getenv("ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN", "")
+ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN = getenv("ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN", "")
+IS_TRANSCRIPT_SUMMARY_ENABLED = getenv("IS_TRANSCRIPT_SUMMARY_ENABLED", "false").lower() == "true"
 
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
     "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
-if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN:
+if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN:
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
@@ -93,6 +95,49 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
+
+SentimentLabelType = Literal["NEGATIVE", "MIXED", "NEUTRAL", "POSITIVE"]
+ChannelType = Literal["AGENT", "CALLER"]
+StatusType = Literal["STARTED", "TRANSCRIBING", "ERRORED", "ENDED"]
+SentimentPeriodType = Literal["QUARTER"]
+
+class SentimentEntry(TypedDict):
+    """Sentiment Shape
+    Held in a list per channel
+    """
+    Id: str
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Sentiment: SentimentLabelType
+    Score: float
+
+class SentimentEntry(TypedDict):
+    """Sentiment Shape
+    Held in a list per channel
+    """
+    Id: str
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Sentiment: SentimentLabelType
+    Score: float
+class SentimentPerChannel(TypedDict):
+    """StatePerChannel Shape
+    Holds state per channel under StatePerCallId. Use to keep values needed
+    for statistics and aggregations.
+    """
+
+    SentimentList: List[SentimentEntry]
+
+class SentimentByPeriodEntry(TypedDict):
+    """Sentiment By Period Shape"""
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Score: float
+
+class Sentiment(TypedDict):
+    """Sentiment Shape"""
+    OverallSentiment: Dict[ChannelType, float]
+    SentimentByPeriod: Dict[SentimentPeriodType, Dict[ChannelType, List[SentimentByPeriodEntry]]]
 
 ##########################################################################
 # Transcripts
@@ -205,10 +250,13 @@ async def execute_create_call_mutation(
         )
     )
 
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
     result = await execute_gql_query_with_retries(
         query,
         client_session=appsync_session,
         logger=LOGGER,
+        should_ignore_exception_fn=ignore_exception_fn,
     )
 
     query_string = print_ast(query)
@@ -253,6 +301,284 @@ async def execute_update_call_status_mutation(
 
     return result
 
+async def execute_get_transcript_segments_query(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    # get_transcript_segments_input = {
+    #     "CallId": call_id
+    # }
+    query = dsl_gql(
+        DSLQuery(
+            schema.Query.getTranscriptSegmentsWithSentiment.args(callId=call_id).select(
+                schema.TranscriptSegmentsWithSentimentList.TranscriptSegmentsWithSentiment.select(
+                    schema.TranscriptSegmentWithSentiment.PK,
+                    schema.TranscriptSegmentWithSentiment.SK,
+                    schema.TranscriptSegmentWithSentiment.CallId,
+                    schema.TranscriptSegmentWithSentiment.Channel,
+                    schema.TranscriptSegmentWithSentiment.SegmentId,
+                    schema.TranscriptSegmentWithSentiment.StartTime,
+                    schema.TranscriptSegmentWithSentiment.EndTime,
+                    schema.TranscriptSegmentWithSentiment.Sentiment,
+                    schema.TranscriptSegmentWithSentiment.SentimentWeighted,
+                )
+            )
+        )
+    )
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("get transcript segments result", extra=dict(query=query_string, result=result))
+
+    return result
+
+def _get_sentiment_per_quarter(
+    sentiment_list: List[SentimentEntry],
+) -> List[SentimentByPeriodEntry]:
+    sorted_sentiment = sorted(sentiment_list, key=lambda i: i["BeginOffsetMillis"])
+    min_begin_time: float = (
+        min(
+            sorted_sentiment,
+            key=lambda i: i["BeginOffsetMillis"],
+        ).get("BeginOffsetMillis", 0.0)
+        if sorted_sentiment
+        else 0.0
+    )
+    max_end_time: float = (
+        max(sorted_sentiment, key=lambda i: i["EndOffsetMillis"]).get("EndOffsetMillis", 0.0)
+        if sorted_sentiment
+        else 0.0
+    )
+    time_range: float = max_end_time - min_begin_time
+    time_ranges = (
+        (
+            max((min_begin_time + time_range * i / 4), min_begin_time),
+            min((min_begin_time + time_range * (i + 1) / 4), max_end_time),
+        )
+        for i in range(4)
+    )
+    quarters = (
+        [
+            s
+            for s in sorted_sentiment
+            if s["EndOffsetMillis"] > time_range[0] and s["EndOffsetMillis"] <= time_range[1]
+        ]
+        for time_range in time_ranges
+    )
+    sentiment_per_quarter = [
+        SentimentByPeriodEntry(
+            {
+                "Score": fmean((i["Score"] for i in quarter)) if quarter else 0,
+                "BeginOffsetMillis": (
+                    min((i["BeginOffsetMillis"] for i in quarter)) if quarter else 0
+                ),
+                "EndOffsetMillis": (
+                    max((i["EndOffsetMillis"] for i in quarter)) if quarter else 0
+                ),
+            }
+        )
+        for quarter in quarters
+    ]
+
+    return sentiment_per_quarter
+
+async def get_aggregated_sentiment(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+    
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+ 
+    result = await execute_get_transcript_segments_query(
+        message=message,
+        appsync_session=appsync_session
+    )
+ 
+    sentiment_entry_list_by_channel: Dict[ChannelType, SentimentPerChannel] = {}
+
+    for segment in result.get("getTranscriptSegmentsWithSentiment").get("TranscriptSegmentsWithSentiment"):
+        channel = segment.get("Channel", None)
+        if channel and channel in ["AGENT", "CALLER"] :
+            if segment.get("SentimentWeighted", None):
+                LOGGER.debug("Aggregating sentiment entry", extra=segment)
+                sentiment_entry : SentimentEntry = {
+                    "Id" : segment["SegmentId"],
+                    "BeginOffsetMillis": segment["StartTime"] * 1000,
+                    "EndOffsetMillis": segment["EndTime"] * 1000,
+                    "Sentiment": segment["Sentiment"],
+                    "Score": segment["SentimentWeighted"]
+                }
+                if channel in sentiment_entry_list_by_channel:
+                    tmp = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
+                    tmp.append(sentiment_entry)
+                    sentiment_list_obj = {
+                        "SentimentList": tmp
+                    }
+                else:
+                    sentiment_list_obj = {
+                        "SentimentList": [sentiment_entry]
+                    }
+
+                sentiment_entry_list_by_channel[channel] = sentiment_list_obj
+                
+    aggregated_sentiment:Sentiment = {}
+    overall_sentiment:Dict[ChannelType, float] = {}
+    sentiment_by_period_by_channel:Dict[ChannelType, List[SentimentByPeriodEntry]] = {}
+    
+    for channel in sentiment_entry_list_by_channel.keys():
+        sentiment_list = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
+        sentiment_scores = [i["Score"] for i in sentiment_list]
+        sentiment_average = fmean(sentiment_scores) if sentiment_scores else 0
+
+        sentiment_per_quarter = (
+            _get_sentiment_per_quarter(sentiment_list) if sentiment_list else []
+        )
+
+        overall_sentiment[channel] = sentiment_average
+        sentiment_by_period_by_channel[channel] = sentiment_per_quarter
+    
+    LOGGER.debug("Overall Sentiment: ", extra=dict(DebugOverallSentiment=overall_sentiment))
+    LOGGER.debug("Sentiment by Period: ", extra=dict(DebugSentimentByPeriod=sentiment_by_period_by_channel))
+        
+    aggregated_sentiment = {
+        "OverallSentiment": overall_sentiment,
+        "SentimentByPeriod": {
+                "QUARTER": sentiment_by_period_by_channel
+            },
+        }
+
+    return aggregated_sentiment
+
+async def get_aggregate_call_data(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+    
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+    
+    total_duration = float(message.get("EndTime", 0.0)) * 1000
+
+    sentiment = await get_aggregated_sentiment(
+        message=message,
+        appsync_session=appsync_session
+    ) 
+    
+    updated_at = message.get("UpdatedAt", datetime.utcnow().astimezone().isoformat())
+    event_type = message.get("EventType", "")
+    if event_type == "END":
+        call_aggregation: Dict[str, object] = {
+            "CallId": call_id,
+            "Sentiment": sentiment
+        }
+    else:
+        call_aggregation: Dict[str, object] = {
+            "CallId": call_id,
+            "TotalConversationDurationMillis": total_duration,
+            "Sentiment": sentiment,
+            "UpdatedAt": updated_at
+        }
+
+    return call_aggregation
+    
+async def get_call_aggregation_tasks(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+
+    call_aggregation = await get_aggregate_call_data(
+        message=message,
+        appsync_session=appsync_session
+    )
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateCallAggregation.args(
+                input=call_aggregation
+            ).select(*call_fields(schema))
+        )
+    )
+
+    tasks = []
+
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
+    tasks.append(
+        execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+            should_ignore_exception_fn=ignore_exception_fn,
+        ),
+    )
+
+    return tasks
+
+
+async def execute_update_call_aggregation_mutation(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_aggregation = await get_aggregate_call_data(
+        message=message,
+        appsync_session=appsync_session
+    )
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateCallAggregation.args(
+                input=call_aggregation
+            ).select(*call_fields(schema))
+        )
+    )
+
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
+    
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+        should_ignore_exception_fn=ignore_exception_fn,
+
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug(
+        "transcript aggregation mutation", extra=dict(query=query_string, result=result)
+    )
+    return result
 
 async def execute_add_s3_recording_mutation(
     message: Dict[str, Any],
@@ -327,17 +653,15 @@ async def execute_add_call_category_mutation(
     appsync_session: AppsyncAsyncClientSession,
 ) -> Dict:
 
-    category = message["CategoryEvent"]["MatchedCategories"][0]
-    if not category:
-        error_message = "Category does not exist in ADD_CALL_CATEGORY event"
-        raise TypeError(error_message)
-
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
-    categories = []
-    categories.append(category)
+    categories = message["CategoryEvent"]["MatchedCategories"]
+    if (len(categories) == 0):
+        error_message = "No MatchedCategories in ADD_CALL_CATEGORY event"
+        raise TypeError(error_message)
+
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addCallCategory.args(
@@ -411,6 +735,7 @@ async def execute_add_call_summary_text_mutation(
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
+    
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.addCallSummaryText.args(
@@ -529,41 +854,47 @@ def add_call_category(
     # pylint: disable=too-many-locals
     LOGGER.debug("Detected Call Category")
 
-    category = message["CategoryEvent"]["MatchedCategories"][0]
-    start_time = message["CategoryEvent"]["MatchedDetails"][category]["TimestampRanges"][0]["EndOffsetMillis"]/1000
-    end_time = start_time + 0.1
-    send_call_category_args = []
-
-    send_call_category_args.append(
-        dict(
-            category=category,
-            transcript_segment_args=dict(
-                CallId=message["CallId"],
-                Channel="CATEGORY_MATCH",
-                CreatedAt=message["CreatedAt"],
-                EndTime=end_time,
-                ExpiresAfter=get_ttl(),
-                SegmentId=str(uuid.uuid4()),
-                StartTime=start_time,
-                IsPartial=False,
-                Status="TRANSCRIBING",
-            ),
-        )
-    )
-
     tasks = []
-    for call_category_args in send_call_category_args:
-        task = send_call_category(
-            appsync_session=appsync_session,
-            **call_category_args,
-        )
-        tasks.append(task)
+    for category in message["CategoryEvent"]["MatchedCategories"]:
+        # Publish SNS message for the category
         sns_task = publish_sns_category(
             sns_client=sns_client,
             category_name=category,
             call_id=message["CallId"]
         )
         tasks.append(sns_task)
+        # Insert Category marker into transcript, if timestamps are provided in the event.
+        try:
+            timestampRanges = message["CategoryEvent"]["MatchedDetails"][category]["TimestampRanges"]
+        except KeyError:
+            LOGGER.debug("Category: %s has no TimestampRanges. Skip transcript insertion.", category)
+            continue
+        for timestampRange in timestampRanges:
+            start_time = timestampRange["EndOffsetMillis"]/1000
+            end_time = start_time + 0.1
+            send_call_category_args = []
+            send_call_category_args.append(
+                dict(
+                    category=category,
+                    transcript_segment_args=dict(
+                        CallId=message["CallId"],
+                        Channel="CATEGORY_MATCH",
+                        CreatedAt=message["CreatedAt"],
+                        EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
+                        SegmentId=str(uuid.uuid4()),
+                        StartTime=start_time,
+                        IsPartial=False,
+                        Status="TRANSCRIBING",
+                    ),
+                )
+            )
+            for call_category_args in send_call_category_args:
+                task = send_call_category(
+                    appsync_session=appsync_session,
+                    **call_category_args,
+                )
+                tasks.append(task)
 
     return tasks
 
@@ -851,31 +1182,6 @@ def invoke_transcript_lambda_hook(
 
 
 ##########################################################################
-# End of Call Lambda Hook
-# User provided function 
-##########################################################################
-
-def invoke_end_of_call_lambda_hook(
-    message: Dict[str, Any]
-):
-    LOGGER.debug("End of Call Lambda Hook Arn: %s", ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN)
-    LOGGER.debug("End of Call Lambda Hook Request: %s", message)
-    lambda_response = LAMBDA_HOOK_CLIENT.invoke(
-        FunctionName=ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN,
-        InvocationType='RequestResponse',
-        Payload=json.dumps(message)
-    )
-    LOGGER.debug("End of Call Lambda Hook Response: ", extra=lambda_response)
-    try:
-        message = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
-    except Exception as error:
-        LOGGER.error(
-            "End of Call Lambda Hook result payload parsing exception. Lambda must return JSON object with (modified) input event fields",
-            extra=error,
-        )
-    return message
-
-##########################################################################
 # Main event processing
 ##########################################################################
 
@@ -937,23 +1243,43 @@ async def execute_process_event_api_mutation(
     elif event_type in [
         "END",
     ]:
-        LOGGER.debug("update status")
+        LOGGER.debug("END Event: update status")
         response = await execute_update_call_status_mutation(
             message=message,
             appsync_session=appsync_session
         )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
         
-        # UPDATE STATUS
-        if (ENDOFCALL_LAMBDA_HOOK_FUNCTION_ARN):
-            call_summary = invoke_end_of_call_lambda_hook(message)
-            LOGGER.debug("Call summary: ")
-            LOGGER.debug(call_summary)
-            message['CallSummaryText'] = call_summary['summary']
-            response = await execute_add_call_summary_text_mutation(
-                message=message,
-                appsync_session=appsync_session
+        if (IS_TRANSCRIPT_SUMMARY_ENABLED):
+            LAMBDA_HOOK_CLIENT.invoke(
+                FunctionName=ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN,
+                InvocationType='Event',
+                Payload=json.dumps(message)
             )
+            LOGGER.debug("END Event: Invoked Async Transcript Summary Lambda")
+      
+
+        response = await execute_update_call_aggregation_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
         
+
+    elif event_type == "ADD_SUMMARY":
+
+        LOGGER.debug("ADD_SUMMARY MUTATION ")
+        response = await execute_add_call_summary_text_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
+ 
         if isinstance(response, Exception):
             return_value["errors"].append(response)
         else:
@@ -981,7 +1307,7 @@ async def execute_process_event_api_mutation(
         }
 
         if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
-            message = invoke_transcript_lambda_hook(message)
+            normalized_message = invoke_transcript_lambda_hook(normalized_message)
 
         issues_detected = normalized_message.get("IssuesDetected", None)
         if issues_detected and len(issues_detected) > 0:
@@ -995,18 +1321,20 @@ async def execute_process_event_api_mutation(
             else:
                 return_value["successes"].append(response)
 
-        LOGGER.debug("Add Transcript Segment")
-        add_transcript_tasks = add_transcript_segments(
-            message=normalized_message,
-            appsync_session=appsync_session,
-        )
 
+        add_transcript_tasks = []
         add_transcript_sentiment_tasks = []
         if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
-            LOGGER.debug("Add Sentiment Analysis")
+            LOGGER.debug("Add Transcript Segment with Sentiment Analysis")
             add_transcript_sentiment_tasks = add_transcript_sentiment_analysis(
                 message=normalized_message,
                 sentiment_analysis_args=sentiment_analysis_args,
+                appsync_session=appsync_session,
+            )
+        else:
+            LOGGER.debug("Add Transcript Segment")
+            add_transcript_tasks = add_transcript_segments(
+                message=normalized_message,
                 appsync_session=appsync_session,
             )
 
@@ -1024,11 +1352,19 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
             )
 
+        update_call_aggregation_tasks = []
+        if not normalized_message["IsPartial"]:
+            update_call_aggregation_tasks = await get_call_aggregation_tasks(
+                message=normalized_message,
+                appsync_session=appsync_session,
+            )
+
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
             *add_lex_agent_assists_tasks,
             *add_lambda_agent_assists_tasks,
+            *update_call_aggregation_tasks,
             # *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )

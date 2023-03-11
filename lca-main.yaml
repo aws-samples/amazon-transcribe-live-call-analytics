@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.7.0) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.7.1) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -80,7 +80,8 @@ Parameters:
     Description: >
       Choose to enable optional Agent Assist capability, powered by a nested QnABot stack, or your own LexV2 bot. 
       QnABot uses Amazon Lex and Amazon Kendra to provide real time agent assist messages based on intents, slots,
-      FAQs, and general search index that you configure using the included ContentDesigner UI.
+      FAQs, and general search index that you configure using the included ContentDesigner UI. Now QnABot also uses 
+      text embeddings to provide additional options for matching FAQs - accept the defaults below, or customize and experiment.
 
   AgentAssistExistingKendraIndexId:
     Default: ''
@@ -113,6 +114,35 @@ Parameters:
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
       Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
+  
+  # Options for QnABot Embeddings
+  AgentAssistQnABotItemMatchingApi:
+    Type: String
+    Description: Method used by QnABot for semantic matching of caller utterances to stored agent assist configuration items and FAQs.
+    AllowedValues:
+      - KENDRA FAQ
+      - EMBEDDINGS SAGEMAKER
+      - EMBEDDINGS LAMBDA
+    Default: KENDRA FAQ
+  AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
+    Type: Number
+    MinValue: 0
+    Description: 'Optional: If Item Matching Api is EMBEDDINGS SAGEMAKER, provide initial instance
+      count (ml.m5.xlarge). Set to ''0'' to enable Serverless Inference (for cold-start delay tolerant
+      deployments only).'
+    Default: 1
+  AgentAssistQnABotEmbeddingsLambdaArn:
+    Type: String
+    AllowedPattern: ^(|arn:aws:lambda:.*)$
+    Description: 'Optional: If Item Matching Api is LAMBDA, provide ARN for a Lambda function
+      that takes JSON {"inputtext":"string"}, and returns JSON {"embedding":[...]}'
+    Default: ''
+  AgentAssistQnABotEmbeddingsLambdaDimensions:
+    Type: Number
+    MinValue: 1
+    Description: 'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
+      for embeddings returned by the EmbeddingsLambda function specified above.'
+    Default: 4096
 
   S3BucketName:
     Type: String
@@ -228,6 +258,24 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+  
+  SentimentNegativeScoreThreshold:
+    Type: Number
+    Default: 0.9
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. 
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+
+  SentimentPositiveScoreThreshold:
+    Type: Number
+    Default: 0.4
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1.
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated). 
 
   TranscriptLambdaHookFunctionArn:
     Default: ''
@@ -388,6 +436,10 @@ Metadata:
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
+          - AgentAssistQnABotItemMatchingApi
+          - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
+          - AgentAssistQnABotEmbeddingsLambdaArn
+          - AgentAssistQnABotEmbeddingsLambdaDimensions
       - Label:
           default: Amazon S3 Configuration
         Parameters:
@@ -409,6 +461,8 @@ Metadata:
           default: Transcript Event Processing Configuration
         Parameters:
           - IsSentimentAnalysisEnabled
+          - SentimentNegativeScoreThreshold
+          - SentimentPositiveScoreThreshold
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
@@ -472,6 +526,14 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      AgentAssistQnABotItemMatchingApi:
+        default: Agent Assist QnABot Item Matching Api
+      AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
+        default: Agent Assist QnABot Embeddings SageMaker Instance Count
+      AgentAssistQnABotEmbeddingsLambdaArn:
+        default: Agent Assist QnABot Embeddings Lambda Function ARN (existing)
+      AgentAssistQnABotEmbeddingsLambdaDimensions:
+        default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
       TranscribeApiMode:
@@ -494,6 +556,10 @@ Metadata:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
         default: Enable Sentiment Analysis
+      SentimentNegativeScoreThreshold:
+        default: Sentiment Negative Score Threshold
+      SentimentPositiveScoreThreshold:
+        default: Sentiment Positive Score Threshold
       TranscriptLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)
       TranscriptLambdaHookFunctionNonPartialOnly:
@@ -538,6 +604,10 @@ Conditions:
   ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with new Kendra Index (Enterprise Edition)']
   ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
   ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
+  QnABotEmbeddingsApiDisabled: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'KENDRA FAQ']
+  QnABotEmbeddingsApiSageMaker: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS SAGEMAKER']
+  QnABotEmbeddingsApiLambda: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
+
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -620,6 +690,12 @@ Rules:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLambdaFunctionArn, '']]
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
 
+  AgentAssistQnABotEmbeddingsExistingLambdaFunctionArn:
+    RuleCondition: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AgentAssistQnABotEmbeddingsLambdaArn, '']]
+        AssertDescription: AgentAssistQnABotEmbeddingsLambdaArn is required when AgentAssistQnABotItemMatchingApi is 'EMBEDDINGS LAMBDA'
+
 Resources:
 
   # Custom resource to enforce max length of StackName - prevent downstream failures                                             
@@ -688,6 +764,16 @@ Resources:
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
         InstallLexResponseBots: 'false'
+        EmbeddingsApi: !If
+          - QnABotEmbeddingsApiDisabled
+          - 'DISABLED'
+          - !If
+            - QnABotEmbeddingsApiSageMaker
+            - 'SAGEMAKER'
+            - 'LAMBDA'
+        SagemakerInitialInstanceCount: !Ref AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
+        EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
+        EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
@@ -709,6 +795,8 @@ Resources:
             Value,
           ]
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
+        SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         CloudFrontAllowedGeos: !Ref CloudFrontAllowedGeos
         IsLexAgentAssistEnabled: !If
@@ -759,16 +847,36 @@ Resources:
           - !Ref AgentAssistExistingLexV2BotAliasId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
         # Changes to Params below force AgentAssist Setup to update.
+        CallAudioSource: !Ref CallAudioSource
+        ComprehendLanguageCode:
+          !FindInMap [
+            TranscribeToComprehendLanguage,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
         AgentAssistOption: !Ref AgentAssistOption
         AgentAssistExistingKendraIndexId: !Ref AgentAssistExistingKendraIndexId
         AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
         AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+        AgentAssistQnABotEmbeddingsApi: !If
+          - QnABotEmbeddingsApiDisabled
+          - 'DISABLED'
+          - !If
+            - QnABotEmbeddingsApiSageMaker
+            - 'SAGEMAKER'
+            - 'LAMBDA'
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
+        SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
+        SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
+        EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+        SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+        EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
+
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
