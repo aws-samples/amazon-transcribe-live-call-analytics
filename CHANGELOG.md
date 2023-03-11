@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2023-03-11
+### Added
+- Transcribe Call Analytics "POST_CALL" categories now displayed in the LCA UI after call ends when using Transcribe 'analytics' mode.
+- New download buttons on call details page to save call summary or call transript to local Excel file.
+- Add configurable sentiment score thresholds for fine grain control over negative and positive sentiment scoring when using Transcribe 'standard' mode.
+- Update Agent Assist QnAbot version to v5.3.0 with [optional semantic search](https://github.com/aws-solutions/qnabot-on-aws/blob/main/docs/semantic_matching_using_LLM_embeddings/README.md) support for FAQs.
+### Changed
+- Improved performance and scalability changes (tested to 300 concurrent calls):
+  - Refactor call aggregate logic to make call event processor fully stateless- removed dependency on Kinesis tumbling window to enable multiple concurrent inocations per shard.
+  - enable AppSync resolver caching to enable fast/efficient call state queries from call event processor.
+  - enable Kinesis Enhanced Fan Out to reduce message read latency.
+  - increase call event processor Lambda memory to 5120M to reduce start time and enable greater message handling concurrency in each invocation.
+  - avoid multiple mutation retries on 'put item condition failure' - where retries will not resolve the condition and merely extend function duration.
+  - call event processor now invokes transcript summarization asynchronously, avoiding blocking and choking execution concurrency limits.
+  - retries for Start Transcription Stream if exceptions thrown, to allow improved tolearnace for call bursts resukting in temporary TPS limit exceeded errors.
+- Fix issue with START_CALL_PROCESSING event rule ( introduced in 0.7.0 with the multiple LCA stack fix). 
+- Fix issue introduced in 0.7.0 preventing invocation of custom transcript processing Lambda Hook function
+- Miscallaneous improvements to test scripts - see [README](./lca-chimevc-stack/asterisk-test-scripts/README.md)
+- Additional minor fixes - see commit history
+
+
 ## [0.7.0] - 2023-02-12
 ### Added
 - Experimental generative transcript summarization to provide a short paragraph with a synopsis of each completed call; use the built-in summarization model or experiment with custom language models or APIs of your choice. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md).
@@ -176,7 +197,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...develop
+[0.7.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...v0.6.0
 [0.7.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...v0.6.0
 [0.6.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...v0.5.2
 [0.5.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.1...v0.5.2
