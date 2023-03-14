@@ -22,8 +22,7 @@ from transcript_batch_processor import TranscriptBatchProcessor
 
 # local imports
 from state_manager import TranscriptStateManager
-from event_processor import execute_process_contact_lens_event_api_mutation
-from event_processor import execute_process_transcribe_event_api_mutation
+from event_processor import execute_process_event_api_mutation
 
 # pylint: enable=import-error
 
@@ -74,15 +73,6 @@ COMPREHEND_LANGUAGE_CODE = getenv("COMPREHEND_LANGUAGE_CODE", "en")
 SNS_CLIENT:SNSClient = BOTO3_SESSION.client("sns", config=CLIENT_CONFIG)
 SSM_CLIENT:SSMClient = BOTO3_SESSION.client("ssm", config=CLIENT_CONFIG)
 
-CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
-MUTATION_FUNCTION_MAPPING = {
-    "Demo Asterisk PBX Server": execute_process_transcribe_event_api_mutation,
-    "Chime Voice Connector (SIPREC)": execute_process_transcribe_event_api_mutation,
-    "Genesys Cloud Audiohook Web Socket": execute_process_transcribe_event_api_mutation,
-    "Amazon Connect Contact Lens": execute_process_contact_lens_event_api_mutation
-}
-MUTATION_FUNCTION_NAME = MUTATION_FUNCTION_MAPPING.get(CALL_AUDIO_SOURCE)
-
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
 EVENT_LOOP = asyncio.get_event_loop()
@@ -127,7 +117,7 @@ async def process_event(event) -> Dict[str, List]:
             comprehend_language_code=COMPREHEND_LANGUAGE_CODE
         ),
         # called for each record right before the context manager exits
-        api_mutation_fn=MUTATION_FUNCTION_NAME,
+        api_mutation_fn=execute_process_event_api_mutation,
         sns_client=SNS_CLIENT,
         settings=SETTINGS
     ) as processor:

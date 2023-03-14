@@ -28,10 +28,11 @@ from graphql_helpers import (
 from sns_utils import publish_sns
 from lambda_utils import invoke_lambda
 from eventprocessor_utils import (
-    normalize_transcript_segment,
+    normalize_transcript_segments,
     get_ttl,
     transform_segment_to_add_sentiment,
-    transform_segment_to_issues_agent_assist
+    transform_segment_to_issues_agent_assist,
+    transform_segment_to_categories_agent_assist,
 )
 # pylint: enable=import-error
 if TYPE_CHECKING:
@@ -84,6 +85,11 @@ CALL_EVENT_TYPE_TO_STATUS = {
 # DEFAULT_CUSTOMER_PHONE_NUMBER used to replace an invalid CustomerPhoneNumber
 # such as seen from calls originating with Skype ('anonymous')
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
+DEFAULT_SYSTEM_PHONE_NUMBER = getenv("DEFAULT_SYSTEM_PHONE_NUMBER", "+18005551111")
+CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv(
+    "CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
+CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv(
+    "CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
 
 ##########################################################################
 # Transcripts
@@ -429,6 +435,9 @@ async def execute_add_agent_assist_mutation(
         )
     )
 
+    LOGGER.debug("Executing QUERY: %s", query)
+
+
     result = await execute_gql_query_with_retries(
         query,
         client_session=appsync_session,
@@ -579,6 +588,70 @@ def add_call_category(
 
     return tasks
 
+def add_contact_lens_call_category(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+    sns_client: SNSClient
+) -> List[Coroutine]:
+    """Add Categories GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    LOGGER.debug("Detected Call Category")
+    send_call_category_args = []
+    tasks = []
+    call_id = message["ContactId"]
+
+    for segment in message.get("Segments", []):
+        # only handle categories and transcripts with issues
+        if (
+            "Transcript" in segment and not segment["Transcript"].get("IssuesDetected")
+        ) and "Categories" not in segment:
+            continue
+
+        categories = segment.get("Categories", {})
+        for category in categories.get("MatchedCategories", []):
+            category_details = categories["MatchedDetails"][category]
+            category_segment = transform_segment_to_categories_agent_assist(
+                category=category,
+                category_details=category_details,
+                call_id=call_id,
+            )
+
+            end_time = category_segment['StartTime'] + 0.1
+
+            send_call_category_args.append(
+                dict(
+                    category=category_segment['Transcript'],
+                    transcript_segment_args=dict(
+                        CallId=message["CallId"],
+                        Channel="CATEGORY_MATCH",
+                        CreatedAt=category_segment["CreatedAt"],
+                        EndTime=end_time,
+                        ExpiresAfter=get_ttl(),
+                        SegmentId=str(uuid.uuid4()),
+                        StartTime=category_segment['StartTime'],
+                        IsPartial=category_segment['IsPartial'],
+                        Status="TRANSCRIBING",
+                    ),
+                )
+            )
+
+    for call_category_args in send_call_category_args:
+        task = send_call_category(
+            appsync_session=appsync_session,
+            **call_category_args,
+        )
+        tasks.append(task)
+        sns_task = publish_sns_category(
+            sns_client=sns_client,
+            category_name=category,
+            call_id=message["CallId"]
+        )
+        tasks.append(sns_task)
+
+    return tasks
+
+
+
 ##########################################################################
 # Transcript Lambda Hook
 # User provided function should return a copy of the input event with
@@ -610,6 +683,170 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
+async def update_call_status(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict[Literal["successes", "errors"], List]:
+    """Add Transcript Segment GraphQL Mutation"""
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    status = {
+        **transform_message_to_call_status(message),
+    }
+    event_type = message.get("EventType")
+
+    return_value: Dict[Literal["successes", "errors"], List] = {
+        "successes": [],
+        "errors": [],
+    }
+
+    if event_type == "START":
+        LOGGER.debug("CREATE CALL")
+        query = dsl_gql(
+            DSLMutation(
+                schema.Mutation.createCall.args(input=status).select(schema.CreateCallOutput.CallId)
+            )
+        )
+    else:
+        query = dsl_gql(
+            DSLMutation(
+                schema.Mutation.updateCallStatus.args(input=status).select(*call_fields(schema))
+            )
+        )
+
+    try:
+        response = await execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+        )
+        query_string = print_ast(query)
+        LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
+        return_value["successes"].append(response)
+    except Exception as error:  # pylint: disable=broad-except
+        return_value["errors"].append(error)
+
+    return return_value
+
+def get_caller_and_system_phone_numbers_from_connect(instanceId, contactId):
+    client = boto3.client('connect')
+    response = client.get_contact_attributes(
+        InstanceId=instanceId,
+        InitialContactId=contactId
+    )
+    # Try to retrieve customer phone number from contact attribute
+    customer_phone_number = response["Attributes"].get(CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER)
+    if not customer_phone_number:
+        LOGGER.warning(
+            f"Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER}'. Reverting to default.")
+        customer_phone_number = DEFAULT_CUSTOMER_PHONE_NUMBER
+    # Try to retrieve system phone number from contact attribute: "LCA System Phone Number"
+    system_phone_number = response["Attributes"].get(CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER)
+    if not system_phone_number:
+        LOGGER.warning(
+            "Unable to retrieve contact attribute: '{CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER}'. Reverting to default.")
+        system_phone_number = DEFAULT_SYSTEM_PHONE_NUMBER
+    LOGGER.info(
+        f"Setting customer_phone_number={customer_phone_number}, system_phone_number={system_phone_number}")
+    return (customer_phone_number, system_phone_number)
+
+
+def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
+    """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
+    call_id = message.get("ContactId")
+    event_type = message.get("EventType")
+    created_at = datetime.utcnow().astimezone().isoformat()
+
+    if event_type == "START":
+        instanceId = message.get("InstanceId")
+        contactId = message.get("ContactId")
+        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(
+            instanceId, contactId)
+        return dict(
+            CallId=call_id,
+            CreatedAt=created_at,
+            ExpiresAfter=get_ttl(),
+            CustomerPhoneNumber=customer_phone_number,
+            SystemPhoneNumber=system_phone_number,
+        )
+
+    updated_at = datetime.utcnow().astimezone().isoformat()
+
+    status = CALL_EVENT_TYPE_TO_STATUS.get(event_type)
+
+    return dict(
+        CallId=call_id,
+        Status=status,
+        UpdatedAt=updated_at,
+        ExpiresAfter=get_ttl(),
+    )
+
+def add_contact_lens_agent_assistances(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+    """Add Contact Lens Agent Assist GraphQL Mutations"""
+    # pylint: disable=too-many-locals
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    call_id = message["ContactId"]
+
+    tasks = []
+    for segment in message.get("Segments", []):
+        # only handle categories and transcripts with issues
+        if (
+            "Transcript" in segment and not segment["Transcript"].get("IssuesDetected")
+        ) and "Categories" not in segment:
+            continue
+
+        transcript_segments = []
+
+        categories = segment.get("Categories", {})
+        for category in categories.get("MatchedCategories", []):
+            category_details = categories["MatchedDetails"][category]
+            category_segment = transform_segment_to_categories_agent_assist(
+                category=category,
+                category_details=category_details,
+                call_id=call_id,
+            )
+            category_segment["Transcript"] = "[Matched Category] " + category_segment["Transcript"]
+            transcript_segments.append(category_segment)
+
+        """BobS: Disable display of DetectedIssues"""
+        """
+        issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
+        for issue in issues_detected:
+            issue_segment = transform_segment_to_issues_agent_assist(
+                segment={**segment, "CallId": call_id},
+                issue=issue,
+            )
+            issue_segment["Transcript"] = "[Detected Issue] " + issue_segment["Transcript"]
+            transcript_segments.append(issue_segment)
+        """
+
+        for transcript_segment in transcript_segments:
+            query = dsl_gql(
+                DSLMutation(
+                    schema.Mutation.addTranscriptSegment.args(input=transcript_segment).select(
+                        *transcript_segment_fields(schema),
+                    )
+                )
+            )
+            tasks.append(
+                execute_gql_query_with_retries(
+                    query,
+                    client_session=appsync_session,
+                    logger=LOGGER,
+                ),
+            )
+
+    return tasks
+
+
 ##########################################################################
 # Main event processing
 ##########################################################################
@@ -639,17 +876,43 @@ async def execute_process_event_api_mutation(
         "errors": [],
     }
 
+    event_type_map = dict(
+        STARTED="START",
+        START="START",
+        COMPLETED="END",
+        END="END",
+        SEGMENTS="ADD_TRANSCRIPT_SEGMENT",
+        ADD_TRANSCRIPT_SEGMENT="ADD_TRANSCRIPT_SEGMENT",
+        FAILED="ERRORED",
+        UPDATE_AGENT="UPDATE_AGENT",
+        ADD_SUMMARY="ADD_SUMMARY",
+        ADD_AGENT_ASSIST="ADD_AGENT_ASSIST",
+        ADD_CALL_CATEGORY="ADD_CALL_CATEGORY",
+        ADD_S3_RECORDING_URL="ADD_S3_RECORDING_URL",
+        ADD_PCA_URL="ADD_PCA_URL",
+    )
+
+    msg_event_type = message.get("EventType", "")
+    event_type = event_type_map.get(msg_event_type, "")
+
+    message["EventType"] = event_type
     message["ExpiresAfter"] = get_ttl()
-    event_type = message.get("EventType", "")
 
     if event_type == "START":
         # CREATE CALL
         LOGGER.debug("CREATE CALL")
 
-        response = await execute_create_call_mutation(
-            message=message,
-            appsync_session=appsync_session
-        )
+        if 'ContactId' in message.keys():
+
+            response = await update_call_status(
+                message=message,
+                appsync_session=appsync_session,
+            )
+        else:
+            response = await execute_create_call_mutation(
+                message=message,
+                appsync_session=appsync_session
+            )
 
         if isinstance(response, Exception):
             return_value["errors"].append(response)
@@ -660,10 +923,16 @@ async def execute_process_event_api_mutation(
         "END",
     ]:
         LOGGER.debug("END Event: update status")
-        response = await execute_update_call_status_mutation(
-            message=message,
-            appsync_session=appsync_session
-        )
+        if 'ContactId' in message.keys():
+            response = await update_call_status(
+                message=message,
+                appsync_session=appsync_session,
+            )
+        else:
+            response = await execute_update_call_status_mutation(
+                message=message,
+                appsync_session=appsync_session
+            )
         
         if (IS_TRANSCRIPT_SUMMARY_ENABLED):
             LAMBDA_HOOK_CLIENT.invoke(
@@ -693,12 +962,10 @@ async def execute_process_event_api_mutation(
 
     elif event_type == "ADD_AGENT_ASSIST":
         LOGGER.debug("ADD_AGENT_ASSIST MUTATION ")
-        normalized_message = {
-            **normalize_transcript_segment({**message}),
-        }
+        normalized_message = normalize_transcript_segments({**message})
 
         response = await execute_add_agent_assist_mutation(
-            message=normalized_message,
+            message=normalized_message[0],
             appsync_session=appsync_session
         )
 
@@ -724,50 +991,70 @@ async def execute_process_event_api_mutation(
                 return return_value
         # Invoke custom lambda hook (if any) and use returned version of message.
 
-        normalized_message = {
-            **normalize_transcript_segment({**message}),
-        }
+        normalized_messages = normalize_transcript_segments({**message})
 
-        if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
-            normalized_message = invoke_transcript_lambda_hook(normalized_message)
-
-        issues_detected = normalized_message.get("IssuesDetected", None)
-        if issues_detected and len(issues_detected) > 0:
-            LOGGER.debug("Add Issues Detected to Call Summary")
-            response = await execute_add_issues_detected_mutation(
-                message=normalized_message,
-                appsync_session=appsync_session
-            )
-            if isinstance(response, Exception):
-                return_value["errors"].append(response)
-            else:
-                return_value["successes"].append(response)
-
-        LOGGER.debug("Add Transcript Segment")
-        add_transcript_tasks = add_transcript_segments(
-            message=normalized_message,
-            appsync_session=appsync_session,
-        )
-
+        add_transcript_tasks = []
         add_transcript_sentiment_tasks = []
-        if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
-            LOGGER.debug("Add Sentiment Analysis")
-            add_transcript_sentiment_tasks = add_transcript_sentiment_analysis(
-                message=normalized_message,
-                sentiment_analysis_args=sentiment_analysis_args,
+
+        for normalized_message in normalized_messages:
+            if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN):
+                normalized_message = invoke_transcript_lambda_hook(normalized_message)
+
+            issues_detected = normalized_message.get("IssuesDetected", None)
+            if issues_detected and len(issues_detected) > 0:
+                LOGGER.debug("Add Issues Detected to Call Summary")
+                response = await execute_add_issues_detected_mutation(
+                    message=normalized_message,
+                    appsync_session=appsync_session
+                )
+                if isinstance(response, Exception):
+                    return_value["errors"].append(response)
+                else:
+                    return_value["successes"].append(response)
+
+            LOGGER.debug("Add Transcript Segment")
+            add_transcript_tasks.extend(
+                add_transcript_segments(
+                    message=normalized_message,
+                    appsync_session=appsync_session,
+                )
+            )
+            if IS_SENTIMENT_ANALYSIS_ENABLED and not normalized_message["IsPartial"]:
+                LOGGER.debug("Add Sentiment Analysis")
+                add_transcript_sentiment_tasks.extend(
+                    add_transcript_sentiment_analysis(
+                        message=normalized_message,
+                        sentiment_analysis_args=sentiment_analysis_args,
+                        appsync_session=appsync_session,
+                    )
+                )
+            if (IS_LEX_AGENT_ASSIST_ENABLED or IS_LAMBDA_AGENT_ASSIST_ENABLED) and (normalized_message["Channel"] == "CALLER" and (not normalized_message["IsPartial"] or 'ContactId' in normalized_message.keys())):
+                LAMBDA_HOOK_CLIENT.invoke(
+                    FunctionName=ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN,
+                    InvocationType='Event',
+                    Payload=json.dumps(normalized_message)
+                )
+
+        add_call_category_tasks = []
+        add_contact_lens_agent_assist_tasks = []
+
+        if 'ContactId' in message.keys():
+            add_call_category_tasks = add_contact_lens_call_category(
+                message=message,
                 appsync_session=appsync_session,
+                sns_client=sns_client,
             )
 
-        if (IS_LEX_AGENT_ASSIST_ENABLED or IS_LAMBDA_AGENT_ASSIST_ENABLED) and (normalized_message["Channel"] == "CALLER" and not normalized_message["IsPartial"]):
-            LAMBDA_HOOK_CLIENT.invoke(
-                FunctionName=ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN,
-                InvocationType='Event',
-                Payload=json.dumps(normalized_message)
+            add_contact_lens_agent_assist_tasks = add_contact_lens_agent_assistances(
+                message=message,
+                appsync_session=appsync_session,
             )
 
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
+            *add_call_category_tasks,
+            *add_contact_lens_agent_assist_tasks,
             # *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
