@@ -190,6 +190,24 @@ async def execute_create_call_mutation(
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
+    # Contact Lens STARTED event type doesn't provide customer and system phone numbers, nor does it
+    # have CreatedAt, so we will create a new message structure that conforms to other KDS channels.
+
+    if('ContactId' in message.keys()):
+        call_id = message.get("ContactId")
+        created_at = datetime.utcnow().astimezone().isoformat()
+        instanceId = message.get("InstanceId")
+        contactId = message.get("ContactId")
+        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(
+            instanceId, contactId)
+        message = dict (
+            CallId=call_id,
+            CreatedAt=created_at,
+            ExpiresAfter=get_ttl(),
+            CustomerPhoneNumber=customer_phone_number,
+            SystemPhoneNumber=system_phone_number,
+        )
+
     query = dsl_gql(
         DSLMutation(
             schema.Mutation.createCall.args(input=message).select(
@@ -226,6 +244,14 @@ async def execute_update_call_status_mutation(
     if not appsync_session.client.schema:
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
+
+    # Contact Lens event requires CallId mapped to ContactId
+
+    if('ContactId' in message.keys()):
+        call_id = message.get("ContactId")
+        updated_at = datetime.utcnow().astimezone().isoformat()
+        message['CallId'] = call_id
+        message['UpdatedAt'] = updated_at
 
     query = dsl_gql(
         DSLMutation(
@@ -683,53 +709,6 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
-async def update_call_status(
-    message: Dict[str, Any],
-    appsync_session: AppsyncAsyncClientSession,
-) -> Dict[Literal["successes", "errors"], List]:
-    """Add Transcript Segment GraphQL Mutation"""
-    if not appsync_session.client.schema:
-        raise ValueError("invalid AppSync schema")
-    schema = DSLSchema(appsync_session.client.schema)
-
-    status = {
-        **transform_message_to_call_status(message),
-    }
-    event_type = message.get("EventType")
-
-    return_value: Dict[Literal["successes", "errors"], List] = {
-        "successes": [],
-        "errors": [],
-    }
-
-    if event_type == "START":
-        LOGGER.debug("CREATE CALL")
-        query = dsl_gql(
-            DSLMutation(
-                schema.Mutation.createCall.args(input=status).select(schema.CreateCallOutput.CallId)
-            )
-        )
-    else:
-        query = dsl_gql(
-            DSLMutation(
-                schema.Mutation.updateCallStatus.args(input=status).select(*call_fields(schema))
-            )
-        )
-
-    try:
-        response = await execute_gql_query_with_retries(
-            query,
-            client_session=appsync_session,
-            logger=LOGGER,
-        )
-        query_string = print_ast(query)
-        LOGGER.debug("appsync mutation response", extra=dict(query=query_string, response=response))
-        return_value["successes"].append(response)
-    except Exception as error:  # pylint: disable=broad-except
-        return_value["errors"].append(error)
-
-    return return_value
-
 def get_caller_and_system_phone_numbers_from_connect(instanceId, contactId):
     client = boto3.client('connect')
     response = client.get_contact_attributes(
@@ -751,37 +730,6 @@ def get_caller_and_system_phone_numbers_from_connect(instanceId, contactId):
     LOGGER.info(
         f"Setting customer_phone_number={customer_phone_number}, system_phone_number={system_phone_number}")
     return (customer_phone_number, system_phone_number)
-
-
-def transform_message_to_call_status(message: Dict) -> Dict[str, object]:
-    """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
-    call_id = message.get("ContactId")
-    event_type = message.get("EventType")
-    created_at = datetime.utcnow().astimezone().isoformat()
-
-    if event_type == "START":
-        instanceId = message.get("InstanceId")
-        contactId = message.get("ContactId")
-        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(
-            instanceId, contactId)
-        return dict(
-            CallId=call_id,
-            CreatedAt=created_at,
-            ExpiresAfter=get_ttl(),
-            CustomerPhoneNumber=customer_phone_number,
-            SystemPhoneNumber=system_phone_number,
-        )
-
-    updated_at = datetime.utcnow().astimezone().isoformat()
-
-    status = CALL_EVENT_TYPE_TO_STATUS.get(event_type)
-
-    return dict(
-        CallId=call_id,
-        Status=status,
-        UpdatedAt=updated_at,
-        ExpiresAfter=get_ttl(),
-    )
 
 def add_contact_lens_agent_assistances(
     message: Dict[str, Any],
@@ -901,18 +849,10 @@ async def execute_process_event_api_mutation(
     if event_type == "START":
         # CREATE CALL
         LOGGER.debug("CREATE CALL")
-
-        if 'ContactId' in message.keys():
-
-            response = await update_call_status(
-                message=message,
-                appsync_session=appsync_session,
-            )
-        else:
-            response = await execute_create_call_mutation(
-                message=message,
-                appsync_session=appsync_session
-            )
+        response = await execute_create_call_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
 
         if isinstance(response, Exception):
             return_value["errors"].append(response)
@@ -923,16 +863,10 @@ async def execute_process_event_api_mutation(
         "END",
     ]:
         LOGGER.debug("END Event: update status")
-        if 'ContactId' in message.keys():
-            response = await update_call_status(
-                message=message,
-                appsync_session=appsync_session,
-            )
-        else:
-            response = await execute_update_call_status_mutation(
-                message=message,
-                appsync_session=appsync_session
-            )
+        response = await execute_update_call_status_mutation(
+            message=message,
+            appsync_session=appsync_session
+        )
         
         if (IS_TRANSCRIPT_SUMMARY_ENABLED):
             LAMBDA_HOOK_CLIENT.invoke(
