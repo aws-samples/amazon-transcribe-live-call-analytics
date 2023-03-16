@@ -117,6 +117,24 @@ Parameters:
       for end of call event. The function is passed en event with CallId as input.
       This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
 
+  StartOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function for beginning or start of 
+      call event. This function can implement custom logic that is relevant to beginning of call processing, for example, retrieving
+      call summary details logged into a case in a CRM.
+
+  PostCallSummaryLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function after the call summary is processed.
+      This function can implement custom logic that is relevant to post processing, for example, updating the call summary to a CRM system.
+
+
   CloudFrontPriceClass:
     Type: String
     Default: PriceClass_100
@@ -298,6 +316,10 @@ Metadata:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       EndOfCallTranscriptSummary:
         default: End of Call Transcript Summary
+      StartOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Start of Call Processing (existing)
+      PostCallSummaryLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Post Processing, after the Call Transcript Summary is processed (existing)
         
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
@@ -305,6 +327,8 @@ Conditions:
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
+  ShouldEnableStartOfCallLambdaHookFunction: !Not [!Equals [!Ref StartOfCallLambdaHookFunctionArn, ""]]
+  ShouldEnablePostCallSummaryLambdaHookFunction: !Not [!Equals [!Ref PostCallSummaryLambdaHookFunctionArn, ""]]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
   IsTranscriptSummaryEnabled: !Or
@@ -956,6 +980,7 @@ Resources:
                 # XXX specific mutation - addEnrichment
                 - !Sub "${AppSyncApi.Arn}/types/Mutation/*"
                 - !Sub "${AppSyncApi.Arn}/types/Query/fields/__schema"
+                - !Sub "${AppSyncApi.Arn}/types/Query/fields/getCall"
             - Effect: Allow
               Action:
                 - comprehend:DetectSentiment
@@ -967,6 +992,21 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !Sub "${TranscriptLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
+            - !If
+              - ShouldEnableStartOfCallLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${StartOfCallLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
+            - !If
+              - ShouldEnablePostCallSummaryLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${PostCallSummaryLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
+
             - !If 
               - IsTranscriptSummaryEnabled
               - Effect: Allow
@@ -1001,12 +1041,14 @@ Resources:
           IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
+          START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN: !Ref StartOfCallLambdaHookFunctionArn
+          POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN: !Ref PostCallSummaryLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
 
           IS_TRANSCRIPT_SUMMARY_ENABLED: !If [IsTranscriptSummaryEnabled, "true", "false"]
           ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
           ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN: !GetAtt AsyncAgentAssistOrchestrator.Arn
-
+          CALL_DATA_STREAM_NAME: !Ref CallDataStream
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 

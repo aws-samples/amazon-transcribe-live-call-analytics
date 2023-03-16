@@ -306,6 +306,23 @@ Parameters:
       for end of call event. The function is passed en event with CallId as input.
       This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
 
+  StartOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function for beginning or start of 
+      call event. This function can implement custom logic that is relevant to beginning of call processing, for example, retrieving
+      call summary details logged into a case in a CRM.
+
+  PostCallSummaryLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function after the call summary is processed.
+      This function can implement custom logic that is relevant to post processing, for example, updating the call summary to a CRM system.
+
   AdminEmail:
     Type: String
     Description: >-
@@ -448,6 +465,8 @@ Metadata:
           - EndOfCallTranscriptSummary
           - SummarizationSageMakerInitialInstanceCount
           - EndOfCallLambdaHookFunctionArn
+          - StartOfCallLambdaHookFunctionArn
+          - PostCallSummaryLambdaHookFunctionArn
       - Label:
           default: Download locations
         Parameters:
@@ -546,6 +565,10 @@ Metadata:
         default: Initial Instance Count for Summarization SageMaker Endpoint
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
+      StartOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Start of Call Processing (existing)
+      PostCallSummaryLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Post Processing, after the Call Transcript Summary is processed (existing)
       CloudFrontPriceClass:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
@@ -791,6 +814,8 @@ Resources:
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
+        StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
+        PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -848,7 +873,6 @@ Resources:
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
-
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

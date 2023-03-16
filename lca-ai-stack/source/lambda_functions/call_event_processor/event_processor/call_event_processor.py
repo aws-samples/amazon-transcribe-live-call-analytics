@@ -14,7 +14,7 @@ import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
-from gql.dsl import DSLMutation, DSLSchema, dsl_gql
+from gql.dsl import DSLMutation, DSLSchema, DSLQuery, dsl_gql
 from graphql.language.printer import print_ast
 
 # custom utils/helpers imports from Lambda layer
@@ -57,6 +57,10 @@ CLIENT_CONFIG = BotoCoreConfig(
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN = getenv("TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN", "")
+
+START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN = getenv("START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN", "")
+POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN = getenv("POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN", "")
+
 ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN = getenv("ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN", "")
 IS_TRANSCRIPT_SUMMARY_ENABLED = getenv("IS_TRANSCRIPT_SUMMARY_ENABLED", "false").lower() == "true"
 
@@ -64,7 +68,11 @@ ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN = getenv("ASYNC_AGENT_ASSIST_ORCHESTRATOR_AR
 
 TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY = getenv(
     "TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY", "true").lower() == "true"
-if TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN or ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN or ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN:
+if (TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN
+        or ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN
+        or ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN
+        or START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN
+        or POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN):
     LAMBDA_HOOK_CLIENT: LambdaClient = BOTO3_SESSION.client("lambda", config=CLIENT_CONFIG)
 
 IS_LEX_AGENT_ASSIST_ENABLED = False
@@ -90,6 +98,11 @@ CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER = getenv(
     "CONNECT_CONTACT_ATTR_CUSTOMER_PHONE_NUMBER", "LCA Caller Phone Number")
 CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER = getenv(
     "CONNECT_CONTACT_ATTR_SYSTEM_PHONE_NUMBER", "LCA System Phone Number")
+
+CUSTOMER_PHONE_NUMBER = ""
+CALL_ID = ""
+
+CALL_DATA_STREAM_NAME = getenv("CALL_DATA_STREAM_NAME", "")
 
 ##########################################################################
 # Transcripts
@@ -190,23 +203,19 @@ async def execute_create_call_mutation(
         raise ValueError("invalid AppSync schema")
     schema = DSLSchema(appsync_session.client.schema)
 
+    global CUSTOMER_PHONE_NUMBER
+    global CALL_ID
+    CUSTOMER_PHONE_NUMBER = message.get("CustomerPhoneNumber", "")
+    CALL_ID = message.get("CallId", "")
+
     # Contact Lens STARTED event type doesn't provide customer and system phone numbers, nor does it
     # have CreatedAt, so we will create a new message structure that conforms to other KDS channels.
 
     if('ContactId' in message.keys()):
-        call_id = message.get("ContactId")
+        CALL_ID = message.get("ContactId")
         created_at = datetime.utcnow().astimezone().isoformat()
-        instanceId = message.get("InstanceId")
-        contactId = message.get("ContactId")
-        (customer_phone_number, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(
-            instanceId, contactId)
-        message = dict (
-            CallId=call_id,
-            CreatedAt=created_at,
-            ExpiresAfter=get_ttl(),
-            CustomerPhoneNumber=customer_phone_number,
-            SystemPhoneNumber=system_phone_number,
-        )
+        (CUSTOMER_PHONE_NUMBER, system_phone_number) = get_caller_and_system_phone_numbers_from_connect(message)
+        message.update({"CallId": CALL_ID, "CreatedAt": created_at, "CustomerPhoneNumber": CUSTOMER_PHONE_NUMBER, "SystemPhoneNumber": system_phone_number})
 
     query = dsl_gql(
         DSLMutation(
@@ -709,7 +718,53 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
-def get_caller_and_system_phone_numbers_from_connect(instanceId, contactId):
+async def get_call_details(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+
+    global CUSTOMER_PHONE_NUMBER
+    global CALL_ID
+
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLQuery(
+            schema.Query.getCall.args(CallId=message["CallId"]).select(
+                *call_fields(schema),
+            )
+        )
+    )
+
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    result = result['getCall']
+    LOGGER.debug("Get Call result %s", json.dumps(result))
+
+    CUSTOMER_PHONE_NUMBER = result['CustomerPhoneNumber']
+    CALL_ID = result['CallId']
+    call_summary = result.get("CallSummaryText", "")
+
+    return dict(
+        CustomerPhoneNumber=CUSTOMER_PHONE_NUMBER,
+        CallId=CALL_ID,
+        CallDataStream=CALL_DATA_STREAM_NAME,
+        CallSummaryText=call_summary
+    )
+
+
+def get_caller_and_system_phone_numbers_from_connect(
+    message: Dict[str, Any]
+):
+    instanceId = message.get("InstanceId")
+    contactId = message.get("ContactId")
+
     client = boto3.client('connect')
     response = client.get_contact_attributes(
         InstanceId=instanceId,
@@ -859,6 +914,18 @@ async def execute_process_event_api_mutation(
         else:
             return_value["successes"].append(response)
 
+        if (START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN):
+            payload = dict(
+                CustomerPhoneNumber=CUSTOMER_PHONE_NUMBER,
+                CallId=CALL_ID,
+                CallDataStream=CALL_DATA_STREAM_NAME,
+            )
+            LAMBDA_HOOK_CLIENT.invoke(
+                FunctionName=START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN,
+                InvocationType='Event',
+                Payload=json.dumps(payload)
+            )
+
     elif event_type in [
         "END",
     ]:
@@ -893,6 +960,17 @@ async def execute_process_event_api_mutation(
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
+
+        if (POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN):
+            payload = await get_call_details(
+                message=message,
+                appsync_session=appsync_session)
+
+            LAMBDA_HOOK_CLIENT.invoke(
+                FunctionName=POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN,
+                InvocationType='Event',
+                Payload=json.dumps(payload)
+            )
 
     elif event_type == "ADD_AGENT_ASSIST":
         LOGGER.debug("ADD_AGENT_ASSIST MUTATION ")
