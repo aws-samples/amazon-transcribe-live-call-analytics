@@ -1226,6 +1226,15 @@ async def execute_process_event_api_mutation(
     message["ExpiresAfter"] = get_ttl()
     event_type = message.get("EventType", "")
 
+    if event_type == "":
+        # This is possibly a message from Flume. Let's fix the message if it is
+        if message.get("UtteranceEvent", "") != "" or message.get("TranscriptEvent", "") != "":
+            message["EventType"] = "ADD_TRANSCRIPT_SEGMENT"
+            event_type = "ADD_TRANSCRIPT_SEGMENT"
+        if message.get("CategoryEvent", "") != "":
+            message["EventType"] = "ADD_CALL_CATEGORY"
+            event_type = "ADD_CALL_CATEGORY"
+
     if event_type == "START":
         # CREATE CALL
         LOGGER.debug("CREATE CALL")
