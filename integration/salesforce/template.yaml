@@ -82,7 +82,7 @@ Resources:
           SF_VERSION: !Ref SalesforceAPIVersion
       Timeout: 120
       MemorySize: 256
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       CodeUri: ./lambda_functions/lca_salesforce_lookup
       Description: This AWS Lambda Function does look up of Salesforce cases and writes the results to KDS.
 
@@ -101,7 +101,7 @@ Resources:
           SF_VERSION: !Ref SalesforceAPIVersion
       Timeout: 120
       MemorySize: 256
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       CodeUri: ./lambda_functions/lca_salesforce_create_case
       Description: This AWS Lambda Function creates a Salesforce case record with the call summary.
 
