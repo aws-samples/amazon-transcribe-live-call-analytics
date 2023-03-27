@@ -49,6 +49,24 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+  
+  SentimentNegativeScoreThreshold:
+    Type: Number
+    Default: 0.9
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. 
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+
+  SentimentPositiveScoreThreshold:
+    Type: Number
+    Default: 0.4
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1.
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated). 
 
   ComprehendLanguageCode:
     Type: String
@@ -272,7 +290,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.7.1-a100
+    Default: 0.7.1-rc1-rc1-a100
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -732,7 +750,12 @@ Resources:
       StreamEncryption:
         EncryptionType: KMS
         KeyId: alias/aws/kinesis
-
+  
+  DataStreamConsumer: 
+        Type: AWS::Kinesis::StreamConsumer
+        Properties: 
+            StreamARN: !GetAtt CallDataStream.Arn
+            ConsumerName: DataStreamConsumer
   ##########################################################################
   # Transcript Summary
   ##########################################################################
@@ -878,7 +901,6 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
-  
   AsyncTranscriptSummaryOrchestratorExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -944,23 +966,24 @@ Resources:
           Type: Kinesis
           Properties:
             # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-kinesis.html#sam-property-function-kinesis--examples
-            BatchSize: 20
+            BatchSize: 200
             BisectBatchOnFunctionError: true
             # TODO Add SQS queue for discarded records
             # DestinationConfig:
             Enabled: true
             MaximumRetryAttempts: 2
             MaximumBatchingWindowInSeconds: 0
+            ParallelizationFactor: 10
             # XXX MaximumRecordAgeInSeconds: 900
             StartingPosition: LATEST
-            Stream: !GetAtt CallDataStream.Arn
+            Stream: !GetAtt DataStreamConsumer.ConsumerARN
             # Tumbling Window is used for aggregations over different invocations
             # https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-windows
-            TumblingWindowInSeconds: 900
+            TumblingWindowInSeconds: 0
       Handler: lambda_function.handler
       Layers:
         - !Ref TranscriptEnrichmentPythonLayer
-      MemorySize: 1024
+      MemorySize: 5120
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref EventSourcingTable
@@ -1034,6 +1057,8 @@ Resources:
           STATE_DYNAMODB_TABLE_NAME: !Ref EventSourcingTable
           COMPREHEND_LANGUAGE_CODE: !Ref ComprehendLanguageCode
           IS_SENTIMENT_ANALYSIS_ENABLED: !Ref IsSentimentAnalysisEnabled
+          SENTIMENT_NEGATIVE_THRESHOLD: !Ref SentimentNegativeScoreThreshold
+          SENTIMENT_POSITIVE_THRESHOLD: !Ref SentimentPositiveScoreThreshold
           CALL_AUDIO_SOURCE: !Ref CallAudioSource
           # Lex Agent Assist
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
@@ -1152,6 +1177,16 @@ Resources:
       DynamoDBConfig:
         TableName: !Ref EventSourcingTable
         AwsRegion: !Ref AWS::Region
+
+  AppSyncApiCache: 
+    Type:  AWS::AppSync::ApiCache 
+    Properties: 
+      ApiId: !GetAtt AppSyncApi.ApiId
+      Type: R4_LARGE
+      ApiCachingBehavior: PER_RESOLVER_CACHING 
+      Ttl: 30
+      TransitEncryptionEnabled: false
+      AtRestEncryptionEnabled: false
 
   GetCallAppSyncResolver:
     Type: AWS::AppSync::Resolver
@@ -1376,6 +1411,16 @@ Resources:
       RequestMappingTemplateS3Location: ../source/appsync/getTranscriptSegments.request.vtl
       ResponseMappingTemplateS3Location: ../source/appsync/getTranscriptSegments.response.vtl
 
+  GetTranscriptSegmentsWithSentimentAppSyncResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: AppSyncSchema
+    Properties:
+      ApiId: !GetAtt AppSyncApi.ApiId
+      DataSourceName: !GetAtt AppSyncDataSource.Name
+      TypeName: Query
+      FieldName: getTranscriptSegmentsWithSentiment
+      RequestMappingTemplateS3Location: ../source/appsync/getTranscriptSegmentsWithSentiment.request.vtl
+      ResponseMappingTemplateS3Location: ../source/appsync/getTranscriptSegmentsWithSentiment.response.vtl
   ##########################################################################
   # Cognito
   # Sample Cognito resources

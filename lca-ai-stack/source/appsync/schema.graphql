@@ -116,6 +116,7 @@ type Query @aws_cognito_user_pools
 @aws_iam {
 	getCall(CallId: ID!): Call
 	getTranscriptSegments(callId: ID!, isPartial: Boolean): TranscriptSegmentList
+	getTranscriptSegmentsWithSentiment(callId: ID!): TranscriptSegmentsWithSentimentList
 	listCalls(endDateTime: AWSDateTime, startDateTime: AWSDateTime): CallList
 	listCallsDateHour(date: AWSDate, hour: Int): CallList
 	listCallsDateShard(date: AWSDate, shard: Int): CallList
@@ -221,6 +222,26 @@ type TranscriptSegmentList @aws_cognito_user_pools
 	nextToken: String
 }
 
+type TranscriptSegmentWithSentiment implements DynamoDbBase @aws_cognito_user_pools
+@aws_iam {
+	PK: ID!
+	SK: ID!
+	CreatedAt: AWSDateTime!
+	UpdatedAt: AWSDateTime
+	ExpiresAfter: AWSTimestamp
+	CallId: ID!
+	SegmentId: ID!
+	StartTime: Float!
+	EndTime: Float!
+	Channel: Channel!
+	Sentiment: Sentiment
+	SentimentWeighted: Float
+}
+type TranscriptSegmentsWithSentimentList @aws_cognito_user_pools
+@aws_iam {
+	TranscriptSegmentsWithSentiment: [TranscriptSegmentWithSentiment]
+	nextToken: String
+}
 input UpdateAgentInput {
 	CallId: ID!
 	AgentId: String!

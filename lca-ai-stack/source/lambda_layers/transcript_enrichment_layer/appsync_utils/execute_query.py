@@ -60,6 +60,11 @@ async def execute_gql_query_with_retries(
                 extra=dict(query=query_string),
             )
             result = await client_session.execute(query)
+            logger.debug(
+                "query document retry: [%d] result - ",
+                retries,
+                extra=dict(result=result),
+            )
             break
         except Exception as error:  # pylint: disable=broad-except
             if retries >= max_retries:
@@ -81,7 +86,7 @@ async def execute_gql_query_with_retries(
             # exponential backoff with jitter using base 2
             sleep_time = min_sleep_time * randint(1, 2**retries)  # nosec
             logger.warning(
-                "error on query - retry: [%d] - sleeping for [%f]ms - error: [%s]",
+                "error on query - retry: [%d] - sleeping for [%f]s - error: [%s]",
                 retries,
                 sleep_time,
                 error,

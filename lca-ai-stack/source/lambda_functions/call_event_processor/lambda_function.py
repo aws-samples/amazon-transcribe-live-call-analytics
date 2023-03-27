@@ -142,15 +142,4 @@ def handler(event, context: LambdaContext):
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("event processor exception")
 
-    # Lambda tumbling window state
-    outgoing_state = EVENT_LOOP.run_until_complete(
-        update_state(event=event, event_processor_results=event_processor_results),
-    )
-
-    # XXX set results metrics
-
-    incoming_state = event.get("state", {})  # type: ignore
-    LOGGER.debug("state", extra=dict(incoming_state=incoming_state, outgoing_state=outgoing_state))
-
-    # XXX add failures to return value
-    return {"state": outgoing_state}
+    return 

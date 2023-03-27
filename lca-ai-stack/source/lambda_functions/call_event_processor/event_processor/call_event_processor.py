@@ -4,8 +4,9 @@
 """
 import asyncio
 from datetime import datetime
+from statistics import fmean
 from os import getenv
-from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional, TypedDict
 import uuid
 import json
 
@@ -14,7 +15,11 @@ import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
+<<<<<<< HEAD:lca-ai-stack/source/lambda_functions/call_event_processor/event_processor/call_event_processor.py
 from gql.dsl import DSLMutation, DSLSchema, DSLQuery, dsl_gql
+=======
+from gql.dsl import DSLMutation, DSLSchema, dsl_gql, DSLQuery
+>>>>>>> develop:lca-ai-stack/source/lambda_functions/call_event_processor/event_processor/transcribe.py
 from graphql.language.printer import print_ast
 
 # custom utils/helpers imports from Lambda layer
@@ -103,6 +108,49 @@ CUSTOMER_PHONE_NUMBER = ""
 CALL_ID = ""
 
 CALL_DATA_STREAM_NAME = getenv("CALL_DATA_STREAM_NAME", "")
+
+SentimentLabelType = Literal["NEGATIVE", "MIXED", "NEUTRAL", "POSITIVE"]
+ChannelType = Literal["AGENT", "CALLER"]
+StatusType = Literal["STARTED", "TRANSCRIBING", "ERRORED", "ENDED"]
+SentimentPeriodType = Literal["QUARTER"]
+
+class SentimentEntry(TypedDict):
+    """Sentiment Shape
+    Held in a list per channel
+    """
+    Id: str
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Sentiment: SentimentLabelType
+    Score: float
+
+class SentimentEntry(TypedDict):
+    """Sentiment Shape
+    Held in a list per channel
+    """
+    Id: str
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Sentiment: SentimentLabelType
+    Score: float
+class SentimentPerChannel(TypedDict):
+    """StatePerChannel Shape
+    Holds state per channel under StatePerCallId. Use to keep values needed
+    for statistics and aggregations.
+    """
+
+    SentimentList: List[SentimentEntry]
+
+class SentimentByPeriodEntry(TypedDict):
+    """Sentiment By Period Shape"""
+    BeginOffsetMillis: float
+    EndOffsetMillis: float
+    Score: float
+
+class Sentiment(TypedDict):
+    """Sentiment Shape"""
+    OverallSentiment: Dict[ChannelType, float]
+    SentimentByPeriod: Dict[SentimentPeriodType, Dict[ChannelType, List[SentimentByPeriodEntry]]]
 
 ##########################################################################
 # Transcripts
@@ -225,10 +273,13 @@ async def execute_create_call_mutation(
         )
     )
 
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
     result = await execute_gql_query_with_retries(
         query,
         client_session=appsync_session,
         logger=LOGGER,
+        should_ignore_exception_fn=ignore_exception_fn,
     )
 
     query_string = print_ast(query)
@@ -278,6 +329,285 @@ async def execute_update_call_status_mutation(
     query_string = print_ast(query)
     LOGGER.debug("query result", extra=dict(query=query_string, result=result))
 
+    return result
+
+async def execute_get_transcript_segments_query(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    # get_transcript_segments_input = {
+    #     "CallId": call_id
+    # }
+    query = dsl_gql(
+        DSLQuery(
+            schema.Query.getTranscriptSegmentsWithSentiment.args(callId=call_id).select(
+                schema.TranscriptSegmentsWithSentimentList.TranscriptSegmentsWithSentiment.select(
+                    schema.TranscriptSegmentWithSentiment.PK,
+                    schema.TranscriptSegmentWithSentiment.SK,
+                    schema.TranscriptSegmentWithSentiment.CallId,
+                    schema.TranscriptSegmentWithSentiment.Channel,
+                    schema.TranscriptSegmentWithSentiment.SegmentId,
+                    schema.TranscriptSegmentWithSentiment.StartTime,
+                    schema.TranscriptSegmentWithSentiment.EndTime,
+                    schema.TranscriptSegmentWithSentiment.Sentiment,
+                    schema.TranscriptSegmentWithSentiment.SentimentWeighted,
+                )
+            )
+        )
+    )
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug("get transcript segments result", extra=dict(query=query_string, result=result))
+
+    return result
+
+def _get_sentiment_per_quarter(
+    sentiment_list: List[SentimentEntry],
+) -> List[SentimentByPeriodEntry]:
+    sorted_sentiment = sorted(sentiment_list, key=lambda i: i["BeginOffsetMillis"])
+    min_begin_time: float = (
+        min(
+            sorted_sentiment,
+            key=lambda i: i["BeginOffsetMillis"],
+        ).get("BeginOffsetMillis", 0.0)
+        if sorted_sentiment
+        else 0.0
+    )
+    max_end_time: float = (
+        max(sorted_sentiment, key=lambda i: i["EndOffsetMillis"]).get("EndOffsetMillis", 0.0)
+        if sorted_sentiment
+        else 0.0
+    )
+    time_range: float = max_end_time - min_begin_time
+    time_ranges = (
+        (
+            max((min_begin_time + time_range * i / 4), min_begin_time),
+            min((min_begin_time + time_range * (i + 1) / 4), max_end_time),
+        )
+        for i in range(4)
+    )
+    quarters = (
+        [
+            s
+            for s in sorted_sentiment
+            if s["EndOffsetMillis"] > time_range[0] and s["EndOffsetMillis"] <= time_range[1]
+        ]
+        for time_range in time_ranges
+    )
+    sentiment_per_quarter = [
+        SentimentByPeriodEntry(
+            {
+                "Score": fmean((i["Score"] for i in quarter)) if quarter else 0,
+                "BeginOffsetMillis": (
+                    min((i["BeginOffsetMillis"] for i in quarter)) if quarter else 0
+                ),
+                "EndOffsetMillis": (
+                    max((i["EndOffsetMillis"] for i in quarter)) if quarter else 0
+                ),
+            }
+        )
+        for quarter in quarters
+    ]
+
+    return sentiment_per_quarter
+
+async def get_aggregated_sentiment(
+    message: Dict[str, Any],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+    
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+ 
+    result = await execute_get_transcript_segments_query(
+        message=message,
+        appsync_session=appsync_session
+    )
+ 
+    sentiment_entry_list_by_channel: Dict[ChannelType, SentimentPerChannel] = {}
+
+    for segment in result.get("getTranscriptSegmentsWithSentiment").get("TranscriptSegmentsWithSentiment"):
+        channel = segment.get("Channel", None)
+        if channel and channel in ["AGENT", "CALLER"] :
+            if segment.get("SentimentWeighted", None):
+                LOGGER.debug("Aggregating sentiment entry", extra=segment)
+                sentiment_entry : SentimentEntry = {
+                    "Id" : segment["SegmentId"],
+                    "BeginOffsetMillis": segment["StartTime"] * 1000,
+                    "EndOffsetMillis": segment["EndTime"] * 1000,
+                    "Sentiment": segment["Sentiment"],
+                    "Score": segment["SentimentWeighted"]
+                }
+                if channel in sentiment_entry_list_by_channel:
+                    tmp = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
+                    tmp.append(sentiment_entry)
+                    sentiment_list_obj = {
+                        "SentimentList": tmp
+                    }
+                else:
+                    sentiment_list_obj = {
+                        "SentimentList": [sentiment_entry]
+                    }
+
+                sentiment_entry_list_by_channel[channel] = sentiment_list_obj
+                
+    aggregated_sentiment:Sentiment = {}
+    overall_sentiment:Dict[ChannelType, float] = {}
+    sentiment_by_period_by_channel:Dict[ChannelType, List[SentimentByPeriodEntry]] = {}
+    
+    for channel in sentiment_entry_list_by_channel.keys():
+        sentiment_list = sentiment_entry_list_by_channel[channel].get("SentimentList", [])
+        sentiment_scores = [i["Score"] for i in sentiment_list]
+        sentiment_average = fmean(sentiment_scores) if sentiment_scores else 0
+
+        sentiment_per_quarter = (
+            _get_sentiment_per_quarter(sentiment_list) if sentiment_list else []
+        )
+
+        overall_sentiment[channel] = sentiment_average
+        sentiment_by_period_by_channel[channel] = sentiment_per_quarter
+    
+    LOGGER.debug("Overall Sentiment: ", extra=dict(DebugOverallSentiment=overall_sentiment))
+    LOGGER.debug("Sentiment by Period: ", extra=dict(DebugSentimentByPeriod=sentiment_by_period_by_channel))
+        
+    aggregated_sentiment = {
+        "OverallSentiment": overall_sentiment,
+        "SentimentByPeriod": {
+                "QUARTER": sentiment_by_period_by_channel
+            },
+        }
+
+    return aggregated_sentiment
+
+async def get_aggregate_call_data(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+    
+    call_id = message.get("CallId")
+    if not call_id:
+        error_message = "callid does not exist"
+        raise TypeError(error_message)
+    
+    total_duration = float(message.get("EndTime", 0.0)) * 1000
+
+    sentiment = await get_aggregated_sentiment(
+        message=message,
+        appsync_session=appsync_session
+    ) 
+    
+    updated_at = message.get("UpdatedAt", datetime.utcnow().astimezone().isoformat())
+    event_type = message.get("EventType", "")
+    if event_type == "END":
+        call_aggregation: Dict[str, object] = {
+            "CallId": call_id,
+            "Sentiment": sentiment
+        }
+    else:
+        call_aggregation: Dict[str, object] = {
+            "CallId": call_id,
+            "TotalConversationDurationMillis": total_duration,
+            "Sentiment": sentiment,
+            "UpdatedAt": updated_at
+        }
+
+    return call_aggregation
+    
+async def get_call_aggregation_tasks(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> List[Coroutine]:
+
+    call_aggregation = await get_aggregate_call_data(
+        message=message,
+        appsync_session=appsync_session
+    )
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateCallAggregation.args(
+                input=call_aggregation
+            ).select(*call_fields(schema))
+        )
+    )
+
+    tasks = []
+
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
+    tasks.append(
+        execute_gql_query_with_retries(
+            query,
+            client_session=appsync_session,
+            logger=LOGGER,
+            should_ignore_exception_fn=ignore_exception_fn,
+        ),
+    )
+
+    return tasks
+
+
+async def execute_update_call_aggregation_mutation(
+    message: Dict[str, object],
+    appsync_session: AppsyncAsyncClientSession,
+) -> Dict:
+
+    call_aggregation = await get_aggregate_call_data(
+        message=message,
+        appsync_session=appsync_session
+    )
+
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
+    query = dsl_gql(
+        DSLMutation(
+            schema.Mutation.updateCallAggregation.args(
+                input=call_aggregation
+            ).select(*call_fields(schema))
+        )
+    )
+
+    def ignore_exception_fn(e): return True if (
+        e["message"] == 'item put condition failure') else False
+    
+    result = await execute_gql_query_with_retries(
+        query,
+        client_session=appsync_session,
+        logger=LOGGER,
+        should_ignore_exception_fn=ignore_exception_fn,
+
+    )
+
+    query_string = print_ast(query)
+    LOGGER.debug(
+        "transcript aggregation mutation", extra=dict(query=query_string, result=result)
+    )
     return result
 
 async def execute_add_s3_recording_mutation(
@@ -934,6 +1264,10 @@ async def execute_process_event_api_mutation(
             message=message,
             appsync_session=appsync_session
         )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
         
         if (IS_TRANSCRIPT_SUMMARY_ENABLED):
             LAMBDA_HOOK_CLIENT.invoke(
@@ -1056,9 +1390,22 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
                 sns_client=sns_client,
             )
+        else:
+            LOGGER.debug("Add Transcript Segment")
+            add_transcript_tasks = add_transcript_segments(
+                message=normalized_message,
+                appsync_session=appsync_session,
+            )
 
             add_contact_lens_agent_assist_tasks = add_contact_lens_agent_assistances(
                 message=message,
+                appsync_session=appsync_session,
+            )
+
+        update_call_aggregation_tasks = []
+        if not normalized_message["IsPartial"]:
+            update_call_aggregation_tasks = await get_call_aggregation_tasks(
+                message=normalized_message,
                 appsync_session=appsync_session,
             )
 

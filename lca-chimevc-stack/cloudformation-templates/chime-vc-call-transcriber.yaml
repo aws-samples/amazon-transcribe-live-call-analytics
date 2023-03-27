@@ -336,28 +336,49 @@ Resources:
             reason: >-
               Transcribe does not support resource-level permissions and KVS streams are dynamic
 
-  AllowEventBridgeToCallTranscriberFunctionLambda:
+  AllowEventBridgeToCallTranscriberFunctionLambdaFromChimeVC:
     Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !Ref CallTranscriberFunction
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambda.Arn
+      SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC.Arn
       SourceAccount: !Ref AWS::AccountId
 
-  EventBridgeRuleToTriggerCallTranscriberLambda:
+  EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered when the ChimeVC streaming status changes, or when a START_CALL_PROCESSING event is sent from IVR"
+      Description: "This rule is triggered when the ChimeVC streaming status changes"
       EventPattern:
         detail:
           voiceConnectorId:
             - !Ref VoiceConnectorId
         detail-type:
           - "Chime VoiceConnector Streaming Status"
-          - "START_CALL_PROCESSING"
         source:
           - aws.chime
+      Targets:
+        - Id: CallTranscriberTarget
+          Arn: !GetAtt CallTranscriberFunction.Arn
+      State: "ENABLED"
+
+  AllowEventBridgeToCallTranscriberFunctionLambdFromIVR:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref CallTranscriberFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR"
+      EventPattern:
+        detail-type:
+          - "START_CALL_PROCESSING"
+        source:
           - lca-solution
       Targets:
         - Id: CallTranscriberTarget
