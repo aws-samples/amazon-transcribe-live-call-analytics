@@ -79,7 +79,6 @@ const CallList = () => {
   }, [collectionProps.selectedItems]);
 
   /* eslint-disable react/jsx-props-no-spreading */
-
   return (
     <Table
       {...collectionProps}
