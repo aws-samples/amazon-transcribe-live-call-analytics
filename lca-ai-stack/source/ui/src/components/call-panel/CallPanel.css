@@ -83,3 +83,7 @@ span.issue-pill {
 .btn-download-right{
     margin-left: 0.5em;
 }
+
+.hide-transcript {
+    display:none;
+}

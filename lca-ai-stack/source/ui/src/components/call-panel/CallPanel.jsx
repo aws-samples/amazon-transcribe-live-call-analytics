@@ -31,7 +31,11 @@ import { DONE_STATUS, IN_PROGRESS_STATUS } from '../common/get-recording-status'
 import { InfoLink } from '../common/info-link';
 import { getWeightedSentimentLabel } from '../common/sentiment';
 
-import { SentimentFluctuationChart, SentimentPerQuarterChart } from './sentiment-charts';
+import {
+  VoiceToneFluctuationChart,
+  SentimentFluctuationChart,
+  SentimentPerQuarterChart,
+} from './sentiment-charts';
 
 import './CallPanel.css';
 import { SentimentTrendIcon } from '../sentiment-trend-icon/SentimentTrendIcon';
@@ -735,6 +739,8 @@ const CallInProgressTranscript = ({
           && s?.createdAt
           && (s.agentTranscript === undefined
             || s.agentTranscript || s.channel !== 'AGENT')
+          && (s.channel !== 'AGENT_VOICE_SENTIMENT')
+          && (s.channel !== 'CALLER_VOICE_SENTIMENT')
           && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} />
         ),
       );
@@ -913,7 +919,7 @@ const CallTranscriptContainer = ({
   );
 };
 
-const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
+const VoiceToneContainer = ({ item, callTranscriptPerCallId }) => (
   <Container
     header={
       <Header
@@ -928,53 +934,92 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
           </Link>
         }
       >
-        Call Sentiment Analysis
+        Voice Tone Analysis
       </Header>
     }
   >
-    <Grid gridDefinition={[{ colspan: 4 }, { colspan: 4 }, { colspan: 4 }]}>
-      <SentimentFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
-      <SentimentPerQuarterChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
-      <SpaceBetween direction="vertical" size="xs">
-        <SpaceBetween size="xs">
-          <Box margin={{ bottom: 'xxxs' }} color="text-label">
-            <strong>Caller Average Sentiment</strong>
-            &nbsp;(min: -5, max: +5)
-          </Box>
-          <SpaceBetween direction="horizontal" size="xs">
-            <SentimentIcon sentiment={item.callerSentimentLabel} />
-            <div>{item.callerAverageSentiment.toFixed(3)}</div>
-          </SpaceBetween>
-        </SpaceBetween>
-        <SpaceBetween size="xs">
-          <Box margin={{ bottom: 'xxxs' }} color="text-label">
-            <strong>Caller Sentiment Trend</strong>
-          </Box>
-          <SpaceBetween direction="horizontal" size="xs">
-            <SentimentTrendIcon trend={item.callerSentimentTrendLabel} />
-          </SpaceBetween>
-        </SpaceBetween>
-        <SpaceBetween size="xs">
-          <Box margin={{ bottom: 'xxxs' }} color="text-label">
-            <strong>Agent Average Sentiment</strong>
-            &nbsp;(min: -5, max: +5)
-          </Box>
-          <SpaceBetween direction="horizontal" size="xs">
-            <SentimentIcon sentiment={item.agentSentimentLabel} />
-            <div>{item.agentAverageSentiment.toFixed(3)}</div>
-          </SpaceBetween>
-        </SpaceBetween>
-        <SpaceBetween size="xs">
-          <Box margin={{ bottom: 'xxxs' }} color="text-label">
-            <strong>Agent Sentiment Trend</strong>
-          </Box>
-          <SpaceBetween direction="horizontal" size="xs">
-            <SentimentTrendIcon trend={item.agentSentimentTrendLabel} />
-          </SpaceBetween>
-        </SpaceBetween>
-      </SpaceBetween>
-    </Grid>
+    <VoiceToneFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
   </Container>
+);
+
+const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
+  <>
+    <Container
+      header={
+        <Header
+          variant="h4"
+          info={
+            <Link
+              variant="info"
+              target="_blank"
+              href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
+            >
+              Info
+            </Link>
+          }
+        >
+          Call Sentiment Analysis
+        </Header>
+      }
+    >
+      <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
+        <SentimentFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
+        <SentimentPerQuarterChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
+      </Grid>
+    </Container>
+    <Container>
+      <ColumnLayout columns={4} variant="text-grid">
+        <SpaceBetween size="xs">
+          <div>
+            <Box margin={{ bottom: 'xxxs' }} color="text-label">
+              <strong>Caller Average Sentiment:</strong>
+            </Box>
+            <div>
+              <SentimentIcon sentiment={item.callerSentimentLabel} />
+              &nbsp;
+              {item.callerAverageSentiment.toFixed(3)}
+              <br />
+              (min: -5, max: +5)
+            </div>
+          </div>
+        </SpaceBetween>
+        <SpaceBetween size="xs">
+          <div>
+            <Box margin={{ bottom: 'xxxs' }} color="text-label">
+              <strong>Caller Sentiment Trend:</strong>
+            </Box>
+            <div>
+              <SentimentTrendIcon trend={item.callerSentimentTrendLabel} />
+            </div>
+          </div>
+        </SpaceBetween>
+        <SpaceBetween size="xs">
+          <div>
+            <Box margin={{ bottom: 'xxxs' }} color="text-label">
+              <strong>Agent Average Sentiment:</strong>
+            </Box>
+            <div>
+              <SentimentIcon sentiment={item.agentSentimentLabel} />
+              &nbsp;
+              {item.agentAverageSentiment.toFixed(3)}
+              <br />
+              (min: -5, max: +5)
+            </div>
+          </div>
+        </SpaceBetween>
+        <SpaceBetween size="xs">
+          <div>
+            <Box margin={{ bottom: 'xxxs' }} color="text-label">
+              <strong>Agent Sentiment Trend:</strong>
+            </Box>
+            <div>
+              <SentimentTrendIcon trend={item.agentSentimentTrendLabel} />
+            </div>
+          </div>
+        </SpaceBetween>
+      </ColumnLayout>
+    </Container>
+  </>
 );
 
 // eslint-disable-next-line import/prefer-default-export
@@ -1021,11 +1066,21 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
         <CallSummary item={item} />
         <CallCategories item={item} />
       </Grid>
-      <CallStatsContainer
-        item={item}
-        setToolsOpen={setToolsOpen}
-        callTranscriptPerCallId={callTranscriptPerCallId}
-      />
+      <Grid
+        gridDefinition={[{ colspan: { default: 12, xs: 8 } }, { colspan: { default: 12, xs: 4 } }]}
+      >
+        <CallStatsContainer
+          item={item}
+          setToolsOpen={setToolsOpen}
+          callTranscriptPerCallId={callTranscriptPerCallId}
+        />
+        <VoiceToneContainer
+          item={item}
+          setToolsOpen={setToolsOpen}
+          callTranscriptPerCallId={callTranscriptPerCallId}
+        />
+      </Grid>
+
       <CallTranscriptContainer
         item={item}
         setToolsOpen={setToolsOpen}

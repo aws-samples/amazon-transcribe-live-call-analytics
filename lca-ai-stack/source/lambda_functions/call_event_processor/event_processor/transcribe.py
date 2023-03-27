@@ -97,7 +97,7 @@ CALL_EVENT_TYPE_TO_STATUS = {
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
 
 SentimentLabelType = Literal["NEGATIVE", "MIXED", "NEUTRAL", "POSITIVE"]
-ChannelType = Literal["AGENT", "CALLER"]
+ChannelType = Literal["AGENT", "CALLER", "AGENT_VOICE_SENTIMENT", "CALLER_VOICE_SENTIMENT"]
 StatusType = Literal["STARTED", "TRANSCRIBING", "ERRORED", "ENDED"]
 SentimentPeriodType = Literal["QUARTER"]
 
@@ -419,7 +419,7 @@ async def get_aggregated_sentiment(
 
     for segment in result.get("getTranscriptSegmentsWithSentiment").get("TranscriptSegmentsWithSentiment"):
         channel = segment.get("Channel", None)
-        if channel and channel in ["AGENT", "CALLER"] :
+        if channel and channel in ["AGENT", "CALLER", "AGENT_VOICE_SENTIMENT", "CALLER_VOICE_SENTIMENT"] :
             if segment.get("SentimentWeighted", None):
                 LOGGER.debug("Aggregating sentiment entry", extra=segment)
                 sentiment_entry : SentimentEntry = {
@@ -1179,7 +1179,27 @@ def invoke_transcript_lambda_hook(
             )
     return message
 
+##########################################################################
+# Fix CamelCasing from Chime
+##########################################################################
 
+def convert_keys_to_uppercamelcase(d):
+    new_dict = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            new_dict[k[0].upper() + k[1:]] = convert_keys_to_uppercamelcase(v)
+        else:
+            new_dict[k[0].upper() + k[1:]] = v
+    return new_dict
+
+##########################################################################
+# merge dicts
+##########################################################################
+
+def merge_dicts(d1, d2):
+    new_dict = d1.copy()
+    new_dict.update(d2)
+    return new_dict
 
 ##########################################################################
 # Main event processing
@@ -1222,12 +1242,24 @@ async def execute_process_event_api_mutation(
         "successes": [],
         "errors": [],
     }
+    
+    metadata = None
+    
+    # normalize the casing
+    message = convert_keys_to_uppercamelcase(message)
+    
+    metadata_str = message.get("Metadata", None)
+    if metadata_str != None:
+        metadata = json.loads(metadata_str)
+        metadata = convert_keys_to_uppercamelcase(metadata)
+        
+        message = merge_dicts(message, metadata)
 
     message["ExpiresAfter"] = get_ttl()
     event_type = message.get("EventType", "")
 
     if event_type == "":
-        # This is possibly a message from Flume. Let's fix the message if it is
+        # This is most likely a message from Flume. Let's fix the message.
         if message.get("UtteranceEvent", "") != "" or message.get("TranscriptEvent", "") != "":
             message["EventType"] = "ADD_TRANSCRIPT_SEGMENT"
             event_type = "ADD_TRANSCRIPT_SEGMENT"

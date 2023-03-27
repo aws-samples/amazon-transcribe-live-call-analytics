@@ -9,13 +9,15 @@ import { getWeightedSentimentLabel } from '../common/sentiment';
 const logger = new Logger('SentimentCharts');
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
-export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => {
+export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => {
   const maxChannels = 4;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
     .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'AGENT')
+    .filter((c) => c !== 'CALLER')
     .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentPerChannel = transcriptChannels
@@ -39,13 +41,85 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
       hideFilter
       series={[
         {
-          title: transcriptChannels[0] || 'Channel 0',
+          title: transcriptChannels[0]
+            ? transcriptChannels[0].replace('_VOICE_SENTIMENT', '')
+            : 'n/a',
           type: 'line',
           data: sentimentPerChannel[0] || [],
           valueFormatter: (e) => e.toFixed(3),
         },
         {
-          title: transcriptChannels[1] || 'Channel 1',
+          title: transcriptChannels[1]
+            ? transcriptChannels[1].replace('_VOICE_SENTIMENT', '')
+            : 'n/a',
+          type: 'line',
+          data: sentimentPerChannel[1] || [],
+          valueFormatter: (e) => e.toFixed(3),
+        },
+      ]}
+      yDomain={[-5, 5]}
+      i18nStrings={{
+        legendAriaLabel: 'Legend',
+        chartAriaRoleDescription: 'line chart',
+        xTickFormatter: (e) => e.toISOString().substr(14, 5),
+        yTickFormatter: (e) => getWeightedSentimentLabel(e),
+      }}
+      empty={
+        <Box textAlign="center" color="inherit">
+          <b>No data available</b>
+          <Box variant="p" color="inherit">
+            There is no data available
+          </Box>
+        </Box>
+      }
+      statusType="finished"
+      xScaleType="time"
+      xTitle="Time"
+      yTitle="Voice Tone Fluctuation"
+    />
+  );
+};
+
+/* eslint-disable react/prop-types, react/destructuring-assignment */
+export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => {
+  const maxChannels = 4;
+  const { callId } = item;
+  const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
+  const transcriptChannels = Object.keys(transcriptsForThisCallId)
+    .slice(0, maxChannels)
+    .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'AGENT_VOICE_SENTIMENT')
+    .filter((c) => c !== 'CALLER_VOICE_SENTIMENT')
+    .filter((c) => c !== 'CATEGORY_MATCH');
+
+  const sentimentPerChannel = transcriptChannels
+    .map((channel) => transcriptsForThisCallId[channel])
+    .map((transcript) =>
+      // eslint-disable-next-line implicit-arrow-linebreak
+      transcript.segments
+        .filter((t) => t.sentimentWeighted)
+        .reduce(
+          (p, c) => [...p, { x: new Date(c.endTime * 1000), y: c.sentimentWeighted }],
+          [{ x: new Date(0), y: 0 }],
+        )
+        .sort((a, b) => a.x - b.x),
+    ); // eslint-disable-line function-paren-newline
+
+  logger.debug('sentimentPerChannel', sentimentPerChannel);
+
+  return (
+    <LineChart
+      height="80"
+      hideFilter
+      series={[
+        {
+          title: transcriptChannels[0] || 'n/a',
+          type: 'line',
+          data: sentimentPerChannel[0] || [],
+          valueFormatter: (e) => e.toFixed(3),
+        },
+        {
+          title: transcriptChannels[1] || 'n/a',
           type: 'line',
           data: sentimentPerChannel[1] || [],
           valueFormatter: (e) => e.toFixed(3),
@@ -81,6 +155,8 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
     .filter((c) => c !== 'AGENT_ASSISTANT')
+    .filter((c) => c !== 'AGENT_VOICE_SENTIMENT')
+    .filter((c) => c !== 'CALLER_VOICE_SENTIMENT')
     .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentByQuarterPerChannel = transcriptChannels
@@ -103,13 +179,13 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
       hideFilter
       series={[
         {
-          title: transcriptChannels[0] || 'Channel 0',
+          title: transcriptChannels[0] || 'n/a',
           type: 'line',
           data: sentimentByQuarterPerChannel[0] || [],
           valueFormatter: (e) => e.toFixed(3),
         },
         {
-          title: transcriptChannels[1] || 'Channel 1',
+          title: transcriptChannels[1] || 'n/a',
           type: 'line',
           data: sentimentByQuarterPerChannel[1] || [],
           valueFormatter: (e) => e.toFixed(3),
