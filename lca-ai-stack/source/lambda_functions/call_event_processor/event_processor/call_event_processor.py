@@ -15,11 +15,7 @@ import boto3
 from botocore.config import Config as BotoCoreConfig
 from aws_lambda_powertools import Logger
 from gql.client import AsyncClientSession as AppsyncAsyncClientSession
-<<<<<<< HEAD:lca-ai-stack/source/lambda_functions/call_event_processor/event_processor/call_event_processor.py
 from gql.dsl import DSLMutation, DSLSchema, DSLQuery, dsl_gql
-=======
-from gql.dsl import DSLMutation, DSLSchema, dsl_gql, DSLQuery
->>>>>>> develop:lca-ai-stack/source/lambda_functions/call_event_processor/event_processor/transcribe.py
 from graphql.language.printer import print_ast
 
 # custom utils/helpers imports from Lambda layer
@@ -1390,13 +1386,6 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
                 sns_client=sns_client,
             )
-        else:
-            LOGGER.debug("Add Transcript Segment")
-            add_transcript_tasks = add_transcript_segments(
-                message=normalized_message,
-                appsync_session=appsync_session,
-            )
-
             add_contact_lens_agent_assist_tasks = add_contact_lens_agent_assistances(
                 message=message,
                 appsync_session=appsync_session,
