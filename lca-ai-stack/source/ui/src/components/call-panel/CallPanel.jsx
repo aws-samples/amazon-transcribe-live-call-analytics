@@ -585,7 +585,8 @@ const CallInProgressTranscript = ({
   const [lastUpdated, setLastUpdated] = useState(Date.now());
   const [updateFlag, setUpdateFlag] = useState(false);
 
-  // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
+  // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH,
+  // AGENT_VOICE_SENTIMENT, CALLER_VOICE_SENTIMENT
   const maxChannels = 6;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
