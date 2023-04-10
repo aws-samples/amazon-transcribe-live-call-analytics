@@ -10,7 +10,7 @@ const logger = new Logger('SentimentCharts');
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 4;
+  const maxChannels = 6;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
@@ -19,7 +19,6 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
     .filter((c) => c !== 'AGENT')
     .filter((c) => c !== 'CALLER')
     .filter((c) => c !== 'CATEGORY_MATCH');
-
   const sentimentPerChannel = transcriptChannels
     .map((channel) => transcriptsForThisCallId[channel])
     .map((transcript) =>
@@ -82,7 +81,7 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 
 /* eslint-disable react/prop-types, react/destructuring-assignment */
 export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 4;
+  const maxChannels = 6;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
@@ -149,7 +148,7 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 };
 
 export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
-  const maxChannels = 4;
+  const maxChannels = 6;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId)

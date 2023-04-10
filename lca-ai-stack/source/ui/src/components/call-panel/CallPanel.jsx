@@ -586,7 +586,7 @@ const CallInProgressTranscript = ({
   const [updateFlag, setUpdateFlag] = useState(false);
 
   // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
-  const maxChannels = 4;
+  const maxChannels = 6;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
   const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
