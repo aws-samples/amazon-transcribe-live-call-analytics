@@ -24,7 +24,7 @@
     "@aws-sdk/client-secrets-manager": "^3.74.0",
     "@aws-sdk/client-transcribe-streaming": "file:client-transcribe-streaming/aws-sdk-client-transcribe-streaming-v3.211.0.tgz",
     "@fastify/websocket": "^5.0.0",
-    "aws-sdk": "^2.1087.0",
+    "aws-sdk": "^2.1354.0",
     "dotenv": "^16.0.0",
     "fastify": "^3.27.3",
     "install": "^0.13.0",
