@@ -20,9 +20,9 @@ Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.7
 Parameters:
   CallAudioSource:
     Type: String
-    Default: Demo Asterisk PBX Server
+    Default: Demo Asterisk PBX Server with Chime Voice Connector
     AllowedValues:
-      - Demo Asterisk PBX Server
+      - Demo Asterisk PBX Server with Chime Voice Connector
       - Chime Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
@@ -32,11 +32,47 @@ Parameters:
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
       or integrate with Amazon Connect Contact Lens.
 
+  CallProcessor:
+    Type: String
+    Default: Chime Call Analytics
+    AllowedValues:
+      - Chime Call Analytics
+      - LCA Call Processor Lambda
+    Description: >
+      If you chose a CallAudioSource with Chime Voice Connector, you can either have a Lambda
+      function that does the call processing (processes audio from KVS and sends to Transcribe),
+      or you can have Chime Call Analytics do it. Enabling Chime Call Analytics also allows you
+      to also use Voice Analytics, such as Voice Tone Analysis and Speaker Search.
+  
+  ChimeVoiceToneAnalysis:
+    Type: String
+    Default: Enabled
+    AllowedValues:
+      - Enabled
+      - Disabled
+    Description: >
+      Used only when a call audio source with Chime Voice Connector is selected, and 
+      Chime Call Analytics is used as a call processor.
+      A voice analytics feature that enables you to analyze caller voices for a positive, 
+      negative, or neutral sentiment. This is different than sentiment analysis, as it analyzes
+      the voice tone versus the text.
+    
+  ChimeSpeakerSearch:
+    Type: String
+    Default: Enabled
+    AllowedValues:
+      - Enabled
+      - Disabled
+    Description: >
+      Used only when a call audio source with Chime Voice Connector is selected, and 
+      Chime Call Analytics is used as a call processor.
+      A voice analytics feature that enables you to identify call participants.
+
   DemoSoftphoneAllowedCidr:
     Type: String
     AllowedPattern: '( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))'
     Description: >
-      Used only when CallAudioSource is set to 'Demo Asterisk PBX Server'
+      Used only when CallAudioSource is set to 'Demo Asterisk PBX Server with Chime Voice Connector'
       CIDR block allowed by demo Asterisk server for soft phone registration.
       Example: '198.51.100.36/32'
 
@@ -46,7 +82,7 @@ Parameters:
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
       (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or
-      'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively
+      'Demo Asterisk PBX Server with Chime Voice Connector'. If present, the specified Lambda function can selectively
       choose calls to process, toggle agent/caller streams, assign AgentId, and/or modify values
       for CallId and displayed phone numbers.
 
@@ -590,11 +626,15 @@ Metadata:
         default: PCA Web App Call Path Prefix
 
 Conditions:
-  ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
+  ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server with Chime Voice Connector']
   ShouldInstallChimeVCsiprec: !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
   ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+  ShouldUseChimeCallAnalytics: !Equals [!Ref CallProcessor, 'Chime Call Analytics']
+  ShouldEnableVoiceToneAnalysis: !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']
+  ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
+  
   ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
   ShouldEnableLexAgentAssist: !And [!Condition ShouldEnableAgentAssist, !Not [!Condition ShouldEnableLambdaAgentAssist]]
@@ -876,7 +916,6 @@ Resources:
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
-
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

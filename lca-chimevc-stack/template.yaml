@@ -17,6 +17,35 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector
 
 Parameters:
+  UseChimeCallAnalytics:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Set to true to use Chime Call Analytics rather than the call transcriber Lambda.
+  
+  EnableVoiceToneAnalysis:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Set to true to enable Chime voice tone analysis. This is only used if Chime
+      Call Analytics is enabled.
+
+  EnableSpeakerSearch:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Set to true to enable Chime speaker search. This is only used if Chime
+      Call Analytics is enabled.
+
   InstallDemoAsteriskServer:
     Type: String
     Default: true
@@ -86,7 +115,7 @@ Parameters:
     Type: String
     Description: >-
       Arn of Kinesis Data Stream to publish events to
-
+      
   IsPartialTranscriptEnabled:
     Type: String
     Default: 'true'
@@ -209,6 +238,7 @@ Conditions:
     !Equals [!Ref InstallDemoAsteriskServer, 'true']
   ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
   ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
+  ShouldInstallCallTranscriber: !Not [!Equals [!Ref UseChimeCallAnalytics, 'true']]
 
 Resources:
   DeployChimeVCAsteriskDemo:
@@ -231,6 +261,7 @@ Resources:
   
   DeployCallTranscriber:
     Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallCallTranscriber
     Properties:
       TemplateURL: ./cloudformation-templates/chime-vc-call-transcriber.yaml
       Parameters:
