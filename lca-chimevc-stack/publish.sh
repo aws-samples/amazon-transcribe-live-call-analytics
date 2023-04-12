@@ -41,11 +41,24 @@ else
   PUBLIC=false
 fi
 
+# configure the layer first. npm run build will also run npm install
+node_transcriber_layer_dir=lambda_layers/node_transcriber_layer
+echo "Installing dependencies for $node_transcriber_layer_dir"
+pushd $node_transcriber_layer_dir
+npm run build
+popd
+
 transcriber_dir=lambda_functions/call_transcriber
 echo "Installing dependencies for $transcriber_dir"
 pushd $transcriber_dir
 npm install
 popd
+
+#chime_call_analytics_dir=lambda_functions/chime_call_analytics_initialization
+#echo "Installing dependencies for $chime_call_analytics_dir"
+#pushd $chime_call_analytics_dir
+#npm install
+#popd
 
 pcaintegration_dir=lambda_functions/pca_integration
 echo "Installing dependencies for $pcaintegration_dir"

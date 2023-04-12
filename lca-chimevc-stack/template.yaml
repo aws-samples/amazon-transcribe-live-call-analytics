@@ -239,6 +239,7 @@ Conditions:
   ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
   ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
   ShouldInstallCallTranscriber: !Not [!Equals [!Ref UseChimeCallAnalytics, 'true']]
+  ShouldInstallChimeCallAnalytics: !Equals [!Ref UseChimeCallAnalytics, 'true']
 
 Resources:
   DeployChimeVCAsteriskDemo:
@@ -285,6 +286,34 @@ Resources:
             - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
 
+  DeployChimeCallAnalyticsProcessor:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallChimeCallAnalytics
+    Properties:
+      TemplateURL: ./cloudformation-templates/chime-vc-call-analytics.yaml
+      Parameters:
+        EnableSpeakerSearch: !Ref EnableSpeakerSearch
+        EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
+        TranscribeApiMode: !Ref TranscribeApiMode
+        AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        KinesisDataStreamName: !Ref KinesisDataStreamName
+        KinesisDataStreamArn: !Ref KinesisDataStreamArn
+        S3BucketName: !Ref S3BucketName
+        IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+        SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        VoiceConnectorId:
+          'Fn::If':
+            - ShouldInstallDemoAsteriskServer
+            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
+        
   DeployPcaIntegration:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallPcaIntegration
@@ -293,9 +322,18 @@ Resources:
       Parameters:
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        CallTranscriberEventTableName: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
-        CallTranscriberEventTableArn: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
-        IsContentRedactionEnabled: !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+        CallTranscriberEventTableName: !If 
+          - ShouldInstallCallTranscriber
+          - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
+          - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableName
+        CallTranscriberEventTableArn: !If 
+          - ShouldInstallCallTranscriber
+          - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
+          - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableArn
+        IsContentRedactionEnabled: !If 
+          - ShouldInstallCallTranscriber
+          - !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+          - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.IsContentRedactionEnabled
         LCAS3BucketName: !Ref S3BucketName
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         PcaS3BucketName: !Ref PcaS3BucketName
@@ -311,9 +349,18 @@ Resources:
       Parameters:
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        CallTranscriberEventTableName: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
-        CallTranscriberEventTableArn: !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
-        IsContentRedactionEnabled: !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+        CallTranscriberEventTableName: !If 
+          - ShouldInstallCallTranscriber
+          - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
+          - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableName
+        CallTranscriberEventTableArn: !If 
+          - ShouldInstallCallTranscriber
+          - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
+          - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableArn
+        IsContentRedactionEnabled: !If
+          - ShouldInstallCallTranscriber
+          - !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
+          - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.IsContentRedactionEnabled
         LCAS3BucketName: !Ref S3BucketName
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
 

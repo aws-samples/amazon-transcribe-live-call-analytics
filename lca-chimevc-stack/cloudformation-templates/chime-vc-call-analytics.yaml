@@ -1,9 +1,29 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector Call Analytics Lambda
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Call Analytics w/ Chime Voice Connector
 
 Parameters:
+  EnableVoiceToneAnalysis:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Set to true to enable Chime voice tone analysis. This is only used if Chime
+      Call Analytics is enabled.
+
+  EnableSpeakerSearch:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Set to true to enable Chime speaker search. This is only used if Chime
+      Call Analytics is enabled.
+
   AudioFilePrefix:
     Type: String
     Default: lca-audio-recordings/
@@ -127,6 +147,54 @@ Parameters:
       Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
         
 Resources:
+
+  ##########################################################################
+  # NodeJS Transcriber Lambda Layer
+  ##########################################################################
+  TranscriberLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs14.x
+        - nodejs16.x
+        - nodejs18.x
+      Description: >
+       This is a layer with shared nodejs libraries for the LCA call transcriber 
+       and call analytics initialization Lambdas.
+      ContentUri:
+        ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
+
+  ##########################################################################
+  # Call Transcriber
+  ##########################################################################
+
+  TranscriberCallEventTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AttributeDefinitions:
+        # primary key attributes
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ExpiresAfter
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+  
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -141,8 +209,9 @@ Resources:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+        - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallTranscriberFunctionRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active
@@ -152,6 +221,7 @@ Resources:
           BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
+          TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
           RAW_FILE_PREFIX: 'lca-audio-raw/'
@@ -171,7 +241,7 @@ Resources:
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
           CUSTOM_LANGUAGE_MODEL_NAME: !Ref CustomLanguageModelName
           LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
-      CodeUri: ../lambda_functions/call_transcriber
+      CodeUri: ../lambda_functions/chime_call_analytics_initialization
     Metadata:
       cfn_nag:
         rules_to_suppress:
