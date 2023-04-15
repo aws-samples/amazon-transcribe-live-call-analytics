@@ -13,6 +13,8 @@ const { KinesisClient } = require('@aws-sdk/client-kinesis');
 /* Transcribe and Streaming Libraries */
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
+const { ChimeSDKMediaPipelinesClient } = require('@aws-sdk/client-chime-sdk-media-pipelines')
+
 
 /* Local libraries */
 const {
@@ -69,6 +71,7 @@ let lambdaClient;
 let dynamoClient;
 // eslint-disable-next-line no-unused-vars
 let kinesisClient;
+let chimeMediaPipelinesClient;
 
 let timeToStop = false;
 let stopTimer;
@@ -394,6 +397,7 @@ const handler = async function handler(event, context) {
   lambdaClient = new LambdaClient({ region: REGION });
   dynamoClient = new DynamoDBClient({ region: REGION });
   kinesisClient = new KinesisClient({ region: REGION });
+  chimeMediaPipelinesClient = new ChimeSDKMediaPipelinesClient({ region: REGION });
 
   /*
   Create a callData object for incoming event:
@@ -412,18 +416,7 @@ const handler = async function handler(event, context) {
 
   let callData;
 
-  if (event.action === 'LAMBDA_CONTINUE') {
-    callData = event.callData;
-    console.log(
-      '--- CONTINUING FROM PREVIOUS LAMBDA. LAMBDA SEQUENCE COUNT: ',
-      callData.lambdaCount,
-      '---',
-    );
-    if (callData.lambdaCount > 30) {
-      console.log('Stopping due to runaway recursive Lambda.');
-      return;
-    }
-  } else if (event.source === 'lca-solution' && event['detail-type'] === 'START_CALL_PROCESSING') {
+  if (event.source === 'lca-solution' && event['detail-type'] === 'START_CALL_PROCESSING') {
     console.log('START_CALL_PROCESSING event received, Retrieving previously stored callData.');
     callData = await getCallDataForStartCallEvent(event.detail);
     if (!callData) {
@@ -476,6 +469,10 @@ const handler = async function handler(event, context) {
       }
       console.log('Ready to start processing call');
       await writeCallStartEventToKds(kinesisClient, callData);
+
+      // it is now time to execute the mediapipeline
+      
+
     } else if (event.detail.streamingStatus === 'ENDED') {
       callData = await getCallDataFromChimeEvents(event);
       await writeCallEndEventToKds(kinesisClient, callData.callId);

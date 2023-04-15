@@ -41,13 +41,22 @@ else
   PUBLIC=false
 fi
 
-# configure the layer first. npm run build will also run npm install
+# configure the nodejs layer first. npm run build will also run npm install
 node_transcriber_layer_dir=lambda_layers/node_transcriber_layer
 echo "Installing dependencies for $node_transcriber_layer_dir"
 pushd $node_transcriber_layer_dir
 npm run build
 popd
 
+# configure the boto3 layer
+boto3_layer_dir=lambda_layers/boto3_layer
+echo "Installing dependencies for $boto3_layer_dir"
+pushd $boto3_layer_dir
+pip install -r requirements.txt -t python/lib/python3.8/site-packages/.
+zip -r boto3_lambda_layer.zip *
+popd
+
+# configure call transcriber
 transcriber_dir=lambda_functions/call_transcriber
 echo "Installing dependencies for $transcriber_dir"
 pushd $transcriber_dir

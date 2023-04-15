@@ -145,7 +145,7 @@ Parameters:
     Default: ''
     Description: >-
       Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
-        
+
 Resources:
 
   ##########################################################################
@@ -163,6 +163,183 @@ Resources:
        and call analytics initialization Lambdas.
       ContentUri:
         ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
+  
+  ##########################################################################
+  # Custom Resource for Media Pipeline Configuration
+  ##########################################################################
+
+  CreateMediaPipelineConfig:
+    Type: Custom::MediaPipelineConfigFunc
+    Properties:
+      ServiceToken: !GetAtt MediaPipelineConfigFunc.Arn
+      StackName: !Ref 'AWS::StackName'
+      TranscribeApiMode: !Ref TranscribeApiMode
+      KinesisStreamName: !Ref KinesisDataStreamName
+      OutputBucket: !Ref S3BucketName
+      RawFilePrefix: 'lca-audio-raw/'
+      RecordingFilePrefix: !Ref AudioFilePrefix
+      CallAnalyticsFilePrefix: !Ref CallAnalyticsPrefix
+      TcaDataAccessRoleArn: !GetAtt TcaDataAccessRole.Arn
+      PostCallContentRedactionOutput: 'redacted'
+      SavePartialTranscripts: !Ref IsPartialTranscriptEnabled
+      IsContentRedactionEnabled: !If
+        - ShouldEnableContentRedaction
+        - 'true'
+        - 'false'
+      TranscribeLanguageCode: !Ref TranscribeLanguageCode
+      ContentRedactionType: !Ref TranscribeContentRedactionType
+      PiiEntityTypes: !Ref TranscribePiiEntityTypes
+      CustomVocabularyName: !Ref CustomVocabularyName
+      CustomLanguageModelName: !Ref CustomLanguageModelName
+
+  MediaPipelineConfigFunc:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      InlineCode: |
+        import boto3
+        import cfnresponse
+        import json
+
+        mediaPipelineClient = boto3.client('chime-sdk-media-pipelines')
+
+        def delete_pipeline_configuration(event):
+            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
+            response = mediaPipelineClient.delete-media-insights-pipeline-configuration(Identifier=stackName)
+
+        def create_pipeline_configuration(event):
+            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
+            resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
+            
+            elements = []
+            
+            # configure kds
+            kdsArn = event['ResourceProperties'].get('KinesisStreamArn', '')
+            kds = {
+                "Type": "KinesisDataStreamSink",
+                "KinesisDataStreamSinkConfiguration": {
+                    "InsightsTarget": kdsArn
+                }
+            }
+            elements.append(kds)
+            
+            # configure transcribe
+            transcribeApiMode = event['ResourceProperties'].get('TranscribeApiMode', '')
+            transcribeLanguageCode = event['ResourceProperties'].get('TranscribeLanguageCode', '')
+            callAnalyticsFilePrefix = event['ResourceProperties'].get('CallAnalyticsFilePrefix', '')
+            contentRedactionType = event['ResourceProperties'].get('ContentRedactionType', '')
+            customLanguageModelName = event['ResourceProperties'].get('CustomLanguageModelName', '')
+            customVocabularyName = event['ResourceProperties'].get('CustomVocabularyName', '')
+            isContentRedactionEnabled = event['ResourceProperties'].get('IsContentRedactionEnabled', '')
+            outputBucket = event['ResourceProperties'].get('OutputBucket', '')
+            piiEntityTypes = event['ResourceProperties'].get('PiiEntityTypes', '')
+            postCallContentRedactionOutput = event['ResourceProperties'].get('PostCallContentRedactionOutput', '')
+            rawFilePrefix = event['ResourceProperties'].get('RawFilePrefix', '')
+            recordingFilePrefix = event['ResourceProperties'].get('RecordingFilePrefix', '')
+            tcaDataAccessRoleArn = event['ResourceProperties'].get('TcaDataAccessRoleArn', '')
+            outputLocation = "s3://%s/%s"%(outputBucket,callAnalyticsFilePrefix)
+            
+            if transcribeApiMode == 'analytics':
+                tca = {
+                    "Type":"AmazonTranscribeCallAnalyticsProcessor",
+                    "AmazonTranscribeCallAnalyticsProcessorConfiguration": { 
+                        "LanguageCode": transcribeLanguageCode,
+                        "PostCallAnalyticsSettings": { 
+                          "DataAccessRoleArn": tcaDataAccessRoleArn,
+                          "OutputLocation": outputLocation
+                        }
+                    }
+                }
+                if isContentRedactionEnabled == 'true':
+                    tca["AmazonTranscribeCallAnalyticsProcessorConfiguration"]["ContentRedactionType"] = contentRedactionType
+                    tca["AmazonTranscribeCallAnalyticsProcessorConfiguration"]["PiiEntityTypes"] = piiEntityTypes
+                    if postCallContentRedactionOutput:
+                        tca["AmazonTranscribeCallAnalyticsProcessorConfiguration"]["PostCallAnalyticsSettings"]["ContentRedactionOutput"] = postCallContentRedactionOutput
+                
+                if customLanguageModelName:
+                    tca["AmazonTranscribeCallAnalyticsProcessorConfiguration"]["LanguageModelName"] = customLanguageModelName
+                if customVocabularyName:
+                    tca["AmazonTranscribeCallAnalyticsProcessorConfiguration"]["vocabularyName"] = customVocabularyName
+                elements.append(tca)
+                
+            # configure lambda sink
+            lambdaSinkArn = event['ResourceProperties'].get('LambdaSinkArn', '')
+            lambdaSink = {
+                "Type": "LambdaFunctionSink",
+                "LambdaFunctionSinkConfiguration": {
+                    "InsightsTarget": lambdaSinkArn
+                }
+            }
+            elements.append(lambdaSink)
+            
+            # configure voice analytics
+            enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalysis', '')
+            enableSpeakerSearch = event['ResourceProperties'].get('EnableSpeakerSearch', '')
+            voiceAnalytics =  {
+                "Type": "VoiceAnalyticsProcessor",
+                "VoiceAnalyticsProcessorConfiguration": {
+                    "SpeakerSearchStatus": 'Enabled' if enableVoiceToneAnalysis == 'true' else 'Disabled',
+                    "VoiceToneAnalysisStatus": 'Enabled' if enableVoiceToneAnalysis == 'true' else 'Disabled'
+                }
+            }
+            elements.append(voiceAnalytics)
+            
+            print(json.dumps(elements))
+            
+            response = mediaPipelineClient.create_media_insights_pipeline_configuration(
+                MediaInsightsPipelineConfigurationName=pipelineConfigName,
+                ResourceAccessRoleArn=resourceAccessRoleArn,
+                RealTimeAlertConfiguration={
+                    'Disabled': True
+                },
+                Elements=elements
+            )
+            
+            return {'Message': 'Created LCA Media Pipeline Config.'}
+            
+
+        def lambda_handler(event, context):
+            print(json.dumps(event))
+
+            if event['RequestType'] == "Create":
+                try:
+                    responseData = create_pipeline_configuration(event)
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
+                except Exception as e:
+                    error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                    print(error)
+                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
+            elif event['RequestType'] == 'Delete':
+                try:
+                    delete_vc(event)
+                    responseData = {'Message': 'Deleting LCA Media Pipeline Config.  Returning success status.'}                   
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                      
+                except Exception as e:
+                    error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                    print(error)
+                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
+            else:
+                responseData = {'Message': 'Update is no-op. Returning success status.'}
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+
+
+  ### TODO: Add Lambda for voice analysis
+
+  ##########################################################################
+  # Boto3 Transcriber Lambda Layer
+  ##########################################################################
+  Boto3LambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+        - python3.8
+      Description: >
+       This is a layer with shared python libraries for the custom resource 
+       to create the ChimeSDKMediaInsightsPipelineConfiguration.
+      ContentUri:
+        ../lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
   ##########################################################################
   # Call Transcriber
