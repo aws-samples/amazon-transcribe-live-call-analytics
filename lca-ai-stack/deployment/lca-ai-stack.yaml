@@ -283,6 +283,15 @@ Parameters:
     Description: >
       A regular expression that will be used to show an alert in the UI if a category matches
 
+  EnableVoiceToneAnalysis:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Whether or not to show the voice tone analysis panel in the UI 
+
 Metadata:
   "AWS::CloudFormation::Interface":
     ParameterGroups:

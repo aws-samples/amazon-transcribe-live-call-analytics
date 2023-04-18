@@ -45,6 +45,12 @@ Parameters:
     Description: >-
       S3 Bucket name for recordings
 
+  RawFilePrefix:
+    Type: String
+    Default: 'lca-audio-raw/'
+    Description: >-
+      Raw LCA prefix for files
+    
   TranscribeApiMode:
     Type: String
     Default: analytics
@@ -161,10 +167,10 @@ Resources:
       EnableVoiceToneAnalytics: !Ref EnableVoiceToneAnalysis
       ResourceAccessRoleArn: !Ref ChimeCallAnalyticsResourceAccessRoleArn
       LambdaSinkArn: !Ref LambdaSinkArn
-      StackName: !Ref 'AWS::StackName'
+      # StackName: !Ref 'AWS::StackName'
       TranscribeApiMode: !Ref TranscribeApiMode
       OutputBucket: !Ref S3BucketName
-      RawFilePrefix: 'lca-audio-raw/'
+      RawFilePrefix: !Ref RawFilePrefix
       RecordingFilePrefix: !Ref AudioFilePrefix
       CallAnalyticsFilePrefix: !Ref CallAnalyticsPrefix
       TcaDataAccessRoleArn: !Ref TcaDataAccessRoleArn
