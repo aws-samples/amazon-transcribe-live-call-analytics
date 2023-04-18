@@ -57,11 +57,11 @@ zip -r boto3_lambda_layer.zip *
 popd
 
 # configure call transcriber
-transcriber_dir=lambda_functions/call_transcriber
-echo "Installing dependencies for $transcriber_dir"
-pushd $transcriber_dir
-npm install
-popd
+#transcriber_dir=lambda_functions/call_transcriber
+#echo "Installing dependencies for $transcriber_dir"
+#pushd $transcriber_dir
+#npm install
+#popd
 
 #chime_call_analytics_dir=lambda_functions/chime_call_analytics_initialization
 #echo "Installing dependencies for $chime_call_analytics_dir"

@@ -480,7 +480,11 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Type: String
-      Value: !Sub '{"CategoryAlertRegex":"${CategoryAlertRegEx}"}'
+      Value: !Sub >
+        '{
+          "CategoryAlertRegex":"${CategoryAlertRegEx}",
+          "EnableVoiceToneAnalysis":"${EnableVoiceToneAnalysis}"
+        }'
 
   ##########################################################################
   # CodeBuild
