@@ -996,6 +996,9 @@ Outputs:
     Description: >-
       The ARN of Kinesis Data Stream for sending Call and Transcription events.
     Value: !GetAtt AISTACK.Outputs.CallDataStreamArn
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-CallDataStreamArn'
 
   DemoPBXIPAddress:
     Description: Demo Asterisk Server IP Address

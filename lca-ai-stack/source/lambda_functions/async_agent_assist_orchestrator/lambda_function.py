@@ -71,11 +71,11 @@ DYNAMODB_TABLE_NAME = getenv("DYNAMODB_TABLE_NAME", "")
 def write_agent_assist_to_kds(
     message: Dict[str, Any]
 ):
-    callId = message.get("CallId", None)  
+    callId = message.get("CallId", None)
     message['EventType'] = "ADD_AGENT_ASSIST"
 
     if callId:
-        try: 
+        try:
             KINESIS_CLIENT.put_record(
                 StreamName=CALL_DATA_STREAM_NAME,
                 PartitionKey=callId,
@@ -139,7 +139,7 @@ def get_lex_agent_assist_transcript(
     """Sends Lex Agent Assist Requests"""
     call_id = transcript_segment_args["CallId"]
 
-    LOGGER.debug("Bot Request: %s", content)
+    LOGGER.info("Bot Request: %s", content)
 
     bot_response: RecognizeTextResponseTypeDef = recognize_text_lex(
         text=content,
@@ -150,7 +150,7 @@ def get_lex_agent_assist_transcript(
         locale_id=LEX_BOT_LOCALE_ID,
     )
 
-    LOGGER.debug("Bot Response: ", extra=bot_response)
+    LOGGER.info("Bot Response: ", extra=bot_response)
 
     transcript_segment = {}
     transcript = process_lex_bot_response(bot_response)
@@ -163,7 +163,7 @@ def process_lex_bot_response(bot_response):
     message = ""
     if is_qnabot_noanswer(bot_response):
         # ignore 'noanswer' responses from QnABot
-        LOGGER.debug("QnABot \"Dont't know\" response - ignoring")
+        LOGGER.info("QnABot \"Dont't know\" response - ignoring")
         return ""
     # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
     appContextJSON = bot_response.get("sessionState", {}).get(
@@ -249,7 +249,7 @@ def get_lambda_agent_assist_transcript(
         'dynamodb_pk': f"c#{call_id}",
     }
 
-    LOGGER.debug("Agent Assist Lambda Request: %s", content)
+    LOGGER.info("Agent Assist Lambda Request: %s", content)
 
     lambda_response = LAMBDA_CLIENT.invoke(
         FunctionName=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
@@ -257,7 +257,7 @@ def get_lambda_agent_assist_transcript(
         Payload=json.dumps(payload)
     )
 
-    LOGGER.debug("Agent Assist Lambda Response: ", extra=lambda_response)
+    LOGGER.info("Agent Assist Lambda Response: ", extra=lambda_response)
 
     transcript_segment = {}
     transcript = process_lambda_response(lambda_response)
@@ -290,10 +290,10 @@ def transform_segment_to_issues_agent_assist(
     is_partial = False
     segment_id = str(uuid.uuid4())
     channel = "AGENT_ASSISTANT"
-    segment_item = segment["Transcript"]
+    segment_item = segment["ContactLensTranscript"]
     transcript = segment_item["Content"]
 
-    issues_detected = segment.get("Transcript", {}).get("IssuesDetected", [])
+    issues_detected = segment.get("ContactLensTranscript", {}).get("IssuesDetected", [])
     if not issues_detected:
         raise ValueError("Invalid issue segment")
 
@@ -338,7 +338,10 @@ def publish_contact_lens_lex_agent_assist_transcript_segment(
     # only send relevant segments to agent assist
     # BobS: Modified to process Utterance rather than Transcript events
     # to lower latency
-    if not ("Utterance" in segment or "Categories" in segment):
+    # Kishore: Switch back to using Transcript events because Utterances
+    # do not have is_partial flag and does not contain full transcripts
+    # anymore.
+    if not ("ContactLensTranscript" in segment or "Categories" in segment):
         return
 
     if (
@@ -486,7 +489,7 @@ def transform_segment_to_categories_agent_assist(
 
 
 def publish_contact_lens_lambda_agent_assist_transcript_segment(
-    segment: Dict[str, Any],
+        segment: Dict[str, Any],
 ):
     """Add Lambda Agent Assist GraphQL Mutations"""
     # pylint: disable=too-many-locals
@@ -503,7 +506,10 @@ def publish_contact_lens_lambda_agent_assist_transcript_segment(
     # only send relevant segments to agent assist
     # BobS: Modified to process Utterance rather than Transcript events
     # to lower latency
-    if not ("Utterance" in segment or "Categories" in segment):
+    # Kishore: Switch back to using Transcript events because Utterances
+    # do not have is_partial flag and does not contain full transcripts
+    # anymore.
+    if not ("ContactLensTranscript" in segment or "Categories" in segment):
         return
 
     if (
