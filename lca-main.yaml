@@ -32,12 +32,12 @@ Parameters:
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
       or integrate with Amazon Connect Contact Lens.
 
-  CallProcessor:
+  CallAudioProcessor:
     Type: String
     Default: Chime Call Analytics
     AllowedValues:
       - Chime Call Analytics
-      - LCA Call Processor Lambda
+      - Call Transcriber Lambda
     Description: >
       If you choose Demo Asterisk PBX Server or Chime Voice Connector (SIPREC), you can have 
       Chime Call Analytics ingest the audio and send it to Trancribe, or use the example LCA Call 
@@ -46,7 +46,7 @@ Parameters:
   
   ChimeVoiceToneAnalysis:
     Type: String
-    Default: Enabled
+    Default: Disabled
     AllowedValues:
       - Enabled
       - Disabled
@@ -54,8 +54,8 @@ Parameters:
       Used only when a call audio source with Chime Voice Connector is selected, and 
       Chime Call Analytics is used as a call processor.
       A voice analytics feature that enables you to analyze caller voices for a positive, 
-      negative, or neutral sentiment. This is different than sentiment analysis, as it analyzes
-      the voice tone versus the text.
+      negative, or neutral tone. This is different than sentiment analysis, as it analyzes
+      the audio versus text.
     
   ChimeSpeakerSearch:
     Type: String
@@ -460,7 +460,7 @@ Metadata:
           default: Telephony Ingestion Options
         Parameters:
           - CallAudioSource
-          - CallProcessor
+          - CallAudioProcessor
           - ChimeVoiceToneAnalysis
           - ChimeSpeakerSearch
           - DemoSoftphoneAllowedCidr
@@ -536,8 +536,8 @@ Metadata:
   
     ParameterLabels:
 
-      CallProcessor:
-        default: Call Processor
+      CallAudioProcessor:
+        default: Call Audio Processor
       ChimeSpeakerSearch:
         default: Chime Speaker Search
       ChimeVoiceToneAnalysis:
@@ -641,7 +641,7 @@ Conditions:
   ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
-  ShouldUseChimeCallAnalytics: !Equals [!Ref CallProcessor, 'Chime Call Analytics']
+  ShouldUseChimeCallAnalytics: !Equals [!Ref CallAudioProcessor, 'Chime Call Analytics']
   ShouldEnableVoiceToneAnalysis: !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']
   ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
   
