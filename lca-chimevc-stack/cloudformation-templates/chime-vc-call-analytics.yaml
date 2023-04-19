@@ -370,7 +370,7 @@ Resources:
                   - !Ref KinesisDataStreamArn
 
   ##########################################################################
-  # Call Transcriber
+  # Chime Call Initialization
   ##########################################################################
 
   TranscriberCallEventTable:
@@ -400,22 +400,21 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_IMAGE
 
-  CallTranscriberFunction:
+  CallAnalyticsInitFunction:
     Type: AWS::Serverless::Function
     Properties:
       Architectures:
         - arm64
       Description: >-
         AWS Lambda Function that will be triggered when a new call starts. This will
-        read from the KVS streams, stitch the channels together, send audio to
-        transcribe, and store the transcriptions in DynamoDB
+        initialize the Chime Call Analytics Media Pipeline.
       Handler: index.handler
       Layers:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
         - !Ref TranscriberLambdaLayer
-      Role: !GetAtt CallTranscriberFunctionRole.Arn
+      Role: !GetAtt CallAnalyticsInitFunctionRole.Arn
       Runtime: nodejs18.x
       MemorySize: 768
       Timeout: 900
@@ -454,7 +453,7 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
-  CallTranscriberFunctionRole:
+  CallAnalyticsInitFunctionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -580,16 +579,16 @@ Resources:
             reason: >-
               Transcribe does not support resource-level permissions and KVS streams are dynamic
 
-  AllowEventBridgeToCallTranscriberFunctionLambdaFromChimeVC:
+  AllowEventBridgeToCallAnalyticsInitFunctionLambdaFromChimeVC:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref CallTranscriberFunction
+      FunctionName: !Ref CallAnalyticsInitFunction
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC.Arn
+      SourceArn: !GetAtt EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromChimeVC.Arn
       SourceAccount: !Ref AWS::AccountId
 
-  EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC:
+  EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromChimeVC:
     Type: AWS::Events::Rule
     Properties:
       Description: "This rule is triggered when the ChimeVC streaming status changes"
@@ -602,20 +601,20 @@ Resources:
         source:
           - aws.chime
       Targets:
-        - Id: CallTranscriberTarget
-          Arn: !GetAtt CallTranscriberFunction.Arn
+        - Id: CallAnalyticsInitTarget
+          Arn: !GetAtt CallAnalyticsInitFunction.Arn
       State: "ENABLED"
 
-  AllowEventBridgeToCallTranscriberFunctionLambdFromIVR:
+  AllowEventBridgeToCallAnalyticsInitFunctionLambdFromIVR:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref CallTranscriberFunction
+      FunctionName: !Ref CallAnalyticsInitFunction
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR.Arn
+      SourceArn: !GetAtt EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromIVR.Arn
       SourceAccount: !Ref AWS::AccountId
 
-  EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR:
+  EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromIVR:
     Type: AWS::Events::Rule
     Properties:
       Description: "This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR"
@@ -625,17 +624,17 @@ Resources:
         source:
           - lca-solution
       Targets:
-        - Id: CallTranscriberTarget
-          Arn: !GetAtt CallTranscriberFunction.Arn
+        - Id: CallAnalyticsInitTarget
+          Arn: !GetAtt CallAnalyticsInitFunction.Arn
       State: "ENABLED"
 
   # Permission for Call Transcriber to invoke itself
-  CallTranscriberPermission:
+  CallAnalyticsInitPermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref CallTranscriberFunction
-      Principal: !GetAtt CallTranscriberFunctionRole.Arn
+      FunctionName: !Ref CallAnalyticsInitFunction
+      Principal: !GetAtt CallAnalyticsInitFunctionRole.Arn
 
 Metadata:
   "AWS::CloudFormation::Interface":
