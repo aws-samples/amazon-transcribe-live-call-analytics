@@ -58,6 +58,7 @@ const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env.POST_CALL_CONTENT_REDACTI
 const START_STREAM_MAX_RETRIES = parseInt(process.env.START_STREAM_RETRIES || '5', 10);
 const START_STREAM_RETRY_WAIT_MS = parseInt(process.env.START_STREAM_RETRY_WAIT || '1000', 10);
 
+const LCA_STACK_NAME = (process.env.LCA_STACK_NAME || '');
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -471,7 +472,7 @@ const handler = async function handler(event, context) {
       await writeCallStartEventToKds(kinesisClient, callData);
 
       // it is now time to execute the mediapipeline
-      
+      let configName = LCA_STACK_NAME + '-MediaPipelineConfig';
 
     } else if (event.detail.streamingStatus === 'ENDED') {
       callData = await getCallDataFromChimeEvents(event);

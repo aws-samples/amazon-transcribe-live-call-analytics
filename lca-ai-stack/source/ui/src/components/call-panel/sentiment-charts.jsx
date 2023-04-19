@@ -40,17 +40,13 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
       hideFilter
       series={[
         {
-          title: transcriptChannels[0]
-            ? transcriptChannels[0].replace('_VOICE_SENTIMENT', '')
-            : 'n/a',
+          title: transcriptChannels[0] ? transcriptChannels[0].replace('_VOICETONE', '') : 'n/a',
           type: 'line',
           data: sentimentPerChannel[0] || [],
           valueFormatter: (e) => e.toFixed(3),
         },
         {
-          title: transcriptChannels[1]
-            ? transcriptChannels[1].replace('_VOICE_SENTIMENT', '')
-            : 'n/a',
+          title: transcriptChannels[1] ? transcriptChannels[1].replace('_VOICETONE', '') : 'n/a',
           type: 'line',
           data: sentimentPerChannel[1] || [],
           valueFormatter: (e) => e.toFixed(3),
@@ -87,8 +83,8 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
     .filter((c) => c !== 'AGENT_ASSISTANT')
-    .filter((c) => c !== 'AGENT_VOICE_SENTIMENT')
-    .filter((c) => c !== 'CALLER_VOICE_SENTIMENT')
+    .filter((c) => c !== 'AGENT_VOICETONE')
+    .filter((c) => c !== 'CALLER_VOICETONE')
     .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentPerChannel = transcriptChannels
@@ -154,8 +150,8 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
   const transcriptChannels = Object.keys(transcriptsForThisCallId)
     .slice(0, maxChannels)
     .filter((c) => c !== 'AGENT_ASSISTANT')
-    .filter((c) => c !== 'AGENT_VOICE_SENTIMENT')
-    .filter((c) => c !== 'CALLER_VOICE_SENTIMENT')
+    .filter((c) => c !== 'AGENT_VOICETONE')
+    .filter((c) => c !== 'CALLER_VOICETONE')
     .filter((c) => c !== 'CATEGORY_MATCH');
 
   const sentimentByQuarterPerChannel = transcriptChannels

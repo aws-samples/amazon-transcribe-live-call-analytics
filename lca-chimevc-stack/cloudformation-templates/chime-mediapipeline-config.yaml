@@ -1,9 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Call Analytics w/ Chime Voice Connector
+Description: Deploys ChimeSDK Chime Call Analytics Media Pipeline Configuration
 
 Parameters:
+  StackName:
+    Type: String
+    Description: >
+      Name of the stack to prepend to the media pipeline configuration.
+
   EnableVoiceToneAnalysis:
     Type: String
     Default: false
@@ -167,7 +172,7 @@ Resources:
       EnableVoiceToneAnalytics: !Ref EnableVoiceToneAnalysis
       ResourceAccessRoleArn: !Ref ChimeCallAnalyticsResourceAccessRoleArn
       LambdaSinkArn: !Ref LambdaSinkArn
-      # StackName: !Ref 'AWS::StackName'
+      StackName: !Ref StackName
       TranscribeApiMode: !Ref TranscribeApiMode
       OutputBucket: !Ref S3BucketName
       RawFilePrefix: !Ref RawFilePrefix
@@ -200,6 +205,9 @@ Resources:
             Action: chime:ListMediaInsightsPipelineConfigurations
             Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-insights-pipeline-configuration/*
           - Effect: Allow
+            Action: chime:GetMediaInsightsPipelineConfiguration
+            Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-insights-pipeline-configuration/*
+          - Effect: Allow
             Action: chime:CreateMediaInsightsPipelineConfiguration
             Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-insights-pipeline-configuration/*
           - Effect: Allow
@@ -225,7 +233,13 @@ Resources:
             pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
             response = mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
             return {'Message': 'Deleted Media Pipeline Config'}
-            
+
+        def find_pipeline_configuration(event):
+            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
+            response = mediaPipelineClient.get_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
+
+            return {'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn']}
+
         def create_pipeline_configuration(event):
             pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
             resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
@@ -335,7 +349,7 @@ Resources:
                 except Exception as e:
                     error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                     print(error)
-                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
+                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
             elif event['RequestType'] == 'Delete':
                 try:
                     delete_pipeline_configuration(event)
@@ -344,10 +358,18 @@ Resources:
                 except Exception as e:
                     error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                     print(error)
-                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
+                    # still returning success so stack doesnt fail
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, reason=error )   
             else:
-                responseData = {'Message': 'Update is no-op. Returning success status.'}
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                #responseData = {'Message': 'Update is no-op. Returning success status.'}
+                #cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                try:
+                    responseData = find_pipeline_configuration(event)
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
+                except Exception as e:
+                    error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                    print(error)
+                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
 
 
 Conditions:

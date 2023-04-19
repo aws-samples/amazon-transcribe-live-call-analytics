@@ -935,6 +935,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        LCAStackName: !Ref 'AWS::StackName'
         UseChimeCallAnalytics: !If 
           - ShouldUseChimeCallAnalytics
           - true

@@ -88,7 +88,7 @@ def lambda_handler(event, context):
         
         timestampStr = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         
-        participant = 'CALLER_VOICE_SENTIMENT' if detail['isCaller'] != True else 'AGENT_VOICE_SENTIMENT'
+        participant = 'CALLER_VOICETONE' if detail['isCaller'] != True else 'AGENT_VOICETONE'
         sentiment = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneLabel'].upper()
         
         segmentStartTimeStr = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['startTime']

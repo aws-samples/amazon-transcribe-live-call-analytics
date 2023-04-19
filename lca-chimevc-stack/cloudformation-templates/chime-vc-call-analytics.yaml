@@ -4,6 +4,10 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Call Analytics w/ Chime Voice Connector
 
 Parameters:
+  LCAStackName:
+    Type: String
+    Description: Name of the LCA stack to prepend to resources.
+
   EnableVoiceToneAnalysis:
     Type: String
     Default: true
@@ -188,6 +192,7 @@ Resources:
     Properties:
       TemplateURL: ./chime-mediapipeline-config.yaml
       Parameters:
+        StackName: !Ref LCAStackName
         EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
         EnableSpeakerSearch: !Ref EnableSpeakerSearch
         TranscribeApiMode: !Ref TranscribeApiMode
@@ -417,6 +422,7 @@ Resources:
       Tracing: Active
       Environment:
         Variables:
+          LCA_STACK_NAME: !Ref LCAStackName
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
           BUFFER_SIZE: "128"
           LAMBDA_INVOKE_TIMEOUT: "720000"

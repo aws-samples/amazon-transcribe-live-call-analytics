@@ -97,7 +97,7 @@ CALL_EVENT_TYPE_TO_STATUS = {
 DEFAULT_CUSTOMER_PHONE_NUMBER = getenv("DEFAULT_CUSTOMER_PHONE_NUMBER", "+18005550000")
 
 SentimentLabelType = Literal["NEGATIVE", "MIXED", "NEUTRAL", "POSITIVE"]
-ChannelType = Literal["AGENT", "CALLER", "AGENT_VOICE_SENTIMENT", "CALLER_VOICE_SENTIMENT"]
+ChannelType = Literal["AGENT", "CALLER", "AGENT_VOICETONE", "CALLER_VOICETONE"]
 StatusType = Literal["STARTED", "TRANSCRIBING", "ERRORED", "ENDED"]
 SentimentPeriodType = Literal["QUARTER"]
 
@@ -419,7 +419,7 @@ async def get_aggregated_sentiment(
 
     for segment in result.get("getTranscriptSegmentsWithSentiment").get("TranscriptSegmentsWithSentiment"):
         channel = segment.get("Channel", None)
-        if channel and channel in ["AGENT", "CALLER", "AGENT_VOICE_SENTIMENT", "CALLER_VOICE_SENTIMENT"] :
+        if channel and channel in ["AGENT", "CALLER", "AGENT_VOICETONE", "CALLER_VOICETONE"] :
             if segment.get("SentimentWeighted", None):
                 LOGGER.debug("Aggregating sentiment entry", extra=segment)
                 sentiment_entry : SentimentEntry = {

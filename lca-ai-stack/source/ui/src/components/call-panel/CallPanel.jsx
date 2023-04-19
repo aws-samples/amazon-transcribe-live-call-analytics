@@ -586,7 +586,7 @@ const CallInProgressTranscript = ({
   const [updateFlag, setUpdateFlag] = useState(false);
 
   // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH,
-  // AGENT_VOICE_SENTIMENT, CALLER_VOICE_SENTIMENT
+  // AGENT_VOICETONE, CALLER_VOICETONE
   const maxChannels = 6;
   const { callId } = item;
   const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
@@ -740,8 +740,8 @@ const CallInProgressTranscript = ({
           && s?.createdAt
           && (s.agentTranscript === undefined
             || s.agentTranscript || s.channel !== 'AGENT')
-          && (s.channel !== 'AGENT_VOICE_SENTIMENT')
-          && (s.channel !== 'CALLER_VOICE_SENTIMENT')
+          && (s.channel !== 'AGENT_VOICETONE')
+          && (s.channel !== 'CALLER_VOICETONE')
           && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} />
         ),
       );

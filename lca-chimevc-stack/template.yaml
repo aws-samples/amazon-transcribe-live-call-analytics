@@ -223,6 +223,10 @@ Parameters:
     Default: dashboard/parsedFiles/
     Description: PCA path prefix for call detail pages.
 
+  LCAStackName:
+    Type: String
+    Description: Praent LCA Stack name
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -292,6 +296,7 @@ Resources:
     Properties:
       TemplateURL: ./cloudformation-templates/chime-vc-call-analytics.yaml
       Parameters:
+        LCAStackName: !Ref LCAStackName
         EnableSpeakerSearch: !Ref EnableSpeakerSearch
         EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
         TranscribeApiMode: !Ref TranscribeApiMode
