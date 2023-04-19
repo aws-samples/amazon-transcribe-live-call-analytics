@@ -19,9 +19,9 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA AI Stack
 
 Parameters:
-  ExpirationInDays:
+  RecordingsBucketRetentionDays:
     Type: Number
-    Description: "Number of days after which bucket objects will be deleted."
+    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
     Default: 30
   CallAudioSource:
     Type: String
@@ -398,7 +398,7 @@ Resources:
           - Id: RuleRetention
             Status: Enabled
             Prefix: ""
-            ExpirationInDays: !Ref ExpirationInDays
+            RecordingsBucketRetentionDays: !Ref RecordingsBucketRetentionDays
 
   RecordingsBucketPolicy:
     Type: AWS::S3::BucketPolicy
