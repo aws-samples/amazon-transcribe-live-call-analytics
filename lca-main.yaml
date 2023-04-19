@@ -57,16 +57,16 @@ Parameters:
       negative, or neutral tone. This is different than sentiment analysis, as it analyzes
       the audio versus text.
     
-  ChimeSpeakerSearch:
-    Type: String
-    Default: Disabled
-    AllowedValues:
-      - Enabled
-      - Disabled
-    Description: >
-      Used only when a call audio source with Chime Voice Connector is selected, and 
-      Chime Call Analytics is used as a call processor.
-      A voice analytics feature that enables you to identify call participants.
+  # ChimeSpeakerSearch:
+  #   Type: String
+  #   Default: Disabled
+  #   AllowedValues:
+  #     - Enabled
+  #     - Disabled
+  #   Description: >
+  #     Used only when a call audio source with Chime Voice Connector is selected, and 
+  #     Chime Call Analytics is used as a call processor.
+  #     A voice analytics feature that enables you to identify call participants.
 
   DemoSoftphoneAllowedCidr:
     Type: String
@@ -462,7 +462,7 @@ Metadata:
           - CallAudioSource
           - CallAudioProcessor
           - ChimeVoiceToneAnalysis
-          - ChimeSpeakerSearch
+          # - ChimeSpeakerSearch
           - DemoSoftphoneAllowedCidr
           - SiprecAllowedCidrList
           - SiprecLambdaHookFunctionArn
@@ -535,11 +535,10 @@ Metadata:
           - PcaWebAppCallPathPrefix
   
     ParameterLabels:
-
       CallAudioProcessor:
         default: Call Audio Processor
-      ChimeSpeakerSearch:
-        default: Chime Speaker Search
+      # ChimeSpeakerSearch:
+      #   default: Chime Speaker Search
       ChimeVoiceToneAnalysis:
         default: Chime Voice Tone Analysis
       S3BucketName:
@@ -643,7 +642,7 @@ Conditions:
   ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldUseChimeCallAnalytics: !Equals [!Ref CallAudioProcessor, 'Chime Call Analytics']
   ShouldEnableVoiceToneAnalysis: !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']
-  ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
+  # ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
   
   ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
@@ -936,6 +935,10 @@ Resources:
       # yamllint enable rule:line-length
       Parameters:
         LCAStackName: !Ref 'AWS::StackName'
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - true
+          - false
         UseChimeCallAnalytics: !If 
           - ShouldUseChimeCallAnalytics
           - true

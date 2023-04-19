@@ -28,7 +28,7 @@ Parameters:
   
   EnableVoiceToneAnalysis:
     Type: String
-    Default: true
+    Default: false
     AllowedValues:
       - true
       - false
@@ -36,15 +36,15 @@ Parameters:
       Set to true to enable Chime voice tone analysis. This is only used if Chime
       Call Analytics is enabled.
 
-  EnableSpeakerSearch:
-    Type: String
-    Default: true
-    AllowedValues:
-      - true
-      - false
-    Description: >
-      Set to true to enable Chime speaker search. This is only used if Chime
-      Call Analytics is enabled.
+  # EnableSpeakerSearch:
+  #   Type: String
+  #   Default: false
+  #   AllowedValues:
+  #     - true
+  #     - false
+  #   Description: >
+  #     Set to true to enable Chime speaker search. This is only used if Chime
+  #     Call Analytics is enabled.
 
   InstallDemoAsteriskServer:
     Type: String
@@ -297,7 +297,7 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-call-analytics.yaml
       Parameters:
         LCAStackName: !Ref LCAStackName
-        EnableSpeakerSearch: !Ref EnableSpeakerSearch
+        # EnableSpeakerSearch: !Ref EnableSpeakerSearch
         EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
         TranscribeApiMode: !Ref TranscribeApiMode
         AudioFilePrefix: !Ref AudioFilePrefix

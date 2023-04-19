@@ -18,15 +18,15 @@ Parameters:
       Set to true to enable Chime voice tone analysis. This is only used if Chime
       Call Analytics is enabled.
 
-  EnableSpeakerSearch:
-    Type: String
-    Default: true
-    AllowedValues:
-      - true
-      - false
-    Description: >
-      Set to true to enable Chime speaker search. This is only used if Chime
-      Call Analytics is enabled.
+  # EnableSpeakerSearch:
+  #   Type: String
+  #   Default: true
+  #   AllowedValues:
+  #     - true
+  #     - false
+  #   Description: >
+  #     Set to true to enable Chime speaker search. This is only used if Chime
+  #     Call Analytics is enabled.
 
   AudioFilePrefix:
     Type: String
@@ -194,7 +194,7 @@ Resources:
       Parameters:
         StackName: !Ref LCAStackName
         EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
-        EnableSpeakerSearch: !Ref EnableSpeakerSearch
+        # EnableSpeakerSearch: !Ref EnableSpeakerSearch
         TranscribeApiMode: !Ref TranscribeApiMode
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
         S3BucketName: !Ref S3BucketName
