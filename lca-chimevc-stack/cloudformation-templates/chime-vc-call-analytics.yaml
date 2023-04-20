@@ -235,6 +235,15 @@ Resources:
                 aws:SourceArn: !Sub arn:aws:chime:*:${AWS::AccountId}:*
       Path: /
       Policies:
+        - PolicyName: chime-analytics-passrole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - iam:PassRole
+                Effect: Allow
+                Resource:  
+                  - !GetAtt TcaDataAccessRole.Arn
         - PolicyName: chime-analytics-kds
           PolicyDocument:
             Version: 2012-10-17
@@ -266,13 +275,13 @@ Resources:
                 - kinesisvideo:GetMedia
                 Effect: Allow
                 Resource: 
-                  - !Sub arn:${AWS::Partition}:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/Chime*"
+                  - !Sub arn:${AWS::Partition}:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/Chime*
               - Action:
                 - kinesisvideo:GetDataEndpoint
                 - kinesisvideo:GetMedia
                 Effect: Allow
                 Resource: 
-                  - !Sub arn:${AWS::Partition}:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*"
+                  - !Sub arn:${AWS::Partition}:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*
                 Condition:
                   StringLike:
                     aws:ResourceTag/AWSServiceName: ChimeSDK
@@ -421,6 +430,7 @@ Resources:
       Tracing: Active
       Environment:
         Variables:
+          CHIME_MEDIAPIPELINE_CONFIG_ARN: !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
           LCA_STACK_NAME: !Ref LCAStackName
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
           BUFFER_SIZE: "128"
@@ -480,6 +490,17 @@ Resources:
                   - iam:PassRole
                 Resource:
                   - !GetAtt TcaDataAccessRole.Arn
+              - Effect: Allow
+                Action:
+                  - chime:CreateMediaInsightsPipeline
+                Resource:
+                  - !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
+                  - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
+              - Effect: Allow
+                Action:
+                  - chime:GetMediaPipeline
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
               - Effect: Allow
                 Action:
                   - transcribe:DeleteTranscriptionJob

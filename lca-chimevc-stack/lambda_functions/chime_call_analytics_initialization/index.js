@@ -13,7 +13,7 @@ const { KinesisClient } = require('@aws-sdk/client-kinesis');
 /* Transcribe and Streaming Libraries */
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
-const { ChimeSDKMediaPipelinesClient } = require('@aws-sdk/client-chime-sdk-media-pipelines')
+const { ChimeSDKMediaPipelinesClient, CreateMediaInsightsPipelineCommand, GetMediaPipelineCommand } = require('@aws-sdk/client-chime-sdk-media-pipelines')
 
 
 /* Local libraries */
@@ -59,6 +59,8 @@ const START_STREAM_MAX_RETRIES = parseInt(process.env.START_STREAM_RETRIES || '5
 const START_STREAM_RETRY_WAIT_MS = parseInt(process.env.START_STREAM_RETRY_WAIT || '1000', 10);
 
 const LCA_STACK_NAME = (process.env.LCA_STACK_NAME || '');
+
+const CHIME_MEDIAPIPELINE_CONFIG_ARN = process.env.CHIME_MEDIAPIPELINE_CONFIG_ARN || '';
 
 const EVENT_TYPE = {
   STARTED: 'START',
@@ -388,6 +390,73 @@ const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent
   return callData;
 };
 
+const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyticsMediaPipeline(mediaPipelineClient, callData) {
+
+  try {
+    console.log('Starting Media Pipeline...');
+    let createMediaPipelineCommand = {
+      'MediaInsightsPipelineConfigurationArn': CHIME_MEDIAPIPELINE_CONFIG_ARN,
+      'MediaInsightsRuntimeMetadata':{
+        'callId':callData.callId,
+        'fromNumber':callData.fromNumber,
+        'toNumber':callData.toNumber,
+        'voiceConnectorId': callData.voiceConnectorId,
+        'transactionId': callData.transactionId,
+        'direction': callData.direction
+      },
+      'KinesisVideoStreamSourceRuntimeConfiguration': {
+        'Streams': [
+          {
+            "StreamArn": callData.agentStreamArn,
+            'StreamChannelDefinition': {
+              'NumberOfChannels': 1,
+              'ChannelDefinitions': [
+                  {
+                      'ChannelId': 0,
+                      'ParticipantRole': 'AGENT'
+                  },
+              ]
+            }
+          },{
+            "StreamArn": callData.callerStreamArn,
+            'StreamChannelDefinition': {
+              'NumberOfChannels': 1,
+              'ChannelDefinitions': [
+                  {
+                      'ChannelId': 1,
+                      'ParticipantRole': 'CUSTOMER'
+                  },
+              ]
+            }
+          },
+        ],
+        'MediaEncoding': 'pcm',
+        'MediaSampleRate': 8000 // always for calls
+      }
+    };
+    console.log("Media Pipeline Command:");
+    console.log(JSON.stringify(createMediaPipelineCommand));
+    let command = new CreateMediaInsightsPipelineCommand(createMediaPipelineCommand);
+    let response = await mediaPipelineClient.send(command);
+    console.log('Media Pipeline Started');
+    console.log(JSON.stringify(response));
+    let getPipelineInput = { // GetMediaPipelineRequest
+      MediaPipelineId: response['MediaInsightsPipeline']['MediaPipelineId'], // required
+    };
+
+    /*for(let i = 0; i < 20; i++) {
+      await sleep(1000);
+      command = new GetMediaPipelineCommand(getPipelineInput);
+      response = await mediaPipelineClient.send(command);
+      console.log(JSON.stringify(response));
+    }*/
+    
+    
+  } catch (error) {
+    console.error('Error writing Chime Call Start event', error);
+  }
+}
+
 
 // MAIN LAMBDA HANDLER - FUNCTION ENTRY POINT
 const handler = async function handler(event, context) {
@@ -472,7 +541,7 @@ const handler = async function handler(event, context) {
       await writeCallStartEventToKds(kinesisClient, callData);
 
       // it is now time to execute the mediapipeline
-      let configName = LCA_STACK_NAME + '-MediaPipelineConfig';
+      await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
 
     } else if (event.detail.streamingStatus === 'ENDED') {
       callData = await getCallDataFromChimeEvents(event);
