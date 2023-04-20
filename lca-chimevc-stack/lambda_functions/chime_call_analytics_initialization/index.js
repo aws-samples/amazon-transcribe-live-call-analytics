@@ -413,7 +413,7 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
               'ChannelDefinitions': [
                   {
                       'ChannelId': 0,
-                      'ParticipantRole': 'AGENT'
+                      'ParticipantRole': 'CUSTOMER'
                   },
               ]
             }
@@ -424,7 +424,7 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
               'ChannelDefinitions': [
                   {
                       'ChannelId': 1,
-                      'ParticipantRole': 'CUSTOMER'
+                      'ParticipantRole': 'AGENT'
                   },
               ]
             }
@@ -450,8 +450,6 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
       response = await mediaPipelineClient.send(command);
       console.log(JSON.stringify(response));
     }*/
-    
-    
   } catch (error) {
     console.error('Error writing Chime Call Start event', error);
   }

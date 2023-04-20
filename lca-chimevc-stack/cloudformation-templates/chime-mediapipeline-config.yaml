@@ -314,7 +314,7 @@ Resources:
             elements.append(lambdaSink)
             
             # configure voice analytics
-            enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalysis', '')
+            enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalytics', '')
             enableSpeakerSearch = event['ResourceProperties'].get('EnableSpeakerSearch', '')
             voiceAnalytics =  {
                 "Type": "VoiceAnalyticsProcessor",
