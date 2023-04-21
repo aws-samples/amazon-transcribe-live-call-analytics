@@ -1027,6 +1027,10 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   const { currentCredentials } = useAppContext();
 
+  const { settings } = useSettingsContext();
+
+  const enableVoiceTone = settings?.EnableVoiceToneAnalysis === 'true';
+
   // prettier-ignore
   const customRetryStrategy = new StandardRetryStrategy(
     async () => MAXIMUM_ATTEMPTS,
@@ -1068,18 +1072,23 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
         <CallCategories item={item} />
       </Grid>
       <Grid
-        gridDefinition={[{ colspan: { default: 12, xs: 8 } }, { colspan: { default: 12, xs: 4 } }]}
+        gridDefinition={[
+          { colspan: { default: 12, xs: enableVoiceTone ? 8 : 12 } },
+          { colspan: { default: 12, xs: enableVoiceTone ? 4 : 0 } },
+        ]}
       >
         <CallStatsContainer
           item={item}
           setToolsOpen={setToolsOpen}
           callTranscriptPerCallId={callTranscriptPerCallId}
         />
-        <VoiceToneContainer
-          item={item}
-          setToolsOpen={setToolsOpen}
-          callTranscriptPerCallId={callTranscriptPerCallId}
-        />
+        {enableVoiceTone ?? (
+          <VoiceToneContainer
+            item={item}
+            setToolsOpen={setToolsOpen}
+            callTranscriptPerCallId={callTranscriptPerCallId}
+          />
+        )}
       </Grid>
 
       <CallTranscriptContainer
