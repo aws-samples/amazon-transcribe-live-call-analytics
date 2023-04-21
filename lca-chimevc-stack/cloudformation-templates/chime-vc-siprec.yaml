@@ -35,7 +35,9 @@ Parameters:
     Default: ''
     Description: >
       If this has a value, the Chime Voice Connector resource will have this configuration applied.
-
+  Boto3LayerArn:
+    Type: String
+    Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
 Resources:
   CreateVCFunctionRole:
     Type: "AWS::IAM::Role"
@@ -63,6 +65,7 @@ Resources:
               - chime:CreateVoiceConnector
               - chime:PutVoiceConnectorTermination
               - chime:PutVoiceConnectorStreamingConfiguration
+              - chime:GetMediaInsightsPipelineConfiguration
               - chime:DeleteVoiceConnector
               - cloudformation:DescribeStacks
               - iam:CreateServiceLinkedRole
@@ -86,6 +89,8 @@ Resources:
       Handler: index.on_event
       Runtime: python3.8
       Timeout: 300
+      Layers:
+        - !Ref Boto3LayerArn
       Code:
         ZipFile: |
           import boto3
@@ -95,7 +100,7 @@ Resources:
 
           responseData = {}
 
-          chime = boto3.client('chime')
+          chime = boto3.client('chime-sdk-voice')
           cloudformation = boto3.resource("cloudformation")
 
           def create_vc(event):

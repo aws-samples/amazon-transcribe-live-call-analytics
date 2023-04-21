@@ -155,7 +155,6 @@ Parameters:
 
   Boto3LayerArn:
     Type: String
-    Default: ''
     Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
 
 Resources:

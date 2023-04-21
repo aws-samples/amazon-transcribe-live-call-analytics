@@ -13,6 +13,7 @@
 # limitations under the License.
 
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector
 
@@ -246,6 +247,19 @@ Conditions:
   ShouldInstallChimeCallAnalytics: !Equals [!Ref UseChimeCallAnalytics, 'true']
 
 Resources:
+
+  DeployBoto3LambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+        - python3.8
+      Description: >
+       This is a layer with shared python libraries for the custom resource 
+       to create the ChimeSDKMediaInsightsPipelineConfiguration.
+      ContentUri:
+        ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
+
   DeployChimeVCAsteriskDemo:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallDemoAsteriskServer
@@ -255,6 +269,7 @@ Resources:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
+        Boto3LayerArn: !Ref DeployBoto3LambdaLayer
 
   DeployChimeVCsiprec:
     Type: AWS::CloudFormation::Stack
@@ -263,6 +278,7 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
       Parameters:
         CidrBlocks: !Ref SiprecAllowedCidrList
+        Boto3LayerArn: !Ref DeployBoto3LambdaLayer
   
   DeployCallTranscriber:
     Type: AWS::CloudFormation::Stack
@@ -313,6 +329,7 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        Boto3LayerArn: !Ref DeployBoto3LambdaLayer
         VoiceConnectorId:
           'Fn::If':
             - ShouldInstallDemoAsteriskServer

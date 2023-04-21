@@ -149,6 +149,10 @@ Parameters:
     Default: ''
     Description: >-
       Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
+  
+  Boto3LayerArn:
+    Type: String
+    Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
 
 Resources:
 
@@ -167,21 +171,6 @@ Resources:
        and call analytics initialization Lambdas.
       ContentUri:
         ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
-  
-  ##########################################################################
-  # Boto3 Transcriber Lambda Layer
-  ##########################################################################
-  Boto3LambdaLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      CompatibleRuntimes:
-        - python3.7
-        - python3.8
-      Description: >
-       This is a layer with shared python libraries for the custom resource 
-       to create the ChimeSDKMediaInsightsPipelineConfiguration.
-      ContentUri:
-        ../lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
   ##########################################################################
   # Media Pipeline configuration 
@@ -214,7 +203,7 @@ Resources:
         CustomLanguageModelName: !Ref CustomLanguageModelName
         ChimeCallAnalyticsResourceAccessRoleArn: !GetAtt ChimeCallAnalyticsResourceAccessRole.Arn
         LambdaSinkArn: !GetAtt VoiceToneLambda.Arn
-        Boto3LayerArn: !Ref Boto3LambdaLayer
+        Boto3LayerArn: !Ref Boto3LayerArn
 
   ChimeCallAnalyticsResourceAccessRole:
     Type: AWS::IAM::Role
@@ -316,7 +305,7 @@ Resources:
       Runtime: python3.8
       Handler: lambda_function.lambda_handler
       Layers:
-        - !Ref Boto3LambdaLayer
+        - !Ref Boto3LayerArn
       Role: !GetAtt VoiceToneLambdaRole.Arn
       MemorySize: 128
       Timeout: 60
