@@ -402,6 +402,9 @@ Resources:
     Condition: ShouldCreateRecordingBucket
     Properties:
       AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       # XXX figure out access logging
       # LoggingConfiguration:
       #    DestinationBucketName: !Ref S3BucketName
@@ -422,7 +425,7 @@ Resources:
           - Id: RuleRetention
             Status: Enabled
             Prefix: ""
-            RecordingsBucketRetentionDays: !Ref RecordingsBucketRetentionDays
+            ExpirationInDays: !Ref RecordingsBucketRetentionDays
 
   RecordingsBucketPolicy:
     Type: AWS::S3::BucketPolicy
