@@ -48,23 +48,6 @@ Parameters:
     AllowedValues:
       - true
       - false
-  EnableVoiceToneAnalysis:
-    Type: String
-    Default: false
-    AllowedValues:
-      - true
-      - false
-    Description: >
-      Set to true to enable Chime voice tone analysis. This is only used if a media insights
-      pipeline configuration arn is also provided.
-  ChimeMediaInsightsPipelineConfigurationArn:
-    Type: String
-    Default: ''
-    Description: >
-      If this has a value, the Chime Voice Connector resource will have this configuration applied.
-  Boto3LayerArn:
-    Type: String
-    Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
 Resources:
   AsteriskVPC:
     Type: AWS::EC2::VPC
@@ -371,7 +354,6 @@ Resources:
                   - chime:PutVoiceConnectorTermination
                   - chime:PutVoiceConnectorStreamingConfiguration
                   - chime:PutVoiceConnectorOrigination
-                  - chime:GetMediaInsightsPipelineConfiguration
                   - cloudformation:DescribeStacks
                   - iam:CreateServiceLinkedRole
                   - iam:PutRolePolicy
@@ -392,7 +374,7 @@ Resources:
           import uuid
           import urllib.parse
           
-          chime = boto3.client('chime-sdk-voice')
+          chime = boto3.client('chime')
           cloudformation = boto3.resource("cloudformation")
           
           def authorizeEIP (voiceConnectorId, elasticIP):
@@ -498,14 +480,6 @@ Resources:
                 },
               ]
             }
-          
-          
-            if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
-              streamingConfiguration['MediaInsightsConfiguration'] = {
-                "ConfigurationArn": event['ResourceProperties']['ChimeMediaInsightsPipelineConfigurationArn']
-              }
-            print('Configuration to put:')
-            print(json.dumps(streamingConfiguration))
             response = chime.put_voice_connector_streaming_configuration(
               VoiceConnectorId=voiceConnectorId,
               StreamingConfiguration=streamingConfiguration
@@ -572,8 +546,6 @@ Resources:
       Handler: index.handler
       Runtime: python3.8
       Timeout: 300
-      Layers:
-        - !Ref Boto3LayerArn
   voiceConnectorResource:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -587,8 +559,6 @@ Resources:
         Ref: EIP
       stackName:
         Ref: AWS::StackName
-      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
-      ChimeMediaInsightsPipelineConfigurationArn: !Ref ChimeMediaInsightsPipelineConfigurationArn
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
   SSMPhoneNumber:

@@ -21,23 +21,7 @@ Parameters:
   CidrBlocks:
     Type: CommaDelimitedList
     Description: Comma Delimited list of CIDR blocks that will be allow listed to send traffic to the Chime Voice Connector.  CIDR blocks must be between /27 and /32 in length and use public IP ranges.  Example 203.0.113.128/27, 198.51.100.76/32
-  EnableVoiceToneAnalysis:
-    Type: String
-    Default: false
-    AllowedValues:
-      - true
-      - false
-    Description: >
-      Set to true to enable Chime voice tone analysis. This is only used if a media insights
-      pipeline configuration arn is also provided.
-  ChimeMediaInsightsPipelineConfigurationArn:
-    Type: String
-    Default: ''
-    Description: >
-      If this has a value, the Chime Voice Connector resource will have this configuration applied.
-  Boto3LayerArn:
-    Type: String
-    Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
+
 Resources:
   CreateVCFunctionRole:
     Type: "AWS::IAM::Role"
@@ -65,7 +49,6 @@ Resources:
               - chime:CreateVoiceConnector
               - chime:PutVoiceConnectorTermination
               - chime:PutVoiceConnectorStreamingConfiguration
-              - chime:GetMediaInsightsPipelineConfiguration
               - chime:DeleteVoiceConnector
               - cloudformation:DescribeStacks
               - iam:CreateServiceLinkedRole
@@ -89,8 +72,6 @@ Resources:
       Handler: index.on_event
       Runtime: python3.8
       Timeout: 300
-      Layers:
-        - !Ref Boto3LayerArn
       Code:
         ZipFile: |
           import boto3
@@ -100,7 +81,7 @@ Resources:
 
           responseData = {}
 
-          chime = boto3.client('chime-sdk-voice')
+          chime = boto3.client('chime')
           cloudformation = boto3.resource("cloudformation")
 
           def create_vc(event):
@@ -123,11 +104,6 @@ Resources:
                 }
               ]
             }
-
-            if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
-              streamingConfiguration['MediaInsightsConfiguration'] = {
-                "ConfigurationArn": event['ResourceProperties']['ChimeMediaInsightsPipelineConfigurationArn']
-              }
 
             chime.put_voice_connector_streaming_configuration(
               VoiceConnectorId=voiceConnectorId,
@@ -187,8 +163,6 @@ Resources:
       stackName:
         Ref: AWS::StackName
       CIDRBlocks: !If [CIDRBlockExists, !Ref CidrBlocks, !Ref "AWS::NoValue"]
-      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
-      ChimeMediaInsightsPipelineConfigurationArn: !Ref ChimeMediaInsightsPipelineConfigurationArn
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
