@@ -62,6 +62,9 @@ const LCA_STACK_NAME = (process.env.LCA_STACK_NAME || '');
 
 const CHIME_MEDIAPIPELINE_CONFIG_ARN = process.env.CHIME_MEDIAPIPELINE_CONFIG_ARN || '';
 
+const ENABLE_VOICETONE = process.env.ENABLE_VOICETONE || '';
+
+
 const EVENT_TYPE = {
   STARTED: 'START',
   ENDED: 'END',
@@ -539,7 +542,9 @@ const handler = async function handler(event, context) {
       await writeCallStartEventToKds(kinesisClient, callData);
 
       // it is now time to execute the mediapipeline
-      await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
+      if (!ENABLE_VOICETONE) {
+        await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
+      }
 
     } else if (event.detail.streamingStatus === 'ENDED') {
       callData = await getCallDataFromChimeEvents(event);

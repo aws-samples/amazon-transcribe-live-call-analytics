@@ -48,6 +48,20 @@ Parameters:
     AllowedValues:
       - true
       - false
+  EnableVoiceToneAnalysis:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Set to true to enable Chime voice tone analysis. This is only used if a media insights
+      pipeline configuration arn is also provided.
+  ChimeMediaInsightsPipelineConfigurationArn:
+    Type: String
+    Default: ''
+    Description: >
+      If this has a value, the Chime Voice Connector resource will have this configuration applied.
 
 Resources:
   AsteriskVPC:
@@ -471,17 +485,24 @@ Resources:
                 ForceAssociate=True
             )
 
+            streamingConfiguration = {
+              'DataRetentionInHours': 1,
+              'Disabled': False,
+              'StreamingNotificationTargets': [
+                {
+                  'NotificationTarget': 'EventBridge'
+                },
+              ]
+            }
+
+            if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
+              streamingConfiguration['MediaInsightsConfiguration'] = {
+                "ConfigurationArn": event['ResourceProperties']['ChimeMediaInsightsPipelineConfigurationArn']
+              }
+
             chime.put_voice_connector_streaming_configuration(
               VoiceConnectorId=voiceConnectorId,
-              StreamingConfiguration={
-                'DataRetentionInHours': 1,
-                'Disabled': False,
-                'StreamingNotificationTargets': [
-                  {
-                    'NotificationTarget': 'EventBridge'
-                  },
-                ]
-              }
+              StreamingConfiguration=streamingConfiguration
             )
 
             voiceConnector = { 'voiceConnectorId': voiceConnectorId, 'outboundHostName': outboundHostName, 'phoneNumber': phoneNumber}
@@ -557,6 +578,8 @@ Resources:
         Ref: EIP
       stackName:
         Ref: AWS::StackName
+      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
+      ChimeMediaInsightsPipelineConfigurationArn: !Ref ChimeMediaInsightsPipelineConfigurationArn
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
   SSMPhoneNumber:

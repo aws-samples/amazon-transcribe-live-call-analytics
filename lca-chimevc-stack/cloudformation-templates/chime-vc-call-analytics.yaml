@@ -430,6 +430,7 @@ Resources:
       Tracing: Active
       Environment:
         Variables:
+          ENABLE_VOICETONE: !Ref EnableVoiceToneAnalysis
           CHIME_MEDIAPIPELINE_CONFIG_ARN: !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
           LCA_STACK_NAME: !Ref LCAStackName
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
