@@ -1403,6 +1403,7 @@ async def execute_process_event_api_mutation(
             *add_transcript_sentiment_tasks,
             *add_call_category_tasks,
             *add_contact_lens_agent_assist_tasks,
+            *update_call_aggregation_tasks,
             # *add_tca_agent_assist_tasks,
             return_exceptions=True,
         )
