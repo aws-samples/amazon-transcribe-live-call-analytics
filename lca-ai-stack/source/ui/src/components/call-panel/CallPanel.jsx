@@ -1082,7 +1082,7 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
           setToolsOpen={setToolsOpen}
           callTranscriptPerCallId={callTranscriptPerCallId}
         />
-        {enableVoiceTone ?? (
+        {enableVoiceTone && (
           <VoiceToneContainer
             item={item}
             setToolsOpen={setToolsOpen}

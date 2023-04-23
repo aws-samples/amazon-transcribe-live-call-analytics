@@ -834,6 +834,10 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - 'true'
+          - 'false'
         CallAudioSource: !Ref CallAudioSource
         S3BucketName: !Ref S3BucketName
         AdminEmail: !Ref AdminEmail
@@ -878,10 +882,6 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        EnableVoiceToneAnalysis: !If
-          - ShouldEnableVoiceToneAnalysis
-          - 'true'
-          - 'false'
         LCAStackName: !Ref AWS::StackName
         AISTACK: !Ref AISTACK
         QNABOTSTACK: !If
