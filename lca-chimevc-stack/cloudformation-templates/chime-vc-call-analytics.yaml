@@ -288,6 +288,86 @@ Resources:
                 Effect: Allow
                 Resource: 
                   - !GetAtt VoiceToneLambda.Arn
+  ##########################################################################
+  # Custom resource to apply config to VoiceConnector
+  ##########################################################################
+
+  ApplyMediaPipelineConfigToVCCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - ApplyMediaPipelineConfigToVCFunction
+          - Arn
+      VoiceConnectorId: !Ref VoiceConnectorId
+      ChimeMediaInsightsPipelineConfigurationArn: !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
+      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+
+  ApplyMediaPipelineConfigToVCFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+      - DeployMediaPipelineConfig
+    Properties:
+      Layers:
+        - !Ref Boto3LayerArn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: 
+              - chime:GetVoiceConnectorStreamingConfiguration
+              - chime:PutVoiceConnectorStreamingConfiguration
+              - chime:GetMediaInsightsPipelineConfiguration
+            Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:*
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      Timeout: 300
+      InlineCode: |
+          import boto3
+          import json
+          import cfnresponse
+
+          responseData = {}
+
+          chime = boto3.client('chime-sdk-voice')
+          cloudformation = boto3.resource("cloudformation")
+
+          def update_vc_configuration(event):
+            voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
+            print("Getting existing configuration...")
+            response = chime.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
+            streamingConfiguration = response["StreamingConfiguration"]
+            print(json.dumps(streamingConfiguration))
+            
+            if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
+                print("Enabling Voice Tone Analysis...")
+                streamingConfiguration['MediaInsightsConfiguration'] = {
+                    "ConfigurationArn": event['ResourceProperties']['ChimeMediaInsightsPipelineConfigurationArn']
+                }
+            else:
+                print("Disabling Voice Tone Analysis...")
+                if 'MediaInsightsConfiguration' in streamingConfiguration:
+                    del streamingConfiguration['MediaInsightsConfiguration']
+            print(json.dumps(streamingConfiguration))
+            print("Saving configuration...")
+            response = chime.put_voice_connector_streaming_configuration(
+                VoiceConnectorId=voiceConnectorId,
+                StreamingConfiguration=streamingConfiguration
+                )
+            print(response)
+            return response
+
+          def lambda_handler(event, context):
+            print(event)
+            try:
+              responseData = update_vc_configuration(event)
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
+            except Exception as e:
+              error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+              print(error)
+              cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
 
   ##########################################################################
   # Voice Tone Lambda Function
@@ -582,13 +662,16 @@ Resources:
                   - !Sub
                     - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName          
-
     Metadata:
       cfn_nag:
         rules_to_suppress:
           - id: W11
             reason: >-
               Transcribe does not support resource-level permissions and KVS streams are dynamic
+
+  ##########################################################################
+  # Event Bridge Notifications
+  ##########################################################################
 
   AllowEventBridgeToCallAnalyticsInitFunctionLambdaFromChimeVC:
     Type: "AWS::Lambda::Permission"

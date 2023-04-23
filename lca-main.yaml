@@ -55,7 +55,9 @@ Parameters:
       Chime Call Analytics is used as a call processor.
       A voice analytics feature that enables you to analyze caller voices for a positive, 
       negative, or neutral tone. This is different than sentiment analysis, as it analyzes
-      the audio versus text.
+      the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice
+      analytics without the caller's consent. Please read 
+      https://docs.aws.amazon.com/chime-sdk/latest/dg/va-opt-out.html for more information.
     
   # ChimeSpeakerSearch:
   #   Type: String
@@ -876,6 +878,10 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - 'true'
+          - 'false'
         LCAStackName: !Ref AWS::StackName
         AISTACK: !Ref AISTACK
         QNABOTSTACK: !If
