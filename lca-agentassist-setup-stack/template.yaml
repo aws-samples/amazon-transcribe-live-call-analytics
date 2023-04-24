@@ -240,16 +240,16 @@ Resources:
             return False
             
           def addBotToAistack(props, oldprops):
-            callEventProcessorFunction = getStackResource(props["AISTACK"], "CallEventProcessorFunction")
-            response = lam.get_function_configuration(FunctionName=callEventProcessorFunction)
+            asyncAgentAssistOrchestratorFunction = getStackResource(props["AISTACK"], "AsyncAgentAssistOrchestrator")
+            response = lam.get_function_configuration(FunctionName=asyncAgentAssistOrchestratorFunction)
             envVars = response["Environment"]["Variables"]
             envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
             envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
             response = lam.update_function_configuration(
-              FunctionName=callEventProcessorFunction,
+              FunctionName=asyncAgentAssistOrchestratorFunction,
               Environment={"Variables":envVars}
               )
-            print("Updated CallEventProcessorFunction Environment variable to add Lex bot.")
+            print("Updated AsyncAgentAssistOrchestratorFunction Environment variable to add Lex bot.")
 
           def setupQnABot(props, oldprops):
             configureQnabotSettings(props)

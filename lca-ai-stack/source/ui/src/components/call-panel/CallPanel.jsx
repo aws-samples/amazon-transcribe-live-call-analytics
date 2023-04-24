@@ -40,7 +40,6 @@ import {
 import './CallPanel.css';
 import { SentimentTrendIcon } from '../sentiment-trend-icon/SentimentTrendIcon';
 import { SentimentIcon } from '../sentiment-icon/SentimentIcon';
-import { exportToExcel } from '../common/download-func';
 import useAppContext from '../../contexts/app';
 import awsExports from '../../aws-exports';
 
@@ -149,16 +148,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
   <Container
     header={
       <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
-        <div className="flex items-center">
-          <div>Call Attributes</div>
-          <div className="btn-download-right">
-            <Button
-              iconName="download"
-              variant="normals"
-              onClick={() => exportToExcel([item], 'call-details')}
-            />
-          </div>
-        </div>
+        Call Attributes
       </Header>
     }
   >
@@ -545,30 +535,6 @@ const TranscriptSegment = ({ segment, translateCache }) => {
     </Grid>
   );
 };
-const formatTranscriptExcel = (item, callTranscriptPerCallId) => {
-  // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
-  const maxChannels = 4;
-  const { callId } = item;
-  const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
-  const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
-  const data = transcriptChannels
-    .map((c) => {
-      const { segments } = transcriptsForThisCallId[c];
-      return segments;
-    })
-    // sort entries by end time
-    .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
-    .map(
-      // prettier-ignore
-      (s) => (
-        s?.segmentId
-        && s?.createdAt
-        && s
-      ),
-    );
-
-  return data;
-};
 
 const CallInProgressTranscript = ({
   item,
@@ -740,7 +706,7 @@ const CallInProgressTranscript = ({
           s?.segmentId
           && s?.createdAt
           && (s.agentTranscript === undefined
-            || s.agentTranscript || s.channel !== 'AGENT')
+              || s.agentTranscript || s.channel !== 'AGENT')
           && (s.channel !== 'AGENT_VOICETONE')
           && (s.channel !== 'CALLER_VOICETONE')
           && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} />
@@ -889,21 +855,7 @@ const CallTranscriptContainer = ({
               </SpaceBetween>
             }
           >
-            <div className="flex items-center">
-              <div> Call Transcript </div>
-              <div className="btn-download-right">
-                <Button
-                  iconName="download"
-                  variant="normals"
-                  onClick={() => {
-                    exportToExcel(
-                      formatTranscriptExcel(item, callTranscriptPerCallId),
-                      'call-transcript',
-                    );
-                  }}
-                />
-              </div>
-            </div>
+            Call Transcript
           </Header>
         }
       >
@@ -1070,7 +1022,6 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
   </>
 );
 
-// eslint-disable-next-line import/prefer-default-export
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   const { currentCredentials } = useAppContext();
 
@@ -1147,3 +1098,5 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
     </SpaceBetween>
   );
 };
+
+export default CallPanel;

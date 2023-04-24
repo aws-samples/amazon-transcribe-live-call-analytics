@@ -1,0 +1,172 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Optional CRM Integration Deployment
+
+Parameters:
+  SalesforceUsername:
+    Type: String
+    Description: >
+      Provide the Salesforce user name that has access to create Cases.
+  SalesforcePassword:
+    Type: String
+    NoEcho: true
+    Description: >
+      Password to log in to Salesforce.
+  SalesforceAccessToken:
+    Type: String
+    NoEcho: true
+    Description: >
+      Access token.
+  SalesforceConsumerKey:
+    Type: String
+    NoEcho: true
+    Description: >
+      Salesforce Connected App Consumer Key.
+  SalesforceConsumerSecret:
+    Type: String
+    NoEcho: true
+    Description: >
+      Salesforce Connected App Consumer Secret.
+  SalesforceHostUrl:
+    Type: String
+    Description: >
+      Login URL to access your Salesforce organization.
+  SalesforceAPIVersion:
+    Type: String
+    Description: >
+      API Version
+    Default: "v56.0"
+  LCACallDataStreamArn:
+    Type: String
+    Description: >
+      The ARN of the Kinesis Data Stream to publish the agent assist messages to.
+
+Resources:
+  SalesforceCredentials:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Store Salesforce Credentials
+      SecretString:
+        !Sub '{"Password": "${SalesforcePassword}", 
+               "ConsumerKey": "${SalesforceConsumerKey}", 
+               "ConsumerSecret": "${SalesforceConsumerSecret}", 
+               "AccessToken": "${SalesforceAccessToken}"}'
+
+  SalesforceLookupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt SalesforceLookupLambdaRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          LOGGING_LEVEL: "INFO"
+          SF_CREDENTIALS_SECRETS_MANAGER_ARN: !Ref SalesforceCredentials
+          SF_HOST: !Ref SalesforceHostUrl
+          SF_PRODUCTION: "false"
+          SF_USERNAME: !Ref SalesforceUsername
+          SF_VERSION: !Ref SalesforceAPIVersion
+      Timeout: 120
+      MemorySize: 256
+      Handler: lambda_function.lambda_handler
+      CodeUri: ./lambda_functions/lca_salesforce_lookup
+      Description: This AWS Lambda Function does look up of Salesforce cases and writes the results to KDS.
+
+  SalesforceCreateCaseLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt SalesforceCreateCaseLambdaRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          LOGGING_LEVEL: "INFO"
+          SF_CREDENTIALS_SECRETS_MANAGER_ARN: !Ref SalesforceCredentials
+          SF_HOST: !Ref SalesforceHostUrl
+          SF_PRODUCTION: "false"
+          SF_USERNAME: !Ref SalesforceUsername
+          SF_VERSION: !Ref SalesforceAPIVersion
+      Timeout: 120
+      MemorySize: 256
+      Handler: lambda_function.lambda_handler
+      CodeUri: ./lambda_functions/lca_salesforce_create_case
+      Description: This AWS Lambda Function creates a Salesforce case record with the call summary.
+
+  SalesforceLookupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Salesforce Lookup Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-Lookup
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                Resource: !Ref SalesforceCredentials
+              - Effect: "Allow"
+                Action:
+                  - kinesis:PutRecord
+                Resource: !Ref LCACallDataStreamArn
+
+  SalesforceCreateCaseLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Salesforce Update Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-Update
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                Resource: !Ref SalesforceCredentials
+              - Effect: "Allow"
+                Action:
+                  - kinesis:PutRecord
+                Resource: !Ref LCACallDataStreamArn
+
+Outputs:
+  StartOfCallLambdaHookFunctionArn:
+    Description: The ARN of the lookup Lambda function to be used as the start of call hook.
+    Value: !GetAtt SalesforceLookupLambda.Arn
+  PostCallSummaryLambdaHookFunctionArn:
+    Description: The ARN of the create case Lambda function to be used as the post call summary hook.
+    Value: !GetAtt SalesforceCreateCaseLambda.Arn
