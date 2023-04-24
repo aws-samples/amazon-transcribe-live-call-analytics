@@ -46,7 +46,8 @@ def normalize_transcript_segment(message: Dict) -> Dict[str, object]:
     status: str = "TRANSCRIBING"
     expires_afer = get_ttl()
     created_at = datetime.utcnow().astimezone().isoformat()
-
+    sentiment_weighted = None
+    sentiment_score = None
 
     call_id = message["CallId"]
 

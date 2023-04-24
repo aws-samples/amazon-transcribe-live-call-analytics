@@ -90,12 +90,12 @@ def lambda_handler(event, context):
         
         participant = 'CALLER_VOICETONE' if detail['isCaller'] != True else 'AGENT_VOICETONE'
         sentiment = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneLabel'].upper()
-        sentimentWeighted = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['positive'] * 5 + detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['negative'] * -5
+        sentimentWeighted = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['positive'] * 5 + detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['negative'] * -5
 
         sentimentScore = {
-            'Positive': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['positive'],
-            'Negative': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['negative'],
-            'Neutral': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['neutral'],
+            'Positive': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['positive'],
+            'Negative': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['negative'],
+            'Neutral': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['neutral'],
             'Mixed': 0
         }
 
