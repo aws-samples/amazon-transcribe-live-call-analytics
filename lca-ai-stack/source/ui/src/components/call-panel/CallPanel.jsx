@@ -293,6 +293,7 @@ const CallCategories = ({ item }) => {
 
   return (
     <Container
+      fitHeight="true"
       header={
         <Header
           variant="h4"
