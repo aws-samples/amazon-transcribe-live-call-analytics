@@ -90,7 +90,15 @@ def lambda_handler(event, context):
         
         participant = 'CALLER_VOICETONE' if detail['isCaller'] != True else 'AGENT_VOICETONE'
         sentiment = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneLabel'].upper()
-        
+        sentimentWeighted = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['positive'] * 5 + detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['negative'] * -5
+
+        sentimentScore = {
+            'Positive': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['positive'],
+            'Negative': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['negative'],
+            'Neutral': detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['neutral'],
+            'Mixed': 0
+        }
+
         segmentStartTimeStr = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['startTime']
         segmentStartTime = datetime.datetime.strptime(segmentStartTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
         
@@ -110,6 +118,8 @@ def lambda_handler(event, context):
                 'isPartial': False,
                 'Transcript':'voice tone',
                 'Sentiment': sentiment,
+                'SentimentWeighted': sentimentWeighted,
+                'SentimentScore': sentimentScore,
                 'BeginOffsetMillis': startMillis,
                 'EndOffsetMillis': endMillis,
             },

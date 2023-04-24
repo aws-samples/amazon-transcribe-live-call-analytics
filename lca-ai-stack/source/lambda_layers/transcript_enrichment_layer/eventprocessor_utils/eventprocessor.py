@@ -147,18 +147,28 @@ async def transform_segment_to_add_sentiment(message: Dict, sentiment_analysis_a
 
     sentiment = {}
     if (sentiment_label_in_message): # we received sentiment label in transcript, use it.
+        sentiment_weighted_in_message = message.get("SentimentWeighted", None)
+        sentiment_score_in_message = message.get("SentimentScore", None)
+
         sentimentlabel: str = ""
         if sentiment_label_in_message.strip()=="":
             sentimentlabel = "NEUTRAL"
         else:
             sentimentlabel= sentiment_label_in_message
+        
         sentiment = dict(
             Sentiment=sentimentlabel,
             SentimentScore=SENTIMENT_SCORE,
             SentimentWeighted=None,
         )
-        if sentimentlabel in ["POSITIVE", "NEGATIVE", "NEUTRAL"]:
+
+        if (sentiment_weighted_in_message):
+            sentiment["SentimentWeighted"] = sentiment_weighted_in_message
+        elif sentimentlabel in ["POSITIVE", "NEGATIVE", "NEUTRAL"]:
             sentiment["SentimentWeighted"] = SENTIMENT_WEIGHT.get(sentimentlabel, 0)
+        if (sentiment_score_in_message):
+            sentiment["SentimentScore"] = sentiment_score_in_message
+
     else: # did not receive sentiment label, so call Comprehend to figure out sentiment
 
         text = message.get("OriginalTranscript", message.get("Transcript", ""))
