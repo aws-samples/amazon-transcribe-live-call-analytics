@@ -317,7 +317,8 @@ Resources:
         - Version: '2012-10-17'
           Statement:
           - Effect: Allow
-            Action: 
+            Action:
+              - chime:DeleteVoiceConnectorStreamingConfiguration
               - chime:GetVoiceConnectorStreamingConfiguration
               - chime:PutVoiceConnectorStreamingConfiguration
               - chime:GetMediaInsightsPipelineConfiguration
@@ -338,15 +339,25 @@ Resources:
           
           def get_vc_configuration(event):
             voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
-            print("Getting existing configuration...")
-            response = chime.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
-            streamingConfiguration = response["StreamingConfiguration"]
-            print(json.dumps(streamingConfiguration))
-            return streamingConfiguration
-          
+            print(f"Getting existing configuration... {voiceConnectorId}")
+            
+            try:
+                response = chime.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
+                streamingConfiguration = response["StreamingConfiguration"]
+                print(json.dumps(streamingConfiguration))
+                return streamingConfiguration
+            except Exception as e:
+                error = f'Error getting voice connector streaming config: {e}.'
+                print(error)
+            return None
+                
           def update_vc_configuration(event):
             voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
             streamingConfiguration = get_vc_configuration(event)
+            
+            if streamingConfiguration is None:
+                # nothing to do?
+                return None
             
             if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
                 print("Enabling Voice Tone Analysis...")
@@ -382,12 +393,13 @@ Resources:
                 responseData = update_vc_configuration(event)
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)    
               else:
-                responseData = delete_vc_configuration(event)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                # responseData = delete_vc_configuration(event)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
             except Exception as e:
               error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
               print(error)
               cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
+      
       
 
   ##########################################################################
