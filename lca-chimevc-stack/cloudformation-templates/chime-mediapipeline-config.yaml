@@ -153,6 +153,12 @@ Parameters:
     Description: >-
       The optional Lambda function arn for the sink 
 
+  VoiceConnectorId:
+    Type: String
+    Default: ''
+    Description: >-
+      Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
+  
   Boto3LayerArn:
     Type: String
     Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
@@ -189,6 +195,7 @@ Resources:
       PiiEntityTypes: !Ref TranscribePiiEntityTypes
       CustomVocabularyName: !Ref CustomVocabularyName
       CustomLanguageModelName: !Ref CustomLanguageModelName
+      VoiceConnectorId: !Ref VoiceConnectorId
 
   MediaPipelineConfigFunc:
     Type: AWS::Serverless::Function
@@ -225,22 +232,51 @@ Resources:
         import boto3
         import cfnresponse
         import json
+        import uuid
         
         mediaPipelineClient = boto3.client('chime-sdk-media-pipelines')
+        voiceClient = boto3.client('chime-sdk-voice')
+        
+        def is_valid_uuid(value):
+            try:
+                uuid.UUID(str(value))
+        
+                return True
+            except ValueError:
+                return False
         
         def delete_pipeline_configuration(event):
-            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
+            id = event.get('PhysicalResourceId','')
+            voiceConnectorId = event['ResourceProperties'].get('VoiceConnectorId', '')
+            try:
+              voiceClient.delete_voice_connector_streaming_configuration(
+                  VoiceConnectorId=voiceConnectorId
+              )
+            except Exception as e:
+              print('no voice connector streaming config applied')
+
+            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
             response = mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
-            return {'Message': 'Deleted Media Pipeline Config'}
-
+            return {'Message': 'Deleted Media Pipeline Config', 'PhysicalResourceId': id}
+        
         def find_pipeline_configuration(event):
-            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
-            response = mediaPipelineClient.get_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
-
-            return {'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn']}
-
+            print('finding media pipeline')
+            try:
+                id = event.get('PhysicalResourceId','')
+                pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
+                response = mediaPipelineClient.get_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
+                return {'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'], 'PhysicalResourceId': id }
+            except Exception as e:
+                error = f'Exception thrown: {e}.'
+                print(error)
+                return None
+        
         def create_pipeline_configuration(event):
-            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-MediaPipelineConfig'
+            print('creating media pipeline')
+            #id = event.get('PhysicalResourceId','')
+            #if not id or not is_valid_uuid(id):
+            id = str(uuid.uuid4())
+            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id 
             resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
             
             elements = []
@@ -335,7 +371,7 @@ Resources:
                 Elements=elements
             )
             
-            return {'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn']}
+            return {'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'], 'PhysicalResourceId': id}
             
         
         def lambda_handler(event, context):
@@ -344,31 +380,37 @@ Resources:
             if event['RequestType'] == "Create":
                 try:
                     responseData = create_pipeline_configuration(event)
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
                 except Exception as e:
                     error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                     print(error)
                     cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
             elif event['RequestType'] == 'Delete':
                 try:
-                    delete_pipeline_configuration(event)
-                    responseData = {'Message': 'Deleting LCA Media Pipeline Config.  Returning success status.'}                   
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                      
+                    responseData = delete_pipeline_configuration(event)
+                    # responseData = {'Message': 'Deleting LCA Media Pipeline Config.  Returning success status.'}
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
                 except Exception as e:
                     error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                     print(error)
                     # still returning success so stack doesnt fail
                     cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, reason=error )   
             else:
-                #responseData = {'Message': 'Update is no-op. Returning success status.'}
-                #cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                # this is an update, let's try to 
                 try:
+                    print('updating media pipeline')
                     responseData = find_pipeline_configuration(event)
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
+                    if responseData:
+                        responseData = delete_pipeline_configuration(event)
+                    responseData = create_pipeline_configuration(event)
+                    print('update response:')
+                    print(json.dumps(responseData))
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
                 except Exception as e:
                     error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                     print(error)
                     cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
+      
 
 
 Conditions:

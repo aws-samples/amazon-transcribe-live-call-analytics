@@ -181,6 +181,7 @@ Resources:
     Properties:
       TemplateURL: ./chime-mediapipeline-config.yaml
       Parameters:
+        VoiceConnectorId: !Ref VoiceConnectorId
         StackName: !Ref LCAStackName
         EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
         # EnableSpeakerSearch: !Ref EnableSpeakerSearch
@@ -328,18 +329,24 @@ Resources:
           import boto3
           import json
           import cfnresponse
-
+          
           responseData = {}
-
+          
           chime = boto3.client('chime-sdk-voice')
           cloudformation = boto3.resource("cloudformation")
-
-          def update_vc_configuration(event):
+          
+          
+          def get_vc_configuration(event):
             voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
             print("Getting existing configuration...")
             response = chime.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
             streamingConfiguration = response["StreamingConfiguration"]
             print(json.dumps(streamingConfiguration))
+            return streamingConfiguration
+          
+          def update_vc_configuration(event):
+            voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
+            streamingConfiguration = get_vc_configuration(event)
             
             if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
                 print("Enabling Voice Tone Analysis...")
@@ -358,16 +365,30 @@ Resources:
                 )
             print(response)
             return response
-
+            
+          def delete_vc_configuration(event):
+            voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
+          
+            response = chime.delete_voice_connector_streaming_configuration(
+                VoiceConnectorId=voiceConnectorId
+            )
+            print(response)
+            return response
+          
           def lambda_handler(event, context):
             print(event)
             try:
-              responseData = update_vc_configuration(event)
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)                
+              if event['RequestType'] == "Create" or event['RequestType'] == "Update":
+                responseData = update_vc_configuration(event)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)    
+              else:
+                responseData = delete_vc_configuration(event)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
             except Exception as e:
               error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
               print(error)
               cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
+      
 
   ##########################################################################
   # Voice Tone Lambda Function
