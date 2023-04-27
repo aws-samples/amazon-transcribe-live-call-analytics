@@ -197,7 +197,7 @@ def transform_contact_lens_segment(segment: Dict) -> Dict[str, object]:
 
 
 # Transform Transcript segment fields
-def normalize_transcript_segments(message: Dict) -> []:
+def normalize_transcript_segments(message: Dict) -> List[Dict]:
     """Transforms Kinesis Stream Transcript Payload to addTranscript API"""
     
     call_id: str = None

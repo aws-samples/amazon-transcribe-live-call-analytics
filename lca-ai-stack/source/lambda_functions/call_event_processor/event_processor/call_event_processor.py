@@ -1175,6 +1175,28 @@ def add_contact_lens_agent_assistances(
 
     return tasks
 
+##########################################################################
+# Fix CamelCasing from Chime
+##########################################################################
+
+def convert_keys_to_uppercamelcase(d):
+    new_dict = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            new_dict[k[0].upper() + k[1:]] = convert_keys_to_uppercamelcase(v)
+        else:
+            new_dict[k[0].upper() + k[1:]] = v
+    return new_dict
+
+##########################################################################
+# merge dicts
+##########################################################################
+
+def merge_dicts(d1, d2):
+    new_dict = d1.copy()
+    new_dict.update(d2)
+    return new_dict
+
 
 ##########################################################################
 # Main event processing
@@ -1205,6 +1227,18 @@ async def execute_process_event_api_mutation(
         "errors": [],
     }
 
+    metadata = None
+    
+    # normalize the casing
+    message = convert_keys_to_uppercamelcase(message)
+    
+    metadata_str = message.get("Metadata", None)
+    if metadata_str != None:
+        metadata = json.loads(metadata_str)
+        metadata = convert_keys_to_uppercamelcase(metadata)
+        
+        message = merge_dicts(message, metadata)
+
     event_type_map = dict(
         STARTED="START",
         START="START",
@@ -1223,6 +1257,15 @@ async def execute_process_event_api_mutation(
 
     msg_event_type = message.get("EventType", "")
     event_type = event_type_map.get(msg_event_type, "")
+
+    if event_type == "":
+        # This is possibly a message from Flume. Let's fix the message if it is
+        if message.get("UtteranceEvent", "") != "" or message.get("TranscriptEvent", "") != "":
+            message["EventType"] = "ADD_TRANSCRIPT_SEGMENT"
+            event_type = "ADD_TRANSCRIPT_SEGMENT"
+        if message.get("CategoryEvent", "") != "":
+            message["EventType"] = "ADD_CALL_CATEGORY"
+            event_type = "ADD_CALL_CATEGORY"
 
     message["EventType"] = event_type
     message["ExpiresAfter"] = get_ttl()
