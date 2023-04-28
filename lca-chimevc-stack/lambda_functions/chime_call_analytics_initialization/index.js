@@ -62,7 +62,7 @@ const LCA_STACK_NAME = (process.env.LCA_STACK_NAME || '');
 
 const CHIME_MEDIAPIPELINE_CONFIG_ARN = process.env.CHIME_MEDIAPIPELINE_CONFIG_ARN || '';
 
-const ENABLE_VOICETONE = process.env.ENABLE_VOICETONE || '';
+const ENABLE_VOICETONE = process.env.ENABLE_VOICETONE || 'false';
 
 
 const EVENT_TYPE = {
@@ -542,8 +542,10 @@ const handler = async function handler(event, context) {
       await writeCallStartEventToKds(kinesisClient, callData);
 
       // it is now time to execute the mediapipeline
-      if (!ENABLE_VOICETONE) {
+      if (ENABLE_VOICETONE === 'false') {
         await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
+      } else {
+        console.log("Voice tone is enabled, so we will not manually start the pipeline.")
       }
 
     } else if (event.detail.streamingStatus === 'ENDED') {
