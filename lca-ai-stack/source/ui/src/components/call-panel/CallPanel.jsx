@@ -874,72 +874,27 @@ const CallTranscriptContainer = ({
 };
 
 const VoiceToneContainer = ({ item, callTranscriptPerCallId }) => (
-  <>
-    <Container
-      header={
-        <Header
-          variant="h4"
-          info={
-            <Link
-              variant="info"
-              target="_blank"
-              href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
-            >
-              Info
-            </Link>
-          }
-        >
-          Voice Tone Analysis
-        </Header>
-      }
-    >
-      <VoiceToneFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
-    </Container>
-    <Container>
-      <ColumnLayout columns={2} variant="text-grid">
-        <SpaceBetween>
-          <div>
-            <Box margin={{ bottom: 'xxxs' }} color="text-label">
-              <strong>Caller Average Tone:</strong>
-            </Box>
-            <div>
-              <SentimentIcon sentiment={item.callerSentimentLabel} />
-              &nbsp;
-              {item.callerAverageSentiment.toFixed(3)}
-              &nbsp;(-5 to +5)
-            </div>
-            <div>
-              <Box display="inline" color="text-label">
-                <strong>Trend:</strong>
-              </Box>
-              &nbsp;
-              <SentimentTrendIcon trend={item.callerSentimentTrendLabel} />
-            </div>
-          </div>
-        </SpaceBetween>
-        <SpaceBetween>
-          <div>
-            <Box margin={{ bottom: 'xxxs' }} color="text-label">
-              <strong>Agent Average Tone:</strong>
-            </Box>
-            <div>
-              <SentimentIcon sentiment={item.agentSentimentLabel} />
-              &nbsp;
-              {item.agentAverageSentiment.toFixed(3)}
-              &nbsp;(-5 to +5)
-            </div>
-            <div>
-              <Box display="inline" color="text-label">
-                <strong>Trend:</strong>
-              </Box>
-              &nbsp;
-              <SentimentTrendIcon trend={item.agentSentimentTrendLabel} />
-            </div>
-          </div>
-        </SpaceBetween>
-      </ColumnLayout>
-    </Container>
-  </>
+  <Container
+    fitHeight="true"
+    header={
+      <Header
+        variant="h4"
+        info={
+          <Link
+            variant="info"
+            target="_blank"
+            href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
+          >
+            Info
+          </Link>
+        }
+      >
+        Voice Tone Analysis
+      </Header>
+    }
+  >
+    <VoiceToneFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
+  </Container>
 );
 
 const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (

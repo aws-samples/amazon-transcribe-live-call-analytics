@@ -36,7 +36,7 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
 
   return (
     <LineChart
-      height="80"
+      height="180"
       hideFilter
       series={[
         {
