@@ -261,12 +261,12 @@ Resources:
                       VoiceConnectorId=voiceConnectorId
                   )
                   print(json.dumps(responseData))
-                  streamingConfiguration = response["StreamingConfiguration"]
+                  streamingConfiguration = responseData["StreamingConfiguration"]
                   print('updating config to add media insights')
                   streamingConfiguration['MediaInsightsConfiguration'] = {
                       "ConfigurationArn": configArn
                   }
-                  response = chime.put_voice_connector_streaming_configuration(
+                  response = voiceClient.put_voice_connector_streaming_configuration(
                       VoiceConnectorId=voiceConnectorId,
                       StreamingConfiguration=streamingConfiguration
                   )
@@ -434,7 +434,7 @@ Resources:
                       cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
               elif event['RequestType'] == 'Delete':
                   try:
-                      responseData = delete_pipeline_configuration(event)
+                      # responseData = delete_pipeline_configuration(event)
                       # responseData = {'Message': 'Deleting LCA Media Pipeline Config.  Returning success status.'}
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
                   except Exception as e:
@@ -455,7 +455,7 @@ Resources:
                       configArn = responseData.get('ConfigArn','')
                       configResponse = apply_streaming_configuration(configArn, event)
                       
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, event.get('PhysicalResourceId',''))
                   except Exception as e:
                       error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       print(error)
