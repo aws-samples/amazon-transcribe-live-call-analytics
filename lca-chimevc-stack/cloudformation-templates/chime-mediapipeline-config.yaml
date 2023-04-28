@@ -250,6 +250,30 @@ Resources:
                   return True
               except ValueError:
                   return False
+                  
+          def apply_streaming_configuration(configArn, event):
+              voiceConnectorId = event['ResourceProperties'].get('VoiceConnectorId', '')
+              enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalytics', '')
+              
+              if enableVoiceToneAnalysis == 'true':
+                  print('getting vc streaming config...')
+                  responseData = voiceClient.get_voice_connector_streaming_configuration(
+                      VoiceConnectorId=voiceConnectorId
+                  )
+                  print(json.dumps(responseData))
+                  streamingConfiguration = response["StreamingConfiguration"]
+                  print('updating config to add media insights')
+                  streamingConfiguration['MediaInsightsConfiguration'] = {
+                      "ConfigurationArn": configArn
+                  }
+                  response = chime.put_voice_connector_streaming_configuration(
+                      VoiceConnectorId=voiceConnectorId,
+                      StreamingConfiguration=streamingConfiguration
+                  )
+                  print(response)
+          
+              else:
+                  print('skipping re-applying media pipeline because voice tone is disabled ')
           
           def delete_pipeline_configuration(event):
               id = event.get('PhysicalResourceId','')
@@ -427,12 +451,16 @@ Resources:
                           responseData = delete_pipeline_configuration(event)
                       responseData = create_pipeline_configuration(event)
                       print('update response:')
-                      print(json.dumps(responseData))
+                      print(json.dumps(responseData)) 
+                      configArn = responseData.get('ConfigArn','')
+                      configResponse = apply_streaming_configuration(configArn, event)
+                      
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
                   except Exception as e:
                       error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       print(error)
                       cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
+      
       
       
 
