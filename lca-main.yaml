@@ -38,7 +38,7 @@ Parameters:
 
   CallAudioProcessor:
     Type: String
-    Default: Chime Call Analytics
+    Default: Call Transcriber Lambda
     AllowedValues:
       - Chime Call Analytics
       - Call Transcriber Lambda

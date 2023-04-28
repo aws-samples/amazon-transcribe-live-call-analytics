@@ -382,7 +382,7 @@ Resources:
               if customLanguageModelName:
                   transcribe[transcribeConfig]["LanguageModelName"] = customLanguageModelName
               if customVocabularyName:
-                  transcribe[transcribeConfig]["vocabularyName"] = customVocabularyName
+                  transcribe[transcribeConfig]["VocabularyName"] = customVocabularyName
               elements.append(transcribe)
                   
               # configure lambda sink
