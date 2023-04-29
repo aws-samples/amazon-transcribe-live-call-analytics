@@ -21,8 +21,13 @@ const UnauthRoutes = ({ location }) => (
     <Route path={LOGIN_PATH}>
       <AmplifyAuthContainer>
         <AmplifyAuthenticator>
-          <AmplifySignIn hideSignUp={REACT_APP_SHOULD_HIDE_SIGN_UP} slot="sign-in" />
+          <AmplifySignIn
+            headerText="Welcome to Live Call Analytics!"
+            hideSignUp={REACT_APP_SHOULD_HIDE_SIGN_UP}
+            slot="sign-in"
+          />
           <AmplifySignUp
+            headerText="Welcome to Live Call Analytics!"
             slot="sign-up"
             h
             usernameAlias="email"
