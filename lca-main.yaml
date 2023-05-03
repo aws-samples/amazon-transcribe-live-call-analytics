@@ -185,6 +185,36 @@ Parameters:
     Description: 'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
       for embeddings returned by the EmbeddingsLambda function specified above.'
     Default: 4096
+  AgentAssistQnABotLLMApi:
+    Type: String
+    Description: Optionally enable (experimental) QnABot question disambiguation and
+      generative question answering using an LLM. If set to SAGEMAKER, a Sagemaker endpoint
+      is automatically provisioned. To use a custom LAMBDA function, provide additional
+      parameters below. To use a supported third party service, enter the API key below.
+    AllowedValues:
+      - DISABLED
+      - SAGEMAKER
+      - LAMBDA
+      - ANTHROPIC
+    Default: DISABLED
+  AgentAssistQnABotLLMSagemakerInitialInstanceCount:
+    Type: Number
+    MinValue: 1
+    Description: 'Optional: If LLMApi is SAGEMAKER, provide initial instance count.
+      Serverless Inference is not currently available for the built-in LLM model.'
+    Default: 1
+  AgentAssistQnABotLLMLambdaArn:
+    Type: String
+    AllowedPattern: "^(|arn:aws:lambda:.*)$"
+    Description: 'Optional: If LLMApi is LAMBDA, provide ARN for a Lambda function that
+      takes JSON {"prompt":"string", "settings":{key:value,..}}, and returns JSON {"generated_text":"string"}'
+    Default: ''
+  AgentAssistQnABotLLMThirdPartyApiKey:
+    Type: String
+    Description: 'Optional: If LLMApi is ANTHROPIC, enter the provider API Key from
+      . ** Data will leave your AWS account **'
+    Default: ''
+    NoEcho: true
 
   S3BucketName:
     Type: String
@@ -345,10 +375,11 @@ Parameters:
       - 'DISABLED'
       - 'SAGEMAKER'
       - 'LAMBDA'
+      - 'ANTHROPIC'
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
-      to provide a function ARN below.
+      to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -356,6 +387,13 @@ Parameters:
     Default: 1
     Description: >
       (Optional) If 'End Of Call Transcript Summary' is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
+  SummarizationLLMThirdPartyApiKey:
+    Type: String
+    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key from
+      . ** Data will leave your AWS account **'
+    Default: ''
+    NoEcho: true
 
   EndOfCallLambdaHookFunctionArn:
     Default: ''
@@ -502,6 +540,10 @@ Metadata:
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
           - AgentAssistQnABotEmbeddingsLambdaDimensions
+          - AgentAssistQnABotLLMApi
+          - AgentAssistQnABotLLMSagemakerInitialInstanceCount
+          - AgentAssistQnABotLLMLambdaArn
+          - AgentAssistQnABotLLMThirdPartyApiKey
       - Label:
           default: Amazon S3 Configuration
         Parameters:
@@ -529,6 +571,7 @@ Metadata:
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
           - SummarizationSageMakerInitialInstanceCount
+          - SummarizationLLMThirdPartyApiKey
           - EndOfCallLambdaHookFunctionArn
           - StartOfCallLambdaHookFunctionArn
           - PostCallSummaryLambdaHookFunctionArn
@@ -604,6 +647,14 @@ Metadata:
         default: Agent Assist QnABot Embeddings Lambda Function ARN (existing)
       AgentAssistQnABotEmbeddingsLambdaDimensions:
         default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
+      AgentAssistQnABotLLMApi:
+        default: Agent Assist QnABot LLM API
+      AgentAssistQnABotLLMSagemakerInitialInstanceCount:
+        default: Agent Assist QnABot LLM SageMaker Instance Count
+      AgentAssistQnABotLLMLambdaArn:
+        default: Agent Assist QnABot LLM Lambda Function ARN (existing)
+      AgentAssistQnABotLLMThirdPartyApiKey:
+        default: Agent Assist QnABot LLM Third Party API Key
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
       TranscribeApiMode:
@@ -638,6 +689,8 @@ Metadata:
         default: End of Call Transcript Summary
       SummarizationSageMakerInitialInstanceCount:
         default: Initial Instance Count for Summarization SageMaker Endpoint
+      SummarizationLLMThirdPartyApiKey:
+        default: Endo of Call Summarization LLM Third Party API Key
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       StartOfCallLambdaHookFunctionArn:
@@ -852,6 +905,11 @@ Resources:
         SagemakerInitialInstanceCount: !Ref AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
         EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
         EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
+        LLMApi: !Ref AgentAssistQnABotLLMApi
+        LLMSagemakerInitialInstanceCount: !Ref AgentAssistQnABotLLMSagemakerInitialInstanceCount
+        LLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
+        LLMThirdPartyApiKey: !Ref AgentAssistQnABotLLMThirdPartyApiKey
+
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
@@ -899,6 +957,7 @@ Resources:
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+        SummarizationLLMThirdPartyApiKey: !Ref SummarizationLLMThirdPartyApiKey
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
         PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
@@ -951,6 +1010,9 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
+        AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
+        AgentAssistQnABotLLMSagemakerInitialInstanceCount: !Ref AgentAssistQnABotLLMSagemakerInitialInstanceCount
+        AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
