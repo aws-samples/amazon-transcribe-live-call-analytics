@@ -374,6 +374,9 @@ Resources:
     Condition: ShouldCreateRecordingBucket
     Properties:
       AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       # XXX figure out access logging
       # LoggingConfiguration:
       #    DestinationBucketName: !Ref S3BucketName
@@ -894,7 +897,7 @@ Resources:
       Handler: lambda_function.handler
       Layers:
         - !Ref TranscriptEnrichmentPythonLayer
-      MemorySize: 5120
+      MemorySize: 3000
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref EventSourcingTable
