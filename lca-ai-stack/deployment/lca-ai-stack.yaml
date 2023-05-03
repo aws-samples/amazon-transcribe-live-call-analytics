@@ -897,7 +897,7 @@ Resources:
       Handler: lambda_function.handler
       Layers:
         - !Ref TranscriptEnrichmentPythonLayer
-      MemorySize: 5120
+      MemorySize: 3000
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref EventSourcingTable
