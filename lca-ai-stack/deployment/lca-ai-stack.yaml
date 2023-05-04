@@ -1023,7 +1023,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+                Resource:
+                  - !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+                  - !GetAtt LLMAnthropicSummaryLambda.Arn
               - Ref: AWS::NoValue
 
   #####################################################
