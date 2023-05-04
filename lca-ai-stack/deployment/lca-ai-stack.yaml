@@ -368,8 +368,10 @@ Conditions:
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
   ShouldEnableStartOfCallLambdaHookFunction: !Not [!Equals [!Ref StartOfCallLambdaHookFunctionArn, ""]]
   ShouldEnablePostCallSummaryLambdaHookFunction: !Not [!Equals [!Ref PostCallSummaryLambdaHookFunctionArn, ""]]
+  ShouldEnableAnthropicSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "ANTHROPIC"]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
+
   IsTranscriptSummaryEnabled: !Or
     - !Condition ShouldEnableEndOfCallLambdaHookFunction
     - !Condition ShouldDeploySageMakerSummarizer
@@ -842,6 +844,54 @@ Resources:
               - Effect: "Allow"
                 Action: "dynamodb:Query"
                 Resource: !GetAtt EventSourcingTable.Arn
+  
+  LLMAnthropicSummaryLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LLMAnthropicSummaryLambdaExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
+          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3"
+          ANTHROPIC_API_KEY: !Ref SummarizationLLMThirdPartyApiKey
+          ENDPOINT_URL: "https://api.anthropic.com/v1/complete"
+          FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
+          PROCESS_TRANSCRIPT: "True"
+          TOKEN_COUNT: "1024"
+      Timeout: 60
+      MemorySize: 128
+      Handler: index.lambda_handler
+      CodeUri: ../source/lambda_functions/llm_anthropic_summary_lambda
+      Description: This AWS Lambda Function runs a transcript summary inference on the call transcript.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+  
+  LLMAnthropicSummaryLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: LLM Anthropic Summary Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-AnthropicSummary
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource: !GetAtt FetchTranscript.Arn
 
   AsyncAgentAssistOrchestrator:
     Type: AWS::Serverless::Function
@@ -916,7 +966,15 @@ Resources:
       Runtime: python3.9
       Environment:
         Variables:
-          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
+          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [
+            ShouldDeploySageMakerSummarizer, 
+            !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn],
+            !If [
+              ShouldEnableAnthropicSummarizer,
+              !GetAtt LLMAnthropicSummaryLambda.Arn,
+              !Ref EndOfCallLambdaHookFunctionArn
+            ]
+          ]
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
       Timeout: 60
       MemorySize: 128
