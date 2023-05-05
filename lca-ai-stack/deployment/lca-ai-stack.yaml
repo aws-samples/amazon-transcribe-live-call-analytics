@@ -957,7 +957,8 @@ Resources:
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
-                  Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
+                  Resource: 
+                    - !Sub "${AgentAssistExistingLambdaFunctionArn}"
                 - Ref: AWS::NoValue
 
   AsyncTranscriptSummaryOrchestrator:
@@ -1026,6 +1027,13 @@ Resources:
                   - lambda:InvokeFunction
                 Resource:
                   - !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+              - Ref: AWS::NoValue
+            - !If 
+              - ShouldEnableAnthropicSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
                   - !GetAtt LLMAnthropicSummaryLambda.Arn
               - Ref: AWS::NoValue
 
