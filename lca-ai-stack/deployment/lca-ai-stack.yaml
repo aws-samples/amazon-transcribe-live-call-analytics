@@ -375,6 +375,7 @@ Conditions:
   IsTranscriptSummaryEnabled: !Or
     - !Condition ShouldEnableEndOfCallLambdaHookFunction
     - !Condition ShouldDeploySageMakerSummarizer
+    - !Condition ShouldEnableAnthropicSummarizer
 
 Outputs:
   CallDataStreamName:
