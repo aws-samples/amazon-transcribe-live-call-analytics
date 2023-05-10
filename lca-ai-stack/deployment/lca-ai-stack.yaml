@@ -862,7 +862,7 @@ Resources:
           TOKEN_COUNT: "1024"
       Timeout: 60
       MemorySize: 128
-      Handler: index.lambda_handler
+      Handler: index.handler
       CodeUri: ../source/lambda_functions/llm_anthropic_summary_lambda
       Description: This AWS Lambda Function runs a transcript summary inference on the call transcript.
     Metadata:
