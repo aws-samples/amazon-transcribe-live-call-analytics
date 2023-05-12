@@ -722,7 +722,7 @@ Conditions:
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldUseChimeCallAnalytics: !Equals [!Ref CallAudioProcessor, 'Chime Call Analytics']
-  ShouldEnableVoiceToneAnalysis: !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']
+  ShouldEnableVoiceToneAnalysis: !And [!Condition ShouldUseChimeCallAnalytics, !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']]
   # ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
   
   ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
