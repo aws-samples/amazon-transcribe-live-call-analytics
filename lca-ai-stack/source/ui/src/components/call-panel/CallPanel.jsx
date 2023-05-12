@@ -826,7 +826,7 @@ const CallTranscriptContainer = ({
     return translateOn;
   };
   return (
-    <Grid gridDefinition={[{ colspan: 12 }]}>
+    <Grid gridDefinition={[{ colspan: 8 }, { colspan: 4 }]}>
       <Container
         disableContentPaddings
         header={
@@ -868,6 +868,17 @@ const CallTranscriptContainer = ({
           agentTranscript,
           translateOn,
         })}
+      </Container>
+      <Container fitHeight="true" disableContentPaddings>
+        <div style={{ height: '100%' }}>
+          <iframe
+            title="test"
+            src="https://d3vlpkgplhzy9q.cloudfront.net/"
+            width="100%"
+            height="350px"
+            border="0"
+          />
+        </div>
       </Container>
     </Grid>
   );
