@@ -883,7 +883,7 @@ const VoiceToneContainer = ({ item, callTranscriptPerCallId }) => (
           <Link
             variant="info"
             target="_blank"
-            href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
+            href="https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html"
           >
             Info
           </Link>
