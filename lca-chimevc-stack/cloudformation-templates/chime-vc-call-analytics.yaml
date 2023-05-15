@@ -176,36 +176,6 @@ Resources:
   # Media Pipeline configuration 
   ##########################################################################
 
-  DeployMediaPipelineConfig:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./chime-mediapipeline-config.yaml
-      Parameters:
-        VoiceConnectorId: !Ref VoiceConnectorId
-        StackName: !Ref LCAStackName
-        EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
-        # EnableSpeakerSearch: !Ref EnableSpeakerSearch
-        TranscribeApiMode: !Ref TranscribeApiMode
-        KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        S3BucketName: !Ref S3BucketName
-        RawFilePrefix: 'lca-audio-raw/'
-        AudioFilePrefix: !Ref AudioFilePrefix
-        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        TcaDataAccessRoleArn: !GetAtt TcaDataAccessRole.Arn
-        IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
-        IsContentRedactionEnabled: !If
-          - ShouldEnableContentRedaction
-          - 'true'
-          - 'false'
-        TranscribeLanguageCode: !Ref TranscribeLanguageCode
-        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
-        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
-        CustomVocabularyName: !Ref CustomVocabularyName
-        CustomLanguageModelName: !Ref CustomLanguageModelName
-        ChimeCallAnalyticsResourceAccessRoleArn: !GetAtt ChimeCallAnalyticsResourceAccessRole.Arn
-        LambdaSinkArn: !GetAtt VoiceToneLambda.Arn
-        Boto3LayerArn: !Ref Boto3LayerArn
-
   ChimeCallAnalyticsResourceAccessRole:
     Type: AWS::IAM::Role
     Properties:
@@ -289,27 +259,45 @@ Resources:
                 Effect: Allow
                 Resource: 
                   - !GetAtt VoiceToneLambda.Arn
+
   ##########################################################################
   # Custom resource to apply config to VoiceConnector
   ##########################################################################
 
-  ApplyMediaPipelineConfigToVCCustomResource:
+  CreateMediaPipelineConfigForVC:
     Type: AWS::CloudFormation::CustomResource
     Properties:
       ServiceToken:
         Fn::GetAtt:
-          - ApplyMediaPipelineConfigToVCFunction
+          - CreateMediaPipelineConfigForVCFunction
           - Arn
+      CodeUri: ../lambda_functions/media_pipeline_config
       VoiceConnectorId: !Ref VoiceConnectorId
-      ChimeMediaInsightsPipelineConfigurationArn: !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
       EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
-    UpdateReplacePolicy: Delete
-    DeletionPolicy: Delete
+      KinesisStreamArn: !Ref KinesisDataStreamArn
+      ResourceAccessRoleArn: !GetAtt ChimeCallAnalyticsResourceAccessRole.Arn
+      LambdaSinkArn: !GetAtt VoiceToneLambda.Arn
+      StackName: !Ref LCAStackName
+      TranscribeApiMode: !Ref TranscribeApiMode
+      OutputBucket: !Ref S3BucketName
+      RawFilePrefix: 'lca-audio-raw/'
+      RecordingFilePrefix: !Ref AudioFilePrefix
+      CallAnalyticsFilePrefix: !Ref CallAnalyticsPrefix
+      TcaDataAccessRoleArn: !GetAtt TcaDataAccessRole.Arn
+      PostCallContentRedactionOutput: 'redacted'
+      SavePartialTranscripts: !Ref IsPartialTranscriptEnabled
+      IsContentRedactionEnabled: !If
+        - ShouldEnableContentRedaction
+        - 'true'
+        - 'false'
+      TranscribeLanguageCode: !Ref TranscribeLanguageCode
+      ContentRedactionType: !Ref TranscribeContentRedactionType
+      PiiEntityTypes: !Ref TranscribePiiEntityTypes
+      CustomVocabularyName: !Ref CustomVocabularyName
+      CustomLanguageModelName: !Ref CustomLanguageModelName
 
-  ApplyMediaPipelineConfigToVCFunction:
+  CreateMediaPipelineConfigForVCFunction:
     Type: AWS::Serverless::Function
-    DependsOn:
-      - DeployMediaPipelineConfig
     Properties:
       Layers:
         - !Ref Boto3LayerArn
@@ -323,83 +311,9 @@ Resources:
               - chime:PutVoiceConnectorStreamingConfiguration
               - chime:GetMediaInsightsPipelineConfiguration
             Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:*
-      Handler: index.lambda_handler
+      Handler: media_pipeline.handler
       Runtime: python3.8
       Timeout: 300
-      InlineCode: |
-          import boto3
-          import json
-          import cfnresponse
-          
-          responseData = {}
-          
-          chime = boto3.client('chime-sdk-voice')
-          cloudformation = boto3.resource("cloudformation")
-          
-          
-          def get_vc_configuration(event):
-            voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
-            print(f"Getting existing configuration... {voiceConnectorId}")
-            
-            try:
-                response = chime.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
-                streamingConfiguration = response["StreamingConfiguration"]
-                print(json.dumps(streamingConfiguration))
-                return streamingConfiguration
-            except Exception as e:
-                error = f'Error getting voice connector streaming config: {e}.'
-                print(error)
-            return None
-                
-          def update_vc_configuration(event):
-            voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
-            streamingConfiguration = get_vc_configuration(event)
-            
-            if streamingConfiguration is None:
-                # nothing to do?
-                return None
-            
-            if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true':
-                print("Enabling Voice Tone Analysis...")
-                streamingConfiguration['MediaInsightsConfiguration'] = {
-                    "ConfigurationArn": event['ResourceProperties']['ChimeMediaInsightsPipelineConfigurationArn']
-                }
-            else:
-                print("Disabling Voice Tone Analysis...")
-                if 'MediaInsightsConfiguration' in streamingConfiguration:
-                    del streamingConfiguration['MediaInsightsConfiguration']
-            print(json.dumps(streamingConfiguration))
-            print("Saving configuration...")
-            response = chime.put_voice_connector_streaming_configuration(
-                VoiceConnectorId=voiceConnectorId,
-                StreamingConfiguration=streamingConfiguration
-                )
-            print(response)
-            return response
-            
-          def delete_vc_configuration(event):
-            voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
-          
-            response = chime.delete_voice_connector_streaming_configuration(
-                VoiceConnectorId=voiceConnectorId
-            )
-            print(response)
-            return response
-          
-          def lambda_handler(event, context):
-            print(event)
-            try:
-              if event['RequestType'] == "Create" or event['RequestType'] == "Update":
-                responseData = update_vc_configuration(event)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)    
-              else:
-                # responseData = delete_vc_configuration(event)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-            except Exception as e:
-              error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
-              print(error)
-              cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )   
-      
       
 
   ##########################################################################
@@ -527,13 +441,13 @@ Resources:
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallAnalyticsInitFunctionRole.Arn
       Runtime: nodejs18.x
-      MemorySize: 768
+      MemorySize: 128
       Timeout: 900
       Tracing: Active
       Environment:
         Variables:
           ENABLE_VOICETONE: !Ref EnableVoiceToneAnalysis
-          CHIME_MEDIAPIPELINE_CONFIG_ARN: !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
+          CHIME_MEDIAPIPELINE_CONFIG_ARN: !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
           LCA_STACK_NAME: !Ref LCAStackName
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
           BUFFER_SIZE: "128"
@@ -597,7 +511,7 @@ Resources:
                 Action:
                   - chime:CreateMediaInsightsPipeline
                 Resource:
-                  - !GetAtt DeployMediaPipelineConfig.Outputs.ChimeMediaPipelineConfigArn
+                  - !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
                   - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
               - Effect: Allow
                 Action:
