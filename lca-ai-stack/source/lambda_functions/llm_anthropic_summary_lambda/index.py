@@ -14,7 +14,7 @@ ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 ENDPOINT_URL = os.environ["ENDPOINT_URL"]
 FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
-TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0'))
+TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0')) # default 0 - do not truncate.
 
 lambda_client = boto3.client('lambda')
 
@@ -34,7 +34,7 @@ def get_transcripts(callId):
     return response
 
 def handler(event, context):
-    print("Received event: " + json.dumps(event, indent=2))
+    print("Received event: ", event)
     callId = event['CallId']
     transcript_response = get_transcripts(callId)
     transcript_data = transcript_response['Payload'].read().decode()
@@ -45,7 +45,7 @@ def handler(event, context):
     print(prompt)
     data = {
         "prompt": prompt,
-        "model": "claude-v1.3",
+        "model": ANTHROPIC_MODEL_IDENTIFIER,
         "max_tokens_to_sample": 512,
         "stop_sequences": ["Human:", "Assistant:"]
     }
