@@ -133,8 +133,7 @@ Parameters:
 
   SummarizationLLMThirdPartyApiKey:
     Type: String
-    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key from
-      . ** Data will leave your AWS account **'
+    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key. ** Data will leave your AWS account **'
     Default: ''
     NoEcho: true
 
@@ -854,12 +853,12 @@ Resources:
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
-          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3"
+          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3-100k"
           ANTHROPIC_API_KEY: !Ref SummarizationLLMThirdPartyApiKey
           ENDPOINT_URL: "https://api.anthropic.com/v1/complete"
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           PROCESS_TRANSCRIPT: "True"
-          TOKEN_COUNT: "1024"
+          TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
       Timeout: 60
       MemorySize: 128
       Handler: index.handler

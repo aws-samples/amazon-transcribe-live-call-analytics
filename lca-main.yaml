@@ -390,8 +390,7 @@ Parameters:
 
   SummarizationLLMThirdPartyApiKey:
     Type: String
-    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key from
-      . ** Data will leave your AWS account **'
+    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key. ** Data will leave your AWS account **'
     Default: ''
     NoEcho: true
 
