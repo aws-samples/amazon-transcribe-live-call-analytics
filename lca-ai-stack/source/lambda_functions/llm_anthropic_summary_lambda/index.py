@@ -42,7 +42,7 @@ def handler(event, context):
     print("Transcript data:", transcript_data)
     transcript_json = json.loads(transcript_data)
     transcript = transcript_json['transcript']
-    prompt = SUMMARY_PROMPT_TEMPLATE.replace("{transcript}", transcript)
+    prompt = SUMMARY_PROMPT_TEMPLATE.replace("<br>", "\n").replace("{transcript}", transcript)
     print("Prompt: ",prompt)
     data = {
         "prompt": prompt,
