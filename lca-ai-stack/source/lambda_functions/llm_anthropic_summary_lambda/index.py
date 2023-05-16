@@ -15,6 +15,7 @@ ENDPOINT_URL = os.environ["ENDPOINT_URL"]
 FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
 TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0')) # default 0 - do not truncate.
+SUMMARY_PROMPT_TEMPLATE = os.environ["SUMMARY_PROMPT_TEMPLATE"]
 
 lambda_client = boto3.client('lambda')
 
@@ -34,15 +35,15 @@ def get_transcripts(callId):
     return response
 
 def handler(event, context):
-    print("Received event: ", event)
+    print("Received event: ", json.dumps(event))
     callId = event['CallId']
     transcript_response = get_transcripts(callId)
     transcript_data = transcript_response['Payload'].read().decode()
     print("Transcript data:", transcript_data)
     transcript_json = json.loads(transcript_data)
     transcript = transcript_json['transcript']
-    prompt = f"\n\nHuman:\n{transcript}\n\nSummarize the above transcript in no more than 5 sentences\n\nAssistant:"
-    print(prompt)
+    prompt = SUMMARY_PROMPT_TEMPLATE.replace("{transcript}", transcript)
+    print("Prompt: ",prompt)
     data = {
         "prompt": prompt,
         "model": ANTHROPIC_MODEL_IDENTIFIER,

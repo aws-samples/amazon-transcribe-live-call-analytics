@@ -527,7 +527,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Type: String
-      Value: !Sub '{ "CategoryAlertRegex":"${CategoryAlertRegEx}", "EnableVoiceToneAnalysis":"${EnableVoiceToneAnalysis}", "SummarizationLLMThirdPartyApiKey":"${SummarizationLLMThirdPartyApiKey}" }'
+      Value: !Sub '{ "CategoryAlertRegex":"${CategoryAlertRegEx}", "EnableVoiceToneAnalysis":"${EnableVoiceToneAnalysis}" }'
 
   ##########################################################################
   # CodeBuild
@@ -859,6 +859,7 @@ Resources:
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           PROCESS_TRANSCRIPT: "True"
           TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
+          SUMMARY_PROMPT_TEMPLATE: "\n\nHuman:\n{transcript}\n\nSummarize the above transcript in no more than 5 sentences, using gender neutral pronouns.\n\nAssistant: Here is a summary in 5 sentences:"
       Timeout: 60
       MemorySize: 128
       Handler: index.handler
