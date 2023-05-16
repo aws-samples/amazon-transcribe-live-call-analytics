@@ -57,7 +57,7 @@ def handler(event, context):
     response = requests.post(ENDPOINT_URL, headers=headers, data=json.dumps(data))
     print("API Response:", response)
     summaryText = json.loads(response.text)["completion"].strip()
-    print("Summary:", summaryText)
+    print("Summary: ", summaryText)
     return {"summary": summaryText}
 
     
