@@ -1,10 +1,12 @@
 import json
 import boto3
-import datetime
+from datetime import datetime, timedelta
 import os
+from os import getenv
 
 KINESIS_STREAM_NAME = os.environ["KINESIS_STREAM_NAME"]
 TRANSCRIBER_CALL_EVENT_TABLE_NAME = os.environ["TRANSCRIBER_CALL_EVENT_TABLE_NAME"]
+DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
 
 chimeClient = boto3.client('chime-sdk-voice')
 kdsClient = boto3.client('kinesis')
@@ -13,6 +15,9 @@ dynamoTable = dynamoClient.Table(TRANSCRIBER_CALL_EVENT_TABLE_NAME)
 
 voiceTaskCache = {}
 callDetailCache = {}
+
+def get_ttl():
+    return int((datetime.utcnow() + timedelta(days=int(DYNAMODB_EXPIRATION_IN_DAYS))).timestamp())
 
 def get_call_record(callId):
     if callId in callDetailCache:
@@ -38,7 +43,8 @@ def put_voice_task(voiceToneAnalysisTaskId, callId):
             'PK': pk,
             'SK': 'VTA',
             'VoiceToneAnalysisTaskId': voiceToneAnalysisTaskId,
-            'CallId': callId
+            'CallId': callId,
+            'ExpiresAfter': get_ttl()
         }
     )
     # save to local cache
@@ -84,9 +90,9 @@ def lambda_handler(event, context):
         callData = json.loads(callRecord['CallData'])
         
         callStartTimeStr = callData['callStreamingStartTime']
-        callStartTime = datetime.datetime.strptime(callStartTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
+        callStartTime = datetime.strptime(callStartTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
         
-        timestampStr = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        timestampStr = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         
         participant = 'CALLER_VOICETONE' if detail['isCaller'] != True else 'AGENT_VOICETONE'
         sentiment = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneLabel'].upper()
@@ -100,10 +106,10 @@ def lambda_handler(event, context):
         }
 
         segmentStartTimeStr = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['startTime']
-        segmentStartTime = datetime.datetime.strptime(segmentStartTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
+        segmentStartTime = datetime.strptime(segmentStartTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
         
         segmentEndTimeStr = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['endTime']
-        segmentEndTime = datetime.datetime.strptime(segmentEndTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
+        segmentEndTime = datetime.strptime(segmentEndTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
 
         endMillis = (segmentEndTime - callStartTime).total_seconds() * 1000
         #startMillis = (segmentStartTime - callStartTime).total_seconds() * 1000
