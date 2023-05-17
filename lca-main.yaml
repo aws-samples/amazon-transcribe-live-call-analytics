@@ -689,7 +689,7 @@ Metadata:
       SummarizationSageMakerInitialInstanceCount:
         default: Initial Instance Count for Summarization SageMaker Endpoint
       SummarizationLLMThirdPartyApiKey:
-        default: Endo of Call Summarization LLM Third Party API Key
+        default: End of Call Summarization LLM Third Party API Key
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       StartOfCallLambdaHookFunctionArn:
