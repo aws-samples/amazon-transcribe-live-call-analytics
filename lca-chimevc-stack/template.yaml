@@ -255,8 +255,8 @@ Resources:
         - python3.7
         - python3.8
       Description: >
-       This is a layer with shared python libraries for the custom resource 
-       to create the ChimeSDKMediaInsightsPipelineConfiguration.
+        This is a layer with shared python libraries for the custom resource 
+        to create the ChimeSDKMediaInsightsPipelineConfiguration.
       ContentUri:
         ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
@@ -333,7 +333,7 @@ Resources:
             - ShouldInstallDemoAsteriskServer
             - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
-        
+
   DeployPcaIntegration:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallPcaIntegration
