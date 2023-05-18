@@ -105,7 +105,6 @@ US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
     12. `Agent Assist Kendra IndexId (existing)`, `Agent Assist LexV2 BotId (existing)`, `Agent Assist LexV2 Bot AliasId (existing)`, and `Agent Assist Lambda Function ARN (existing)` - empty by default, but must be populated as described depending on the option chosen for `Enable Agent Assist`.
     13. `Agent Assist QnABot Item Matching Api` - Use Kendra for FAQ matching, or choose to use the new QnAbot Embeddings feature - see [QnaBot Embeddings](https://github.com/aws-solutions/qnabot-on-aws/blob/main/docs/semantic_matching_using_LLM_embeddings/README.md) for more information. 
     14. `Agent Assist QnABot LLM API` - Use QnABot's (prerelease) LLM integration capabilities to use exiting new generative AI capabilities to handle conversational followup questions and to generate concise answers from your knowledge base documents. See [LLM Query Disambiguation and Generative Question Answering](https://github.com/aws-solutions/qnabot-on-aws/blob/feature/llm-summarize/docs/LLM_Retrieval_and_generative_question_answering/README.md)
-
     **Amazon S3 Configuration**  
     15. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
     16. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
