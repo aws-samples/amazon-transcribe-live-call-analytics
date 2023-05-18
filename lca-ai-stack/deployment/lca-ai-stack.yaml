@@ -859,7 +859,7 @@ Resources:
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           PROCESS_TRANSCRIPT: "True"
           TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
-          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns.<br><br>Assistant: Here is a summary in 5 sentences:"
+          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
       Timeout: 60
       MemorySize: 128
       Handler: index.handler
