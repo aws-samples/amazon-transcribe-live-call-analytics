@@ -209,11 +209,11 @@ def normalize_transcript_segments(message: Dict) -> List[Dict]:
     is_partial: bool = None
     sentiment: str = None
     issuesdetected = None
+    sentimentWeighted = None
+    sentimentScore = None
     status: str = "TRANSCRIBING"
     expires_afer = get_ttl()
     created_at = datetime.utcnow().astimezone().isoformat()
-    sentiment_weighted = None
-    sentiment_score = None
     segments = []
 
 

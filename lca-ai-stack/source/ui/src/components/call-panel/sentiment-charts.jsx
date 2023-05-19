@@ -52,7 +52,7 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
           valueFormatter: (e) => e.toFixed(3),
         },
       ]}
-      yDomain={[-5, 5]}
+      yDomain={[-1, 1]}
       i18nStrings={{
         legendAriaLabel: 'Legend',
         chartAriaRoleDescription: 'line chart',
