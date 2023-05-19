@@ -756,6 +756,37 @@ const CallInProgressTranscript = ({
   );
 };
 
+const getAgentAssistPanel = () => {
+  if (process.env.REACT_APP_LEX_BOT_ID) {
+    return (
+      <Container
+        disableContentPaddings
+        header={
+          <Header
+            variant="h4"
+            info={
+              <Link variant="info" target="_blank" href="https://amazon.com/live-call-analytics">
+                Info
+              </Link>
+            }
+          >
+            Agent Assist Bot
+          </Header>
+        }
+      >
+        <Box>
+          <iframe
+            style={{ border: '0px', height: '34vh', margin: '0' }}
+            title="Agent Assist"
+            src="/index-lexwebui.html"
+            width="100%"
+          />
+        </Box>
+      </Container>
+    );
+  }
+  return null;
+};
 const getTranscriptContent = ({
   item,
   callTranscriptPerCallId,
@@ -826,7 +857,12 @@ const CallTranscriptContainer = ({
     return translateOn;
   };
   return (
-    <Grid gridDefinition={[{ colspan: 8 }, { colspan: 4 }]}>
+    <Grid
+      gridDefinition={[
+        { colspan: { default: 12, xs: process.env.REACT_APP_LEX_BOT_ID ? 8 : 12 } },
+        { colspan: { default: 12, xs: process.env.REACT_APP_LEX_BOT_ID ? 4 : 0 } },
+      ]}
+    >
       <Container
         fitHeight="true"
         disableContentPaddings
@@ -870,34 +906,7 @@ const CallTranscriptContainer = ({
           translateOn,
         })}
       </Container>
-      <Container
-        disableContentPaddings
-        header={
-          <Header
-            variant="h4"
-            info={
-              <Link
-                variant="info"
-                target="_blank"
-                href="https://amazon.com/live-call-analytics"
-              >
-                Info
-              </Link>
-            }
-          >
-            Agent Assist Bot
-          </Header>
-        }
-      >
-        <Box>
-          <iframe
-            style={{ border: '0px', height: '34vh', margin: '0' }}
-            title="Agent Assist"
-            src="/index-lexwebui.html"
-            width="100%"
-          />
-        </Box>
-      </Container>
+      {getAgentAssistPanel()}
     </Grid>
   );
 };
