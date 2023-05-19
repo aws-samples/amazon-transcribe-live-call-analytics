@@ -56,7 +56,17 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
       i18nStrings={{
         legendAriaLabel: 'Legend',
         chartAriaRoleDescription: 'line chart',
-        xTickFormatter: (e) => e.toISOString().substr(14, 5),
+        // xTickFormatter: (e) => e.toISOString().substr(14, 5),
+        xTickFormatter: (e) =>
+        e.toLocaleDateString('en-US', { month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: 'numeric',
+                                        second: 'numeric',
+                                        hour12: false,
+                                      }
+                            ).split(',')
+                             .join('\n'),
         yTickFormatter: (e) => getWeightedSentimentLabel(e),
       }}
       empty={
@@ -124,7 +134,17 @@ export const SentimentFluctuationChart = ({ item, callTranscriptPerCallId }) => 
       i18nStrings={{
         legendAriaLabel: 'Legend',
         chartAriaRoleDescription: 'line chart',
-        xTickFormatter: (e) => e.toISOString().substr(14, 5),
+        // xTickFormatter: (e) => e.toISOString().substr(14, 5),
+        xTickFormatter: (e) =>
+          e.toLocaleDateString('en-US', { month: 'short',
+                                          day: 'numeric',
+                                          hour: 'numeric',
+                                          minute: 'numeric',
+                                          second: 'numeric',
+                                          hour12: false,
+                                        }
+                              ).split(',')
+                               .join('\n'),
         yTickFormatter: (e) => getWeightedSentimentLabel(e),
       }}
       empty={
@@ -170,7 +190,7 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
 
   return (
     <LineChart
-      height={300}
+      height="80"
       hideFilter
       series={[
         {
@@ -186,7 +206,7 @@ export const SentimentPerQuarterChart = ({ item, callTranscriptPerCallId }) => {
           valueFormatter: (e) => e.toFixed(3),
         },
       ]}
-      yDomain={[-1, 1]}
+      yDomain={[-5, 5]}
       i18nStrings={{
         legendAriaLabel: 'Legend',
         chartAriaRoleDescription: 'line chart',
