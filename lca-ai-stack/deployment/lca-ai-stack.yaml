@@ -618,12 +618,17 @@ Resources:
                 - echo Build started on `date`
                 - echo Building kvs transcribe streamig container image
                 - cd $CODEBUILD_SRC_DIR
-                - echo Building Web UI
                 - cd source/ui
+                - echo Downloading LexWebUI 
+                - ./download-lexwebui.sh
+                - echo Building Web UI
                 - npm run build
                 - >
                   printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
                   $REPOSITORY_URI $PROJECT_NAME $ARTIFACT_BUCKET > build.json
+                - cd build
+                - envsubst < lex-web-ui-loader-config-template.json > lex-web-ui-loader-config.json
+                - cd ..
             post_build:
               commands:
                 - echo Build completed on `date`
@@ -677,6 +682,14 @@ Resources:
               - ShouldAllowSignUpEmailDomain
               - 'false'
               - 'true'
+          - Name: REACT_APP_LEX_BOT_ID
+            Value: !Ref LexAgentAssistBotId
+          - Name: REACT_APP_LEX_BOT_ALIAS_ID
+            Value: !Ref LexAgentAssistAliasId
+          - Name: REACT_APP_LEX_BOT_LOCALE_ID
+            Value: !Ref LexAgentAssistLocaleId
+          - Name: REACT_APP_CLOUDFRONT_DOMAIN
+            Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
       TimeoutInMinutes: 10
 
   LambdaCodeBuildStartBuildExecutionRole:

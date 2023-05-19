@@ -1,0 +1,77 @@
+{
+  "region": "${AWS_DEFAULT_REGION}",
+  "cognito": {
+    "poolId": "${REACT_APP_IDENTITY_POOL_ID}",
+    "appUserPoolClientId": "${REACT_APP_USER_POOL_CLIENT_ID}",
+    "appUserPoolName": "${REACT_APP_USER_POOL_ID}",
+    "appDomainName": "lexwebuikllmkkidentitypoolconfigkbed109902885450.auth.us-east-1.amazoncognito.com",
+    "aws_cognito_region": "${AWS_DEFAULT_REGION}",
+    "region": "${AWS_DEFAULT_REGION}"
+  },
+  "connect": {
+    "contactFlowId": "",
+    "instanceId": "",
+    "apiGatewayEndpoint": "",
+    "promptForNameMessage": "Before starting a live chat, please tell me your name?",
+    "waitingForAgentMessage": "Thanks for waiting. An agent will be with you when available.",
+    "waitingForAgentMessageIntervalSeconds": "60",
+    "agentJoinedMessage": "{Agent} has joined.",
+    "agentLeftMessage": "{Agent} has left.",
+    "chatEndedMessage": "Chat ended.",
+    "attachChatTranscript": "false",
+    "liveChatTerms": "live chat"
+  },
+  "lex": {
+    "v2BotId": "${REACT_APP_LEX_BOT_ID}",
+    "v2BotAliasId": "${REACT_APP_LEX_BOT_ALIAS_ID}",
+    "v2BotLocaleId": "${REACT_APP_LEX_BOT_LOCALE_ID}",
+    "botName": "${REACT_APP_LEX_BOT_ID}",
+    "botAlias": "$LATEST",
+    "initialText": "Agent Assist Loaded.",
+    "initialSpeechInstruction": "Agent Assist Loaded.",
+    "initialUtterance": "",
+    "reInitSessionAttributesOnRestart": false,
+    "region": "${AWS_DEFAULT_REGION}",
+    "retryOnLexPostTextTimeout": "false",
+    "retryCountPostTextTimeout": "1"
+  },
+  "ui": {
+    "parentOrigin": "${CLOUDFRONT_DOMAIN}",
+    "toolbarTitle": "LCA Agent Assist",
+    "toolbarLogo": "",
+    "toolbarStartLiveChatLabel": "Start Live Chat",
+    "toolbarEndLiveChatLabel": "End Live Chat",
+    "toolbarStartLiveChatIcon": "people_alt",
+    "toolbarEndLiveChatIcon": "call_end",
+    "positiveFeedbackIntent": "",
+    "negativeFeedbackIntent": "",
+    "helpIntent": "Help",
+    "minButtonContent": "",
+    "backButton": false,
+    "messageMenu": false,
+    "hideButtonMessageBubble": false,
+    "enableLogin": true,
+    "enableLiveChat": false,
+    "forceLogin": false,
+    "AllowSuperDangerousHTMLInMessage": true,
+    "shouldDisplayResponseCardTitle": false,
+    "saveHistory": false,
+    "helpContent": {},
+    "enableSFX": false,
+    "hideInputFieldsForButtonResponse": false,
+    "pushInitialTextOnRestart": false,
+    "directFocusToBotInput": false,
+    "showDialogStateIcon": false
+  },
+  "polly": {
+    "voiceId": "Salli"
+  },
+  "recorder": {
+    "preset": "speech_recognition"
+  },
+  "iframe": {
+    "iframeOrigin": "https://d3vlpkgplhzy9q.cloudfront.net",
+    "shouldLoadIframeMinimized": false,
+    "iframeSrcPath": "/index.html#/?lexWebUiEmbed=true"
+  }
+}

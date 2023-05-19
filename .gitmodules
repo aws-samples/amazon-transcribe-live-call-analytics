@@ -2,3 +2,4 @@
 	path = submodule-aws-qnabot
 	url = https://github.com/aws-solutions/qnabot-on-aws.git
 	branch = main
+

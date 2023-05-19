@@ -828,6 +828,7 @@ const CallTranscriptContainer = ({
   return (
     <Grid gridDefinition={[{ colspan: 8 }, { colspan: 4 }]}>
       <Container
+        fitHeight="true"
         disableContentPaddings
         header={
           <Header
@@ -869,16 +870,33 @@ const CallTranscriptContainer = ({
           translateOn,
         })}
       </Container>
-      <Container fitHeight="true" disableContentPaddings>
-        <div style={{ height: '100%' }}>
+      <Container
+        disableContentPaddings
+        header={
+          <Header
+            variant="h4"
+            info={
+              <Link
+                variant="info"
+                target="_blank"
+                href="https://amazon.com/live-call-analytics"
+              >
+                Info
+              </Link>
+            }
+          >
+            Agent Assist Bot
+          </Header>
+        }
+      >
+        <Box>
           <iframe
-            title="test"
-            src="https://d3vlpkgplhzy9q.cloudfront.net/"
+            style={{ border: '0px', height: '34vh', margin: '0' }}
+            title="Agent Assist"
+            src="/index-lexwebui.html"
             width="100%"
-            height="350px"
-            border="0"
           />
-        </div>
+        </Box>
       </Container>
     </Grid>
   );
