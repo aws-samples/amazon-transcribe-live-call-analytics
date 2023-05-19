@@ -233,7 +233,11 @@ def normalize_transcript_segments(message: Dict) -> List[Dict]:
         is_partial = utteranceEvent["IsPartial"]
         if not is_partial and utteranceEvent.get("Sentiment", None):
             sentiment: str = utteranceEvent.get("Sentiment", None)
-        
+        if not is_partial and utteranceEvent.get("SentimentWeighted", None):
+            sentimentWeighted = utteranceEvent.get("SentimentWeighted", None)
+        if not is_partial and utteranceEvent.get("SentimentScore", None):
+            sentimentScore = utteranceEvent.get("SentimentScore", None)
+
         if not is_partial and utteranceEvent.get("IssuesDetected", []):
             issuesdetected = utteranceEvent.get("IssuesDetected")
         segments.append(
@@ -247,6 +251,8 @@ def normalize_transcript_segments(message: Dict) -> List[Dict]:
                     OriginalTranscript=transcript,
                     IsPartial=is_partial,
                     Sentiment=sentiment,
+                    SentimentWeighted=sentimentWeighted,
+                    SentimentScore=sentimentScore,
                     IssuesDetected=issuesdetected,
                     Status=status,
                     ExpiresAfter=expires_afer,
