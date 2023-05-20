@@ -544,6 +544,7 @@ const CallInProgressTranscript = ({
   targetLanguage,
   agentTranscript,
   translateOn,
+  collapseSentiment,
 }) => {
   const bottomRef = useRef();
   const [turnByTurnSegments, setTurnByTurnSegments] = useState([]);
@@ -748,15 +749,23 @@ const CallInProgressTranscript = ({
   ]);
 
   return (
-    <Box className="transcript-box" padding="l">
+    <div
+      style={{
+        overflowY: 'auto',
+        maxHeight: collapseSentiment ? '34vh' : '68vh',
+        paddingLeft: '10px',
+        paddingTop: '5px',
+        paddingRight: '10px',
+      }}
+    >
       <ColumnLayout borders="horizontal" columns={1}>
         {turnByTurnSegments}
       </ColumnLayout>
-    </Box>
+    </div>
   );
 };
 
-const getAgentAssistPanel = () => {
+const getAgentAssistPanel = (collapseSentiment) => {
   if (process.env.REACT_APP_LEX_BOT_ID) {
     return (
       <Container
@@ -774,9 +783,9 @@ const getAgentAssistPanel = () => {
           </Header>
         }
       >
-        <Box>
+        <Box style={{ height: collapseSentiment ? '34vh' : '68vh' }}>
           <iframe
-            style={{ border: '0px', height: '34vh', margin: '0' }}
+            style={{ border: '0px', height: collapseSentiment ? '34vh' : '68vh', margin: '0' }}
             title="Agent Assist"
             src="/index-lexwebui.html"
             width="100%"
@@ -795,6 +804,7 @@ const getTranscriptContent = ({
   targetLanguage,
   agentTranscript,
   translateOn,
+  collapseSentiment,
 }) => {
   switch (item.recordingStatusLabel) {
     case DONE_STATUS:
@@ -809,6 +819,7 @@ const getTranscriptContent = ({
           targetLanguage={targetLanguage}
           agentTranscript={agentTranscript}
           translateOn={translateOn}
+          collapseSentiment={collapseSentiment}
         />
       );
   }
@@ -819,6 +830,7 @@ const CallTranscriptContainer = ({
   item,
   callTranscriptPerCallId,
   translateClient,
+  collapseSentiment,
 }) => {
   // defaults to auto scroll when call is in progress
   const [autoScroll, setAutoScroll] = useState(item.recordingStatusLabel === IN_PROGRESS_STATUS);
@@ -904,16 +916,23 @@ const CallTranscriptContainer = ({
           targetLanguage,
           agentTranscript,
           translateOn,
+          collapseSentiment,
         })}
       </Container>
-      {getAgentAssistPanel()}
+      {getAgentAssistPanel(collapseSentiment)}
     </Grid>
   );
 };
 
-const VoiceToneContainer = ({ item, callTranscriptPerCallId }) => (
+const VoiceToneContainer = ({
+  item,
+  callTranscriptPerCallId,
+  collapseSentiment,
+  setCollapseSentiment,
+}) => (
   <Container
     fitHeight="true"
+    disableContentPaddings={collapseSentiment ? '' : 'true'}
     header={
       <Header
         variant="h4"
@@ -926,18 +945,35 @@ const VoiceToneContainer = ({ item, callTranscriptPerCallId }) => (
             Info
           </Link>
         }
+        actions={
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button
+              variant="inline-icon"
+              iconName={collapseSentiment ? 'angle-up' : 'angle-down'}
+              onClick={() => setCollapseSentiment(!collapseSentiment)}
+            />
+          </SpaceBetween>
+        }
       >
         Voice Tone Analysis
       </Header>
     }
   >
-    <VoiceToneFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
+    {collapseSentiment ? (
+      <VoiceToneFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
+    ) : null}
   </Container>
 );
 
-const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
+const CallStatsContainer = ({
+  item,
+  callTranscriptPerCallId,
+  collapseSentiment,
+  setCollapseSentiment,
+}) => (
   <>
     <Container
+      disableContentPaddings={collapseSentiment ? '' : 'true'}
       header={
         <Header
           variant="h4"
@@ -950,68 +986,84 @@ const CallStatsContainer = ({ item, callTranscriptPerCallId }) => (
               Info
             </Link>
           }
+          actions={
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button
+                variant="inline-icon"
+                iconName={collapseSentiment ? 'angle-up' : 'angle-down'}
+                onClick={() => setCollapseSentiment(!collapseSentiment)}
+              />
+            </SpaceBetween>
+          }
         >
           Call Sentiment Analysis
         </Header>
       }
     >
-      <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
-        <SentimentFluctuationChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
-        <SentimentPerQuarterChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
-      </Grid>
+      {collapseSentiment ? (
+        <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
+          <SentimentFluctuationChart
+            item={item}
+            callTranscriptPerCallId={callTranscriptPerCallId}
+          />
+          <SentimentPerQuarterChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
+        </Grid>
+      ) : null}
     </Container>
-    <Container>
-      <ColumnLayout columns={4} variant="text-grid">
-        <SpaceBetween size="xs">
-          <div>
-            <Box margin={{ bottom: 'xxxs' }} color="text-label">
-              <strong>Caller Average Sentiment:</strong>
-            </Box>
+    {collapseSentiment ? (
+      <Container style={{ display: collapseSentiment ? 'block' : 'none' }}>
+        <ColumnLayout columns={4} variant="text-grid">
+          <SpaceBetween size="xs">
             <div>
-              <SentimentIcon sentiment={item.callerSentimentLabel} />
-              &nbsp;
-              {item.callerAverageSentiment.toFixed(3)}
-              <br />
-              (min: -5, max: +5)
+              <Box margin={{ bottom: 'xxxs' }} color="text-label">
+                <strong>Caller Avg Sentiment:</strong>
+              </Box>
+              <div>
+                <SentimentIcon sentiment={item.callerSentimentLabel} />
+                &nbsp;
+                {item.callerAverageSentiment.toFixed(3)}
+                <br />
+                (min: -5, max: +5)
+              </div>
             </div>
-          </div>
-        </SpaceBetween>
-        <SpaceBetween size="xs">
-          <div>
-            <Box margin={{ bottom: 'xxxs' }} color="text-label">
-              <strong>Caller Sentiment Trend:</strong>
-            </Box>
+          </SpaceBetween>
+          <SpaceBetween size="xs">
             <div>
-              <SentimentTrendIcon trend={item.callerSentimentTrendLabel} />
+              <Box margin={{ bottom: 'xxxs' }} color="text-label">
+                <strong>Caller Sentiment Trend:</strong>
+              </Box>
+              <div>
+                <SentimentTrendIcon trend={item.callerSentimentTrendLabel} />
+              </div>
             </div>
-          </div>
-        </SpaceBetween>
-        <SpaceBetween size="xs">
-          <div>
-            <Box margin={{ bottom: 'xxxs' }} color="text-label">
-              <strong>Agent Average Sentiment:</strong>
-            </Box>
+          </SpaceBetween>
+          <SpaceBetween size="xs">
             <div>
-              <SentimentIcon sentiment={item.agentSentimentLabel} />
-              &nbsp;
-              {item.agentAverageSentiment.toFixed(3)}
-              <br />
-              (min: -5, max: +5)
+              <Box margin={{ bottom: 'xxxs' }} color="text-label">
+                <strong>Agent Avg Sentiment:</strong>
+              </Box>
+              <div>
+                <SentimentIcon sentiment={item.agentSentimentLabel} />
+                &nbsp;
+                {item.agentAverageSentiment.toFixed(3)}
+                <br />
+                (min: -5, max: +5)
+              </div>
             </div>
-          </div>
-        </SpaceBetween>
-        <SpaceBetween size="xs">
-          <div>
-            <Box margin={{ bottom: 'xxxs' }} color="text-label">
-              <strong>Agent Sentiment Trend:</strong>
-            </Box>
+          </SpaceBetween>
+          <SpaceBetween size="xs">
             <div>
-              <SentimentTrendIcon trend={item.agentSentimentTrendLabel} />
+              <Box margin={{ bottom: 'xxxs' }} color="text-label">
+                <strong>Agent Sentiment Trend:</strong>
+              </Box>
+              <div>
+                <SentimentTrendIcon trend={item.agentSentimentTrendLabel} />
+              </div>
             </div>
-          </div>
-        </SpaceBetween>
-      </ColumnLayout>
-    </Container>
+          </SpaceBetween>
+        </ColumnLayout>
+      </Container>
+    ) : null}
   </>
 );
 
@@ -1019,6 +1071,7 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
   const { currentCredentials } = useAppContext();
 
   const { settings } = useSettingsContext();
+  const [collapseSentiment, setCollapseSentiment] = useState(false);
 
   const enableVoiceTone = settings?.EnableVoiceToneAnalysis === 'true';
 
@@ -1070,14 +1123,16 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
       >
         <CallStatsContainer
           item={item}
-          setToolsOpen={setToolsOpen}
           callTranscriptPerCallId={callTranscriptPerCallId}
+          collapseSentiment={collapseSentiment}
+          setCollapseSentiment={setCollapseSentiment}
         />
         {enableVoiceTone && (
           <VoiceToneContainer
             item={item}
-            setToolsOpen={setToolsOpen}
             callTranscriptPerCallId={callTranscriptPerCallId}
+            collapseSentiment={collapseSentiment}
+            setCollapseSentiment={setCollapseSentiment}
           />
         )}
       </Grid>
@@ -1087,6 +1142,7 @@ export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
         setToolsOpen={setToolsOpen}
         callTranscriptPerCallId={callTranscriptPerCallId}
         translateClient={translateClient}
+        collapseSentiment={collapseSentiment}
       />
     </SpaceBetween>
   );
