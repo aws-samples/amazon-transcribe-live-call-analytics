@@ -1,12 +1,12 @@
 {
-  "region": "${AWS_DEFAULT_REGION}",
+  "region": "${REACT_APP_AWS_REGION}",
   "cognito": {
     "poolId": "${REACT_APP_IDENTITY_POOL_ID}",
     "appUserPoolClientId": "${REACT_APP_USER_POOL_CLIENT_ID}",
     "appUserPoolName": "${REACT_APP_USER_POOL_ID}",
     "appDomainName": "lexwebuikllmkkidentitypoolconfigkbed109902885450.auth.us-east-1.amazoncognito.com",
-    "aws_cognito_region": "${AWS_DEFAULT_REGION}",
-    "region": "${AWS_DEFAULT_REGION}"
+    "aws_cognito_region": "${REACT_APP_AWS_REGION}",
+    "region": "${REACT_APP_AWS_REGION}"
   },
   "connect": {
     "contactFlowId": "",
@@ -31,7 +31,7 @@
     "initialSpeechInstruction": "Agent Assist Loaded.",
     "initialUtterance": "",
     "reInitSessionAttributesOnRestart": false,
-    "region": "${AWS_DEFAULT_REGION}",
+    "region": "${REACT_APP_AWS_REGION}",
     "retryOnLexPostTextTimeout": "false",
     "retryCountPostTextTimeout": "1"
   },

@@ -35,7 +35,7 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "./download-lexwebui.sh && ./generate-lexwebui-json.sh && react-scripts start",
     "build": "./download-lexwebui.sh && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
