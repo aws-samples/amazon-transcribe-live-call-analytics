@@ -95,6 +95,12 @@ Parameters:
     Type: String
   AgentAssistExistingLambdaFunctionArn:
     Type: String
+  AgentAssistQnABotLLMApi:
+    Type: String
+  AgentAssistQnABotLLMSagemakerInitialInstanceCount:
+    Type: String
+  AgentAssistQnABotLLMLambdaArn:
+    Type: String
   TranscribeLanguageCode:
     Type: String
   IsSentimentAnalysisEnabled:
@@ -296,6 +302,11 @@ Resources:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
             # Set embedding distance score threshold
             settings["EMBEDDINGS_SCORE_THRESHOLD"] = "0.90"
+            settings["EMBEDDINGS_SCORE_ANSWER_THRESHOLD"] = "0.90"
+            # Set LLM params
+            settings["LLM_QA_NO_HITS_REGEX"] = "Sorry, I don't know"
+            settings["LLM_QA_SHOW_CONTEXT_TEXT"] = "FALSE"
+
             # save back to SSM
             response = ssm.put_parameter(
               Name=ssmParamName,
@@ -428,6 +439,9 @@ Resources:
       AgentAssistExistingLexV2BotId: !Ref AgentAssistExistingLexV2BotId
       AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
       AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
+      AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
+      AgentAssistQnABotLLMSagemakerInitialInstanceCount: !Ref AgentAssistQnABotLLMSagemakerInitialInstanceCount
+      AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
       TranscribeLanguageCode: !Ref TranscribeLanguageCode
       IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
       TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn

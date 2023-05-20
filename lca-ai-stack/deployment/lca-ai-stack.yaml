@@ -118,10 +118,11 @@ Parameters:
       - 'DISABLED'
       - 'SAGEMAKER'
       - 'LAMBDA'
+      - 'ANTHROPIC'
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
-      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type. The LAMBDA option requires you to 
-      provide a function ARN below.
+      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
+      to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -129,6 +130,12 @@ Parameters:
     Default: 1
     Description: >
       (Optional) If "End Of Call Transcript Summary" is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
+  SummarizationLLMThirdPartyApiKey:
+    Type: String
+    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key. ** Data will leave your AWS account **'
+    Default: ''
+    NoEcho: true
 
   EndOfCallLambdaHookFunctionArn:
     Default: ''
@@ -294,7 +301,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.7.1-rc1-rc1-a100
+    Default: 0.8.0-rc1
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -360,11 +367,14 @@ Conditions:
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
   ShouldEnableStartOfCallLambdaHookFunction: !Not [!Equals [!Ref StartOfCallLambdaHookFunctionArn, ""]]
   ShouldEnablePostCallSummaryLambdaHookFunction: !Not [!Equals [!Ref PostCallSummaryLambdaHookFunctionArn, ""]]
+  ShouldEnableAnthropicSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "ANTHROPIC"]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
+
   IsTranscriptSummaryEnabled: !Or
     - !Condition ShouldEnableEndOfCallLambdaHookFunction
     - !Condition ShouldDeploySageMakerSummarizer
+    - !Condition ShouldEnableAnthropicSummarizer
 
 Outputs:
   CallDataStreamName:
@@ -847,6 +857,55 @@ Resources:
               - Effect: "Allow"
                 Action: "dynamodb:Query"
                 Resource: !GetAtt EventSourcingTable.Arn
+  
+  LLMAnthropicSummaryLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LLMAnthropicSummaryLambdaExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
+          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3-100k"
+          ANTHROPIC_API_KEY: !Ref SummarizationLLMThirdPartyApiKey
+          ENDPOINT_URL: "https://api.anthropic.com/v1/complete"
+          FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
+          PROCESS_TRANSCRIPT: "True"
+          TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
+          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
+      Timeout: 60
+      MemorySize: 128
+      Handler: index.handler
+      CodeUri: ../source/lambda_functions/llm_anthropic_summary_lambda
+      Description: This AWS Lambda Function runs a transcript summary inference on the call transcript.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+  
+  LLMAnthropicSummaryLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: LLM Anthropic Summary Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-AnthropicSummary
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource: !GetAtt FetchTranscript.Arn
 
   AsyncAgentAssistOrchestrator:
     Type: AWS::Serverless::Function
@@ -911,7 +970,8 @@ Resources:
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
-                  Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
+                  Resource: 
+                    - !Sub "${AgentAssistExistingLambdaFunctionArn}"
                 - Ref: AWS::NoValue
 
   AsyncTranscriptSummaryOrchestrator:
@@ -921,7 +981,15 @@ Resources:
       Runtime: python3.9
       Environment:
         Variables:
-          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
+          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [
+            ShouldDeploySageMakerSummarizer, 
+            !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn],
+            !If [
+              ShouldEnableAnthropicSummarizer,
+              !GetAtt LLMAnthropicSummaryLambda.Arn,
+              !Ref EndOfCallLambdaHookFunctionArn
+            ]
+          ]
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
       Timeout: 60
       MemorySize: 128
@@ -970,7 +1038,16 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+                Resource:
+                  - !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+              - Ref: AWS::NoValue
+            - !If 
+              - ShouldEnableAnthropicSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt LLMAnthropicSummaryLambda.Arn
               - Ref: AWS::NoValue
 
   #####################################################
