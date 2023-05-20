@@ -586,7 +586,6 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:\
                     distribution/${WebAppCloudFrontDistribution}"
-
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -629,8 +628,6 @@ Resources:
                 - echo Building kvs transcribe streamig container image
                 - cd $CODEBUILD_SRC_DIR
                 - cd source/ui
-                - echo Downloading LexWebUI 
-                - ./download-lexwebui.sh
                 - echo Building Web UI
                 - npm run build
                 - >
@@ -801,6 +798,7 @@ Resources:
         Properties: 
             StreamARN: !GetAtt CallDataStream.Arn
             ConsumerName: DataStreamConsumer
+
   ##########################################################################
   # Transcript Summary
   ##########################################################################
@@ -1050,8 +1048,54 @@ Resources:
                   - !GetAtt LLMAnthropicSummaryLambda.Arn
               - Ref: AWS::NoValue
 
-  #####################################################
-  #####################
+  ##########################################################################
+  # LexWebUI / Agent Assist Bot 
+  ##########################################################################
+
+  AgentAssistBotIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${AWS::StackName}-AgentAssistBot-IdentityPool"
+      AllowUnauthenticatedIdentities: true
+
+  AgentAssistBotIdentityPoolSetRole:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref AgentAssistBotIdentityPool
+      Roles:
+        unauthenticated: !GetAtt AgentAssistBotUnauthRole.Arn
+
+  AgentAssistBotUnauthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref AgentAssistBotIdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+      Policies:
+        - PolicyName: AgentAssistBotUnauthPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lex:RecognizeText
+                  - lex:RecognizeUtterance
+                  - lex:DeleteSession
+                  - lex:PutSession
+                Resource: !Sub "arn:${AWS::Partition}:lex:${AWS::Region}:${AWS::AccountId}:bot-alias/${LexAgentAssistBotId}/${LexAgentAssistAliasId}"
+
+
+  ##########################################################################
   # SNS Topic for Category Event Notifications
   ##########################################################################
   CategorySNSTopic:
@@ -1142,7 +1186,6 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !Sub "${PostCallSummaryLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
-
             - !If 
               - IsTranscriptSummaryEnabled
               - Effect: Allow
@@ -1154,7 +1197,6 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
-
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -1182,7 +1224,6 @@ Resources:
           START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN: !Ref StartOfCallLambdaHookFunctionArn
           POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN: !Ref PostCallSummaryLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
-
           IS_TRANSCRIPT_SUMMARY_ENABLED: !If [IsTranscriptSummaryEnabled, "true", "false"]
           ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
           ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN: !GetAtt AsyncAgentAssistOrchestrator.Arn
@@ -1554,7 +1595,7 @@ Resources:
             <p>     {####}
             <p>
             <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
-             the Live Call Analytics web interface and set your permanent password.
+            the Live Call Analytics web interface and set your permanent password.
             <p>     https://${WebAppCloudFrontDistribution.DomainName}/
             <p>
             <p>Good luck!
