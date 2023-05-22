@@ -244,7 +244,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
           </div>
         </SpaceBetween>
       )}
-      {item?.recordingUrl?.length && (
+      {item?.recordingUrl?.length && item?.recordingStatusLabel !== IN_PROGRESS_STATUS && (
         <SpaceBetween size="xs">
           <div>
             <Box margin={{ bottom: 'xxxs' }} color="text-label">
@@ -257,6 +257,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
     </ColumnLayout>
   </Container>
 );
+
 const CallCategories = ({ item }) => {
   const { settings } = useSettingsContext();
   const regex = settings?.CategoryAlertRegex ?? '.*';
