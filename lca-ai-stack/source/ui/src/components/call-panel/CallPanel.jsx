@@ -955,7 +955,7 @@ const VoiceToneContainer = ({
           </SpaceBetween>
         }
       >
-        Voice Tone Analysis
+        Voice Tone Analysis (30sec rolling window)
       </Header>
     }
   >

@@ -52,12 +52,12 @@ export const VoiceToneFluctuationChart = ({ item, callTranscriptPerCallId }) => 
           valueFormatter: (e) => e.toFixed(3),
         },
       ]}
-      yDomain={[-5, 5]}
+      yDomain={[-1, 1]}
       i18nStrings={{
         legendAriaLabel: 'Legend',
         chartAriaRoleDescription: 'line chart',
         xTickFormatter: (e) => e.toISOString().substr(14, 5),
-        yTickFormatter: (e) => getWeightedSentimentLabel(e),
+        // yTickFormatter: (e) => getWeightedSentimentLabel(e),
       }}
       empty={
         <Box textAlign="center" color="inherit">
