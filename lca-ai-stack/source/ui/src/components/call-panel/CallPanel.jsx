@@ -889,7 +889,7 @@ const VoiceToneContainer = ({ item, callTranscriptPerCallId }) => (
           </Link>
         }
       >
-        Voice Tone Analysis
+        Voice Tone Analysis (30sec rolling window)
       </Header>
     }
   >
