@@ -9,6 +9,7 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, Coroutine, Dict, List, Literal, Optional, TypedDict
 import uuid
 import json
+import re
 
 # third-party imports from Lambda layer
 import boto3
@@ -1515,6 +1516,33 @@ async def execute_process_event_api_mutation(
         LOGGER.debug("Update AgentId for call")
         response = await execute_update_agent_mutation(
             message=message,
+            appsync_session=appsync_session
+        )
+        if isinstance(response, Exception):
+            return_value["errors"].append(response)
+        else:
+            return_value["successes"].append(response)
+    elif('Metadata' in message.keys()):
+        meta = json.loads(message['Metadata'])
+        LOGGER.debug("S3 URL from metadata %s", meta['oneTimeMetadata']['s3RecordingUrl'])
+
+        bucket = meta['oneTimeMetadata']['s3RecordingUrl'].split("/")[5].split("?")[0]
+        region = re.search(r"region\=(.+)\&prefix+", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
+        prefix=re.search(r"\&prefix\=(.+)", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
+
+        new_url = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + prefix
+
+        new_message = dict (
+            CallId=message['CallId'],
+            RecordingUrl=new_url,
+            EventType='ADD_S3_RECORDING_URL',
+            CreatedAt=get_ttl(),
+            ExpiresAfter=message['ExpiresAfter'],
+        )
+
+        LOGGER.debug("Add recording url from metadata")
+        response = await execute_add_s3_recording_mutation(
+            message=new_message,
             appsync_session=appsync_session
         )
         if isinstance(response, Exception):
