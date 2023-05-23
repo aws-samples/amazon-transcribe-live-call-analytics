@@ -766,7 +766,7 @@ const CallInProgressTranscript = ({
 };
 
 const getAgentAssistPanel = (collapseSentiment) => {
-  if (process.env.REACT_APP_LEX_BOT_ID) {
+  if (process.env.REACT_APP_ENABLE_LEX_AGENT_ASSIST === 'true') {
     return (
       <Container
         disableContentPaddings
@@ -871,8 +871,18 @@ const CallTranscriptContainer = ({
   return (
     <Grid
       gridDefinition={[
-        { colspan: { default: 12, xs: process.env.REACT_APP_LEX_BOT_ID ? 8 : 12 } },
-        { colspan: { default: 12, xs: process.env.REACT_APP_LEX_BOT_ID ? 4 : 0 } },
+        {
+          colspan: {
+            default: 12,
+            xs: process.env.REACT_APP_ENABLE_LEX_AGENT_ASSIST === 'true' ? 8 : 12,
+          },
+        },
+        {
+          colspan: {
+            default: 12,
+            xs: process.env.REACT_APP_ENABLE_LEX_AGENT_ASSIST === 'true' ? 4 : 0,
+          },
+        },
       ]}
     >
       <Container

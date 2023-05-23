@@ -943,8 +943,8 @@ Resources:
           - ShouldEnableLexAgentAssist
           - true
           - false
-        LexAgentAssistLocaleId:
-          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
+        #LexAgentAssistLocaleId:
+        #  !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         IsLambdaAgentAssistEnabled: 
           !If
             - ShouldEnableLambdaAgentAssist
@@ -988,6 +988,13 @@ Resources:
           - ShouldInstallAWSQnaBot
           - !GetAtt QNABOT.Outputs.LexV2BotAliasId
           - !Ref AgentAssistExistingLexV2BotAliasId
+        LexAgentAssistLocaleId: !FindInMap [
+            TranscribeToLexLocaleId,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
+        WebAppBucket: !GetAtt AISTACK.Outputs.WebAppBucket
+        CloudFrontDistributionId: !GetAtt AISTACK.Outputs.CloudFrontDistributionId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
         # Changes to Params below force AgentAssist Setup to update.
         CallAudioSource: !Ref CallAudioSource

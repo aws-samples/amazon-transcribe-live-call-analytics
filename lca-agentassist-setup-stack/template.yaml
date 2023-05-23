@@ -57,6 +57,32 @@ Parameters:
     AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
 
   # Required
+  LexAgentAssistLocaleId:
+    Type: String
+    Description: >-
+      Lex Bot Locale ID used for Agent Assist.
+    AllowedValues:
+        - ca_ES
+        - de_AT
+        - de_DE
+        - en_AU
+        - en_GB
+        - en_IN
+        - en_US
+        - en_ZA
+        - es_419
+        - es_ES
+        - es_US
+        - fr_CA
+        - fr_FR
+        - it_IT
+        - ja_JP
+        - ko_KR
+        - pt_BR
+        - pt_PT
+        - zh_CN
+
+  # Required
   QnaAgentAssistDemoJson:
     Type: String
     Description: >-
@@ -79,6 +105,14 @@ Parameters:
       - SAGEMAKER
       - LAMBDA
     Default: SAGEMAKER
+  
+  WebAppBucket:
+    Type: String
+    Description: The LCA Web App Bucket Name.
+
+  CloudFrontDistributionId:
+    Type: String
+    Description: The LCA web app CloudFront distribution id
 
   # Changes to Params below force AgentAssist Setup to update.
   CallAudioSource:
@@ -177,6 +211,24 @@ Resources:
                 Effect: Allow
                 Resource:
                   - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LCAStackName}*"
+              - Action:
+                  - iam:ListRolePolicies
+                  - iam:PutRolePolicy
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*"
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${WebAppBucket}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${WebAppBucket}/*"
+              - Action:
+                  - cloudfront:CreateInvalidation
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistributionId}"
               - !If
                 - ShouldConfigureQnabot
                 - Action:
@@ -232,17 +284,24 @@ Resources:
           import os
           from botocore.exceptions import ClientError
 
+          AWS_REGION = os.environ['AWS_REGION']
+          aws_account_id = ''
+          aws_partition = 'aws'
+
           dt = datetime.datetime.utcnow()
           cf = boto3.client('cloudformation')
           ssm = boto3.client('ssm')
           s3 = boto3.client('s3')
           lam = boto3.client('lambda')
+          iam = boto3.client('iam')
+          cloudfront = boto3.client('cloudfront')
+
 
           def propsChanged(props, oldprops, fields):
             for field in fields:
               if props.get(field) != oldprops.get(field):
-                 print(f"Prop {field} value changed. Old: {oldprops.get(field)}, New: {props.get(field)}")
-                 return True
+                print(f"Prop {field} value changed. Old: {oldprops.get(field)}, New: {props.get(field)}")
+                return True
             return False
             
           def addBotToAistack(props, oldprops):
@@ -256,6 +315,45 @@ Resources:
               Environment={"Variables":envVars}
               )
             print("Updated AsyncAgentAssistOrchestratorFunction Environment variable to add Lex bot.")
+
+            print("Updating updating Cognito Unauthenticated Role for Agent Assist...")
+            agentAssistBotUnauthRole = getStackResource(props["AISTACK"], "AgentAssistBotUnauthRole")
+            newArn = f'arn:{aws_partition}:lex:{AWS_REGION}:{aws_account_id}:bot-alias/{props["LexAgentAssistBotId"]}/{props["LexAgentAssistAliasId"]}'
+            newPolicy = {'Version': '2012-10-17', 'Statement': [{'Action': ['lex:RecognizeText', 'lex:RecognizeUtterance', 'lex:DeleteSession', 'lex:PutSession'], 'Resource': newArn, 'Effect': 'Allow'}]}
+            print('New Policy:')
+            print(newPolicy)
+            iam.put_role_policy(
+              RoleName=agentAssistBotUnauthRole,
+              PolicyName='AgentAssistBotUnauthPolicy',
+              PolicyDocument=json.dumps(newPolicy)
+              )
+            print("Done updating Cognito Unauthenticated Role for Agent Assist")
+
+            # update config file and invalidate CF
+            print("Updating lex-web-ui-loader-config.json...")
+            webAppBucket = getStackResource(props["AISTACK"], "WebAppBucket")
+            configKey = 'lex-web-ui-loader-config.json'
+            response = s3.get_object(Bucket=webAppBucket, Key=configKey)
+            contents = response["Body"].read().decode("utf-8")
+            contents = contents.replace('${REACT_APP_LEX_BOT_ID}', props["LexAgentAssistBotId"])
+            contents = contents.replace('${REACT_APP_LEX_BOT_ALIAS_ID}', props["LexAgentAssistAliasId"])
+            contents = contents.replace('${REACT_APP_LEX_BOT_LOCALE_ID}', props["LexAgentAssistLocaleId"])
+            s3.put_object(Bucket=webAppBucket, Key=configKey, Body=contents)
+            print("Done updating lex-web-ui-loader-config.json. Invalidating CloudFront...")
+
+            cloudFrontDistro = getStackResource(props["AISTACK"], "WebAppCloudFrontDistribution")
+            response = cloudfront.create_invalidation(
+              DistributionId=cloudFrontDistro,
+              InvalidationBatch={
+                'Paths': {
+                  'Quantity': 1,
+                  'Items': [
+                      '/lex-web-ui-loader-config.json'
+                  ]
+                },
+                'CallerReference': str(time.time()).replace(".", "")
+              }
+            )
 
           def setupQnABot(props, oldprops):
             configureQnabotSettings(props)
@@ -400,6 +498,10 @@ Resources:
             return obj_status_details["status"]
 
           def handler(event, context):
+            global aws_account_id
+            global aws_partition
+            aws_account_id = context.invoked_function_arn.split(":")[4]
+            aws_partition = context.invoked_function_arn.split(":")[1]
             print(json.dumps(event))
             status = cfnresponse.SUCCESS
             reason = "Success"
@@ -427,6 +529,7 @@ Resources:
       QNABOTSTACK: !Ref QNABOTSTACK
       LexAgentAssistBotId: !Ref LexAgentAssistBotId
       LexAgentAssistAliasId: !Ref LexAgentAssistAliasId
+      LexAgentAssistLocaleId: !Ref LexAgentAssistLocaleId
       KendraIndexId: !Ref KendraIndexId
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
