@@ -62,17 +62,6 @@ Parameters:
       the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice
       analytics without the caller's consent. Please read 
       https://docs.aws.amazon.com/chime-sdk/latest/dg/va-opt-out.html for more information.
-    
-  # ChimeSpeakerSearch:
-  #   Type: String
-  #   Default: Disabled
-  #   AllowedValues:
-  #     - Enabled
-  #     - Disabled
-  #   Description: >
-  #     Used only when a call audio source with Chime Voice Connector is selected, and 
-  #     Chime Call Analytics is used as a call processor.
-  #     A voice analytics feature that enables you to identify call participants.
 
   DemoSoftphoneAllowedCidr:
     Type: String
@@ -604,8 +593,6 @@ Metadata:
     ParameterLabels:
       CallAudioProcessor:
         default: Call Audio Processor
-      # ChimeSpeakerSearch:
-      #   default: Chime Speaker Search
       ChimeVoiceToneAnalysis:
         default: Chime Voice Tone Analysis
       S3BucketName:
@@ -943,8 +930,6 @@ Resources:
           - ShouldEnableLexAgentAssist
           - true
           - false
-        #LexAgentAssistLocaleId:
-        #  !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         IsLambdaAgentAssistEnabled: 
           !If
             - ShouldEnableLambdaAgentAssist

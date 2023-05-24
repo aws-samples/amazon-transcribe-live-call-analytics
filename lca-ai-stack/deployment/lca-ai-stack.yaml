@@ -213,47 +213,6 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
-
-  # LexAgentAssistBotId:
-  #   Type: String
-  #   Default: ''
-  #   Description: >-
-  #     Lex Bot Id used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
-  #   AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
-
-  # LexAgentAssistAliasId:
-  #   Type: String
-  #   Default: ''
-  #   Description: >-
-  #     Lex Bot Alias ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
-  #   AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
-
-  # LexAgentAssistLocaleId:
-  #   Type: String
-  #   Default: 'en_US'
-  #   Description: >-
-  #       Lex Bot Locale ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to
-  #       'true'
-  #   AllowedValues:
-  #     - ca_ES
-  #     - de_AT
-  #     - de_DE
-  #     - en_AU
-  #     - en_GB
-  #     - en_IN
-  #     - en_US
-  #     - en_ZA
-  #     - es_419
-  #     - es_ES
-  #     - es_US
-  #     - fr_CA
-  #     - fr_FR
-  #     - it_IT
-  #     - ja_JP
-  #     - ko_KR
-  #     - pt_BR
-  #     - pt_PT
-  #     - zh_CN
   
   IsLambdaAgentAssistEnabled:
     Type: String
