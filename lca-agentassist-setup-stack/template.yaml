@@ -131,8 +131,6 @@ Parameters:
     Type: String
   AgentAssistQnABotLLMApi:
     Type: String
-  AgentAssistQnABotLLMSagemakerInitialInstanceCount:
-    Type: String
   AgentAssistQnABotLLMLambdaArn:
     Type: String
   TranscribeLanguageCode:
