@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.0-rc1) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.0-rc2) (SO9072)
 
 Parameters:
   RecordingsBucketRetentionDays:
@@ -521,7 +521,6 @@ Metadata:
           - AgentAssistQnABotEmbeddingsLambdaArn
           - AgentAssistQnABotEmbeddingsLambdaDimensions
           - AgentAssistQnABotLLMApi
-          - AgentAssistQnABotLLMSagemakerInitialInstanceCount
           - AgentAssistQnABotLLMLambdaArn
           - AgentAssistQnABotLLMThirdPartyApiKey
       - Label:
@@ -627,8 +626,6 @@ Metadata:
         default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
       AgentAssistQnABotLLMApi:
         default: Agent Assist QnABot LLM API
-      AgentAssistQnABotLLMSagemakerInitialInstanceCount:
-        default: Agent Assist QnABot LLM SageMaker Instance Count
       AgentAssistQnABotLLMLambdaArn:
         default: Agent Assist QnABot LLM Lambda Function ARN (existing)
       AgentAssistQnABotLLMThirdPartyApiKey:
@@ -883,7 +880,6 @@ Resources:
         EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
         EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
         LLMApi: !Ref AgentAssistQnABotLLMApi
-        LLMSagemakerInitialInstanceCount: !Ref AgentAssistQnABotLLMSagemakerInitialInstanceCount
         LLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         LLMThirdPartyApiKey: !Ref AgentAssistQnABotLLMThirdPartyApiKey
 
@@ -993,7 +989,6 @@ Resources:
             - 'SAGEMAKER'
             - 'LAMBDA'
         AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
-        AgentAssistQnABotLLMSagemakerInitialInstanceCount: !Ref AgentAssistQnABotLLMSagemakerInitialInstanceCount
         AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled

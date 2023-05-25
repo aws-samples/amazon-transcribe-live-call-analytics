@@ -387,7 +387,7 @@ Resources:
             else:
               # Embeddings enabled - disable Kendra FAQ
               settings["KENDRA_FAQ_INDEX"] = ""
-            settings["ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE"] = "HIGH"
+            settings["ALT_SEARCH_KENDRA_FALLBACK_CONFIDENCE_SCORE"] = "MEDIUM"
             settings["KENDRA_FAQ_ES_FALLBACK"] = "false"
             settings["ALT_SEARCH_KENDRA_ANSWER_MESSAGE"] = "Amazon Kendra suggestions."
             settings["KENDRA_WEB_PAGE_INDEX"] = props["KendraIndexId"]
@@ -399,10 +399,10 @@ Resources:
             else:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
             # Set embedding distance score threshold
-            settings["EMBEDDINGS_SCORE_THRESHOLD"] = "0.90"
+            settings["EMBEDDINGS_SCORE_THRESHOLD"] = "0.92"
             settings["EMBEDDINGS_SCORE_ANSWER_THRESHOLD"] = "0.90"
             # Set LLM params
-            settings["LLM_QA_NO_HITS_REGEX"] = "Sorry, I don't know"
+            settings["LLM_QA_NO_HITS_REGEX"] = "Sorry,"
             settings["LLM_QA_SHOW_CONTEXT_TEXT"] = "FALSE"
 
             # save back to SSM
