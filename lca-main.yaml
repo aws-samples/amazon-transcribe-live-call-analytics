@@ -177,21 +177,13 @@ Parameters:
   AgentAssistQnABotLLMApi:
     Type: String
     Description: Optionally enable (experimental) QnABot question disambiguation and
-      generative question answering using an LLM. If set to SAGEMAKER, a Sagemaker endpoint
-      is automatically provisioned. To use a custom LAMBDA function, provide additional
+      generative question answering using an LLM. To use a custom LAMBDA function, provide additional
       parameters below. To use a supported third party service, enter the API key below.
     AllowedValues:
       - DISABLED
-      - SAGEMAKER
       - LAMBDA
       - ANTHROPIC
     Default: DISABLED
-  AgentAssistQnABotLLMSagemakerInitialInstanceCount:
-    Type: Number
-    MinValue: 1
-    Description: 'Optional: If LLMApi is SAGEMAKER, provide initial instance count.
-      Serverless Inference is not currently available for the built-in LLM model.'
-    Default: 1
   AgentAssistQnABotLLMLambdaArn:
     Type: String
     AllowedPattern: "^(|arn:aws:lambda:.*)$"
@@ -888,7 +880,6 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
-        SagemakerInitialInstanceCount: !Ref AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
         EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
         EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
         LLMApi: !Ref AgentAssistQnABotLLMApi
