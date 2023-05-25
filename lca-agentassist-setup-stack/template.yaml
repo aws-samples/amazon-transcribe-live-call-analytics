@@ -541,7 +541,6 @@ Resources:
       AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
       AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
       AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
-      AgentAssistQnABotLLMSagemakerInitialInstanceCount: !Ref AgentAssistQnABotLLMSagemakerInitialInstanceCount
       AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
       TranscribeLanguageCode: !Ref TranscribeLanguageCode
       IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
