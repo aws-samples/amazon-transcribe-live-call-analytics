@@ -308,6 +308,7 @@ Resources:
             envVars = response["Environment"]["Variables"]
             envVars["LEX_BOT_ID"] = props["LexAgentAssistBotId"]
             envVars["LEX_BOT_ALIAS_ID"] = props["LexAgentAssistAliasId"]
+            envVars["LEX_BOT_LOCALE_ID"] = props["LexAgentAssistLocaleId"]
             response = lam.update_function_configuration(
               FunctionName=asyncAgentAssistOrchestratorFunction,
               Environment={"Variables":envVars}

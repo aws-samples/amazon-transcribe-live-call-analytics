@@ -889,9 +889,9 @@ Resources:
       Environment:
         Variables:
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
-          # LEX_BOT_ID: !Ref LexAgentAssistBotId
-          # LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
-          # LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
+          LEX_BOT_ID: 'Pending AgentAssistSetup'
+          LEX_BOT_ALIAS_ID: 'Pending AgentAssistSetup'
+          LEX_BOT_LOCALE_ID: 'Pending AgentAssistSetup'
           # Lex Agent Assist
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
           # Lambda Agent Assist
