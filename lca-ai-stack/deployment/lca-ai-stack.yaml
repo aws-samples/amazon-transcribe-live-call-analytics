@@ -381,6 +381,9 @@ Outputs:
   WebAppBucket:
     Description: Name of S3 web app bucket
     Value: !Ref WebAppBucket
+  CloudFrontDomainName:
+    Description: The full domain name of the CloudFront distribution
+    Value: !GetAtt WebAppCloudFrontDistribution.DomainName
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
@@ -603,9 +606,6 @@ Resources:
                 - >
                   printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
                   $REPOSITORY_URI $PROJECT_NAME $ARTIFACT_BUCKET > build.json
-                - cd build
-                - envsubst '${REACT_APP_AWS_REGION} ${REACT_APP_LEX_IDENTITY_POOL_ID}' < lex-web-ui-loader-config-template.json > lex-web-ui-loader-config.json
-                - cd ..
             post_build:
               commands:
                 - echo Build completed on `date`
@@ -661,14 +661,6 @@ Resources:
               - 'true'
           - Name: REACT_APP_ENABLE_LEX_AGENT_ASSIST
             Value: !Ref IsLexAgentAssistEnabled
-          - Name: REACT_APP_LEX_IDENTITY_POOL_ID
-            Value: !Ref AgentAssistBotIdentityPool
-          # - Name: REACT_APP_LEX_BOT_ID
-          #   Value: !Ref LexAgentAssistBotId
-          # - Name: REACT_APP_LEX_BOT_ALIAS_ID
-          #   Value: !Ref LexAgentAssistAliasId
-          # - Name: REACT_APP_LEX_BOT_LOCALE_ID
-          #   Value: !Ref LexAgentAssistLocaleId
           - Name: REACT_APP_CLOUDFRONT_DOMAIN
             Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
       TimeoutInMinutes: 10

@@ -114,6 +114,14 @@ Parameters:
     Type: String
     Description: The LCA web app CloudFront distribution id
 
+  LexAgentAssistIdentityPoolId:
+    Type: String
+    Description: The LCA Agent Assist Identity Pool ID
+
+  CloudFrontDomainName:
+    Type: String
+    Description: The domain name of the LCA CloudFront distribution
+
   # Changes to Params below force AgentAssist Setup to update.
   CallAudioSource:
     Type: String
@@ -332,11 +340,17 @@ Resources:
             print("Updating lex-web-ui-loader-config.json...")
             webAppBucket = getStackResource(props["AISTACK"], "WebAppBucket")
             configKey = 'lex-web-ui-loader-config.json'
-            response = s3.get_object(Bucket=webAppBucket, Key=configKey)
+            configTemplateKey = 'lex-web-ui-loader-config-template.json'
+            response = s3.get_object(Bucket=webAppBucket, Key=configTemplateKey)
             contents = response["Body"].read().decode("utf-8")
             contents = contents.replace('${REACT_APP_LEX_BOT_ID}', props["LexAgentAssistBotId"])
             contents = contents.replace('${REACT_APP_LEX_BOT_ALIAS_ID}', props["LexAgentAssistAliasId"])
             contents = contents.replace('${REACT_APP_LEX_BOT_LOCALE_ID}', props["LexAgentAssistLocaleId"])
+            contents = contents.replace('${REACT_APP_AWS_REGION}', AWS_REGION)
+            contents = contents.replace('${REACT_APP_LEX_IDENTITY_POOL_ID}', props["LexAgentAssistIdentityPoolId"])
+            contents = contents.replace('${CLOUDFRONT_DOMAIN}', props["CloudFrontDomainName"])
+            print("New LexWebUI Config:")
+            print(contents)
             s3.put_object(Bucket=webAppBucket, Key=configKey, Body=contents)
             print("Done updating lex-web-ui-loader-config.json. Invalidating CloudFront...")
 
@@ -529,6 +543,7 @@ Resources:
       LexAgentAssistBotId: !Ref LexAgentAssistBotId
       LexAgentAssistAliasId: !Ref LexAgentAssistAliasId
       LexAgentAssistLocaleId: !Ref LexAgentAssistLocaleId
+      LexAgentAssistIdentityPoolId: !Ref LexAgentAssistIdentityPoolId
       KendraIndexId: !Ref KendraIndexId
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
@@ -551,6 +566,7 @@ Resources:
       EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
       SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
       EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
+      CloudFrontDomainName: !Sub "https://${CloudFrontDomainName}/"
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 

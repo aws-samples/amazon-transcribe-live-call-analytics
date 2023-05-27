@@ -1000,6 +1000,8 @@ Resources:
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
+        LexAgentAssistIdentityPoolId: !GetAtt AISTACK.Outputs.LexAgentAssistIdentityPoolId
+        CloudFrontDomainName: !GetAtt AISTACK.Outputs.CloudFrontDomainName
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
