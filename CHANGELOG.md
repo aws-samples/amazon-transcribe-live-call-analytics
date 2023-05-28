@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2023-05-27
+### Added
+- Generative transcript summarization capability now supports Anthropic Claude third party API with 100K token limit (eliminating transcript length limitations). In a later release we will support Anthropic's models natively in AWS via the new [Amazon Bedrock](https://aws.amazon.com/bedrock/) service. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md#anthropic)
+- Generative AI for Agent Assist (experimental), using the QnABot on AWS with [Large Language Model for Query Disambiguation, and Generative Question Answering](https://github.com/aws-solutions/qnabot-on-aws/blob/feature/llm-summarize/docs/LLM_Retrieval_and_generative_question_answering/README.md) - see [Agent Assist](./lca-agentassist-setup-stack/README.md#)
+- New Agent Assist interaction widget on the LCA Call Detail page allows agents to directly query the Agent Assist Lex Bot / QnABot to execute Kendra knowledge base queries, FAQ lookups, or to automate actions during or after the call.
+- [Chime Call Analytics](https://aws.amazon.com/about-aws/whats-new/2023/03/amazon-chime-sdk-call-analytics/) supported (as an alternative to LCA's CallTranscriber Lambda).
+  - *Known Issue: Post Call Analytics (PCA) integration is disabled when using Chime Call Analytics - will be fixed in a later release.*
+- [Real-Time Voice Tone Analysis](https://aws.amazon.com/blogs/aws/amazon-chime-sdk-call-analytics-real-time-voice-tone-analysis-and-speaker-search/) supported when using Chime Call Analytics. When selected during stack deployment, the LCA Call Detail UI now shows an additional chart reflecting the last 30sec rolling average of caller and agent voice tones. 
+- Saleforce/CRM integration plug-in - see [Boosting agent productivity with Salesforce integration for Live Call Analytics](./plugins/salesforce-integration/README.md)
+### Changed
+- Update Code Build version
+- Improve throughput by decoupling agent assist inference latency from main call event processor - now runs asynchronously in parallel with transcriot processing.
+- Refactored call event processor code to normalize and merge handling of Contact Lens, Transcribe, Transcribe Call Analytics, and Chime Call Analytics messages.
+
+
+## [0.7.2] - 2023-05-03
+### Fixed
+- Hot fix for S3 bucket ACL changes
+- Changed default function memory for Call Event Processor Lambda
+
+
 ## [0.7.1] - 2023-03-11
 ### Added
 - Transcribe Call Analytics "POST_CALL" categories now displayed in the LCA UI after call ends when using Transcribe 'analytics' mode.
@@ -14,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update Agent Assist QnAbot version to v5.3.0 with [optional semantic search](https://github.com/aws-solutions/qnabot-on-aws/blob/main/docs/semantic_matching_using_LLM_embeddings/README.md) support for FAQs.
 ### Changed
 - Improved performance and scalability changes (tested to 300 concurrent calls):
-  - Refactor call aggregate logic to make call event processor fully stateless- removed dependency on Kinesis tumbling window to enable multiple concurrent inocations per shard.
+  - Refactor call aggregate logic to make call event processor fully stateless - removed dependency on Kinesis tumbling window to enable multiple concurrent inocations per shard.
   - enable AppSync resolver caching to enable fast/efficient call state queries from call event processor.
   - enable Kinesis Enhanced Fan Out to reduce message read latency.
   - increase call event processor Lambda memory to 5120M to reduce start time and enable greater message handling concurrency in each invocation.
@@ -23,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - retries for Start Transcription Stream if exceptions thrown, to allow improved tolearnace for call bursts resukting in temporary TPS limit exceeded errors.
 - Fix issue with START_CALL_PROCESSING event rule ( introduced in 0.7.0 with the multiple LCA stack fix). 
 - Fix issue introduced in 0.7.0 preventing invocation of custom transcript processing Lambda Hook function
-- Miscallaneous improvements to test scripts - see [README](./lca-chimevc-stack/asterisk-test-scripts/README.md)
+- Miscellaneous improvements to test scripts - see [README](./lca-chimevc-stack/asterisk-test-scripts/README.md)
 - Additional minor fixes - see commit history
 
 
@@ -197,10 +218,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...develop
-[0.7.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...v0.6.0
-[0.7.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...v0.6.0
-[0.6.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...v0.5.2
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.2...develop
+[0.7.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.4.1...v0.5.0
