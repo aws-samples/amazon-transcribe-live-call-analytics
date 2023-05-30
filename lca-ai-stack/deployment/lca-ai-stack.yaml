@@ -1049,18 +1049,15 @@ Resources:
                 "cognito-identity.amazonaws.com:aud": !Ref AgentAssistBotIdentityPool
               "ForAnyValue:StringLike":
                 "cognito-identity.amazonaws.com:amr": unauthenticated
-      # Policies:
-        # - PolicyName: AgentAssistBotUnauthPolicy
-        #   PolicyDocument:
-        #     Version: 2012-10-17
-        #     Statement:
-        #       - Effect: Allow
-        #         Action:
-        #           - lex:RecognizeText
-        #           - lex:RecognizeUtterance
-        #           - lex:DeleteSession
-        #           - lex:PutSession
-        #         Resource: !Sub "arn:${AWS::Partition}:lex:${AWS::Region}:${AWS::AccountId}:bot-alias/${LexAgentAssistBotId}/${LexAgentAssistAliasId}"
+      Policies:
+        - PolicyName: AgentAssistBotUnauthPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lex:RecognizeText
+                Resource: !Sub "arn:${AWS::Partition}:lex:${AWS::Region}:${AWS::AccountId}:bot-alias/PLCHLDR/PLCHLDR"
 
 
   ##########################################################################
