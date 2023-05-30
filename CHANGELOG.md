@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] - 2023-05-29
+## [0.8.0] - 2023-05-30
 ### Added
 - Generative transcript summarization capability now supports Anthropic Claude third party API with 100K token limit (eliminating transcript length limitations). In a later release we will support Anthropic's models natively in AWS via the new [Amazon Bedrock](https://aws.amazon.com/bedrock/) service. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md#anthropic)
 - Generative AI for Agent Assist (experimental), using the QnABot on AWS with [Large Language Model for Query Disambiguation, and Generative Question Answering](https://github.com/aws-solutions/qnabot-on-aws/blob/feature/llm-summarize/docs/LLM_Retrieval_and_generative_question_answering/README.md) - see [Agent Assist](./lca-agentassist-setup-stack/README.md#)
