@@ -2,7 +2,8 @@
 *Companion AWS blog post: [Live call analytics and agent assist for your contact center with Amazon language AI services](http://www.amazon.com/live-call-analytics)*
 ## Overview
 
-*Update February 2023 (v0.7.0) – This release introduces (experimental) generative transcript summarization to provide a short paragraph with a synopsis of each completed call; use the built-in summarization model or experiment with custom language models or APIs of your choice. Also, with this update you can now choose to view call transcriptions translated to a second language of your choice using Amazon Translate, for live or completed calls. Other new features include: a utility Lambda function that returns the transcript for any in-progress or completed call, a UI selector that allows agents to disable display of their own voice transcription, a new download button on the UI Calls page, and more! See New features.*  
+*Update May 2023 (v0.8.0) - This release introduces (experimental) Generative AI support for both trasncript summarization and Agent Assist with Anthropic's models, which will be released natively on AWS via the new [Amazon Bedrock](https://aws.amazon.com/bedrock/) service. It adds (experimental) support for [Chime Call Analytics](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html) as a call source in conjunction with [Voice Tone Analysis](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html). Lastly, it includes [Salesforce/CRM plug-in integration](./plugins/salesforce-integration/README.md).*
+
 *See [CHANGELOG](./CHANGELOG.md) for latest features and fixes.*
 
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
@@ -23,9 +24,10 @@ Our sample solution, Live Call Analytics with Agent Assist (LCA), does most of t
   
 The demo Asterisk server is configured to use Amazon Voice Connector, which provides the phone number and SIP trunking needed to route inbound and outbound calls. When you configure LCA to integrate with your contact center using the Chime Voice Connector (SIPREC) option, instead of the demo Asterisk server, Voice Connector is configured to integrate instead with your existing contact center using SIP-based media recording (SIPREC) or network-based recording (NBR). In both cases, Voice Connector streams audio to Kinesis Video Streams using two streams per call, one for the caller and one for the agent.  
   
-LCA also now also supports two additional input sources, using different architectures for ingestion: 
+LCA also now also supports three additional input sources, using different architectures for ingestion: 
 - The Genesys Cloud AudioHook integration option - see [Genesys AudioHook Integration README](/lca-genesys-audiohook-stack/README.md) for details.
 - The new Connect Contact Lens integration option - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) for details.
+- Chime Call Analytics and voice tone analysis - see [Chime Call Analytics README](./lca-chimevc-stack/ChimeCallAnalytics.md)
   
 When a new caller or agent Kinesis Video stream is initiated, an event is fired using EventBridge. This event triggers the Call Transcriber Lambda function. When both the caller and agent streams have been established, your custom call initialization Lambda hook function, if specified, is invoked for you - see [LambdaHookFunction](./lca-chimevc-stack/LambdaHookFunction.md). Then the Call Transcriber function starts consuming real time audio fragments from both input streams and combines them to create a new stereo audio stream. The stereo audio is streamed to an Amazon Transcribe Real-time Call Analytics or standard Amazon Transribe session (depending on stack parameter value), and the transcription results are written in real time to Kinesis Data Streams.
 
@@ -194,7 +196,8 @@ For automated testing, see
 - [Assign an AgentID to a call](./lca-chimevc-stack/SettingAgentId.md)
 - [Customize transcript processing](./lca-ai-stack/TranscriptLambdaHookFunction.md)
 - [Customize transcript summarization](./lca-ai-stack/TranscriptSummarization.md)
-
+- [Chime Call Analytics & voice tone analysis](./lca-chimevc-stack/ChimeCallAnalytics.md)
+  
 ## Post Call Analytics: Companion solution
 Our companion solution, Post Call Analytics (PCA), offers additional insights and analytics capabilities by using the Amazon Transcribe Call Analytics batch API to detect common issues, interruptions, silences, speaker loudness, call categories, and more. Unlike LCA, which transcribes and analyzes streaming audio in real time, PCA analyzes your calls after the call has ended. The new Amazon Transcribe Real-time Call Analytics service provides post-call analytics output from your streaming sessions just a few minutes after the call has ended. LCA can now send this post-call analytics data to the latest version of PCA (v0.4.0) to provide analytics visualizations for your streaming sessions without needing to transcribe the audio a second time. Configure LCA to integrate with PCA v0.4.0 or later using the LCA CloudFormation tempate parameters labeled **Post Call Analytics (PCA) Integration**. Use the two solutions together to get the best of both worlds. For more information, see [Post call analytics for your contact center with Amazon language AI services](https://www.amazon.com/post-call-analytics).
 
