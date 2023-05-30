@@ -20,7 +20,7 @@ else:
     RecognizeTextResponseTypeDef = object
 
 
-async def recognize_text_lex(
+def recognize_text_lex(
     text: str,
     session_id: str,
     lex_client: LexRuntimeV2Client,
@@ -36,17 +36,13 @@ async def recognize_text_lex(
     bot_response: RecognizeTextResponseTypeDef
     while not bot_responded and retry_count < max_retries:
         try:
-            event_loop = asyncio.get_event_loop()
-            bot_response = await event_loop.run_in_executor(
-                None,
-                lambda: lex_client.recognize_text(
+            bot_response = lex_client.recognize_text(
                     text=text,
                     sessionId=session_id,
                     botId=bot_id,
                     botAliasId=bot_alias_id,
                     localeId=locale_id,
-                ),
-            )
+                )
             bot_responded = True
         except lex_client.exceptions.ConflictException as error:
             retry_count = retry_count + 1
@@ -54,7 +50,7 @@ async def recognize_text_lex(
                 "recognize_text retriable exception",
                 extra=dict(error=error, retry_count=retry_count),
             )
-            await asyncio.sleep(0.25 * retry_count)
+            sleep(0.25 * retry_count)
             if retry_count >= max_retries:
                 raise
         except Exception:  # pylint: disable=broad-except

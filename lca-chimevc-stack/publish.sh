@@ -41,11 +41,33 @@ else
   PUBLIC=false
 fi
 
-transcriber_dir=lambda_functions/call_transcriber
-echo "Installing dependencies for $transcriber_dir"
-pushd $transcriber_dir
-npm install
+# configure the nodejs layer first. npm run build will also run npm install
+node_transcriber_layer_dir=lambda_layers/node_transcriber_layer
+echo "Installing dependencies for $node_transcriber_layer_dir"
+pushd $node_transcriber_layer_dir
+npm run build
 popd
+
+# configure the boto3 layer
+boto3_layer_dir=lambda_layers/boto3_layer
+echo "Installing dependencies for $boto3_layer_dir"
+pushd $boto3_layer_dir
+pip install -r requirements.txt -t python/lib/python3.8/site-packages/.
+zip -r boto3_lambda_layer.zip *
+popd
+
+# configure call transcriber
+#transcriber_dir=lambda_functions/call_transcriber
+#echo "Installing dependencies for $transcriber_dir"
+#pushd $transcriber_dir
+#npm install
+#popd
+
+#chime_call_analytics_dir=lambda_functions/chime_call_analytics_initialization
+#echo "Installing dependencies for $chime_call_analytics_dir"
+#pushd $chime_call_analytics_dir
+#npm install
+#popd
 
 pcaintegration_dir=lambda_functions/pca_integration
 echo "Installing dependencies for $pcaintegration_dir"
@@ -81,6 +103,7 @@ aws cloudformation package --template-file $MAIN_TEMPLATE --output-template-file
 aws s3 cp $tmpdir/$MAIN_TEMPLATE s3://${BUCKET}/${PREFIX}/$MAIN_TEMPLATE || exit 1
 
 aws s3 cp ./demo-audio/agent.wav s3://${BUCKET}/${PREFIX}/demo-audio/agent.wav || exit 1
+aws s3 cp ./demo-audio/agent2.wav s3://${BUCKET}/${PREFIX}/demo-audio/agent2.wav || exit 1
 
 if $PUBLIC; then
   echo "$STACK: Setting public read ACLs on published artifacts"

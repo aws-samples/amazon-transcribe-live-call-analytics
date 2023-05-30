@@ -48,7 +48,6 @@ Parameters:
     AllowedValues:
       - true
       - false
-
 Resources:
   AsteriskVPC:
     Type: AWS::EC2::VPC
@@ -374,10 +373,10 @@ Resources:
           import time
           import uuid
           import urllib.parse
-
+          
           chime = boto3.client('chime')
           cloudformation = boto3.resource("cloudformation")
-
+          
           def authorizeEIP (voiceConnectorId, elasticIP):
             response = chime.put_voice_connector_origination(
               VoiceConnectorId=voiceConnectorId,
@@ -395,7 +394,7 @@ Resources:
               }
             )
             print(response)
-
+          
             response = chime.put_voice_connector_termination(
               VoiceConnectorId=voiceConnectorId,
               Termination={
@@ -410,8 +409,8 @@ Resources:
               }
             )
             print(response)
-
-
+          
+          
           def getPhoneNumber ():
             search_response = chime.search_available_phone_numbers(
                 # AreaCode='string',
@@ -430,13 +429,13 @@ Resources:
                 ]
             )
             print ('Phone Order: ' + str(phone_order))
-
+          
             check_phone_order = chime.get_phone_number_order(
               PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
             )
             order_status = check_phone_order['PhoneNumberOrder']['Status']
             timeout = 0
-
+          
             while not order_status == 'Successful':
               timeout += 1  
               print('Checking status: ' + str(order_status))
@@ -448,10 +447,11 @@ Resources:
               order_status = check_phone_order['PhoneNumberOrder']['Status']
               if timeout == 15:
                 return 'Could not get phone number'
-
+          
             return phoneNumberToOrder
-
-          def createVoiceConnector (region, phoneNumber):
+          
+          def createVoiceConnector (region, phoneNumber, event):
+            print("Creating voice connector...")
             print(str(uuid.uuid1()))
             print(region)
             response = chime.create_voice_connector(
@@ -462,7 +462,7 @@ Resources:
                 
             voiceConnectorId = response['VoiceConnector']['VoiceConnectorId']
             outboundHostName = response['VoiceConnector']['OutboundHostName']
-
+          
             response = chime.associate_phone_numbers_with_voice_connector(
                 VoiceConnectorId=voiceConnectorId,
                 E164PhoneNumbers=[
@@ -470,38 +470,40 @@ Resources:
                 ],
                 ForceAssociate=True
             )
-
-            chime.put_voice_connector_streaming_configuration(
+          
+            streamingConfiguration = {
+              'DataRetentionInHours': 1,
+              'Disabled': False,
+              'StreamingNotificationTargets': [
+                {
+                  'NotificationTarget': 'EventBridge'
+                },
+              ]
+            }
+            response = chime.put_voice_connector_streaming_configuration(
               VoiceConnectorId=voiceConnectorId,
-              StreamingConfiguration={
-                'DataRetentionInHours': 1,
-                'Disabled': False,
-                'StreamingNotificationTargets': [
-                  {
-                    'NotificationTarget': 'EventBridge'
-                  },
-                ]
-              }
+              StreamingConfiguration=streamingConfiguration
             )
-
+            print('Configuration created.')
             voiceConnector = { 'voiceConnectorId': voiceConnectorId, 'outboundHostName': outboundHostName, 'phoneNumber': phoneNumber}
             return voiceConnector
-
+          
           def handler(event, context):
-              print(event)
+              print(json.dumps(event))
               if event['RequestType'] == 'Create':
                   try:              
                     physical_id = 'VoiceConnectorResources'
                     region = event['ResourceProperties']['region']
                     elasticIP = event['ResourceProperties']['eip']
-
+          
                     newPhoneNumber = getPhoneNumber()
-                    voiceConnector = createVoiceConnector(region, newPhoneNumber)
+                    voiceConnector = createVoiceConnector(region, newPhoneNumber, event)
                     authorizeEIP(voiceConnector['voiceConnectorId'], elasticIP)
                     cfnresponse.send(event, context, cfnresponse.SUCCESS, voiceConnector, physical_id)
                   except Exception as e:
                     error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                     print(error)
+                    # print(e.Message)
                     cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )                    
               elif event['RequestType'] == 'Delete':
                   try:              

@@ -22,7 +22,8 @@
         "eslint-plugin-jest"
     ],
     "rules": {
- 
+        
+        "linebreak-style": ["error", "unix"],
         "react/jsx-filename-extension": [
             "warn",
             {

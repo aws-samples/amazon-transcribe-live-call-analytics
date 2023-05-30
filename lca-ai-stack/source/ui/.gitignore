@@ -42,3 +42,13 @@ amplifytools.xcconfig
 .secret-*
 **.sample
 #amplify-do-not-edit-end
+
+.env*
+
+public/lex-web-ui-loader-config.json
+public/lex-web-ui-loader.min.css 
+public/lex-web-ui-loader.min.js
+public/lex-web-ui.min.css
+public/lex-web-ui.min.js
+public/wav-worker.min.js 
+public/index-lexwebui.html 

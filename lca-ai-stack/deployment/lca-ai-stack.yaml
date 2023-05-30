@@ -19,6 +19,10 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA AI Stack
 
 Parameters:
+  RecordingsBucketRetentionDays:
+    Type: Number
+    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
+    Default: 30
   CallAudioSource:
     Type: String
     AllowedValues:
@@ -114,10 +118,11 @@ Parameters:
       - 'DISABLED'
       - 'SAGEMAKER'
       - 'LAMBDA'
+      - 'ANTHROPIC'
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
-      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type. The LAMBDA option requires you to 
-      provide a function ARN below.
+      the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
+      to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -125,6 +130,12 @@ Parameters:
     Default: 1
     Description: >
       (Optional) If "End Of Call Transcript Summary" is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
+  SummarizationLLMThirdPartyApiKey:
+    Type: String
+    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key. ** Data will leave your AWS account **'
+    Default: ''
+    NoEcho: true
 
   EndOfCallLambdaHookFunctionArn:
     Default: ''
@@ -134,6 +145,24 @@ Parameters:
       (Optional) If 'End Of Call Transcript Summary' is LAMBDA, provide ARN for a Lambda function. The specified Lambda function is invoked by the LCA Call Event Processor Lambda function 
       for end of call event. The function is passed en event with CallId as input.
       This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
+
+  StartOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function for beginning or start of 
+      call event. This function can implement custom logic that is relevant to beginning of call processing, for example, retrieving
+      call summary details logged into a case in a CRM.
+
+  PostCallSummaryLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function after the call summary is processed.
+      This function can implement custom logic that is relevant to post processing, for example, updating the call summary to a CRM system.
+
 
   CloudFrontPriceClass:
     Type: String
@@ -180,52 +209,10 @@ Parameters:
     Type: String
     Default: 'false'
     Description: >-
-      Enables the Lex Agent Assist feature. The LexBotId, LexBotAliasId and LexBotLocaleId
-      parameters should have values if this is set to 'true'
+      Enables the Lex Agent Assist feature.
     AllowedValues:
       - 'true'
       - 'false'
-
-  LexAgentAssistBotId:
-    Type: String
-    Default: ''
-    Description: >-
-      Lex Bot Id used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
-    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
-
-  LexAgentAssistAliasId:
-    Type: String
-    Default: ''
-    Description: >-
-      Lex Bot Alias ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to 'true'
-    AllowedPattern: '^(|[0-9a-zA-Z]{10})$'
-
-  LexAgentAssistLocaleId:
-    Type: String
-    Default: 'en_US'
-    Description: >-
-        Lex Bot Locale ID used for Agent Assist. Only used if IsLexAgentAssistEnabled is set to
-        'true'
-    AllowedValues:
-      - ca_ES
-      - de_AT
-      - de_DE
-      - en_AU
-      - en_GB
-      - en_IN
-      - en_US
-      - en_ZA
-      - es_419
-      - es_ES
-      - es_US
-      - fr_CA
-      - fr_FR
-      - it_IT
-      - ja_JP
-      - ko_KR
-      - pt_BR
-      - pt_PT
-      - zh_CN
   
   IsLambdaAgentAssistEnabled:
     Type: String
@@ -272,7 +259,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.7.2-rc1-rc1-a100
+    Default: 0.8.0
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -282,6 +269,15 @@ Parameters:
     Default: .*
     Description: >
       A regular expression that will be used to show an alert in the UI if a category matches
+
+  EnableVoiceToneAnalysis:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Whether or not to show the voice tone analysis panel in the UI 
 
 Metadata:
   "AWS::CloudFormation::Interface":
@@ -316,6 +312,10 @@ Metadata:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       EndOfCallTranscriptSummary:
         default: End of Call Transcript Summary
+      StartOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Start of Call Processing (existing)
+      PostCallSummaryLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Post Processing, after the Call Transcript Summary is processed (existing)
         
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
@@ -323,11 +323,16 @@ Conditions:
   ShouldEnableGeoRestriction: !Not [!Equals [!Ref CloudFrontAllowedGeos, '']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref IsLambdaAgentAssistEnabled, "true"]
   ShouldEnableTranscriptLambdaHookFunction: !Not [!Equals [!Ref TranscriptLambdaHookFunctionArn, ""]]
+  ShouldEnableStartOfCallLambdaHookFunction: !Not [!Equals [!Ref StartOfCallLambdaHookFunctionArn, ""]]
+  ShouldEnablePostCallSummaryLambdaHookFunction: !Not [!Equals [!Ref PostCallSummaryLambdaHookFunctionArn, ""]]
+  ShouldEnableAnthropicSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "ANTHROPIC"]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
+
   IsTranscriptSummaryEnabled: !Or
     - !Condition ShouldEnableEndOfCallLambdaHookFunction
     - !Condition ShouldDeploySageMakerSummarizer
+    - !Condition ShouldEnableAnthropicSummarizer
 
 Outputs:
   CallDataStreamName:
@@ -364,6 +369,21 @@ Outputs:
   FetchTranscriptArn:
     Description: The arn for a Lambda function that fetches a call transcript as a string
     Value: !GetAtt FetchTranscript.Arn
+  LexAgentAssistIdentityPoolId:
+    Description: The Id for the Cognito Identity Pool created for the agent assist
+    Value: !Ref AgentAssistBotIdentityPool
+  LexAgentAssistUnauthRoleArn:
+    Description: The arn for the Agent Assist Bot Identity Pool Cognito role
+    Value: !GetAtt AgentAssistBotUnauthRole.Arn
+  CloudFrontDistributionId:
+    Description: The ID of the CloudFront distribution for LCA's main web ui
+    Value: !Ref WebAppCloudFrontDistribution
+  WebAppBucket:
+    Description: Name of S3 web app bucket
+    Value: !Ref WebAppBucket
+  CloudFrontDomainName:
+    Description: The full domain name of the CloudFront distribution
+    Value: !GetAtt WebAppCloudFrontDistribution.DomainName
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
@@ -392,6 +412,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: RuleRetention
+            Status: Enabled
+            Prefix: ""
+            ExpirationInDays: !Ref RecordingsBucketRetentionDays
 
   RecordingsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -474,7 +500,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Type: String
-      Value: !Sub '{"CategoryAlertRegex":"${CategoryAlertRegEx}"}'
+      Value: !Sub '{ "CategoryAlertRegex":"${CategoryAlertRegEx}", "EnableVoiceToneAnalysis":"${EnableVoiceToneAnalysis}" }'
 
   ##########################################################################
   # CodeBuild
@@ -533,7 +559,6 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:\
                     distribution/${WebAppCloudFrontDistribution}"
-
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -575,8 +600,8 @@ Resources:
                 - echo Build started on `date`
                 - echo Building kvs transcribe streamig container image
                 - cd $CODEBUILD_SRC_DIR
-                - echo Building Web UI
                 - cd source/ui
+                - echo Building Web UI
                 - npm run build
                 - >
                   printf '{"RepositoryUri":"%s","ProjectName":"%s","ArtifactBucket":"%s"}'
@@ -596,7 +621,7 @@ Resources:
               - build.json
       Environment:
         ComputeType: BUILD_GENERAL1_MEDIUM
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
         Type: LINUX_CONTAINER
         PrivilegedMode: True
         EnvironmentVariables:
@@ -634,6 +659,10 @@ Resources:
               - ShouldAllowSignUpEmailDomain
               - 'false'
               - 'true'
+          - Name: REACT_APP_ENABLE_LEX_AGENT_ASSIST
+            Value: !Ref IsLexAgentAssistEnabled
+          - Name: REACT_APP_CLOUDFRONT_DOMAIN
+            Value: !Sub "https://${WebAppCloudFrontDistribution.DomainName}/"
       TimeoutInMinutes: 10
 
   LambdaCodeBuildStartBuildExecutionRole:
@@ -695,6 +724,8 @@ Resources:
     Properties:
       ServiceToken: !GetAtt LambdaCodeBuildStartBuild.Arn
       BuildProjectName: !Ref TranscriberCodeBuildProject
+      IsLexAgentAssistEnabled: !Ref IsLexAgentAssistEnabled
+      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
       # pass code location to support upgrades
       CodeLocation:
         !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
@@ -735,6 +766,7 @@ Resources:
         Properties: 
             StreamARN: !GetAtt CallDataStream.Arn
             ConsumerName: DataStreamConsumer
+
   ##########################################################################
   # Transcript Summary
   ##########################################################################
@@ -791,7 +823,123 @@ Resources:
               - Effect: "Allow"
                 Action: "dynamodb:Query"
                 Resource: !GetAtt EventSourcingTable.Arn
-          
+  
+  LLMAnthropicSummaryLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LLMAnthropicSummaryLambdaExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
+          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3-100k"
+          ANTHROPIC_API_KEY: !Ref SummarizationLLMThirdPartyApiKey
+          ENDPOINT_URL: "https://api.anthropic.com/v1/complete"
+          FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
+          PROCESS_TRANSCRIPT: "True"
+          TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
+          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
+      Timeout: 60
+      MemorySize: 128
+      Handler: index.handler
+      CodeUri: ../source/lambda_functions/llm_anthropic_summary_lambda
+      Description: This AWS Lambda Function runs a transcript summary inference on the call transcript.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+  
+  LLMAnthropicSummaryLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: LLM Anthropic Summary Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-AnthropicSummary
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource: !GetAtt FetchTranscript.Arn
+
+  AsyncAgentAssistOrchestrator:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt AsyncAgentAssistOrchestratorExecutionRole.Arn
+      Runtime: python3.9
+      Environment:
+        Variables:
+          CALL_DATA_STREAM_NAME: !Ref CallDataStream
+          LEX_BOT_ID: 'Pending AgentAssistSetup'
+          LEX_BOT_ALIAS_ID: 'Pending AgentAssistSetup'
+          LEX_BOT_LOCALE_ID: 'Pending AgentAssistSetup'
+          # Lex Agent Assist
+          IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
+          # Lambda Agent Assist
+          IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
+          LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
+          DYNAMODB_TABLE_NAME: !Ref EventSourcingTable
+      Timeout: 60
+      MemorySize: 128
+      Handler: lambda_function.handler
+      Layers:
+        - !Ref TranscriptEnrichmentPythonLayer
+      CodeUri: ../source/lambda_functions/async_agent_assist_orchestrator
+      Description: This AWS Lambda Function orchestrates agent assist processing.
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  AsyncAgentAssistOrchestratorExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Async Agent Assist Orchestrator Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-AsyncAgentAssist
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: kinesis:PutRecord
+                Resource: !GetAtt CallDataStream.Arn
+              - Effect: Allow
+                Action:
+                  - lex:RecognizeText
+                Resource:
+                  # XXX make specific to bot passed in parameter
+                  "*"
+              - !If
+                - ShouldEnableLambdaAgentAssist
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource: 
+                    - !Sub "${AgentAssistExistingLambdaFunctionArn}"
+                - Ref: AWS::NoValue
+
   AsyncTranscriptSummaryOrchestrator:
     Type: AWS::Serverless::Function
     Properties:
@@ -799,7 +947,15 @@ Resources:
       Runtime: python3.9
       Environment:
         Variables:
-          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [ShouldDeploySageMakerSummarizer, !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn] , !Ref EndOfCallLambdaHookFunctionArn]
+          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [
+            ShouldDeploySageMakerSummarizer, 
+            !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn],
+            !If [
+              ShouldEnableAnthropicSummarizer,
+              !GetAtt LLMAnthropicSummaryLambda.Arn,
+              !Ref EndOfCallLambdaHookFunctionArn
+            ]
+          ]
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
       Timeout: 60
       MemorySize: 128
@@ -814,7 +970,6 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
-  
   AsyncTranscriptSummaryOrchestratorExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -849,11 +1004,63 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+                Resource:
+                  - !GetAtt SageMakerTranscriptSummaryStack.Outputs.InvokeLambdaArn
+              - Ref: AWS::NoValue
+            - !If 
+              - ShouldEnableAnthropicSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt LLMAnthropicSummaryLambda.Arn
               - Ref: AWS::NoValue
 
-  #####################################################
-  #####################
+  ##########################################################################
+  # LexWebUI / Agent Assist Bot 
+  ##########################################################################
+
+  AgentAssistBotIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${AWS::StackName}-AgentAssistBot-IdentityPool"
+      AllowUnauthenticatedIdentities: true
+
+  AgentAssistBotIdentityPoolSetRole:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref AgentAssistBotIdentityPool
+      Roles:
+        unauthenticated: !GetAtt AgentAssistBotUnauthRole.Arn
+
+  AgentAssistBotUnauthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref AgentAssistBotIdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+      Policies:
+        - PolicyName: AgentAssistBotUnauthPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lex:RecognizeText
+                Resource: !Sub "arn:${AWS::Partition}:lex:${AWS::Region}:${AWS::AccountId}:bot-alias/PLCHLDR/PLCHLDR"
+
+
+  ##########################################################################
   # SNS Topic for Category Event Notifications
   ##########################################################################
   CategorySNSTopic:
@@ -916,30 +1123,33 @@ Resources:
               Resource:
                 # XXX specific mutation - addEnrichment
                 - !Sub "${AppSyncApi.Arn}/types/Mutation/*"
+                - !Sub "${AppSyncApi.Arn}/types/Query/fields/__schema"
+                - !Sub "${AppSyncApi.Arn}/types/Query/fields/getCall"
                 - !Sub "${AppSyncApi.Arn}/types/Query/*"
             - Effect: Allow
               Action:
                 - comprehend:DetectSentiment
               Resource: "*"
-            - Effect: Allow
-              Action:
-                - lex:RecognizeText
-              Resource:
-                # XXX make specific to bot passed in parameter
-                "*"
-            - !If 
-              - ShouldEnableLambdaAgentAssist
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource: !Sub "${AgentAssistExistingLambdaFunctionArn}"
-              - Ref: AWS::NoValue
-            - !If 
+            - !If
               - ShouldEnableTranscriptLambdaHookFunction
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
                 Resource: !Sub "${TranscriptLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
+            - !If
+              - ShouldEnableStartOfCallLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${StartOfCallLambdaHookFunctionArn}"
+              - Ref: AWS::NoValue
+            - !If
+              - ShouldEnablePostCallSummaryLambdaHookFunction
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "${PostCallSummaryLambdaHookFunctionArn}"
               - Ref: AWS::NoValue
             - !If 
               - IsTranscriptSummaryEnabled
@@ -948,7 +1158,10 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
               - Ref: AWS::NoValue
-
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -969,19 +1182,17 @@ Resources:
           CALL_AUDIO_SOURCE: !Ref CallAudioSource
           # Lex Agent Assist
           IS_LEX_AGENT_ASSIST_ENABLED: !Ref IsLexAgentAssistEnabled
-          LEX_BOT_ID: !Ref LexAgentAssistBotId
-          LEX_BOT_ALIAS_ID: !Ref LexAgentAssistAliasId
-          LEX_BOT_LOCALE_ID: !Ref LexAgentAssistLocaleId
           # Lambda Agent Assist
           IS_LAMBDA_AGENT_ASSIST_ENABLED: !Ref IsLambdaAgentAssistEnabled
-          LAMBDA_AGENT_ASSIST_FUNCTION_ARN: !Ref AgentAssistExistingLambdaFunctionArn
           DYNAMODB_EXPIRATION_IN_DAYS: !Ref DynamoDbExpirationInDays
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_ARN: !Ref TranscriptLambdaHookFunctionArn
+          START_OF_CALL_LAMBDA_HOOK_FUNCTION_ARN: !Ref StartOfCallLambdaHookFunctionArn
+          POST_CALL_SUMMARY_LAMBDA_HOOK_FUNCTION_ARN: !Ref PostCallSummaryLambdaHookFunctionArn
           TRANSCRIPT_LAMBDA_HOOK_FUNCTION_NONPARTIAL_ONLY: !Ref TranscriptLambdaHookFunctionNonPartialOnly
-
           IS_TRANSCRIPT_SUMMARY_ENABLED: !If [IsTranscriptSummaryEnabled, "true", "false"]
           ASYNC_TRANSCRIPT_SUMMARY_ORCHESTRATOR_ARN: !GetAtt AsyncTranscriptSummaryOrchestrator.Arn
-
+          ASYNC_AGENT_ASSIST_ORCHESTRATOR_ARN: !GetAtt AsyncAgentAssistOrchestrator.Arn
+          CALL_DATA_STREAM_NAME: !Ref CallDataStream
           SNS_TOPIC_ARN: !Ref CategorySNSTopic
           PARAMETER_STORE_NAME: !Ref LCASettingsParameter
 
@@ -1349,7 +1560,7 @@ Resources:
             <p>     {####}
             <p>
             <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
-             the Live Call Analytics web interface and set your permanent password.
+            the Live Call Analytics web interface and set your permanent password.
             <p>     https://${WebAppCloudFrontDistribution.DomainName}/
             <p>
             <p>Good luck!

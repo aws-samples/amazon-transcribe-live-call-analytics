@@ -15,9 +15,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.7.2) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.0) (SO9072)
 
 Parameters:
+  RecordingsBucketRetentionDays:
+    Type: Number
+    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
+    Default: 30
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
@@ -31,6 +35,33 @@ Parameters:
       Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
       or integrate with Amazon Connect Contact Lens.
+
+  CallAudioProcessor:
+    Type: String
+    Default: Call Transcriber Lambda
+    AllowedValues:
+      - Chime Call Analytics
+      - Call Transcriber Lambda
+    Description: >
+      If you choose Demo Asterisk PBX Server or Chime Voice Connector (SIPREC), you can have 
+      Chime Call Analytics ingest the audio and send it to Trancribe, or use the example LCA Call 
+      Processor Lambda. Enabling Chime Call Analytics also allows you to also use Voice Analytics, 
+      such as Voice Tone Analysis and Speaker Search.
+  
+  ChimeVoiceToneAnalysis:
+    Type: String
+    Default: Disabled
+    AllowedValues:
+      - Enabled
+      - Disabled
+    Description: >
+      Used only when a call audio source with Chime Voice Connector is selected, and 
+      Chime Call Analytics is used as a call processor.
+      A voice analytics feature that enables you to analyze caller voices for a positive, 
+      negative, or neutral tone. This is different than sentiment analysis, as it analyzes
+      the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice
+      analytics without the caller's consent. Please read 
+      https://docs.aws.amazon.com/chime-sdk/latest/dg/va-opt-out.html for more information.
 
   DemoSoftphoneAllowedCidr:
     Type: String
@@ -143,6 +174,28 @@ Parameters:
     Description: 'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
       for embeddings returned by the EmbeddingsLambda function specified above.'
     Default: 4096
+  AgentAssistQnABotLLMApi:
+    Type: String
+    Description: Optionally enable (experimental) QnABot question disambiguation and
+      generative question answering using an LLM. To use a custom LAMBDA function, provide additional
+      parameters below. To use a supported third party service, enter the API key below.
+    AllowedValues:
+      - DISABLED
+      - LAMBDA
+      - ANTHROPIC
+    Default: DISABLED
+  AgentAssistQnABotLLMLambdaArn:
+    Type: String
+    AllowedPattern: "^(|arn:aws:lambda:.*)$"
+    Description: 'Optional: If LLMApi is LAMBDA, provide ARN for a Lambda function that
+      takes JSON {"prompt":"string", "settings":{key:value,..}}, and returns JSON {"generated_text":"string"}'
+    Default: ''
+  AgentAssistQnABotLLMThirdPartyApiKey:
+    Type: String
+    Description: 'Optional: If LLMApi is ANTHROPIC, enter the provider API Key from
+      . ** Data will leave your AWS account **'
+    Default: ''
+    NoEcho: true
 
   S3BucketName:
     Type: String
@@ -303,10 +356,11 @@ Parameters:
       - 'DISABLED'
       - 'SAGEMAKER'
       - 'LAMBDA'
+      - 'ANTHROPIC'
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
-      to provide a function ARN below.
+      to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -314,6 +368,12 @@ Parameters:
     Default: 1
     Description: >
       (Optional) If 'End Of Call Transcript Summary' is SAGEMAKER, provide initial instance count. Set to '0' to enable Serverless Inference (for cold-start delay tolerant deployments only).
+
+  SummarizationLLMThirdPartyApiKey:
+    Type: String
+    Description: 'Optional: If EndOfCallTranscriptSummary is ANTHROPIC, enter the provider API Key. ** Data will leave your AWS account **'
+    Default: ''
+    NoEcho: true
 
   EndOfCallLambdaHookFunctionArn:
     Default: ''
@@ -323,6 +383,23 @@ Parameters:
       (Optional) If 'End Of Call Transcript Summary' is LAMBDA, provide ARN for a Lambda function. The specified Lambda function is invoked by the LCA Call Event Processor Lambda function 
       for end of call event. The function is passed en event with CallId as input.
       This function can implement custom logic that is relevant to end of call processing, for example, creating a call summary.
+
+  StartOfCallLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function for beginning or start of 
+      call event. This function can implement custom logic that is relevant to beginning of call processing, for example, retrieving
+      call summary details logged into a case in a CRM.
+
+  PostCallSummaryLambdaHookFunctionArn:
+    Default: ''
+    Type: String
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description: >
+      (Optional) The specified Lambda function is invoked by the LCA Call Event Processor Lambda function after the call summary is processed.
+      This function can implement custom logic that is relevant to post processing, for example, updating the call summary to a CRM system.
 
   AdminEmail:
     Type: String
@@ -424,6 +501,9 @@ Metadata:
           default: Telephony Ingestion Options
         Parameters:
           - CallAudioSource
+          - CallAudioProcessor
+          - ChimeVoiceToneAnalysis
+          # - ChimeSpeakerSearch
           - DemoSoftphoneAllowedCidr
           - SiprecAllowedCidrList
           - SiprecLambdaHookFunctionArn
@@ -440,6 +520,9 @@ Metadata:
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
           - AgentAssistQnABotEmbeddingsLambdaDimensions
+          - AgentAssistQnABotLLMApi
+          - AgentAssistQnABotLLMLambdaArn
+          - AgentAssistQnABotLLMThirdPartyApiKey
       - Label:
           default: Amazon S3 Configuration
         Parameters:
@@ -467,7 +550,10 @@ Metadata:
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
           - SummarizationSageMakerInitialInstanceCount
+          - SummarizationLLMThirdPartyApiKey
           - EndOfCallLambdaHookFunctionArn
+          - StartOfCallLambdaHookFunctionArn
+          - PostCallSummaryLambdaHookFunctionArn
       - Label:
           default: Download locations
         Parameters:
@@ -496,6 +582,10 @@ Metadata:
           - PcaWebAppCallPathPrefix
   
     ParameterLabels:
+      CallAudioProcessor:
+        default: Call Audio Processor
+      ChimeVoiceToneAnalysis:
+        default: Chime Voice Tone Analysis
       S3BucketName:
         default: Call Audio Recordings Bucket Name
       AudioFilePrefix:
@@ -534,6 +624,12 @@ Metadata:
         default: Agent Assist QnABot Embeddings Lambda Function ARN (existing)
       AgentAssistQnABotEmbeddingsLambdaDimensions:
         default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
+      AgentAssistQnABotLLMApi:
+        default: Agent Assist QnABot LLM API
+      AgentAssistQnABotLLMLambdaArn:
+        default: Agent Assist QnABot LLM Lambda Function ARN (existing)
+      AgentAssistQnABotLLMThirdPartyApiKey:
+        default: Agent Assist QnABot LLM Third Party API Key
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
       TranscribeApiMode:
@@ -568,8 +664,14 @@ Metadata:
         default: End of Call Transcript Summary
       SummarizationSageMakerInitialInstanceCount:
         default: Initial Instance Count for Summarization SageMaker Endpoint
+      SummarizationLLMThirdPartyApiKey:
+        default: End of Call Summarization LLM Third Party API Key
       EndOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
+      StartOfCallLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Start of Call Processing (existing)
+      PostCallSummaryLambdaHookFunctionArn:
+        default: Lambda Hook Function ARN for Custom Post Processing, after the Call Transcript Summary is processed (existing)
       CloudFrontPriceClass:
         default: CloudFront Price Class
       CloudFrontAllowedGeos:
@@ -595,6 +697,10 @@ Conditions:
   ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
   ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+  ShouldUseChimeCallAnalytics: !Equals [!Ref CallAudioProcessor, 'Chime Call Analytics']
+  ShouldEnableVoiceToneAnalysis: !And [!Condition ShouldUseChimeCallAnalytics, !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']]
+  # ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
+  
   ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
   ShouldEnableLambdaAgentAssist: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
   ShouldEnableLexAgentAssist: !And [!Condition ShouldEnableAgentAssist, !Not [!Condition ShouldEnableLambdaAgentAssist]]
@@ -771,9 +877,12 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
-        SagemakerInitialInstanceCount: !Ref AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
         EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
         EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
+        LLMApi: !Ref AgentAssistQnABotLLMApi
+        LLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
+        LLMThirdPartyApiKey: !Ref AgentAssistQnABotLLMThirdPartyApiKey
+
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
@@ -783,6 +892,11 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        RecordingsBucketRetentionDays: !Ref RecordingsBucketRetentionDays
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - 'true'
+          - 'false'
         CallAudioSource: !Ref CallAudioSource
         S3BucketName: !Ref S3BucketName
         AdminEmail: !Ref AdminEmail
@@ -803,8 +917,6 @@ Resources:
           - ShouldEnableLexAgentAssist
           - true
           - false
-        LexAgentAssistLocaleId:
-          !FindInMap [TranscribeToLexLocaleId, !Ref TranscribeLanguageCode, Value]
         IsLambdaAgentAssistEnabled: 
           !If
             - ShouldEnableLambdaAgentAssist
@@ -816,7 +928,10 @@ Resources:
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
+        SummarizationLLMThirdPartyApiKey: !Ref SummarizationLLMThirdPartyApiKey
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
+        StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
+        PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -845,6 +960,13 @@ Resources:
           - ShouldInstallAWSQnaBot
           - !GetAtt QNABOT.Outputs.LexV2BotAliasId
           - !Ref AgentAssistExistingLexV2BotAliasId
+        LexAgentAssistLocaleId: !FindInMap [
+            TranscribeToLexLocaleId,
+            !Ref TranscribeLanguageCode,
+            Value,
+          ]
+        WebAppBucket: !GetAtt AISTACK.Outputs.WebAppBucket
+        CloudFrontDistributionId: !GetAtt AISTACK.Outputs.CloudFrontDistributionId
         QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
         # Changes to Params below force AgentAssist Setup to update.
         CallAudioSource: !Ref CallAudioSource
@@ -866,6 +988,8 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
+        AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
+        AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
@@ -876,7 +1000,8 @@ Resources:
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
-
+        LexAgentAssistIdentityPoolId: !GetAtt AISTACK.Outputs.LexAgentAssistIdentityPoolId
+        CloudFrontDomainName: !GetAtt AISTACK.Outputs.CloudFrontDomainName
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
@@ -886,6 +1011,15 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        LCAStackName: !Ref 'AWS::StackName'
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - true
+          - false
+        UseChimeCallAnalytics: !If 
+          - ShouldUseChimeCallAnalytics
+          - true
+          - false
         InstallDemoAsteriskServer: !If
           - ShouldInstallDemoAsteriskServer
           - true
@@ -972,6 +1106,9 @@ Outputs:
     Description: >-
       The ARN of Kinesis Data Stream for sending Call and Transcription events.
     Value: !GetAtt AISTACK.Outputs.CallDataStreamArn
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-CallDataStreamArn'
 
   DemoPBXIPAddress:
     Description: Demo Asterisk Server IP Address

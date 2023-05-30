@@ -45,7 +45,7 @@
 <span style="color:blue">**AGENTASSIST**: Confirm card balance (eg $75.34). Ask caller how much they want to pay ($50 minimum)</span>
   
 **Agent**: Great. I see that your card balance is $75.34. How much do you want to pay? There’s a $50 minimum payment.  
-**Caller**: I’ll pay $50  
+**Caller**: $50  
 **Agent**:  OK, I’m entering payment for $50.   
   
 <span style="color:blue">**AGENTASSIST**: Ask caller if they want to pay from their checking or savings account</span>

@@ -166,7 +166,7 @@ const handler = async function handler(event, context) {
 exports.handler = handler;
 
 // Test
-
+/*
 const event={
   "version": "0",
   "id": "0de5438d-bf86-c04c-7441-1f4c4eff1798",
@@ -187,11 +187,12 @@ const event={
       }
   }
 }
-/*
-export KINESIS_STREAM_NAME='LCA-AA-Asterisk-AISTACK-1JOV74E6CRV7K-CallDataStream-dF6h3ac1d3xl';
-export TRANSCRIBER_CALL_EVENT_TABLE_NAME='LCA-AA-Asterisk-CHIMEVCSTACK-Q5B3LOV32VYX-DeployCallTranscriber-K0KRQLW8E9N5-TranscriberCallEventTable-VWVQC1NTV3IF';
-export LCA_BUCKET_NAME='lca-aa-asterisk-aistack-1jov74e6-recordingsbucket-ds31m0sugh17';
-export CALL_ANALYTICS_FILE_PREFIX='lca-call-analytics/');
-export IS_CONTENT_REDACTION_ENABLED='false';
-*/
+
+//export KINESIS_STREAM_NAME='LCA-AA-Asterisk-AISTACK-1JOV74E6CRV7K-CallDataStream-dF6h3ac1d3xl';
+//export TRANSCRIBER_CALL_EVENT_TABLE_NAME='LCA-AA-Asterisk-CHIMEVCSTACK-Q5B3LOV32VYX-DeployCallTranscriber-K0KRQLW8E9N5-TranscriberCallEventTable-VWVQC1NTV3IF';
+//export LCA_BUCKET_NAME='lca-aa-asterisk-aistack-1jov74e6-recordingsbucket-ds31m0sugh17';
+//export CALL_ANALYTICS_FILE_PREFIX='lca-call-analytics/');
+//export IS_CONTENT_REDACTION_ENABLED='false';
+
 handler(event);
+*/

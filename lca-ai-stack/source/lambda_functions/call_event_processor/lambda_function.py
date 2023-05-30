@@ -15,15 +15,13 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 import boto3
 from botocore.config import Config as BotoCoreConfig
 
-
 # imports from Lambda layer
 # pylint: disable=import-error
 from appsync_utils import AppsyncAioGqlClient
 from transcript_batch_processor import TranscriptBatchProcessor
 
 # local imports
-from event_processor import execute_process_contact_lens_event_api_mutation
-from event_processor import execute_process_transcribe_event_api_mutation
+from event_processor import execute_process_event_api_mutation
 
 # pylint: enable=import-error
 
@@ -45,7 +43,6 @@ else:
     SNSClient = object
     SSMClient = object
 
-
 APPSYNC_GRAPHQL_URL = environ["APPSYNC_GRAPHQL_URL"]
 APPSYNC_CLIENT = AppsyncAioGqlClient(url=APPSYNC_GRAPHQL_URL, fetch_schema_from_transport=True)
 
@@ -62,26 +59,8 @@ STATE_DYNAMODB_RESOURCE: DynamoDBServiceResource = BOTO3_SESSION.resource(
 STATE_DYNAMODB_TABLE: DynamoDbTable = STATE_DYNAMODB_RESOURCE.Table(STATE_DYNAMODB_TABLE_NAME)
 
 IS_LEX_AGENT_ASSIST_ENABLED = getenv("IS_LEX_AGENT_ASSIST_ENABLED", "true").lower() == "true"
-if IS_LEX_AGENT_ASSIST_ENABLED:
-    LEXV2_CLIENT: LexRuntimeV2Client = BOTO3_SESSION.client(
-        "lexv2-runtime",
-        config=CLIENT_CONFIG,
-    )
-else:
-    LEXV2_CLIENT = None
-LEX_BOT_ID = environ["LEX_BOT_ID"]
-LEX_BOT_ALIAS_ID = environ["LEX_BOT_ALIAS_ID"]
-LEX_BOT_LOCALE_ID = environ["LEX_BOT_LOCALE_ID"]
 
 IS_LAMBDA_AGENT_ASSIST_ENABLED = getenv("IS_LAMBDA_AGENT_ASSIST_ENABLED", "true").lower() == "true"
-if IS_LAMBDA_AGENT_ASSIST_ENABLED:
-    LAMBDA_CLIENT: LambdaClient = BOTO3_SESSION.client(
-        "lambda",
-        config=CLIENT_CONFIG,
-    )
-else:
-    LAMBDA_CLIENT = None
-LAMBDA_AGENT_ASSIST_FUNCTION_ARN = environ["LAMBDA_AGENT_ASSIST_FUNCTION_ARN"]
 
 IS_SENTIMENT_ANALYSIS_ENABLED = getenv("IS_SENTIMENT_ANALYSIS_ENABLED", "true").lower() == "true"
 if IS_SENTIMENT_ANALYSIS_ENABLED:
@@ -92,15 +71,6 @@ COMPREHEND_LANGUAGE_CODE = getenv("COMPREHEND_LANGUAGE_CODE", "en")
 
 SNS_CLIENT:SNSClient = BOTO3_SESSION.client("sns", config=CLIENT_CONFIG)
 SSM_CLIENT:SSMClient = BOTO3_SESSION.client("ssm", config=CLIENT_CONFIG)
-
-CALL_AUDIO_SOURCE = getenv("CALL_AUDIO_SOURCE")
-MUTATION_FUNCTION_MAPPING = {
-    "Demo Asterisk PBX Server": execute_process_transcribe_event_api_mutation,
-    "Chime Voice Connector (SIPREC)": execute_process_transcribe_event_api_mutation,
-    "Genesys Cloud Audiohook Web Socket": execute_process_transcribe_event_api_mutation,
-    "Amazon Connect Contact Lens": execute_process_contact_lens_event_api_mutation
-}
-MUTATION_FUNCTION_NAME = MUTATION_FUNCTION_MAPPING.get(CALL_AUDIO_SOURCE)
 
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
 
@@ -116,27 +86,21 @@ async def process_event(event) -> Dict[str, List]:
     async with TranscriptBatchProcessor(
         appsync_client=APPSYNC_CLIENT,
         agent_assist_args=dict(
-            lex_client=LEXV2_CLIENT,
-            lex_bot_id=LEX_BOT_ID,
-            lex_bot_alias_id=LEX_BOT_ALIAS_ID,
-            lex_bot_locale_id=LEX_BOT_LOCALE_ID,
-            lambda_client=LAMBDA_CLIENT,
-            lambda_agent_assist_function_arn=LAMBDA_AGENT_ASSIST_FUNCTION_ARN,
-            dynamodb_table_name=STATE_DYNAMODB_TABLE_NAME,
+            is_lex_agent_assist_enabled=IS_LEX_AGENT_ASSIST_ENABLED,
+            is_lambda_agent_assist_enabled=IS_LAMBDA_AGENT_ASSIST_ENABLED,
         ),
         sentiment_analysis_args=dict(
             comprehend_client=COMPREHEND_CLIENT,
             comprehend_language_code=COMPREHEND_LANGUAGE_CODE
         ),
         # called for each record right before the context manager exits
-        api_mutation_fn=MUTATION_FUNCTION_NAME,
+        api_mutation_fn=execute_process_event_api_mutation,
         sns_client=SNS_CLIENT,
         settings=SETTINGS
     ) as processor:
         await processor.handle_event(event=event)
 
     return processor.results
-
 
 @LOGGER.inject_lambda_context
 def handler(event, context: LambdaContext):
