@@ -103,6 +103,7 @@ aws cloudformation package --template-file $MAIN_TEMPLATE --output-template-file
 aws s3 cp $tmpdir/$MAIN_TEMPLATE s3://${BUCKET}/${PREFIX}/$MAIN_TEMPLATE || exit 1
 
 aws s3 cp ./demo-audio/agent.wav s3://${BUCKET}/${PREFIX}/demo-audio/agent.wav || exit 1
+aws s3 cp ./demo-audio/agent2.wav s3://${BUCKET}/${PREFIX}/demo-audio/agent2.wav || exit 1
 
 if $PUBLIC; then
   echo "$STACK: Setting public read ACLs on published artifacts"
