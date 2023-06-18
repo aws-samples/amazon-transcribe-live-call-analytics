@@ -8,6 +8,10 @@ import re
 import boto3
 import requests
 
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
 # grab environment variables
 ANTHROPIC_MODEL_IDENTIFIER = os.environ["ANTHROPIC_MODEL_IDENTIFIER"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
@@ -54,11 +58,17 @@ def handler(event, context):
         "x-api-key": ANTHROPIC_API_KEY,
         "content-type": "application/json"
     }
-    response = requests.post(ENDPOINT_URL, headers=headers, data=json.dumps(data))
-    print("API Response:", response)
-    summaryText = json.loads(response.text)["completion"].strip()
-    print("Summary: ", summaryText)
-    return {"summary": summaryText}
+    
+    try:
+        response = requests.post(ENDPOINT_URL, headers=headers, data=json.dumps(data))
+        response.raise_for_status()
+        print("API Response:", response)
+        summaryText = json.loads(response.text)["completion"].strip()
+        print("Summary: ", summaryText)
+        return {"summary": summaryText}
+    except requests.exceptions.HTTPError as err:
+        logger.error(err)
+        raise
 
     
 # for testing on terminal
