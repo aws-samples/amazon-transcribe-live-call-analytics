@@ -11,7 +11,8 @@ Example Transcript Summary:
 Transcript Summaries are generated after the call has ended, and can take 20-30 seconds to appear on the UI.
 
 Configure Transcript Summarization by choosing a value for the `EndOfCallTranscriptSummary` CloudFormation parameter when deploying or updating your LCA stack. Valid values are 
-`DISABLED`, `SAGEMAKER`, `ANTHROPIC`, and `LAMBDA`.
+`DISABLED`, `SAGEMAKER`, `ANTHROPIC`, `LAMBDA` and `BEDROCK`.
+If `BEDROCK` option is chosen, select a supported model ID from the list (`BedrockModelId` parameter)
 
 ### **DISABLED** (default)
 

@@ -111,7 +111,7 @@ Parameters:
       Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
       both Partial and Non-Partial transcript segments (false).
 
-  EndOfCallTranscriptSummary:
+ EndOfCallTranscriptSummary:
     Default: 'DISABLED'
     Type: String
     AllowedValues:
@@ -119,10 +119,33 @@ Parameters:
       - 'SAGEMAKER'
       - 'LAMBDA'
       - 'ANTHROPIC'
+      - 'BEDROCK'
+
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
       to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
+      BEDROCK option requires you to choose a model ID from a list of models supported by Bedrock (BedrockModelId).
+
+  BedrockModelId:
+    Default: 'amazon.titan-tg1-large'
+    Type: String
+    AllowedValues: 
+      - 'amazon.titan-tg1-large'
+      - 'amazon.titan-e1t-medium'
+      - 'ai21.j2-grande-instruct'
+      - 'ai21.j2-jumbo-instruct'
+      - 'anthropic.claude-instant-v1'
+      - 'anthropic.claude-v1'
+
+    Description: >
+      If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
+      Defaults to 'amazon.titan-tg1-large'
+
+  BedrockPreviewSdkUrl:
+    Type: String
+    Default: https://preview.documentation.bedrock.aws.dev/Documentation/SDK/bedrock-python-sdk.zip
+    Description: URL for the Bedrock SDK zip file (Bedrock preview access only)
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -312,6 +335,10 @@ Metadata:
         default: Lambda Hook Function ARN for Custom End of Call Processing (existing)
       EndOfCallTranscriptSummary:
         default: End of Call Transcript Summary
+      BedrockModelId: 
+        default: Bedrock supported LLM model ID
+      BedrockPreviewSdkUrl:
+        default: Bedrock preview SDK url
       StartOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom Start of Call Processing (existing)
       PostCallSummaryLambdaHookFunctionArn:
@@ -328,11 +355,13 @@ Conditions:
   ShouldEnableAnthropicSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "ANTHROPIC"]
   ShouldEnableEndOfCallLambdaHookFunction: !Equals [!Ref EndOfCallTranscriptSummary, "LAMBDA"]
   ShouldDeploySageMakerSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "SAGEMAKER"]
+  ShouldEnableBedrockSummarizer: !Equals [!Ref EndOfCallTranscriptSummary, "BEDROCK"]
 
   IsTranscriptSummaryEnabled: !Or
     - !Condition ShouldEnableEndOfCallLambdaHookFunction
     - !Condition ShouldDeploySageMakerSummarizer
     - !Condition ShouldEnableAnthropicSummarizer
+    - !Condition ShouldEnableBedrockSummarizer
 
 Outputs:
   CallDataStreamName:
@@ -782,6 +811,16 @@ Resources:
         InitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         FetchTranscriptArn: !GetAtt FetchTranscript.Arn
 
+  BedrockPreviewBoto3Stack:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldEnableBedrockSummarizer
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/bedrock-preview-boto3-stack.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        BedrockPreviewSdkUrl: !Ref BedrockPreviewSdkUrl
+
   FetchTranscript:
     Type: AWS::Serverless::Function
     Properties:
@@ -873,6 +912,63 @@ Resources:
                 Action: "lambda:InvokeFunction"
                 Resource: !GetAtt FetchTranscript.Arn
 
+  BedrockSummaryLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt BedrockSummaryLambdaExecutionRole.Arn
+      Runtime: python3.10
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
+          TOKEN_COUNT: "0"
+          PROCESS_TRANSCRIPT: "True"
+          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
+      Timeout: 60
+      MemorySize: 512
+      Handler: index.handler
+      CodeUri: ../source/lambda_functions/bedrock_summary_lambda
+      Layers:
+        - !GetAtt BedrockPreviewBoto3Stack.Outputs.BedrockBoto3Layer
+      Description: This AWS Lambda Function runs a transcript summary inference on the call transcript using Bedrock API
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+  
+  BedrockSummaryLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Bedrock Summary Lambda Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-Bedrock-Fetch-Transcript
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource: !GetAtt FetchTranscript.Arn
+
+        - PolicyName: !Sub ${AWS::StackName}-BedrockSummary
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: 
+                  - "bedrock:*" 
+                Resource: "*"
+
   AsyncAgentAssistOrchestrator:
     Type: AWS::Serverless::Function
     Properties:
@@ -953,7 +1049,11 @@ Resources:
             !If [
               ShouldEnableAnthropicSummarizer,
               !GetAtt LLMAnthropicSummaryLambda.Arn,
-              !Ref EndOfCallLambdaHookFunctionArn
+              !If [
+                ShouldEnableBedrockSummarizer,
+                !GetAtt BedrockSummaryLambda.Arn,
+                !Ref EndOfCallLambdaHookFunctionArn
+              ]
             ]
           ]
           CALL_DATA_STREAM_NAME: !Ref CallDataStream

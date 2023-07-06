@@ -357,10 +357,29 @@ Parameters:
       - 'SAGEMAKER'
       - 'LAMBDA'
       - 'ANTHROPIC'
+      - 'BEDROCK'
+
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
       to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
+      BEDROCK option requires preview access to Amazon Bedrock API and requires you to choose one of the supported model IDs from the 
+      provided list (BedrockModelId).
+
+  BedrockModelId:
+    Default: 'amazon.titan-tg1-large'
+    Type: String
+    AllowedValues: 
+      - 'amazon.titan-tg1-large'
+      - 'amazon.titan-e1t-medium'
+      - 'ai21.j2-grande-instruct'
+      - 'ai21.j2-jumbo-instruct'
+      - 'anthropic.claude-instant-v1'
+      - 'anthropic.claude-v1'
+
+    Description: >
+      If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
+      Defaults to 'amazon.titan-tg1-large'
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -549,6 +568,8 @@ Metadata:
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
+          - BedrockModelId
+          - BedrockPreviewSdkUrl
           - SummarizationSageMakerInitialInstanceCount
           - SummarizationLLMThirdPartyApiKey
           - EndOfCallLambdaHookFunctionArn
@@ -927,6 +948,8 @@ Resources:
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+        BedrockModelId: !Ref BedrockModelId
+        BedrockPreviewSdkUrl: !Ref BedrockPreviewSdkUrl
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         SummarizationLLMThirdPartyApiKey: !Ref SummarizationLLMThirdPartyApiKey
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
