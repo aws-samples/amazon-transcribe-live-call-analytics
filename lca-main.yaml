@@ -381,6 +381,11 @@ Parameters:
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
       Defaults to 'amazon.titan-tg1-large'
 
+  BedrockPreviewSdkUrl:
+    Type: String
+    Default: https://preview.documentation.bedrock.aws.dev/Documentation/SDK/bedrock-python-sdk.zip
+    Description: URL for the Bedrock SDK zip file (Bedrock preview access only)
+    
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
     MinValue: 0
