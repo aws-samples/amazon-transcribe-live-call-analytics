@@ -50,8 +50,8 @@ Resources:
       Environment:
         Variables:
           SDK_DOWNLOAD_URL: !Ref BedrockPreviewSdkUrl
-          BOTOCORE_WHL_FILE: botocore-1.29.142-py3-none-any.whl
-          BOTO3_WHL_FILE: boto3-1.26.142-py3-none-any.whl
+          BOTOCORE_WHL_FILE: botocore-1.29.162-py3-none-any.whl
+          BOTO3_WHL_FILE: boto3-1.26.162-py3-none-any.whl
           BOTO3_BUCKET: !Ref BedrockBoto3Bucket
       Code:
         ZipFile: |
@@ -154,8 +154,8 @@ Resources:
       ServiceToken: !GetAtt BedrockBoto3ZipFunction.Arn
       # Rerun BedrockBoto3ZipFunction if any of the following parameters change
       SDK_DOWNLOAD_URL: !Ref BedrockPreviewSdkUrl
-      BOTOCORE_WHL_FILE: botocore-1.29.142-py3-none-any.whl
-      BOTO3_WHL_FILE: boto3-1.26.142-py3-none-any.whl
+      BOTOCORE_WHL_FILE: botocore-1.29.162-py3-none-any.whl
+      BOTO3_WHL_FILE: boto3-1.26.162-py3-none-any.whl
       BOTO3_BUCKET: !Ref BedrockBoto3Bucket
 
   BedrockBoto3Layer:
