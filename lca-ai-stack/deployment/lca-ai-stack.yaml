@@ -916,7 +916,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt BedrockSummaryLambdaExecutionRole.Arn
-      Runtime: python3.10
+      Runtime: python3.9
       Environment:
         Variables:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
