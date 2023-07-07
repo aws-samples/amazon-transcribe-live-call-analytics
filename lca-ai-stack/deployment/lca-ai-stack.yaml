@@ -111,7 +111,7 @@ Parameters:
       Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for
       both Partial and Non-Partial transcript segments (false).
 
- EndOfCallTranscriptSummary:
+  EndOfCallTranscriptSummary:
     Default: 'DISABLED'
     Type: String
     AllowedValues:
