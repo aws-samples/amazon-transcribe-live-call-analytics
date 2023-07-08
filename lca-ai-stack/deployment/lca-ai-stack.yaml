@@ -1588,7 +1588,7 @@ Resources:
       Schema:
         - Name: email
           AttributeDataType: String
-          Mutable: false
+          Mutable: true
           Required: true
       UserPoolName: !Sub "${AWS::StackName}-UserPool"
       UsernameAttributes:
