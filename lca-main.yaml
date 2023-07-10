@@ -680,6 +680,8 @@ Metadata:
         default: CloudFront Allowed Geographies
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
+      RecordingsBucketRetentionDays:
+        default: Recordings Expiration In Days
       CategoryAlertRegEx:
         default: Category Alert Regular Expression
       PcaS3BucketName:
