@@ -18,10 +18,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.1) (SO9072)
 
 Parameters:
-  RecordingsBucketRetentionDays:
-    Type: Number
-    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
-    Default: 30
+
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
@@ -454,12 +451,6 @@ Parameters:
     ConstraintDescription: >-
       Comma separated list of uppercase two letter country codes or empty
 
-  DynamoDbExpirationInDays:
-    Type: Number
-    Default: 90
-    Description: >-
-      Number of days to retain call records. Records will be automatically deleted from LCA after this time.
-
   PcaS3BucketName:
     Type: String
     Description: >
@@ -487,6 +478,17 @@ Parameters:
     Type: String
     Default: dashboard/parsedFiles/
     Description: PCA path prefix for call detail pages.
+
+  DynamoDbExpirationInDays:
+    Type: Number
+    Default: 90
+    Description: >-
+      Number of days to retain call records. Records will be automatically deleted from LCA after this time.
+
+  RecordingsBucketRetentionDays:
+    Type: Number
+    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
+    Default: 30
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -567,6 +569,7 @@ Metadata:
           default: Record retention
         Parameters:
           - DynamoDbExpirationInDays
+          - RecordingsBucketRetentionDays
       - Label:
           default: User Experience
         Parameters:
@@ -677,6 +680,8 @@ Metadata:
         default: CloudFront Allowed Geographies
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
+      RecordingsBucketRetentionDays:
+        default: Recordings Expiration In Days
       CategoryAlertRegEx:
         default: Category Alert Regular Expression
       PcaS3BucketName:
