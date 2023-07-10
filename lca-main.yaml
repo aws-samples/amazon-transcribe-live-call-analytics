@@ -192,8 +192,7 @@ Parameters:
     Default: ''
   AgentAssistQnABotLLMThirdPartyApiKey:
     Type: String
-    Description: 'Optional: If LLMApi is ANTHROPIC, enter the provider API Key from
-      . ** Data will leave your AWS account **'
+    Description: 'Optional: If LLMApi is ANTHROPIC, enter your Anthropic API Key. ** Data will leave your AWS account **'
     Default: ''
     NoEcho: true
 
