@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2023-07-10
+### Fixed
+- Add compatibility with [Start Call Processing](https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/develop/lca-chimevc-stack/StartCallProcessingEvent.md#start-call-processing-for-a-in-progress-call) feature, when using Chime SDK Call Analytics audio processor.
+
 ## [0.8.0] - 2023-05-30
 ### Added
 - Generative transcript summarization capability now supports Anthropic Claude third party API with 100K token limit (eliminating transcript length limitations). In a later release we will support Anthropic's models natively in AWS via the new [Amazon Bedrock](https://aws.amazon.com/bedrock/) service. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md#anthropic)
@@ -218,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.0...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.1...develop
+[0.8.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.0...v0.7.1

@@ -8,7 +8,6 @@ KINESIS_STREAM_NAME = os.environ["KINESIS_STREAM_NAME"]
 TRANSCRIBER_CALL_EVENT_TABLE_NAME = os.environ["TRANSCRIBER_CALL_EVENT_TABLE_NAME"]
 DYNAMODB_EXPIRATION_IN_DAYS = getenv("DYNAMODB_EXPIRATION_IN_DAYS", "90")
 
-chimeClient = boto3.client('chime-sdk-voice')
 kdsClient = boto3.client('kinesis')
 dynamoClient = boto3.resource('dynamodb')
 dynamoTable = dynamoClient.Table(TRANSCRIBER_CALL_EVENT_TABLE_NAME)
@@ -34,23 +33,6 @@ def get_call_record(callId):
     callDetailCache[callId] = response['Item']
     return response['Item']
 
-def put_voice_task(voiceToneAnalysisTaskId, callId):
-    pk = "vta#" + voiceToneAnalysisTaskId
-    sk = callId
-    # TODO: calculate TTL
-    response = dynamoTable.put_item(
-        Item = {
-            'PK': pk,
-            'SK': 'VTA',
-            'VoiceToneAnalysisTaskId': voiceToneAnalysisTaskId,
-            'CallId': callId,
-            'ExpiresAfter': get_ttl()
-        }
-    )
-    # save to local cache
-    voiceTaskCache[voiceToneAnalysisTaskId] = callId
-    return
-
 def get_callId_for_voiceTask(voiceToneAnalysisTaskId):
     if voiceToneAnalysisTaskId in voiceTaskCache:
         return voiceTaskCache[voiceToneAnalysisTaskId]
@@ -69,22 +51,12 @@ def get_callId_for_voiceTask(voiceToneAnalysisTaskId):
     return callId
 
 def lambda_handler(event, context):
+    print("Received call analytics event")
     print(json.dumps(event))
     detail = event['detail']
-    
-    if detail['detailStatus'] == 'AnalyticsReady':
-        response = chimeClient.start_voice_tone_analysis_task(
-            VoiceConnectorId=detail['voiceConnectorId'],
-            TransactionId=detail['transactionId'],
-            LanguageCode='en-US',
-            ClientRequestToken=detail['callId']
-        )
-        
-        voiceToneAnalysisTaskId = response['VoiceToneAnalysisTask']['VoiceToneAnalysisTaskId']
-        print("RESPONSE TASK_ID: " + voiceToneAnalysisTaskId)
-        put_voice_task(voiceToneAnalysisTaskId, detail['callId'])
-        
+
     if detail['detailStatus'] == 'VoiceToneAnalysisSuccessful':
+        print("Received VoiceToneAnalysisSuccessful event")
         callId = get_callId_for_voiceTask(detail['taskId'])
         callRecord = get_call_record(get_callId_for_voiceTask(detail['taskId']))
         callData = json.loads(callRecord['CallData'])
@@ -131,7 +103,7 @@ def lambda_handler(event, context):
             },
             'CreatedAt': timestampStr,
             'UpdatedAt': timestampStr
-        };
+        }
         
         print(json.dumps(putObj))
         

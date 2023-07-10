@@ -1,0 +1,14 @@
+{
+  "name": "chime_call_analytics_initialization",
+  "version": "1.0.0",
+  "description": "This lambda creates media insight pipeline and optional voice tone analysis",
+  "main": "index.js",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.312.0",
+    "@aws-sdk/client-kinesis": "^3.312.0",
+    "@aws-sdk/client-lambda": "^3.312.0",
+    "@aws-sdk/client-chime-sdk-media-pipelines": "^3.312.0",
+    "@aws-sdk/client-chime-sdk-voice": "^3.312.0"
+  }
+}

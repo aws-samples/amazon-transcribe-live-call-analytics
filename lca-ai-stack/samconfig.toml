@@ -8,12 +8,12 @@ use_container = true
 # shared account
 [shared.global.parameters]
 s3_bucket = "lca-artifacts-253873381732-us-east-1"
-s3_prefix = "artifacts/lca/0.8.0-rc4"
+s3_prefix = "artifacts/lca/0.8.1-rc4"
 
 [shared.deploy.parameters]
 stack_name = "LiveCallAnalytics"
 s3_bucket = "lca-artifacts-253873381732-us-east-1"
-s3_prefix = "artifacts/lca/0.8.0-rc4"
+s3_prefix = "artifacts/lca/0.8.1-rc4"
 region = "us-east-1"
 fail_on_empty_changeset = false
 confirm_changeset = true
@@ -21,7 +21,7 @@ capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 parameter_overrides = [
   "BootstrapBucketBaseName=lca-artifacts-253873381732",
   "BootstrapS3Prefix=artifacts/lca",
-  "BootstrapVersion=0.8.0-rc4",
+  "BootstrapVersion=0.8.1-rc4",
   "S3BucketName=shared-ai-for-chime-vc-audio",
   "IsContentRedactionEnabled=true",
   "IsSentimentAnalysisEnabled=true",
@@ -32,4 +32,4 @@ parameter_overrides = [
 
 [shared.package.parameters]
 s3_bucket = "lca-artifacts-253873381732-us-east-1"
-s3_prefix = "artifacts/lca/0.8.0-rc4"
+s3_prefix = "artifacts/lca/0.8.1-rc4"

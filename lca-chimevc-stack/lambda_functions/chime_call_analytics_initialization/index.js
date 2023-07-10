@@ -13,18 +13,14 @@ const { KinesisClient } = require('@aws-sdk/client-kinesis');
 /* Transcribe and Streaming Libraries */
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
-const { ChimeSDKMediaPipelinesClient, CreateMediaInsightsPipelineCommand, GetMediaPipelineCommand } = require('@aws-sdk/client-chime-sdk-media-pipelines')
-
+const { ChimeSDKMediaPipelinesClient, CreateMediaInsightsPipelineCommand, } = require('@aws-sdk/client-chime-sdk-media-pipelines')
+const { ChimeSDKVoiceClient, StartVoiceToneAnalysisTaskCommand, } = require('@aws-sdk/client-chime-sdk-voice')
 
 /* Local libraries */
 const {
   formatPath,
-  writeS3UrlToKds,
-  writeAddTranscriptSegmentEventToKds,
-  writeTranscriptionSegmentToKds,
   writeCallStartEventToKds,
   writeCallEndEventToKds,
-  writeCategoryEventToKds,
 } = require('./lca');
 
 const REGION = process.env.REGION || 'us-east-1';
@@ -78,6 +74,7 @@ let dynamoClient;
 // eslint-disable-next-line no-unused-vars
 let kinesisClient;
 let chimeMediaPipelinesClient;
+let chimeVoiceClient;
 
 let timeToStop = false;
 let stopTimer;
@@ -144,6 +141,8 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
   const callData = {
     callId: callEvent.detail.callId,
     originalCallId: callEvent.detail.callId,
+    voiceConnectorId: callEvent.detail.voiceConnectorId,
+    transactionId: callEvent.detail.transactionId,
     callStreamingStartTime: now,
     callProcessingStartTime: now,
     callStreamingEndTime: '',
@@ -459,6 +458,59 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
 }
 
 
+/**
+ * Create voice tone analysis task mapping record in DDB. The record is used to look up callId with taskId.
+ */
+const putVoiceToneAnalysisTask = async function(voiceToneAnalysisTaskId, callId) {
+  console.log(`Writing voice tone analysis task item to DDB...`);
+  const expiration = getExpiration(1);
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `vta#${voiceToneAnalysisTaskId}` },
+      SK: { S: 'VTA' },
+      VoiceToneAnalysisTaskId: { S: voiceToneAnalysisTaskId },
+      CallId: { S: callId },
+      ExpiresAfter: { N: expiration.toString() }
+    },
+  };
+  console.log("Write voice tone analysis task item to DDB. Request:");
+  console.log(JSON.stringify(putParams));
+  const putCmd = new PutItemCommand(putParams);
+  try {
+    await dynamoClient.send(putCmd);
+    console.log('Wrote voice tone analysis task item to DDB');
+  } catch (error) {
+    console.error('Error persisting voice tone analysis task record in DDB', error);
+  }
+}
+
+
+/**
+ * Start voice tone analysis task for a given call.
+ */
+const startVoiceToneAnalysisTask = async function startVoiceToneAnalysisTask(chimeVoiceClient, callData){
+  try {
+    console.log('Starting voice tone analysis task...');
+    const request = {
+      VoiceConnectorId: callData.voiceConnectorId,
+      TransactionId: callData.transactionId,
+      LanguageCode: "en-US",
+    };
+    console.log("Starting voice tone analysis task command. Request:");
+    console.log(JSON.stringify(request));
+    const command = new StartVoiceToneAnalysisTaskCommand(request);
+    const response = await chimeVoiceClient.send(command);
+    console.log('Started voice tone analysis task. Response:');
+    console.log(JSON.stringify(response));
+
+    await putVoiceToneAnalysisTask(response.VoiceToneAnalysisTask.VoiceToneAnalysisTaskId, callData.callId);
+  } catch (error) {
+    console.error('Error starting voice tone analytics tasks', error);
+  }
+}
+
+
 // MAIN LAMBDA HANDLER - FUNCTION ENTRY POINT
 const handler = async function handler(event, context) {
   console.log('Event: ', JSON.stringify(event));
@@ -469,6 +521,7 @@ const handler = async function handler(event, context) {
   dynamoClient = new DynamoDBClient({ region: REGION });
   kinesisClient = new KinesisClient({ region: REGION });
   chimeMediaPipelinesClient = new ChimeSDKMediaPipelinesClient({ region: REGION });
+  chimeVoiceClient = new ChimeSDKVoiceClient({ region: REGION });
 
   /*
   Create a callData object for incoming event:
@@ -497,6 +550,14 @@ const handler = async function handler(event, context) {
     await writeCallDataToDdb(callData);
     console.log('Ready to start processing call');
     await writeCallStartEventToKds(kinesisClient, callData);
+
+    // start media insight pipeline
+    await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
+
+    // start voice tone analysis task
+    if (ENABLE_VOICETONE === 'true') {
+      await startVoiceToneAnalysisTask(chimeVoiceClient, callData);
+    }
   } else if (event.source === 'aws.chime') {
     if (event.detail.streamingStatus === 'STARTED') {
       if (event.detail.isCaller === undefined) {
@@ -541,11 +602,12 @@ const handler = async function handler(event, context) {
       console.log('Ready to start processing call');
       await writeCallStartEventToKds(kinesisClient, callData);
 
-      // it is now time to execute the mediapipeline
-      if (ENABLE_VOICETONE === 'false') {
-        await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
-      } else {
-        console.log("Voice tone is enabled, so we will not manually start the pipeline.")
+      // it is now time to execute the media pipeline
+      await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
+
+      // start voice tone analysis task
+      if (ENABLE_VOICETONE === 'true') {
+        await startVoiceToneAnalysisTask(chimeVoiceClient, callData);
       }
 
     } else if (event.detail.streamingStatus === 'ENDED') {
