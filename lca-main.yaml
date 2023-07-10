@@ -566,7 +566,7 @@ Metadata:
           - CloudFrontPriceClass
           - CloudFrontAllowedGeos
       - Label:
-          default: Record retention
+          default: Retention
         Parameters:
           - DynamoDbExpirationInDays
           - RecordingsBucketRetentionDays
@@ -681,7 +681,7 @@ Metadata:
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
       RecordingsBucketRetentionDays:
-        default: Recordings Expiration In Days
+        default: Recording Expiration In Days
       CategoryAlertRegEx:
         default: Category Alert Regular Expression
       PcaS3BucketName:
