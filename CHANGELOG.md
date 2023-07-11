@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.2] - 2023-07-11
 ### Fixed
-- Fix stack update problems related to Chime Voice Connector configuration when updating to v0.8.1 from v0.8.0 with Chime Call Anlaytics enabled
+- Fix stack update problems related to Chime Voice Connector configuration when updating to v0.8.1 from v0.8.0 with Chime Call Analytics enabled
 
 ## [0.8.1] - 2023-07-10
 ### Fixed
