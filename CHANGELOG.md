@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2023-07-11
+### Fixed
+- Fix stack update problems related to Chime Voice Connector configuration when updating to v0.8.1 from v0.8.0 with Chime Call Anlaytics enabled
+
 ## [0.8.1] - 2023-07-10
 ### Fixed
 - Add compatibility with [Start Call Processing](https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/develop/lca-chimevc-stack/StartCallProcessingEvent.md#start-call-processing-for-a-in-progress-call) feature, when using Chime SDK Call Analytics audio processor.
@@ -222,7 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.1...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.2...develop
+[0.8.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.7.1...v0.7.2
