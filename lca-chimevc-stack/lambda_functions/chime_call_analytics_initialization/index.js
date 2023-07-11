@@ -159,6 +159,12 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     tcaOutputLocation: `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_FILE_PREFIX}`,
   };
 
+  return callData;
+};
+
+const getCallDataFromChimeEventsWithLambdaHook = async function getCallDataFromChimeEventsWithLambdaHook(callEvent) {
+  const callData = await getCallDataFromChimeEvents(callEvent);
+
   // Call customer LambdaHook, if present
   if (LAMBDA_HOOK_FUNCTION_ARN) {
     // invoke lambda function
@@ -590,7 +596,7 @@ const handler = async function handler(event, context) {
       console.log(
         'This is the CALLER stream (isCaller is true). Collate with AGENT stream data from DynamoDB.',
       );
-      callData = await getCallDataFromChimeEvents(event);
+      callData = await getCallDataFromChimeEventsWithLambdaHook(event);
 
       console.log('Saving callData to DynamoDB');
       await writeCallDataToDdb(callData);
@@ -611,6 +617,13 @@ const handler = async function handler(event, context) {
       }
 
     } else if (event.detail.streamingStatus === 'ENDED') {
+      if (event.detail.isCaller === false) {
+        console.log(
+            'This is the AGENT stream (isCaller is false). Exit and wait for CALLER stream event to arrive.',
+        );
+        return;
+      }
+
       callData = await getCallDataFromChimeEvents(event);
       await writeCallEndEventToKds(kinesisClient, callData.callId);
       callData.callStreamingEndTime = new Date().toISOString();
