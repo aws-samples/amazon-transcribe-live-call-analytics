@@ -60,7 +60,7 @@ pwd
 dir=lca-chimevc-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
+bash ./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
 popd
 
 dir=lca-genesys-audiohook-stack
