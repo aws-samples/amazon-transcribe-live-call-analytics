@@ -37,6 +37,9 @@ VERSION=$(cat ./VERSION)
 [[ "${PREFIX}" == */ ]] && PREFIX="${PREFIX%?}"
 PREFIX_AND_VERSION=${PREFIX}/${VERSION}
 
+# Remove invalid character at the end of PREFIX_AND_VERSION
+PREFIX_AND_VERSION=${PREFIX_AND_VERSION::-1} 
+
 # Append region to bucket basename
 BUCKET=${BUCKET_BASENAME}-${REGION}
 
