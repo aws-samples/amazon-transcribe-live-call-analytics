@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.3] - 2023-07-18
 ### Fixed
 - Fix regression issue that prevented persistence of custom metadata json in DynamoDB call record
+- Update QnAbot submodule branch/commit to pull in deployment fixes from QnAbot v5.3.5
 
 ## [0.8.2] - 2023-07-11
 ### Fixed
