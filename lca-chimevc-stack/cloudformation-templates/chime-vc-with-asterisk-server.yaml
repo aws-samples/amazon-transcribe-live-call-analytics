@@ -631,7 +631,7 @@ Resources:
           sudo ./aws/install --update
           mkdir -p /opt/aws/
           sudo pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
-          sudo ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
+          sudo ln -s -f /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           /usr/local/bin/cfn-init -v  --stack ${AWS::StackName} --resource AsteriskInstance --configsets full_install  --region ${AWS::Region}
           /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region}
 
