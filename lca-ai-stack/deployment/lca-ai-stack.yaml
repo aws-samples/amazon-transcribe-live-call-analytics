@@ -32,7 +32,7 @@ Parameters:
       - Amazon Connect Contact Lens
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
-     Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
+      Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       or a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center.
 
   S3BucketName:
