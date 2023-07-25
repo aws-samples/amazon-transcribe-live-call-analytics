@@ -645,7 +645,7 @@ Resources:
           echo Create asterisk configuration
           echo ================================
           INSTANCE_ID=$( curl http://169.254.169.254/latest/meta-data/instance-id)
-          IP=$( curl http://169.254.169.254/latest/meta-data/public-ipv4 )
+          PUBLIC_IP=$( curl http://169.254.169.254/latest/meta-data/public-ipv4 )
           REGION=$( curl http://169.254.169.254/latest/meta-data/placement/region )
           PHONE_NUMBER=$( aws ssm get-parameter --name /${AWS::StackName}/phoneNumber --region ${AWS::Region} | jq -r '.Parameter.Value' )
           VOICE_CONNECTOR=$( aws ssm get-parameter --name /${AWS::StackName}/voiceConnector --region ${AWS::Region} | jq -r '.Parameter.Value' )
