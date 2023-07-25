@@ -1,7 +1,7 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Call Analytics w/ Chime Voice Connector
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Call Analytics w/Amazon Chime SDK Voice Connector
 
 Parameters:
   LCAStackName:
@@ -48,10 +48,10 @@ Parameters:
     Type: String
     Default: analytics
     AllowedValues:
-        - standard
-        - analytics
+      - standard
+      - analytics
     Description: Set the default operational mode for Transcribe
-    
+
   IsPartialTranscriptEnabled:
     Type: String
     Default: 'true'
@@ -64,13 +64,13 @@ Parameters:
 
   IsContentRedactionEnabled:
     Type: String
-    Default: "false"
+    Default: 'false'
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
       the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
-      - "true"
-      - "false"
+      - 'true'
+      - 'false'
 
   TranscribeContentRedactionType:
     Type: String
@@ -130,7 +130,7 @@ Parameters:
     Description: >
       (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
       If present, the specified Lambda function is invoked at the start of each call. 
-      The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
+      The call start event from Amazon Chime SDK Voice Connector (containing SIPREC headers) is provided as input.
       The function must return a True/False flag to indicate if the call should be processed or ignored, 
       a mapped CallId, an AgentId, and may be extended to support additional features in future.
 
@@ -138,14 +138,13 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
-  
+      Voice connector Id for setting up EventBridge Rule to restrict events to specific Amazon Chime SDK Voice Connector.
+
   Boto3LayerArn:
     Type: String
-    Description: Arn of the Boto3 Lambda Layer that contains Chime Call Analytics
+    Description: Arn of the Boto3 Lambda Layer that contains Amazon Chime SDK Call Analytics
 
 Resources:
-
   ##########################################################################
   # NodeJS Transcriber Lambda Layer
   ##########################################################################
@@ -157,13 +156,12 @@ Resources:
         - nodejs16.x
         - nodejs18.x
       Description: >
-       This is a layer with shared nodejs libraries for the LCA call transcriber 
-       and call analytics initialization Lambdas.
-      ContentUri:
-        ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
+        This is a layer with shared nodejs libraries for the LCA call transcriber 
+        and call analytics initialization Lambdas.
+      ContentUri: ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
 
   ##########################################################################
-  # Media Pipeline configuration 
+  # Media Pipeline configuration
   ##########################################################################
 
   ChimeCallAnalyticsResourceAccessRole:
@@ -192,7 +190,7 @@ Resources:
               - Action:
                   - iam:PassRole
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !GetAtt TcaDataAccessRole.Arn
         - PolicyName: chime-analytics-kds
           PolicyDocument:
@@ -201,7 +199,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref KinesisDataStreamArn
               - Action:
                   - kms:GenerateDataKey
@@ -216,27 +214,27 @@ Resources:
             Version: 2012-10-17
             Statement:
               - Action:
-                - transcribe:StartCallAnalyticsStreamTranscription
-                - transcribe:StartTranscriptionJob
+                  - transcribe:StartCallAnalyticsStreamTranscription
+                  - transcribe:StartTranscriptionJob
                 Effect: Allow
-                Resource: "*"
+                Resource: '*'
               - Action:
-                - kinesisvideo:GetDataEndpoint
-                - kinesisvideo:GetMedia
+                  - kinesisvideo:GetDataEndpoint
+                  - kinesisvideo:GetMedia
                 Effect: Allow
-                Resource: 
+                Resource:
                   - !Sub arn:${AWS::Partition}:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/Chime*
               - Action:
-                - kinesisvideo:GetDataEndpoint
-                - kinesisvideo:GetMedia
+                  - kinesisvideo:GetDataEndpoint
+                  - kinesisvideo:GetMedia
                 Effect: Allow
-                Resource: 
+                Resource:
                   - !Sub arn:${AWS::Partition}:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*
                 Condition:
                   StringLike:
                     aws:ResourceTag/AWSServiceName: ChimeSDK
               - Action:
-                - kms:Decrypt
+                  - kms:Decrypt
                 Effect: Allow
                 Resource:
                   - !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
@@ -244,10 +242,10 @@ Resources:
                   StringLike:
                     aws:ResourceTag/AWSServiceName: ChimeSDK
               - Action:
-                - lambda:InvokeFunction
-                - lambda:GetPolicy
+                  - lambda:InvokeFunction
+                  - lambda:GetPolicy
                 Effect: Allow
-                Resource: 
+                Resource:
                   - !GetAtt VoiceToneLambda.Arn
 
   ##########################################################################
@@ -295,27 +293,26 @@ Resources:
       Policies:
         - Version: '2012-10-17'
           Statement:
-          - Effect: Allow
-            Action:
-              - chime:DeleteVoiceConnectorStreamingConfiguration
-              - chime:GetVoiceConnectorStreamingConfiguration
-              - chime:PutVoiceConnectorStreamingConfiguration
-              - chime:CreateMediaInsightsPipelineConfiguration
-              - chime:DeleteMediaInsightsPipelineConfiguration
-              - chime:UpdateMediaInsightsPipelineConfiguration
-              - chime:GetMediaInsightsPipelineConfiguration
-              - chime:ListMediaInsightsPipelineConfigurations
-              - chime:GetMediaInsightsPipelineConfiguration
-            Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:*
-          - Effect: Allow
-            Action: chime:ListVoiceConnectors
-            Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:vc/*
-          - Effect: Allow
-            Action: kinesis:DescribeStream
-            Resource: !Ref KinesisDataStreamArn
-          - Effect: Allow
-            Action: iam:PassRole
-            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:*
+            - Effect: Allow
+              Action:
+                - chime:DeleteVoiceConnectorStreamingConfiguration
+                - chime:GetVoiceConnectorStreamingConfiguration
+                - chime:PutVoiceConnectorStreamingConfiguration
+                - chime:CreateMediaInsightsPipelineConfiguration
+                - chime:DeleteMediaInsightsPipelineConfiguration
+                - chime:UpdateMediaInsightsPipelineConfiguration
+                - chime:ListMediaInsightsPipelineConfigurations
+                - chime:GetMediaInsightsPipelineConfiguration
+              Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:*
+            - Effect: Allow
+              Action: chime:ListVoiceConnectors
+              Resource: !Sub arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:vc/*
+            - Effect: Allow
+              Action: kinesis:DescribeStream
+              Resource: !Ref KinesisDataStreamArn
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:*
       Handler: index.lambda_handler
       Runtime: python3.8
       Timeout: 300
@@ -325,24 +322,23 @@ Resources:
         import cfnresponse
         import uuid
         import traceback
-        
+
         responseData = {}
-        
+
         voiceClient = boto3.client('chime-sdk-voice')
         mediaPipelineClient = boto3.client('chime-sdk-media-pipelines')
         cloudformation = boto3.resource("cloudformation")
-        
+
         def is_valid_uuid(value):
           try:
             uuid.UUID(str(value))
-        
+
             return True
           except ValueError:
             return False
-        
+
         def delete_pipeline_config(event):
           id = event.get('PhysicalResourceId','')
-
           try:
             transcribePipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-ts-' + id
             mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=transcribePipelineConfigName)
@@ -361,7 +357,7 @@ Resources:
         
         def generate_voice_analytics_config(event, pipelineConfigName, resourceAccessRoleArn ):
           elements = []
-        
+
           # configure kds
           kdsArn = event['ResourceProperties'].get('KinesisStreamArn', '')
           kds = {
@@ -460,7 +456,7 @@ Resources:
           print("Media pipeline configuration")
           print(json.dumps(elements))
           return elements
-        
+
         def update_media_pipeline_config(event):
           id = event.get('PhysicalResourceId')
           resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
@@ -519,7 +515,7 @@ Resources:
             'ConfigArn': transcribeResponse['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
             'PhysicalResourceId': id
           }
-        
+
         def create_media_pipeline_config(event):
           print('creating media pipeline configuration')
           id = str(uuid.uuid4())
@@ -554,8 +550,7 @@ Resources:
             'ConfigArn': transcribeResponse['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
             'PhysicalResourceId': id
           }
-        
-        
+
         def get_vc_configuration(event):
           voiceConnectorId = event['ResourceProperties']['VoiceConnectorId']
           print(f"Getting existing configuration... {voiceConnectorId}")
@@ -614,7 +609,7 @@ Resources:
             )
           print(response)
           return response
-        
+
         def lambda_handler(event, context):
           print(event)
           responseData = {
@@ -639,8 +634,6 @@ Resources:
             error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
             print(error)
             cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )
-      
-
 
   ##########################################################################
   # Voice Tone Lambda Function
@@ -652,7 +645,7 @@ Resources:
       Architectures:
         - x86_64
       Description: >-
-        AWS Lambda Function that will accept events from Chime Call Analytics voice
+        AWS Lambda Function that will accept events from Amazon Chime SDK Call Analytics voice
         tone analysis, modify them for use for LCA, and save them to the LCA Kinesis Data Streams
         as a voice tone analysis
       Runtime: python3.8
@@ -696,7 +689,7 @@ Resources:
                   - chime:StopVoiceToneAnalysisTask
                   - chime:StartSpeakerSearchTask
                   - chime:StopSpeakerSearchTask
-                Resource: "*"
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -717,7 +710,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref KinesisDataStreamArn
 
   ##########################################################################
@@ -758,12 +751,12 @@ Resources:
         - arm64
       Description: >-
         AWS Lambda Function that will be triggered when a new call starts. This will
-        initialize the Chime Call Analytics Media Pipeline.
+        initialize the Amazon Chime SDK Call Analytics Media Pipeline.
       Handler: index.handler
       Layers:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+        - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2'
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallAnalyticsInitFunctionRole.Arn
       Runtime: nodejs18.x
@@ -776,8 +769,8 @@ Resources:
           CHIME_MEDIAPIPELINE_CONFIG_ARN: !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
           LCA_STACK_NAME: !Ref LCAStackName
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
-          BUFFER_SIZE: "128"
-          LAMBDA_INVOKE_TIMEOUT: "720000"
+          BUFFER_SIZE: '128'
+          LAMBDA_INVOKE_TIMEOUT: '720000'
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
@@ -838,7 +831,7 @@ Resources:
                   - chime:CreateMediaInsightsPipeline
                 Resource:
                   - !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
-                  - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
+                  - !Sub 'arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*'
               - Effect: Allow
                 Action:
                   - chime:StartVoiceToneAnalysisTask
@@ -847,7 +840,7 @@ Resources:
                 Action:
                   - chime:GetMediaPipeline
                 Resource:
-                  - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
+                  - !Sub 'arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*'
               - Effect: Allow
                 Action:
                   - transcribe:DeleteTranscriptionJob
@@ -858,13 +851,13 @@ Resources:
                   - transcribe:StartStreamTranscription
                   - transcribe:StartCallAnalyticsStreamTranscription
                   - transcribe:StartTranscriptionJob
-                Resource: "*"
+                Resource: '*'
               - Action:
-                  - "kinesisvideo:Describe*"
-                  - "kinesisvideo:Get*"
-                  - "kinesisvideo:List*"
-                Effect: "Allow"
-                Resource: "*"
+                  - 'kinesisvideo:Describe*'
+                  - 'kinesisvideo:Get*'
+                  - 'kinesisvideo:List*'
+                Effect: 'Allow'
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -885,7 +878,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref KinesisDataStreamArn
               - Effect: Allow
                 Action:
@@ -895,17 +888,17 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub
-                    - "arn:aws:s3:::${bucket}"
+                    - 'arn:aws:s3:::${bucket}'
                     - bucket: !Ref S3BucketName
                   - !Sub
-                    - "arn:aws:s3:::${bucket}/*"
+                    - 'arn:aws:s3:::${bucket}/*'
                     - bucket: !Ref S3BucketName
               - !If
                 - ShouldEnableLambdaHook
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
-                  Resource: !Sub "${SiprecLambdaHookFunctionArn}"
+                  Resource: !Sub '${SiprecLambdaHookFunctionArn}'
                 - Ref: AWS::NoValue
 
   TcaDataAccessRole:
@@ -934,11 +927,11 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub
-                    - "arn:aws:s3:::${bucket}"
+                    - 'arn:aws:s3:::${bucket}'
                     - bucket: !Ref S3BucketName
                   - !Sub
-                    - "arn:aws:s3:::${bucket}/*"
-                    - bucket: !Ref S3BucketName          
+                    - 'arn:aws:s3:::${bucket}/*'
+                    - bucket: !Ref S3BucketName
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -951,10 +944,10 @@ Resources:
   ##########################################################################
 
   AllowEventBridgeToCallAnalyticsInitFunctionLambdaFromChimeVC:
-    Type: "AWS::Lambda::Permission"
+    Type: 'AWS::Lambda::Permission'
     Properties:
       FunctionName: !Ref CallAnalyticsInitFunction
-      Action: "lambda:InvokeFunction"
+      Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromChimeVC.Arn
       SourceAccount: !Ref AWS::AccountId
@@ -962,25 +955,25 @@ Resources:
   EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromChimeVC:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered when the ChimeVC streaming status changes"
+      Description: 'This rule is triggered when the ChimeVC streaming status changes'
       EventPattern:
         detail:
           voiceConnectorId:
             - !Ref VoiceConnectorId
         detail-type:
-          - "Chime VoiceConnector Streaming Status"
+          - 'Chime VoiceConnector Streaming Status'
         source:
           - aws.chime
       Targets:
         - Id: CallAnalyticsInitTarget
           Arn: !GetAtt CallAnalyticsInitFunction.Arn
-      State: "ENABLED"
+      State: 'ENABLED'
 
   AllowEventBridgeToCallAnalyticsInitFunctionLambdFromIVR:
-    Type: "AWS::Lambda::Permission"
+    Type: 'AWS::Lambda::Permission'
     Properties:
       FunctionName: !Ref CallAnalyticsInitFunction
-      Action: "lambda:InvokeFunction"
+      Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromIVR.Arn
       SourceAccount: !Ref AWS::AccountId
@@ -988,16 +981,16 @@ Resources:
   EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromIVR:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR"
+      Description: 'This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR'
       EventPattern:
         detail-type:
-          - "START_CALL_PROCESSING"
+          - 'START_CALL_PROCESSING'
         source:
           - lca-solution
       Targets:
         - Id: CallAnalyticsInitTarget
           Arn: !GetAtt CallAnalyticsInitFunction.Arn
-      State: "ENABLED"
+      State: 'ENABLED'
 
   # Permission for Call Transcriber to invoke itself
   CallAnalyticsInitPermission:
@@ -1008,7 +1001,7 @@ Resources:
       Principal: !GetAtt CallAnalyticsInitFunctionRole.Arn
 
 Metadata:
-  "AWS::CloudFormation::Interface":
+  'AWS::CloudFormation::Interface':
     ParameterGroups:
       - Label:
           default: Amazon S3 Configuration
@@ -1031,22 +1024,21 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
-      
+
 Conditions:
   ShouldEnableContentRedaction: !And
-  - !Equals [!Ref IsContentRedactionEnabled, 'true']
-  - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
   ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
 
 Outputs:
-
   CallTranscriberEventTableName:
     Value: !Ref TranscriberCallEventTable
 
   CallTranscriberEventTableArn:
     Value: !GetAtt TranscriberCallEventTable.Arn
 
-  IsContentRedactionEnabled: 
+  IsContentRedactionEnabled:
     Value: !If
       - ShouldEnableContentRedaction
       - 'true'

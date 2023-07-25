@@ -1,7 +1,7 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector Call Transcriber Lambda
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Voice Connector Call Transcriber Lambda
 
 Parameters:
   AudioFilePrefix:
@@ -34,10 +34,10 @@ Parameters:
     Type: String
     Default: analytics
     AllowedValues:
-        - standard
-        - analytics
+      - standard
+      - analytics
     Description: Set the default operational mode for Transcribe
-    
+
   IsPartialTranscriptEnabled:
     Type: String
     Default: 'true'
@@ -50,13 +50,13 @@ Parameters:
 
   IsContentRedactionEnabled:
     Type: String
-    Default: "false"
+    Default: 'false'
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
       the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
-      - "true"
-      - "false"
+      - 'true'
+      - 'false'
 
   TranscribeContentRedactionType:
     Type: String
@@ -116,7 +116,7 @@ Parameters:
     Description: >
       (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
       If present, the specified Lambda function is invoked at the start of each call. 
-      The call start event from Chime Voice Connector (containing Siprec headers) is provided as input.
+      The call start event from Amazon Chime SDK Voice Connector (containing SIPREC headers) is provided as input.
       The function must return a True/False flag to indicate if the call should be processed or ignored, 
       a mapped CallId, an AgentId, and may be extended to support additional features in future.
 
@@ -124,8 +124,8 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      Voice connector Id for setting up EventBridge Rule to restrict events to specific Chime Voice Connector.
-        
+      Voice connector Id for setting up EventBridge Rule to restrict events to specific Amazon Chime SDK Voice Connector.
+
 Resources:
   ##########################################################################
   # NodeJS Transcriber Lambda Layer
@@ -138,10 +138,9 @@ Resources:
         - nodejs16.x
         - nodejs18.x
       Description: >
-       This is a layer with shared nodejs libraries for the LCA call transcriber 
-       and call analytics initialization Lambdas.
-      ContentUri:
-        ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
+        This is a layer with shared nodejs libraries for the LCA call transcriber 
+        and call analytics initialization Lambdas.
+      ContentUri: ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
 
   ##########################################################################
   # Call Transcriber
@@ -173,7 +172,7 @@ Resources:
         Enabled: true
       StreamSpecification:
         StreamViewType: NEW_IMAGE
-  
+
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -187,7 +186,7 @@ Resources:
       Layers:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+        - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2'
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallTranscriberFunctionRole.Arn
       Runtime: nodejs14.x
@@ -197,8 +196,8 @@ Resources:
       Environment:
         Variables:
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
-          BUFFER_SIZE: "128"
-          LAMBDA_INVOKE_TIMEOUT: "720000"
+          BUFFER_SIZE: '128'
+          LAMBDA_INVOKE_TIMEOUT: '720000'
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
@@ -264,13 +263,13 @@ Resources:
                   - transcribe:StartStreamTranscription
                   - transcribe:StartCallAnalyticsStreamTranscription
                   - transcribe:StartTranscriptionJob
-                Resource: "*"
+                Resource: '*'
               - Action:
-                  - "kinesisvideo:Describe*"
-                  - "kinesisvideo:Get*"
-                  - "kinesisvideo:List*"
-                Effect: "Allow"
-                Resource: "*"
+                  - 'kinesisvideo:Describe*'
+                  - 'kinesisvideo:Get*'
+                  - 'kinesisvideo:List*'
+                Effect: 'Allow'
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -291,7 +290,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref KinesisDataStreamArn
               - Effect: Allow
                 Action:
@@ -301,17 +300,17 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub
-                    - "arn:aws:s3:::${bucket}"
+                    - 'arn:aws:s3:::${bucket}'
                     - bucket: !Ref S3BucketName
                   - !Sub
-                    - "arn:aws:s3:::${bucket}/*"
+                    - 'arn:aws:s3:::${bucket}/*'
                     - bucket: !Ref S3BucketName
               - !If
                 - ShouldEnableLambdaHook
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
-                  Resource: !Sub "${SiprecLambdaHookFunctionArn}"
+                  Resource: !Sub '${SiprecLambdaHookFunctionArn}'
                 - Ref: AWS::NoValue
 
   TcaDataAccessRole:
@@ -340,11 +339,11 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub
-                    - "arn:aws:s3:::${bucket}"
+                    - 'arn:aws:s3:::${bucket}'
                     - bucket: !Ref S3BucketName
                   - !Sub
-                    - "arn:aws:s3:::${bucket}/*"
-                    - bucket: !Ref S3BucketName          
+                    - 'arn:aws:s3:::${bucket}/*'
+                    - bucket: !Ref S3BucketName
 
     Metadata:
       cfn_nag:
@@ -354,10 +353,10 @@ Resources:
               Transcribe does not support resource-level permissions and KVS streams are dynamic
 
   AllowEventBridgeToCallTranscriberFunctionLambdaFromChimeVC:
-    Type: "AWS::Lambda::Permission"
+    Type: 'AWS::Lambda::Permission'
     Properties:
       FunctionName: !Ref CallTranscriberFunction
-      Action: "lambda:InvokeFunction"
+      Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC.Arn
       SourceAccount: !Ref AWS::AccountId
@@ -365,25 +364,25 @@ Resources:
   EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered when the ChimeVC streaming status changes"
+      Description: 'This rule is triggered when the ChimeVC streaming status changes'
       EventPattern:
         detail:
           voiceConnectorId:
             - !Ref VoiceConnectorId
         detail-type:
-          - "Chime VoiceConnector Streaming Status"
+          - 'Chime VoiceConnector Streaming Status'
         source:
           - aws.chime
       Targets:
         - Id: CallTranscriberTarget
           Arn: !GetAtt CallTranscriberFunction.Arn
-      State: "ENABLED"
+      State: 'ENABLED'
 
   AllowEventBridgeToCallTranscriberFunctionLambdFromIVR:
-    Type: "AWS::Lambda::Permission"
+    Type: 'AWS::Lambda::Permission'
     Properties:
       FunctionName: !Ref CallTranscriberFunction
-      Action: "lambda:InvokeFunction"
+      Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR.Arn
       SourceAccount: !Ref AWS::AccountId
@@ -391,16 +390,16 @@ Resources:
   EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR"
+      Description: 'This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR'
       EventPattern:
         detail-type:
-          - "START_CALL_PROCESSING"
+          - 'START_CALL_PROCESSING'
         source:
           - lca-solution
       Targets:
         - Id: CallTranscriberTarget
           Arn: !GetAtt CallTranscriberFunction.Arn
-      State: "ENABLED"
+      State: 'ENABLED'
 
   # Permission for Call Transcriber to invoke itself
   CallTranscriberPermission:
@@ -411,7 +410,7 @@ Resources:
       Principal: !GetAtt CallTranscriberFunctionRole.Arn
 
 Metadata:
-  "AWS::CloudFormation::Interface":
+  'AWS::CloudFormation::Interface':
     ParameterGroups:
       - Label:
           default: Amazon S3 Configuration
@@ -434,22 +433,21 @@ Metadata:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
         default: Transcription Custom Vocabulary Name
-      
+
 Conditions:
   ShouldEnableContentRedaction: !And
-  - !Equals [!Ref IsContentRedactionEnabled, 'true']
-  - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
   ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
 
 Outputs:
-
   CallTranscriberEventTableName:
     Value: !Ref TranscriberCallEventTable
 
   CallTranscriberEventTableArn:
     Value: !GetAtt TranscriberCallEventTable.Arn
 
-  IsContentRedactionEnabled: 
+  IsContentRedactionEnabled:
     Value: !If
       - ShouldEnableContentRedaction
       - 'true'
