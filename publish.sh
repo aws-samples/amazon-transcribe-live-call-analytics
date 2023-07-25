@@ -102,6 +102,7 @@ cp -v ./patches/qnabot/Makefile $dir/Makefile
 echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
 sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
 pushd $dir
+rm -fr ./ml_model/llm-qa-summarize # remove deleted folder if left over from previous build.
 mkdir -p build/templates/dev
 cat > config.json <<_EOF
 {

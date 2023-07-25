@@ -11,6 +11,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@aws-sdk/client-chime-sdk-media-pipelines": "^3.312.0",
+    "@aws-sdk/client-chime-sdk-voice": "^3.312.0",
     "@aws-sdk/client-dynamodb": "^3.312.0",
     "@aws-sdk/client-eventbridge": "^3.312.0",
     "@aws-sdk/client-kinesis": "^3.312.0",

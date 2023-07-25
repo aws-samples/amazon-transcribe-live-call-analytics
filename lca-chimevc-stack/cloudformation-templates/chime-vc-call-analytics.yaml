@@ -250,6 +250,7 @@ Resources:
 
   ##########################################################################
   # Custom resource to apply config to VoiceConnector
+  # Increment CustomResourceVersion when making changes to CreateMediaPipelineConfigForVCFunction
   ##########################################################################
 
   CreateMediaPipelineConfigForVC:
@@ -282,6 +283,7 @@ Resources:
       PiiEntityTypes: !Ref TranscribePiiEntityTypes
       CustomVocabularyName: !Ref CustomVocabularyName
       CustomLanguageModelName: !Ref CustomLanguageModelName
+      CustomResourceVersion: '1.1'
 
   CreateMediaPipelineConfigForVCFunction:
     Type: AWS::Serverless::Function
@@ -337,26 +339,23 @@ Resources:
 
         def delete_pipeline_config(event):
           id = event.get('PhysicalResourceId','')
-          pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
-          result = mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
-          return {'PhysicalResourceId': id}
-
-        def find_media_pipeline_config(event):
-          print('finding media pipeline')
           try:
-            id = event.get('PhysicalResourceId','')
-            pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
-            response = mediaPipelineClient.get_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
-            return {
-              'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
-              'PhysicalResourceId': id
-            }
+            transcribePipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-ts-' + id
+            mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=transcribePipelineConfigName)
           except Exception as e:
-            error = f'Exception thrown: {e}.'
+            error = f'Error deleting transcribe media insight pipeline config: {e}.'
             print(error)
-            return None
 
-        def generate_config(event, pipelineConfigName, resourceAccessRoleArn ):
+          try:
+            voiceAnalyticsPipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
+            mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=voiceAnalyticsPipelineConfigName)
+          except Exception as e:
+            error = f'Error deleting voice analytics media insight pipeline config: {e}.'
+            print(error)
+        
+          return {'PhysicalResourceId': id}
+        
+        def generate_voice_analytics_config(event, pipelineConfigName, resourceAccessRoleArn ):
           elements = []
 
           # configure kds
@@ -368,7 +367,45 @@ Resources:
               }
           }
           elements.append(kds)
-          
+        
+          # configure lambda sink
+          lambdaSinkArn = event['ResourceProperties'].get('LambdaSinkArn', '')
+          lambdaSink = {
+            "Type": "LambdaFunctionSink",
+            "LambdaFunctionSinkConfiguration": {
+              "InsightsTarget": lambdaSinkArn
+            }
+          }
+          elements.append(lambdaSink)
+        
+          # configure voice analytics
+          enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalysis', '')
+          enableSpeakerSearch = event['ResourceProperties'].get('EnableSpeakerSearch', '')
+          voiceAnalytics =  {
+            "Type": "VoiceAnalyticsProcessor",
+            "VoiceAnalyticsProcessorConfiguration": {
+              "VoiceToneAnalysisStatus": 'Enabled' if enableVoiceToneAnalysis == 'true' else 'Disabled',
+              "SpeakerSearchStatus": 'Enabled' if enableSpeakerSearch == 'true' else 'Disabled'
+            }
+          }
+          elements.append(voiceAnalytics)
+          print("Voice analytics configuration")
+          print(json.dumps(elements))
+          return elements
+        
+        def generate_transcribe_config(event, pipelineConfigName, resourceAccessRoleArn ):
+          elements = []
+        
+          # configure kds
+          kdsArn = event['ResourceProperties'].get('KinesisStreamArn', '')
+          kds = {
+              "Type": "KinesisDataStreamSink",
+              "KinesisDataStreamSinkConfiguration": {
+                  "InsightsTarget": kdsArn
+              }
+          }
+          elements.append(kds)
+        
           # configure transcribe
           transcribeApiMode = event['ResourceProperties'].get('TranscribeApiMode', '')
           transcribeLanguageCode = event['ResourceProperties'].get('TranscribeLanguageCode', '')
@@ -384,14 +421,14 @@ Resources:
           recordingFilePrefix = event['ResourceProperties'].get('RecordingFilePrefix', '')
           tcaDataAccessRoleArn = event['ResourceProperties'].get('TcaDataAccessRoleArn', '')
           outputLocation = "s3://%s/%s"%(outputBucket,callAnalyticsFilePrefix)
-          
+        
           if transcribeApiMode == 'analytics':
             transcribeConfig = "AmazonTranscribeCallAnalyticsProcessorConfiguration"
             transcribe = {
               "Type":"AmazonTranscribeCallAnalyticsProcessor",
-              "AmazonTranscribeCallAnalyticsProcessorConfiguration": { 
+              "AmazonTranscribeCallAnalyticsProcessorConfiguration": {
                 "LanguageCode": transcribeLanguageCode,
-                "PostCallAnalyticsSettings": { 
+                "PostCallAnalyticsSettings": {
                   "DataAccessRoleArn": tcaDataAccessRoleArn,
                   "OutputLocation": outputLocation
                 }
@@ -415,100 +452,150 @@ Resources:
           if customVocabularyName:
             transcribe[transcribeConfig]["VocabularyName"] = customVocabularyName
           elements.append(transcribe)
-              
-          # configure lambda sink
-          lambdaSinkArn = event['ResourceProperties'].get('LambdaSinkArn', '')
-          lambdaSink = {
-            "Type": "LambdaFunctionSink",
-            "LambdaFunctionSinkConfiguration": {
-              "InsightsTarget": lambdaSinkArn
-            }
-          }
-          elements.append(lambdaSink)
-          
-          # configure voice analytics
-          enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalysis', '')
-          enableSpeakerSearch = event['ResourceProperties'].get('EnableSpeakerSearch', '')
-          voiceAnalytics =  {
-            "Type": "VoiceAnalyticsProcessor",
-            "VoiceAnalyticsProcessorConfiguration": {
-              "VoiceToneAnalysisStatus": 'Enabled' if enableVoiceToneAnalysis == 'true' else 'Disabled',
-              "SpeakerSearchStatus": 'Enabled' if enableSpeakerSearch == 'true' else 'Disabled'
-            }
-          }
-          elements.append(voiceAnalytics)
+        
+          print("Media pipeline configuration")
           print(json.dumps(elements))
           return elements
 
         def update_media_pipeline_config(event):
           id = event.get('PhysicalResourceId')
-          pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
-          print("Updating media pipeline config: ", pipelineConfigName)
           resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
-          elements = generate_config(event, pipelineConfigName, resourceAccessRoleArn)
-          response = mediaPipelineClient.update_media_insights_pipeline_configuration(
-            Identifier=pipelineConfigName,
-            ResourceAccessRoleArn=resourceAccessRoleArn,
-            RealTimeAlertConfiguration={
-              'Disabled': True
-            },
-            Elements=elements
-          )
+
+          transcribePipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-ts-' + id
+          transcribeElements = generate_transcribe_config(event, transcribePipelineConfigName, resourceAccessRoleArn)
+          transcribeMediaPipelineConfiguration = get_media_pipeline_config(transcribePipelineConfigName)
+          if transcribeMediaPipelineConfiguration is None:
+            print("Creating transcribe media pipeline config: ", transcribePipelineConfigName)
+            transcribeResponse = mediaPipelineClient.create_media_insights_pipeline_configuration(
+              MediaInsightsPipelineConfigurationName=transcribePipelineConfigName,
+              ResourceAccessRoleArn=resourceAccessRoleArn,
+              RealTimeAlertConfiguration={
+                  'Disabled': True
+              },
+              Elements=transcribeElements
+            )
+          else:
+            print("Updating transcribe media pipeline config: ", transcribePipelineConfigName)
+            transcribeResponse = mediaPipelineClient.update_media_insights_pipeline_configuration(
+              Identifier=transcribePipelineConfigName,
+              ResourceAccessRoleArn=resourceAccessRoleArn,
+        
+              RealTimeAlertConfiguration={
+                'Disabled': True
+              },
+              Elements=transcribeElements
+            )
+        
+          voiceAnalyticsPipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
+          voiceAnalyticsElements = generate_voice_analytics_config(event, voiceAnalyticsPipelineConfigName, resourceAccessRoleArn)
+          voiceAnalyticsPipelineConfiguration = get_media_pipeline_config(voiceAnalyticsPipelineConfigName)
+          if voiceAnalyticsPipelineConfiguration is None:
+            print("Creating voice analytics media pipeline config: ", voiceAnalyticsPipelineConfigName)
+            voiceAnalyticsResponse = mediaPipelineClient.create_media_insights_pipeline_configuration(
+              MediaInsightsPipelineConfigurationName=voiceAnalyticsPipelineConfigName,
+              ResourceAccessRoleArn=resourceAccessRoleArn,
+              RealTimeAlertConfiguration={
+                  'Disabled': True
+              },
+              Elements=voiceAnalyticsElements
+            )
+          else:
+            print("Updating voice analytics media pipeline config: ", voiceAnalyticsPipelineConfigName)
+            voiceAnalyticsResponse = mediaPipelineClient.update_media_insights_pipeline_configuration(
+              Identifier=voiceAnalyticsPipelineConfigName,
+              ResourceAccessRoleArn=resourceAccessRoleArn,
+              RealTimeAlertConfiguration={
+                'Disabled': True
+              },
+              Elements=voiceAnalyticsElements
+            )
+        
           return {
-            'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'], 
+            'VoiceAnalyticsConfigArn': voiceAnalyticsResponse['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
+            'ConfigArn': transcribeResponse['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
             'PhysicalResourceId': id
           }
 
         def create_media_pipeline_config(event):
           print('creating media pipeline configuration')
           id = str(uuid.uuid4())
-          pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id 
           resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
-
-          elements = generate_config(event, pipelineConfigName, resourceAccessRoleArn)
-          
-          response = mediaPipelineClient.create_media_insights_pipeline_configuration(
-            MediaInsightsPipelineConfigurationName=pipelineConfigName,
+        
+          transcribePipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-ts-' + id
+          transcribeElements = generate_transcribe_config(event, transcribePipelineConfigName, resourceAccessRoleArn)
+          print("Creating transcribe media pipeline config: ", transcribePipelineConfigName)
+          transcribeResponse = mediaPipelineClient.create_media_insights_pipeline_configuration(
+            MediaInsightsPipelineConfigurationName=transcribePipelineConfigName,
             ResourceAccessRoleArn=resourceAccessRoleArn,
             RealTimeAlertConfiguration={
               'Disabled': True
             },
-            Elements=elements
+            Elements=transcribeElements
           )
-          
+        
+          voiceAnalyticsPipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
+          voiceAnalyticsElements = generate_voice_analytics_config(event, voiceAnalyticsPipelineConfigName, resourceAccessRoleArn)
+          print("Creating voice analytics media pipeline config: ", voiceAnalyticsPipelineConfigName)
+          voiceAnalyticsResponse = mediaPipelineClient.create_media_insights_pipeline_configuration(
+            MediaInsightsPipelineConfigurationName=voiceAnalyticsPipelineConfigName,
+            ResourceAccessRoleArn=resourceAccessRoleArn,
+            RealTimeAlertConfiguration={
+              'Disabled': True
+            },
+            Elements=voiceAnalyticsElements
+          )
+        
           return {
-            'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
+            'VoiceAnalyticsConfigArn': voiceAnalyticsResponse['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
+            'ConfigArn': transcribeResponse['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
             'PhysicalResourceId': id
           }
-          
 
         def get_vc_configuration(event):
-          voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
+          voiceConnectorId = event['ResourceProperties']['VoiceConnectorId']
           print(f"Getting existing configuration... {voiceConnectorId}")
-          
+        
           try:
             response = voiceClient.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
             streamingConfiguration = response["StreamingConfiguration"]
+            print("Voice connector streaming configuration")
             print(json.dumps(streamingConfiguration))
             return streamingConfiguration
           except Exception as e:
             error = f'Error getting voice connector streaming config: {e}.'
             print(error)
           return None
-              
+
+        def get_media_pipeline_config(pipeline_identifier):
+          print(f"Getting existing media insight pipeline config... {pipeline_identifier}")
+
+          try:
+            response = mediaPipelineClient.get_media_insights_pipeline_configuration(Identifier=pipeline_identifier)
+            mediaPipelineConfiguration = response["MediaInsightsPipelineConfiguration"]
+            print("Media insight pipeline configuration already exists")
+            return mediaPipelineConfiguration
+          except mediaPipelineClient.exceptions.NotFoundException as nfe:
+            error = f'Media insight pipeline is not found: {nfe}.'
+            print(error)
+          except Exception as e:
+            error = f'Error getting existing media pipeline config: {e}.'
+            print(error)
+          return None
+        
         def update_vc_configuration(event, config_arn, delete=False):
           print("Updating VC configuration")
-          voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
+          voiceConnectorId = event['ResourceProperties']['VoiceConnectorId']
           streamingConfiguration = get_vc_configuration(event)
-          
+        
           if streamingConfiguration is None:
             # nothing to do?
             return None
-          
+        
           if event['ResourceProperties']['EnableVoiceToneAnalysis'] == 'true' and delete == False:
             print("Enabling Voice Tone Analysis...")
             streamingConfiguration['MediaInsightsConfiguration'] = {
-              "ConfigurationArn": config_arn
+              "ConfigurationArn": config_arn,
+              "Disabled": False
             }
           else:
             print("Disabling Voice Tone Analysis/Removing Streaming Config from VC")
@@ -523,14 +610,6 @@ Resources:
           print(response)
           return response
 
-        def delete_vc_configuration(event):
-          voiceConnectorId = event['ResourceProperties']['VoiceConnectorId'] 
-          response = voiceClient.delete_voice_connector_streaming_configuration(
-            VoiceConnectorId=voiceConnectorId
-          )
-          print(response)
-          return response
-
         def lambda_handler(event, context):
           print(event)
           responseData = {
@@ -539,11 +618,11 @@ Resources:
           try:
             if event['RequestType'] == "Create":
               responseData = create_media_pipeline_config(event)
-              update_vc_configuration(event, responseData['ConfigArn'])
+              update_vc_configuration(event, responseData['VoiceAnalyticsConfigArn'])
               cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
             elif event['RequestType'] == "Update":
               responseData = update_media_pipeline_config(event)
-              update_vc_configuration(event, responseData['ConfigArn'])
+              update_vc_configuration(event, responseData['VoiceAnalyticsConfigArn'])
               cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, responseData['PhysicalResourceId'])
             else:
               update_vc_configuration(event, None, True)
@@ -753,6 +832,10 @@ Resources:
                 Resource:
                   - !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
                   - !Sub 'arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*'
+              - Effect: Allow
+                Action:
+                  - chime:StartVoiceToneAnalysisTask
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - chime:GetMediaPipeline
