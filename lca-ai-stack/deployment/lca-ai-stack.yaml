@@ -27,7 +27,7 @@ Parameters:
     Type: String
     AllowedValues:
       - Demo Asterisk PBX Server
-      -Amazon Chime SDK Voice Connector (SIPREC)
+      - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
     Description: >

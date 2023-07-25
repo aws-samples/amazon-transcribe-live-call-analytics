@@ -18,7 +18,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.3) (SO9072)
 
 Parameters:
-
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
@@ -29,7 +28,7 @@ Parameters:
       - Amazon Connect Contact Lens
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
-     Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
+      Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
       or integrate with Amazon Connect Contact Lens.
 
@@ -484,7 +483,7 @@ Parameters:
 
   RecordingsBucketRetentionDays:
     Type: Number
-    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
+    Description: 'Number of days after which bucket objects will be deleted from the Recordings bucket.'
     Default: 30
 
 Metadata:
