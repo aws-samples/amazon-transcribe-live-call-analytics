@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Voice Connector
 
 Parameters:
   UseChimeCallAnalytics:
@@ -25,7 +25,7 @@ Parameters:
       - true
       - false
     Description: >
-      Set to true to use Chime Call Analytics rather than the call transcriber Lambda.
+      Set to true to use Amazon Chime SDK Call Analytics rather than the call transcriber Lambda.
 
   EnableVoiceToneAnalysis:
     Type: String
@@ -34,8 +34,7 @@ Parameters:
       - true
       - false
     Description: >
-      Set to true to enable Chime voice tone analysis. This is only used if Chime
-      Call Analytics is enabled.
+      Set to true to enable Amazon Chime SDK voice tone analysis. This is only used if Amazon Chime SDK Call Analytics is enabled.
 
   # EnableSpeakerSearch:
   #   Type: String
@@ -53,7 +52,7 @@ Parameters:
     AllowedValues:
       - true
       - false
-    Description: Set to true to automatically install a demo Asterisk server for testing Chime Voice Connector streaming.
+    Description: Set to true to automatically install a demo Asterisk server for testing Amazon Chime SDK Voice Connector streaming.
 
   DemoSoftphoneAllowedCidr:
     Type: String
@@ -68,7 +67,7 @@ Parameters:
     AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
     Description: >
       Ignored if Install Demo Asterisk Server is true.
-      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
+      Comma delimited list of public CIDR blocks allowed by Amazon Chime SDK Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
   SiprecLambdaHookFunctionArn:
@@ -76,7 +75,7 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
-      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or
+      (Optional) Used only when CallAudioSource is set to 'Amazon Chime SDK Voice Connector (SIPREC)' or
       'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively
       choose calls to process, toggle agent/caller streams, assign AgentId, and/or modify values
       for CallId and displayed phone numbers.
@@ -221,7 +220,7 @@ Parameters:
 
   LCAStackName:
     Type: String
-    Description: Praent LCA Stack name
+    Description: Parent LCA Stack name
 
 Metadata:
   AWS::CloudFormation::Interface:

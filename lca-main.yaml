@@ -27,25 +27,25 @@ Parameters:
     Default: Demo Asterisk PBX Server
     AllowedValues:
       - Demo Asterisk PBX Server
-      - Chime Voice Connector (SIPREC)
+      - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
     Description: >
-      Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
-      Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
+      Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
+     Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
       or integrate with Amazon Connect Contact Lens.
 
   CallAudioProcessor:
     Type: String
-    Default: Call Transcriber Lambda
+    Default: Amazon Chime SDK Call Analytics
     AllowedValues:
-      - Chime Call Analytics
+      - Amazon Chime SDK Call Analytics
       - Call Transcriber Lambda
     Description: >
-      If you choose Demo Asterisk PBX Server or Chime Voice Connector (SIPREC), you can have 
-      Chime Call Analytics ingest the audio and send it to Trancribe, or use the example LCA Call 
-      Processor Lambda. Enabling Chime Call Analytics also allows you to also use Voice Analytics, 
+      If you choose Demo Asterisk PBX Server orAmazon Chime SDK Voice Connector (SIPREC), you can have 
+      Amazon Chime SDK Call Analytics ingest the audio and send it to Transcribe, or use the example LCA Call 
+      Processor Lambda. Enabling Amazon Chime SDK Call Analytics also allows you to also use Voice Analytics, 
       such as Voice Tone Analysis and Speaker Search.
 
   ChimeVoiceToneAnalysis:
@@ -55,8 +55,8 @@ Parameters:
       - Enabled
       - Disabled
     Description: >
-      Used only when a call audio source with Chime Voice Connector is selected, and 
-      Chime Call Analytics is used as a call processor.
+      Used only when a call audio source withAmazon Chime SDK Voice Connector is selected, and 
+      Amazon Chime SDK Call Analytics is used as a call processor.
       A voice analytics feature that enables you to analyze caller voices for a positive, 
       negative, or neutral tone. This is different than sentiment analysis, as it analyzes
       the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice
@@ -88,7 +88,7 @@ Parameters:
     # yamllint enable rule:line-length
     Description: >
       Ignored if Install Demo Asterisk Server is true.
-      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
+      Comma delimited list of public CIDR blocks allowed by Amazon Chime SDK Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
   ConnectInstanceArn:
@@ -701,7 +701,7 @@ Conditions:
   ShouldInstallConnectIntegrationStack:
     !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldUseChimeCallAnalytics:
-    !Equals [!Ref CallAudioProcessor, 'Chime Call Analytics']
+    !Equals [!Ref CallAudioProcessor, 'Amazon Chime SDK Call Analytics']
   ShouldEnableVoiceToneAnalysis:
     !And [
       !Condition ShouldUseChimeCallAnalytics,

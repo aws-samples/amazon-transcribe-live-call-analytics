@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector with Asterisk demo server
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Voice Connector with Asterisk demo server
 
 Parameters:
   InstanceType:
@@ -164,52 +164,52 @@ Resources:
           IpProtocol: '-1'
       SecurityGroupIngress:
         - CidrIp: 3.80.16.0/23
-          Description: Allow Chime Voice Connector Signaling Access
+          Description: Allow Amazon Chime SDK Voice Connector Signaling Access
           FromPort: 5060
           IpProtocol: udp
           ToPort: 5060
         - CidrIp: 3.80.16.0/23
-          Description: Allow Chime Voice Connector Signaling Access
+          Description: Allow Amazon Chime SDK Voice Connector Signaling Access
           FromPort: 5060
           IpProtocol: tcp
           ToPort: 5061
         - CidrIp: 99.77.253.0/24
-          Description: Allow Chime Voice Connector Signaling Access
+          Description: Allow Amazon Chime SDK Voice Connector Signaling Access
           FromPort: 5060
           IpProtocol: udp
           ToPort: 5060
         - CidrIp: 99.77.253.0/24
-          Description: Allow Chime Voice Connector Signaling Access
+          Description: Allow Amazon Chime SDK Voice Connector Signaling Access
           FromPort: 5060
           IpProtocol: tcp
           ToPort: 5061
         - CidrIp: 99.77.253.0/24
-          Description: Allow Chime Voice Connector Signaling Access
+          Description: Allow Amazon Chime SDK Voice Connector Signaling Access
           FromPort: 5000
           IpProtocol: udp
           ToPort: 65000
         - CidrIp: 3.80.16.0/23
-          Description: Allow Chime Voice Connector Media Access
+          Description: Allow Amazon Chime SDK Voice Connector Media Access
           FromPort: 5000
           IpProtocol: udp
           ToPort: 65000
         - CidrIp: 52.55.62.128/25
-          Description: Allow Chime Voice Connector Media Access
+          Description: Allow Amazon Chime SDK Voice Connector Media Access
           FromPort: 1024
           IpProtocol: udp
           ToPort: 65535
         - CidrIp: 52.55.63.0/25
-          Description: Allow Chime Voice Connector Media Access
+          Description: Allow Amazon Chime SDK Voice Connector Media Access
           FromPort: 1024
           IpProtocol: udp
           ToPort: 65535
         - CidrIp: 34.212.95.128/25
-          Description: Allow Chime Voice Connector Media Access
+          Description: Allow Amazon Chime SDK Voice Connector Media Access
           FromPort: 1024
           IpProtocol: udp
           ToPort: 65535
         - CidrIp: 34.223.21.0/25
-          Description: Allow Chime Voice Connector Media Access
+          Description: Allow Amazon Chime SDK Voice Connector Media Access
           FromPort: 1024
           IpProtocol: udp
           ToPort: 65535
