@@ -647,8 +647,8 @@ Resources:
           INSTANCE_ID=$( curl http://169.254.169.254/latest/meta-data/instance-id)
           IP=$( curl http://169.254.169.254/latest/meta-data/public-ipv4 )
           REGION=$( curl http://169.254.169.254/latest/meta-data/placement/region )
-          PHONE_NUMBER=$( aws ssm get-parameter --name /${AWS::StackName}/phoneNumber --region ${AWS::REGION} | jq -r '.Parameter.Value' )
-          VOICE_CONNECTOR=$( aws ssm get-parameter --name /${AWS::StackName}/voiceConnector --region ${AWS::REGION} | jq -r '.Parameter.Value' )
+          PHONE_NUMBER=$( aws ssm get-parameter --name /${AWS::StackName}/phoneNumber --region ${AWS::Region} | jq -r '.Parameter.Value' )
+          VOICE_CONNECTOR=$( aws ssm get-parameter --name /${AWS::StackName}/voiceConnector --region ${AWS::Region} | jq -r '.Parameter.Value' )
           curl -L ${DemoAsteriskAgentAudioURL} --output /var/lib/asterisk/sounds/agent.wav
           echo Phone Number: $PHONE_NUMBER
           echo Voice Connector: $VOICE_CONNECTOR
