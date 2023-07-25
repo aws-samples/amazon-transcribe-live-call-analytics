@@ -628,7 +628,7 @@ Resources:
           sudo apt-get install unzip asterisk python3-pip jq -y
           curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
           unzip -q  -o awscliv2.zip
-          sudo ./aws/install
+          sudo ./aws/install --update
           mkdir -p /opt/aws/
           sudo pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
           sudo ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
