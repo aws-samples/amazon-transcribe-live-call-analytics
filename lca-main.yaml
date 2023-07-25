@@ -692,7 +692,7 @@ Conditions:
   ShouldInstallDemoAsteriskServer:
     !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
   ShouldInstallChimeVCsiprec:
-    !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
+    !Equals [!Ref CallAudioSource, 'Amazon Chime SDK Voice Connector (SIPREC)']
   ShouldInstallChimeVCStack:
     !Or [
       !Condition ShouldInstallDemoAsteriskServer,
