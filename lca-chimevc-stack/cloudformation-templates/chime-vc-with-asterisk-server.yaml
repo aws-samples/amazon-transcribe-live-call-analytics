@@ -338,203 +338,192 @@ Resources:
     Properties:
       Code:
         ZipFile: |
-          import cfnresponse
           import json
-          import boto3
           import time
+          import os
           import uuid
           import urllib.parse
+          import logging
+          import cfnresponse
+          import boto3
+
+          # Set up logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
 
           chime = boto3.client('chime-sdk-voice')
-          cloudformation = boto3.resource("cloudformation")
           ssm_client = boto3.client('ssm')
 
-          def authorizeEIP (voiceConnectorId, elasticIP):
-            response = chime.put_voice_connector_origination(
-              VoiceConnectorId=voiceConnectorId,
-              Origination={
-                  'Routes': [
-                      {
-                          'Host': elasticIP,
-                          'Port': 5060,
-                          'Protocol': 'UDP',
-                          'Priority': 1,
-                          'Weight': 1
-                      },
-                  ],
-                  'Disabled': False
-              }
-            )
-            print(response)
-
-            response = chime.put_voice_connector_termination(
-              VoiceConnectorId=voiceConnectorId,
-              Termination={
-                  'CpsLimit': 1,
-                  'CallingRegions': [
-                      'US',
-                  ],
-                  'CidrAllowedList': [
-                      elasticIP + '/32',
-                  ],
-                  'Disabled': False
-              }
-            )
-            print(response)
-
-
-          def getPhoneNumber ():
-            search_response = chime.search_available_phone_numbers(
-                # AreaCode='string',
-                # City='string',
-                # Country='string',
-                State='IL',
-                # TollFreePrefix='string',
-                MaxResults=1
-            )
-            phoneNumberToOrder = search_response['E164PhoneNumbers'][0]
-            print ('Phone Number: ' + phoneNumberToOrder)
-            phone_order = chime.create_phone_number_order(
-                ProductType='VoiceConnector',
-                E164PhoneNumbers=[
-                    phoneNumberToOrder,
-                ]
-            )
-            print ('Phone Order: ' + str(phone_order))
-
-            check_phone_order = chime.get_phone_number_order(
-              PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
-            )
-            order_status = check_phone_order['PhoneNumberOrder']['Status']
-            timeout = 0
-
-            while not order_status == 'Successful':
-              timeout += 1  
-              print('Checking status: ' + str(order_status))
-              time.sleep(5)
-              check_phone_order = chime.get_phone_number_order(
-                PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
+          def create_voice_connector(phone_number):
+              logger.info("Creating voice connector...")
+              response = chime.create_voice_connector(
+                  Name='LCA-PSTN-Trunk-'+ uuid.uuid1(),
+                  AwsRegion=os.environ['AWS_REGION'],
+                  RequireEncryption=False
               )
-              print('Current Response: ' + str(check_phone_order))
-              order_status = check_phone_order['PhoneNumberOrder']['Status']
-              if timeout == 15:
-                return 'Could not get phone number'
+              logger.info(response)
+              voice_connector_id = response['VoiceConnector']['VoiceConnectorId']
+              outbound_host_name = response['VoiceConnector']['OutboundHostName']
 
-            return phoneNumberToOrder
+              response = chime.associate_phone_numbers_with_voice_connector(
+                  VoiceConnectorId=voice_connector_id,
+                  E164PhoneNumbers=[phone_number],
+                  ForceAssociate=True
+              )
 
-          def createVoiceConnector (region, phoneNumber, event):
-            print("Creating voice connector...")
-            print(str(uuid.uuid1()))
-            print(region)
-            response = chime.create_voice_connector(
-                Name='LCA-Trunk' + str(uuid.uuid1()),
-                AwsRegion=region,
-                RequireEncryption=False
-            )
-                
-            voiceConnectorId = response['VoiceConnector']['VoiceConnectorId']
-            outboundHostName = response['VoiceConnector']['OutboundHostName']
-
-            response = chime.associate_phone_numbers_with_voice_connector(
-                VoiceConnectorId=voiceConnectorId,
-                E164PhoneNumbers=[
-                    phoneNumber,
-                ],
-                ForceAssociate=True
-            )
-
-            streamingConfiguration = {
-              'DataRetentionInHours': 1,
-              'Disabled': False,
-              'StreamingNotificationTargets': [
-                {
-                  'NotificationTarget': 'EventBridge'
-                },
-              ]
-            }
-            response = chime.put_voice_connector_streaming_configuration(
-              VoiceConnectorId=voiceConnectorId,
-              StreamingConfiguration=streamingConfiguration
-            )
-            print('Configuration created.')
-
-            chime.put_voice_connector_logging_configuration(
-              VoiceConnectorId=voiceConnectorId,
-              LoggingConfiguration={
-                'EnableSIPLogs': True,
-                'EnableMediaMetricLogs': True
+              streaming_configuration = {
+                  'DataRetentionInHours': 1,
+                  'Disabled': False,
+                  'StreamingNotificationTargets': [{'NotificationTarget': 'EventBridge'}],
               }
-            )
+              chime.put_voice_connector_streaming_configuration(
+                  VoiceConnectorId=voice_connector_id,
+                  StreamingConfiguration=streaming_configuration
+              )
+              logger.info('Configuration created.')
 
-            voiceConnector = { 'voiceConnectorId': voiceConnectorId, 'outboundHostName': outboundHostName, 'phoneNumber': phoneNumber}
-            return voiceConnector
+              chime.put_voice_connector_logging_configuration(
+                  VoiceConnectorId=voice_connector_id,
+                  LoggingConfiguration={
+                      'EnableSIPLogs': True,
+                      'EnableMediaMetricLogs': True
+                  }
+              )
+              response_data = {'voiceConnectorId': voice_connector_id, 'outboundHostName': outbound_host_name, 'phoneNumber': phone_number}
+              return response_data
+
+          def delete_voice_connector(phone_number, voice_connector_id, stack_name):
+              logger.info('Phone Number to delete: ' + phone_number)
+              logger.info('Voice Connector to delete: ' + voice_connector_id)
+              
+              chime.disassociate_phone_numbers_from_voice_connector(
+                  VoiceConnectorId=voice_connector_id,
+                  E164PhoneNumbers=[phone_number],
+              )
+              time.sleep(10)
+              voice_connector_response = chime.delete_voice_connector(VoiceConnectorId=voice_connector_id)
+              parsed_number = urllib.parse.quote_plus(phone_number)
+              time.sleep(10)
+              phone_number_response = chime.delete_phone_number(PhoneNumberId=parsed_number)
+              delete_ssm('voiceConnector', stack_name)
+              delete_ssm('phoneNumber', stack_name)
+              response_data = {'delete_vc': voice_connector_response, 'delete_phone_number': phone_number_response}
+              return response_data
+
+          def put_ssm(value, parameter, stack_name):
+              parameter_name = '/' + stack_name + '/' + parameter
+              ssm_client.put_parameter(
+                  Name=parameter_name,
+                  Value=value,
+                  Type='String',
+                  Overwrite=True
+              )
+
+          def get_ssm(parameter, stack_name):
+              parameter_name = '/' + stack_name + '/' + parameter
+              parameter_value = ssm_client.get_parameter(Name=parameter_name)
+              return parameter_value['Parameter']['Value']
+
+          def delete_ssm(parameter, stack_name):
+              parameter_name = '/' + stack_name + '/' + parameter
+              ssm_client.delete_parameter(Name=parameter_name)
+
+          def authorize_eip(voice_connector_id, elastic_ip):
+              response = chime.put_voice_connector_origination(
+                  VoiceConnectorId=voice_connector_id,
+                  Origination={
+                      'Routes': [
+                          {
+                              'Host': elastic_ip,
+                              'Port': 5060,
+                              'Protocol': 'UDP',
+                              'Priority': 1,
+                              'Weight': 1
+                          },
+                      ],
+                      'Disabled': False
+                  }
+              )
+              logger.info(response)
+
+              response = chime.put_voice_connector_termination(
+                  VoiceConnectorId=voice_connector_id,
+                  Termination={
+                      'CpsLimit': 1,
+                      'CallingRegions': ['US'],
+                      'CidrAllowedList': [f'{elastic_ip}/32'],
+                      'Disabled': False
+                  }
+              )
+              logger.info(response)
+
+          def get_phone_number():
+              search_response = chime.search_available_phone_numbers(
+                  State='IL',
+                  MaxResults=1
+              )
+              phone_number_to_order = search_response['E164PhoneNumbers'][0]
+              logger.info('Phone Number: ' + phone_number_to_order)
+              phone_order = chime.create_phone_number_order(
+                  ProductType='VoiceConnector',
+                  E164PhoneNumbers=[phone_number_to_order],
+              )
+              logger.info('Phone Order: ' + str(phone_order))
+
+              check_phone_order = chime.get_phone_number_order(
+                  PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
+              )
+              order_status = check_phone_order['PhoneNumberOrder']['Status']
+              timeout = 0
+
+              while not order_status == 'Successful':
+                  timeout += 1
+                  logger.info('Checking status: ' + str(order_status))
+                  time.sleep(5)
+                  check_phone_order = chime.get_phone_number_order(
+                      PhoneNumberOrderId=phone_order['PhoneNumberOrder']['PhoneNumberOrderId']
+                  )
+                  logger.info('Current Response: ' + str(check_phone_order))
+                  order_status = check_phone_order['PhoneNumberOrder']['Status']
+                  if timeout == 15:
+                      return 'Could not get phone number'
+              return phone_number_to_order
+
+
 
           def handler(event, context):
-              print(json.dumps(event))
+              logger.info(json.dumps(event))
               stack_name = event["ResourceProperties"]["stackName"]
-              phone_number_parameter = '/' + stack_name + '/phoneNumber'
-              voice_connector_parameter = '/' + stack_name + '/voiceConnector'
-              print('Phone Number Parameter: ' + phone_number_parameter)
-              print('Voice Connector Parameter: ' + voice_connector_parameter)
+              physical_id = 'VoiceConnectorResources'
               if event['RequestType'] == 'Create':
-                  try:              
-                    physical_id = 'VoiceConnectorResources'
-                    region = event['ResourceProperties']['region']
-                    elasticIP = event['ResourceProperties']['eip']
-                    newPhoneNumber = getPhoneNumber()
-                    voiceConnector = createVoiceConnector(region, newPhoneNumber, event)
-                    authorizeEIP(voiceConnector['voiceConnectorId'], elasticIP)
-                    ssm_client.put_parameter(
-                      Name=phone_number_parameter,
-                      Value=newPhoneNumber,
-                      Type='String',
-                      Overwrite=True
-                    )
-                    ssm_client.put_parameter(
-                      Name=voice_connector_parameter,
-                      Value=voiceConnector['voiceConnectorId'],
-                      Type='String',
-                      Overwrite=True
-                    )
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, voiceConnector, physical_id)
+                  logger.info('Create Request')
+                  try:
+
+                      elastic_ip = event['ResourceProperties']['eip']
+                      phone_number = get_phone_number()
+                      voice_connector = create_voice_connector(phone_number)
+                      authorize_eip(voice_connector['voiceConnectorId'], elastic_ip)
+                      put_ssm(voice_connector['voiceConnectorId'], 'voiceConnector', stack_name)
+                      put_ssm(phone_number, 'phoneNumber', stack_name)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, voice_connector, physical_id)
                   except Exception as e:
-                    error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
-                    print(error)
-                    # print(e.Message)
-                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )                    
+                      error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                      logger.error(error)
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error)
               elif event['RequestType'] == 'Delete':
-                  try:              
-                    physical_id = 'VoiceConnectorResources'
-                    phone_number = ssm_client.get_parameter(Name=phone_number_parameter)['Parameter']['Value']
-                    voice_connector = ssm_client.get_parameter(Name=voice_connector_parameter)['Parameter']['Value']
-                    print('Phone Number to delete: ' + phone_number)
-                    print('Voice Connector to delete: ' + voice_connector)
-                    chime.disassociate_phone_numbers_from_voice_connector(
-                        VoiceConnectorId=voice_connector,
-                        E164PhoneNumbers=[
-                            phone_number,
-                        ]
-                    )
-                    time.sleep(10)
-                    response = {}
-                    response['delete_vc'] = chime.delete_voice_connector(VoiceConnectorId=voice_connector)
-                    parsed_number = urllib.parse.quote_plus(phone_number)
-                    time.sleep(10)
-                    response['delete_phone'] = chime.delete_phone_number(PhoneNumberId=parsed_number)
-                    ssm_client.delete_parameter(
-                      Name=phone_number_parameter,
-                    )
-                    ssm_client.delete_parameter(
-                      Name=voice_connector_parameter,
-                    )
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physical_id)
+                  logger.info('Delete Request')
+                  try:
+                      phone_number = get_ssm('phoneNumber', stack_name)
+                      voice_connector = get_ssm('voiceConnector', stack_name)
+                      response = delete_voice_connector(phone_number, voice_connector, stack_name)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physical_id)
                   except Exception as e:
-                    error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
-                    print(error)
-                    cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error )                      
+                      error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                      logger.error(error)
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error)
               else:
-                  responseData = {'Message': 'Update is no-op. Returning success status.'}
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                  response_data = {'Message': 'Update is no-op. Returning success status.'}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
       Role:
         Fn::GetAtt:
           - createChimeLambdaRole
