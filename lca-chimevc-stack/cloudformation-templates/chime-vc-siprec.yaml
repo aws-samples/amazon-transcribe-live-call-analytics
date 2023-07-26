@@ -125,11 +125,11 @@ Resources:
               )
               logger.info('Configuration created.')
               
-              if 'SiprecAllowedCidrLists' in event['ResourceProperties']:
+              if 'SiprecAllowedCidrList' in event['ResourceProperties']:
                   params = {
                       'CpsLimit': 1,
                       'CallingRegions': ['US'],
-                      'CidrAllowedList': event['ResourceProperties']['SiprecAllowedCidrLists'],
+                      'CidrAllowedList': event['ResourceProperties']['SiprecAllowedCidrList'],
                       'Disabled': False
                   }
                   logger.info(params)
@@ -208,19 +208,15 @@ Resources:
       ServiceToken: !GetAtt CreateVCFunction.Arn
       stackName:
         Ref: AWS::StackName
-      SiprecAllowedCidrLists:
-        !If [
-          SiprecAllowedCidrListExists,
-          !Ref SiprecAllowedCidrList,
-          !Ref 'AWS::NoValue',
-        ]
+      SiprecAllowedCidrList:
+        !If [CIDRBlockExists, !Ref SiprecAllowedCidrList, !Ref 'AWS::NoValue']
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
 Conditions:
-  SiprecAllowedCidrListExists: !Not
+  CIDRBlockExists: !Not
     - !Equals
-      - !Join ['', !Ref SiprecAllowedCidrLists]
+      - !Join ['', !Ref SiprecAllowedCidrList]
       - ''
 
 Outputs:
