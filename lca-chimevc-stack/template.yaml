@@ -268,7 +268,7 @@ Resources:
     Properties:
       TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
       Parameters:
-        CidrBlocks: !Ref SiprecAllowedCidrList
+        SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
 
   DeployCallTranscriber:
     Type: AWS::CloudFormation::Stack
