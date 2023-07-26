@@ -14,23 +14,25 @@
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
 if ! [ -x "$(command -v docker)" ]; then
-  echo 'Error: docker is not running.' >&2
+  echo 'Error: docker is not running and required.' >&2
+  echo 'Install: https://docs.docker.com/engine/install/' >&2
   exit 1
 fi
 if ! [ -x "$(command -v sam)" ]; then
-  echo 'Error: sam is not installed.' >&2
+  echo 'Error: sam is not installed and required.' >&2
+  echo 'Install: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html' >&2
   exit 1
 fi
 if ! [ -x "$(command -v zip)" ]; then
-  echo 'Error: zip is not installed.' >&2
+  echo 'Error: zip is not installed and required.' >&2
   exit 1
 fi
 if ! [ -x "$(command -v pip)" ]; then
-  echo 'Error: pip is not installed.' >&2
+  echo 'Error: pip is not installed and required.' >&2
   exit 1
 fi
 if ! [ -x "$(command -v npm)" ]; then
-  echo 'Error: npm is not installed.' >&2
+  echo 'Error: npm is not installed and required.' >&2
   exit 1
 fi
 
