@@ -86,7 +86,7 @@ Resources:
       Role: !GetAtt
         - CreateVCFunctionRole
         - Arn
-      Handler: index.on_event
+      Handler: index.handler
       Runtime: python3.8
       Timeout: 300
       Code:
