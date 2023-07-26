@@ -357,7 +357,7 @@ Resources:
           def create_voice_connector(phone_number):
               logger.info("Creating voice connector...")
               response = chime.create_voice_connector(
-                  Name='LCA-PSTN-Trunk-'+ uuid.uuid1(),
+                  Name='LCA-PSTN-Trunk-'+ str(uuid.uuid1()),
                   AwsRegion=os.environ['AWS_REGION'],
                   RequireEncryption=False
               )
