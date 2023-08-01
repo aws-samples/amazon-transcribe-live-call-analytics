@@ -12,6 +12,10 @@ from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
 import boto3
 from botocore.config import Config as BotoCoreConfig
+from eventprocessor_utils import (
+    get_ttl
+)
+
 
 # pylint: enable=import-error
 LOGGER = Logger(location="%(filename)s:%(lineno)d - %(funcName)s()")
@@ -61,15 +65,22 @@ def get_call_summary(
 def write_call_summary_to_kds(
     message: Dict[str, Any]
 ):
-    callId = message.get("CallId", None)  
-    message['EventType'] = "ADD_SUMMARY"  
+    callId = message.get("CallId", None)
+    expiresAfter = message.get("ExpiresAfter", get_ttl())
+
+    new_message = dict (
+        CallId=callId,
+        EventType="ADD_SUMMARY",
+        ExpiresAfter=expiresAfter,
+        CallSummaryText=message["CallSummaryText"]
+    )
 
     if callId:
         try: 
             KINESIS_CLIENT.put_record(
                 StreamName=CALL_DATA_STREAM_NAME,
                 PartitionKey=callId,
-                Data=json.dumps(message)
+                Data=json.dumps(new_message)
             )
             LOGGER.info("Write ADD_SUMMARY event to KDS")
         except Exception as error:
