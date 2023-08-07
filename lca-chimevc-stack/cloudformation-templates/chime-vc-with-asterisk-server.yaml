@@ -364,13 +364,13 @@ Resources:
               logger.info(response)
               voice_connector_id = response['VoiceConnector']['VoiceConnectorId']
               outbound_host_name = response['VoiceConnector']['OutboundHostName']
-
+              time.sleep(10)
               response = chime.associate_phone_numbers_with_voice_connector(
                   VoiceConnectorId=voice_connector_id,
                   E164PhoneNumbers=[phone_number],
                   ForceAssociate=True
               )
-
+              time.sleep(10)
               streaming_configuration = {
                   'DataRetentionInHours': 1,
                   'Disabled': False,
