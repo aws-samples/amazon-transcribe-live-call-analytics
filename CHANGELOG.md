@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2023-08-11
+### Fixed
+- Fix issue with deploying new Chime Voice Connector if in a new AWS account
+- Fix Contact Lens summaries
+
 ## [0.8.3] - 2023-07-18
 ### Fixed
 - Fix regression issue that prevented persistence of custom metadata json in DynamoDB call record
