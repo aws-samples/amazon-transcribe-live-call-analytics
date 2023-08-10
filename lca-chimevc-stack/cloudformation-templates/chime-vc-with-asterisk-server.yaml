@@ -364,13 +364,13 @@ Resources:
               logger.info(response)
               voice_connector_id = response['VoiceConnector']['VoiceConnectorId']
               outbound_host_name = response['VoiceConnector']['OutboundHostName']
-
+              time.sleep(10)
               response = chime.associate_phone_numbers_with_voice_connector(
                   VoiceConnectorId=voice_connector_id,
                   E164PhoneNumbers=[phone_number],
                   ForceAssociate=True
               )
-
+              time.sleep(10)
               streaming_configuration = {
                   'DataRetentionInHours': 1,
                   'Disabled': False,
@@ -382,13 +382,13 @@ Resources:
               )
               logger.info('Configuration created.')
 
-              chime.put_voice_connector_logging_configuration(
-                  VoiceConnectorId=voice_connector_id,
-                  LoggingConfiguration={
-                      'EnableSIPLogs': True,
-                      'EnableMediaMetricLogs': True
-                  }
-              )
+              # chime.put_voice_connector_logging_configuration(
+              #     VoiceConnectorId=voice_connector_id,
+              #     LoggingConfiguration={
+              #         'EnableSIPLogs': True,
+              #         'EnableMediaMetricLogs': True
+              #     }
+              # )
               response_data = {'voiceConnectorId': voice_connector_id, 'outboundHostName': outbound_host_name, 'phoneNumber': phone_number}
               return response_data
 

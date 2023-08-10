@@ -138,13 +138,13 @@ Resources:
                       Termination=params
                   )
               
-              chime.put_voice_connector_logging_configuration(
-                  VoiceConnectorId=voice_connector_id,
-                  LoggingConfiguration={
-                      'EnableSIPLogs': True,
-                      'EnableMediaMetricLogs': True
-                  }
-              )
+              # chime.put_voice_connector_logging_configuration(
+              #     VoiceConnectorId=voice_connector_id,
+              #     LoggingConfiguration={
+              #         'EnableSIPLogs': True,
+              #         'EnableMediaMetricLogs': True
+              #     }
+              # )
               response_data = {'voiceConnectorId': voice_connector_id}
               return response_data
 
