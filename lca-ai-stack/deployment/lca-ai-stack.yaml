@@ -27,12 +27,12 @@ Parameters:
     Type: String
     AllowedValues:
       - Demo Asterisk PBX Server
-      - Chime Voice Connector (SIPREC)
+      - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
-      Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
+      Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       or a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center.
 
   S3BucketName:
@@ -259,7 +259,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.8.3
+    Default: 0.8.4
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket

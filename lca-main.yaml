@@ -15,36 +15,35 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.3) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.4) (SO9072)
 
 Parameters:
-
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
     AllowedValues:
       - Demo Asterisk PBX Server
-      - Chime Voice Connector (SIPREC)
+      - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
     Description: >
-      Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
-      Chime Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
+      Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
+      Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
       or integrate with Amazon Connect Contact Lens.
 
   CallAudioProcessor:
     Type: String
-    Default: Call Transcriber Lambda
+    Default: Amazon Chime SDK Call Analytics
     AllowedValues:
-      - Chime Call Analytics
+      - Amazon Chime SDK Call Analytics
       - Call Transcriber Lambda
     Description: >
-      If you choose Demo Asterisk PBX Server or Chime Voice Connector (SIPREC), you can have 
-      Chime Call Analytics ingest the audio and send it to Trancribe, or use the example LCA Call 
-      Processor Lambda. Enabling Chime Call Analytics also allows you to also use Voice Analytics, 
+      If you choose Demo Asterisk PBX Server orAmazon Chime SDK Voice Connector (SIPREC), you can have 
+      Amazon Chime SDK Call Analytics ingest the audio and send it to Transcribe, or use the example LCA Call 
+      Processor Lambda. Enabling Amazon Chime SDK Call Analytics also allows you to also use Voice Analytics, 
       such as Voice Tone Analysis and Speaker Search.
-  
+
   ChimeVoiceToneAnalysis:
     Type: String
     Default: Disabled
@@ -52,8 +51,8 @@ Parameters:
       - Enabled
       - Disabled
     Description: >
-      Used only when a call audio source with Chime Voice Connector is selected, and 
-      Chime Call Analytics is used as a call processor.
+      Used only when a call audio source withAmazon Chime SDK Voice Connector is selected, and 
+      Amazon Chime SDK Call Analytics is used as a call processor.
       A voice analytics feature that enables you to analyze caller voices for a positive, 
       negative, or neutral tone. This is different than sentiment analysis, as it analyzes
       the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice
@@ -85,7 +84,7 @@ Parameters:
     # yamllint enable rule:line-length
     Description: >
       Ignored if Install Demo Asterisk Server is true.
-      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
+      Comma delimited list of public CIDR blocks allowed by Amazon Chime SDK Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
   ConnectInstanceArn:
@@ -134,15 +133,15 @@ Parameters:
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own LexV2 bot'.
       Provide the Lex V2 *Bot Alias Id* (not name) of an existing LexV2 bot alias to be used for Agent Assist."
-  
+
   AgentAssistExistingLambdaFunctionArn:
     Default: ''
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
-      Provide the function ARN of an existing Lambda function to be used for Agent Assist." 
-  
+      Provide the function ARN of an existing Lambda function to be used for Agent Assist."
+
   # Options for QnABot Embeddings
   AgentAssistQnABotItemMatchingApi:
     Type: String
@@ -155,25 +154,29 @@ Parameters:
   AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
     Type: Number
     MinValue: 0
-    Description: 'Optional: If Item Matching Api is EMBEDDINGS SAGEMAKER, provide initial instance
-      count (ml.m5.xlarge). Set to ''0'' to enable Serverless Inference (for cold-start delay tolerant
-      deployments only).'
+    Description:
+      "Optional: If Item Matching Api is EMBEDDINGS SAGEMAKER, provide initial instance
+      count (ml.m5.xlarge). Set to '0' to enable Serverless Inference (for cold-start delay tolerant
+      deployments only)."
     Default: 1
   AgentAssistQnABotEmbeddingsLambdaArn:
     Type: String
     AllowedPattern: ^(|arn:aws:lambda:.*)$
-    Description: 'Optional: If Item Matching Api is LAMBDA, provide ARN for a Lambda function
+    Description:
+      'Optional: If Item Matching Api is LAMBDA, provide ARN for a Lambda function
       that takes JSON {"inputtext":"string"}, and returns JSON {"embedding":[...]}'
     Default: ''
   AgentAssistQnABotEmbeddingsLambdaDimensions:
     Type: Number
     MinValue: 1
-    Description: 'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
+    Description:
+      'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
       for embeddings returned by the EmbeddingsLambda function specified above.'
     Default: 4096
   AgentAssistQnABotLLMApi:
     Type: String
-    Description: Optionally enable (experimental) QnABot question disambiguation and
+    Description:
+      Optionally enable (experimental) QnABot question disambiguation and
       generative question answering using an LLM. To use a custom LAMBDA function, provide additional
       parameters below. To use a supported third party service, enter the API key below.
     AllowedValues:
@@ -183,8 +186,9 @@ Parameters:
     Default: DISABLED
   AgentAssistQnABotLLMLambdaArn:
     Type: String
-    AllowedPattern: "^(|arn:aws:lambda:.*)$"
-    Description: 'Optional: If LLMApi is LAMBDA, provide ARN for a Lambda function that
+    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    Description:
+      'Optional: If LLMApi is LAMBDA, provide ARN for a Lambda function that
       takes JSON {"prompt":"string", "settings":{key:value,..}}, and returns JSON {"generated_text":"string"}'
     Default: ''
   AgentAssistQnABotLLMThirdPartyApiKey:
@@ -206,7 +210,7 @@ Parameters:
     Type: String
     Default: lca-audio-recordings/
     Description: The Amazon S3 prefix where the audio files will be saved (must end in "/")
-  
+
   CallAnalyticsPrefix:
     Type: String
     Default: lca-call-analytics/
@@ -231,17 +235,17 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
-  
+
   TranscribeApiMode:
     Type: String
     Default: analytics
     AllowedValues:
-        - standard
-        - analytics
+      - standard
+      - analytics
     Description: >-
       Set the default API mode for Transcribe. 
       Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support 
-      call categories and alerts, call summarization, and PCA integration. 
+      call categories and alerts, call summarization, and PCA integration.
 
   CategoryAlertRegEx:
     Type: String
@@ -250,7 +254,7 @@ Parameters:
       If using the 'analytics' Transcribe API Mode, this regular expression will be used to show
       an alert in red in the web user interface if it matches a call category. This defaults to 
       matching all categories.
-    
+
   TranscribeContentRedactionType:
     Type: String
     Default: PII
@@ -307,7 +311,7 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
-  
+
   SentimentNegativeScoreThreshold:
     Type: Number
     Default: 0.9
@@ -324,7 +328,7 @@ Parameters:
     MaxValue: 1
     Description: >-
       Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1.
-      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated). 
+      Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
 
   TranscriptLambdaHookFunctionArn:
     Default: ''
@@ -333,7 +337,7 @@ Parameters:
     Description: >
       (Optional) If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each completed 
       (non-partial) transcript segment. The function can capture and/or modify the text of the transcript, for example to implement custom
-      redaction logic, profanity filtering, or custom rules to highlight patterns in the transcript. 
+      redaction logic, profanity filtering, or custom rules to highlight patterns in the transcript.
 
   TranscriptLambdaHookFunctionNonPartialOnly:
     Type: String
@@ -414,14 +418,6 @@ Parameters:
       Cognito.
     AllowedPattern: '^(|([\w-]+\.)+[\w-]{2,6}(, *([\w-]+\.)+[\w-]{2,6})*)$'
 
-
-  DemoAsteriskDownloadUrl:
-    Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
-    Description: >-
-      URL for Asterisk source distribution tar file download - see https://www.asterisk.org/. 
-      The latest tested version is: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
-
   DemoAsteriskAgentAudioURL:
     Type: String
     Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
@@ -472,8 +468,8 @@ Parameters:
   PcaWebAppURL:
     Type: String
     AllowedPattern: '^(|https:\/\/.*)$'
-    Description: (Optional) Value of PCA stack "WebAppURL". 
-  
+    Description: (Optional) Value of PCA stack "WebAppURL".
+
   PcaWebAppCallPathPrefix:
     Type: String
     Default: dashboard/parsedFiles/
@@ -487,7 +483,7 @@ Parameters:
 
   RecordingsBucketRetentionDays:
     Type: Number
-    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
+    Description: 'Number of days after which bucket objects will be deleted from the Recordings bucket.'
     Default: 30
 
 Metadata:
@@ -558,7 +554,6 @@ Metadata:
       - Label:
           default: Download locations
         Parameters:
-          - DemoAsteriskDownloadUrl
           - DemoAsteriskAgentAudioURL
       - Label:
           default: Amazon CloudFront Configuration
@@ -582,7 +577,7 @@ Metadata:
           - PcaPlaybackAudioFilePrefix
           - PcaWebAppURL
           - PcaWebAppCallPathPrefix
-  
+
     ParameterLabels:
       CallAudioProcessor:
         default: Call Audio Processor
@@ -648,8 +643,6 @@ Metadata:
         default: Transcription Custom Vocabulary Name
       CustomLanguageModelName:
         default: Transcription Custom Language Model Name
-      DemoAsteriskDownloadUrl:
-        default: Demo Asterisk Server Source Code Download URL
       DemoAsteriskAgentAudioURL:
         default: Demo Asterisk Server Agent WAV File Download URL
       IsSentimentAnalysisEnabled:
@@ -696,28 +689,66 @@ Metadata:
         default: PCA Web App Call Path Prefix
 
 Conditions:
-  ShouldInstallDemoAsteriskServer: !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
-  ShouldInstallChimeVCsiprec: !Equals [!Ref CallAudioSource, 'Chime Voice Connector (SIPREC)']
-  ShouldInstallChimeVCStack: !Or [!Condition ShouldInstallDemoAsteriskServer, !Condition ShouldInstallChimeVCsiprec]
-  ShouldInstallGenesysAudiohookStack: !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
-  ShouldInstallConnectIntegrationStack: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
-  ShouldUseChimeCallAnalytics: !Equals [!Ref CallAudioProcessor, 'Chime Call Analytics']
-  ShouldEnableVoiceToneAnalysis: !And [!Condition ShouldUseChimeCallAnalytics, !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled']]
+  ShouldInstallDemoAsteriskServer:
+    !Equals [!Ref CallAudioSource, 'Demo Asterisk PBX Server']
+  ShouldInstallChimeVCsiprec:
+    !Equals [!Ref CallAudioSource, 'Amazon Chime SDK Voice Connector (SIPREC)']
+  ShouldInstallChimeVCStack:
+    !Or [
+      !Condition ShouldInstallDemoAsteriskServer,
+      !Condition ShouldInstallChimeVCsiprec,
+    ]
+  ShouldInstallGenesysAudiohookStack:
+    !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
+  ShouldInstallConnectIntegrationStack:
+    !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+  ShouldUseChimeCallAnalytics:
+    !Equals [!Ref CallAudioProcessor, 'Amazon Chime SDK Call Analytics']
+  ShouldEnableVoiceToneAnalysis:
+    !And [
+      !Condition ShouldUseChimeCallAnalytics,
+      !Equals [!Ref ChimeVoiceToneAnalysis, 'Enabled'],
+    ]
   # ShouldEnableSpeakerSearch: !Equals [!Ref ChimeSpeakerSearch, 'Enabled']
-  
-  ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
-  ShouldEnableLambdaAgentAssist: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
-  ShouldEnableLexAgentAssist: !And [!Condition ShouldEnableAgentAssist, !Not [!Condition ShouldEnableLambdaAgentAssist]]
-  ShouldBringYourOwnBot: !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
-  ShouldInstallAWSQnaBot: !And [!Condition ShouldEnableLexAgentAssist, !Not [!Condition ShouldBringYourOwnBot]]
-  ShouldCreateKendraIndexDeveloperEdition: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with new Kendra Index (Developer Edition)']
-  ShouldCreateKendraIndexEnterpriseEdition: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with new Kendra Index (Enterprise Edition)']
-  ShouldCreateKendraIndex: !Or [!Condition ShouldCreateKendraIndexDeveloperEdition, !Condition ShouldCreateKendraIndexEnterpriseEdition]
-  ShouldUseExistingKendraIndex: !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
-  QnABotEmbeddingsApiDisabled: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'KENDRA FAQ']
-  QnABotEmbeddingsApiSageMaker: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS SAGEMAKER']
-  QnABotEmbeddingsApiLambda: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
 
+  ShouldEnableAgentAssist: !Not [!Equals [!Ref AgentAssistOption, 'Disabled']]
+  ShouldEnableLambdaAgentAssist:
+    !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
+  ShouldEnableLexAgentAssist:
+    !And [
+      !Condition ShouldEnableAgentAssist,
+      !Not [!Condition ShouldEnableLambdaAgentAssist],
+    ]
+  ShouldBringYourOwnBot:
+    !Equals [!Ref AgentAssistOption, 'Bring your own LexV2 bot']
+  ShouldInstallAWSQnaBot:
+    !And [
+      !Condition ShouldEnableLexAgentAssist,
+      !Not [!Condition ShouldBringYourOwnBot],
+    ]
+  ShouldCreateKendraIndexDeveloperEdition:
+    !Equals [
+      !Ref AgentAssistOption,
+      'QnABot on AWS with new Kendra Index (Developer Edition)',
+    ]
+  ShouldCreateKendraIndexEnterpriseEdition:
+    !Equals [
+      !Ref AgentAssistOption,
+      'QnABot on AWS with new Kendra Index (Enterprise Edition)',
+    ]
+  ShouldCreateKendraIndex:
+    !Or [
+      !Condition ShouldCreateKendraIndexDeveloperEdition,
+      !Condition ShouldCreateKendraIndexEnterpriseEdition,
+    ]
+  ShouldUseExistingKendraIndex:
+    !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
+  QnABotEmbeddingsApiDisabled:
+    !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'KENDRA FAQ']
+  QnABotEmbeddingsApiSageMaker:
+    !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS SAGEMAKER']
+  QnABotEmbeddingsApiLambda:
+    !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -781,7 +812,10 @@ Rules:
 
   AgentAssistExistingKendraIndexId:
     RuleCondition:
-      !Equals [!Ref AgentAssistOption, 'QnABot on AWS with existing Kendra Index']
+      !Equals [
+        !Ref AgentAssistOption,
+        'QnABot on AWS with existing Kendra Index',
+      ]
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingKendraIndexId, '']]
         AssertDescription: AgentAssistExistingKendraIndexId is required when AgentAssistOption is 'QnABot on AWS with existing Kendra Index'
@@ -795,42 +829,43 @@ Rules:
         AssertDescription: AgentAssistExistingLexV2BotAliasId is required when AgentAssistOption is 'Bring your own LexV2 bot'
 
   AgentAssistExistingLambdaFunctionArn:
-    RuleCondition: !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
+    RuleCondition:
+      !Equals [!Ref AgentAssistOption, 'Bring your own Lambda function']
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLambdaFunctionArn, '']]
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
 
   AgentAssistQnABotEmbeddingsExistingLambdaFunctionArn:
-    RuleCondition: !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
+    RuleCondition:
+      !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistQnABotEmbeddingsLambdaArn, '']]
         AssertDescription: AgentAssistQnABotEmbeddingsLambdaArn is required when AgentAssistQnABotItemMatchingApi is 'EMBEDDINGS LAMBDA'
 
 Resources:
-
-  # Custom resource to enforce max length of StackName - prevent downstream failures                                             
+  # Custom resource to enforce max length of StackName - prevent downstream failures
   StacknameCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
       Runtime: python3.8
       InlineCode: |
-          import cfnresponse
-          import time
-          import json
-          def handler(event, context):
-              print(json.dumps(event))
-              input = event['ResourceProperties'].get('InputString', '')
-              max_length = int(event['ResourceProperties'].get('MaxLength', 0))
-              status = cfnresponse.SUCCESS
-              reason = f"Stack Name Length under {max_length} - OK"
-              if event['RequestType'] == "Create":
-                if len(input) > max_length:
-                  status = cfnresponse.FAILED
-                  reason = f"Stack Name length too long - max length {max_length} - FAILED"
-              else:
-                print(f"Request type is {event['RequestType']} - skipping")
-              cfnresponse.send(event, context, status, {}, reason=reason) 
+        import cfnresponse
+        import time
+        import json
+        def handler(event, context):
+            print(json.dumps(event))
+            input = event['ResourceProperties'].get('InputString', '')
+            max_length = int(event['ResourceProperties'].get('MaxLength', 0))
+            status = cfnresponse.SUCCESS
+            reason = f"Stack Name Length under {max_length} - OK"
+            if event['RequestType'] == "Create":
+              if len(input) > max_length:
+                status = cfnresponse.FAILED
+                reason = f"Stack Name length too long - max length {max_length} - FAILED"
+            else:
+              print(f"Request type is {event['RequestType']} - skipping")
+            cfnresponse.send(event, context, status, {}, reason=reason)
 
   IsStacknameLengthOK:
     Type: Custom::StacknameCheck
@@ -887,7 +922,6 @@ Resources:
         LLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         LLMThirdPartyApiKey: !Ref AgentAssistQnABotLLMThirdPartyApiKey
 
-
   AISTACK:
     Type: AWS::CloudFormation::Stack
     DependsOn: IsStacknameLengthOK
@@ -921,11 +955,10 @@ Resources:
           - ShouldEnableLexAgentAssist
           - true
           - false
-        IsLambdaAgentAssistEnabled: 
-          !If
-            - ShouldEnableLambdaAgentAssist
-            - true
-            - false
+        IsLambdaAgentAssistEnabled: !If
+          - ShouldEnableLambdaAgentAssist
+          - true
+          - false
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
         DynamoDbExpirationInDays: !Ref DynamoDbExpirationInDays
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
@@ -964,7 +997,8 @@ Resources:
           - ShouldInstallAWSQnaBot
           - !GetAtt QNABOT.Outputs.LexV2BotAliasId
           - !Ref AgentAssistExistingLexV2BotAliasId
-        LexAgentAssistLocaleId: !FindInMap [
+        LexAgentAssistLocaleId:
+          !FindInMap [
             TranscribeToLexLocaleId,
             !Ref TranscribeLanguageCode,
             Value,
@@ -1020,7 +1054,7 @@ Resources:
           - ShouldEnableVoiceToneAnalysis
           - true
           - false
-        UseChimeCallAnalytics: !If 
+        UseChimeCallAnalytics: !If
           - ShouldUseChimeCallAnalytics
           - true
           - false
@@ -1030,7 +1064,6 @@ Resources:
           - false
         DemoSoftphoneAllowedCidr: !Ref DemoSoftphoneAllowedCidr
         SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
-        DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         AudioFilePrefix: !Ref AudioFilePrefix
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
@@ -1092,7 +1125,7 @@ Resources:
         CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
-        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn        
+        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
 
 Outputs:
   ApplicationCloudfrontEndpoint:
