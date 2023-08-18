@@ -114,6 +114,16 @@ pushd $dir
 aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-kendra-stack/template.yaml
 popd
 
+echo "Initialize and update git submodules"
+git submodule init
+git submodule update
+
+dir=submodule-aws-qnabot-plugins
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION/aws-qnabot-plugins || exit 1
+popd
+
 dir=submodule-aws-qnabot
 echo "PACKAGING $dir"
 git submodule init
