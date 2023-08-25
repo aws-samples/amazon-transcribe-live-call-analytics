@@ -13,7 +13,9 @@
 # limitations under the License.
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
+Transform: 
+  - AWS::Serverless-2016-10-31
+  - AWS::LanguageExtensions
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.0-wip) (SO9072)
 
@@ -908,6 +910,30 @@ Resources:
       ServiceToken: !GetAtt StacknameCheckFunction.Arn
       InputString: !Ref 'AWS::StackName'
       MaxLength: 25
+  
+  ToJSONFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      InlineCode: |
+        import cfnresponse
+        import json
+        def handler(event, context):
+            print(json.dumps(event))
+            status = cfnresponse.SUCCESS
+            reason = "Sucessful"
+            result = {}
+            if event['RequestType'] == "Create":
+              output = {}
+              for k, v in event['ResourceProperties'].items():
+                if k != "ServiceToken":
+                  output[k] = v
+              outputJSON = json.dumps(output)
+              result = {"Output": outputJSON}
+            else:
+              print(f"Request type is {event['RequestType']} - skipping")
+            cfnresponse.send(event, context, status, result, reason=reason)
 
   KENDRA:
     Type: AWS::CloudFormation::Stack
@@ -1043,6 +1069,52 @@ Resources:
         StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
         PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
 
+  # Format nested JSON strings before nesting them in QnABotSettings in AGENTASSISTSETUP
+  SettingsJSON:
+    Type: Custom::ToJSON
+    Properties:
+      ServiceToken: !GetAtt ToJSONFunction.Arn
+      EMBEDDINGS_SCORE_THRESHOLD: !If
+      - QnABotEmbeddingsApiBedrock
+      - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingEmbeddingsScoreThreshold
+      - '0.92'
+      EMBEDDINGS_SCORE_ANSWER_THRESHOLD: !If
+      - QnABotEmbeddingsApiBedrock
+      - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingEmbeddingsScoreAnswerThreshold
+      - '0.90'
+      EMBEDDINGS_TEXT_PASSAGE_SCORE_THRESHOLD: !If
+      - QnABotEmbeddingsApiBedrock
+      - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingEmbeddingsTextPassageScoreThreshold
+      - ''
+      LLM_GENERATE_QUERY_MODEL_PARAMS: !If
+      - QnABotLLMPluginAnthropic
+      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryModelParams
+      - !If 
+        - QnABotLLMPluginBedrock
+        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryModelParams
+        - ''
+      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: !If
+      - QnABotLLMPluginAnthropic
+      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryPromptTemplate
+      - !If 
+        - QnABotLLMPluginBedrock
+        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryPromptTemplate
+        - ''
+      LLM_QA_MODEL_PARAMS: !If
+        - QnABotLLMPluginAnthropic
+        - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAModelParams
+        - !If 
+          - QnABotLLMPluginBedrock
+          - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAModelParams
+          - ''
+      LLM_QA_PROMPT_TEMPLATE: !If
+      - QnABotLLMPluginAnthropic
+      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAPromptTemplate
+      - !If 
+        - QnABotLLMPluginBedrock
+        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAPromptTemplate
+        - ''
+
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldEnableLexAgentAssist
@@ -1113,6 +1185,8 @@ Resources:
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         LexAgentAssistIdentityPoolId: !GetAtt AISTACK.Outputs.LexAgentAssistIdentityPoolId
         CloudFrontDomainName: !GetAtt AISTACK.Outputs.CloudFrontDomainName
+        # QnaBotSettings - JSON param with new settings values based on options selected
+        QnaBotSettings: !GetAtt SettingsJSON.Output
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
