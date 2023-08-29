@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Chime Voice Connector
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Voice Connector
 
 Parameters:
   UseChimeCallAnalytics:
@@ -25,8 +25,8 @@ Parameters:
       - true
       - false
     Description: >
-      Set to true to use Chime Call Analytics rather than the call transcriber Lambda.
-  
+      Set to true to use Amazon Chime SDK Call Analytics rather than the call transcriber Lambda.
+
   EnableVoiceToneAnalysis:
     Type: String
     Default: false
@@ -34,8 +34,7 @@ Parameters:
       - true
       - false
     Description: >
-      Set to true to enable Chime voice tone analysis. This is only used if Chime
-      Call Analytics is enabled.
+      Set to true to enable Amazon Chime SDK voice tone analysis. This is only used if Amazon Chime SDK Call Analytics is enabled.
 
   # EnableSpeakerSearch:
   #   Type: String
@@ -53,7 +52,7 @@ Parameters:
     AllowedValues:
       - true
       - false
-    Description: Set to true to automatically install a demo Asterisk server for testing Chime Voice Connector streaming.
+    Description: Set to true to automatically install a demo Asterisk server for testing Amazon Chime SDK Voice Connector streaming.
 
   DemoSoftphoneAllowedCidr:
     Type: String
@@ -68,7 +67,7 @@ Parameters:
     AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
     Description: >
       Ignored if Install Demo Asterisk Server is true.
-      Comma delimited list of public CIDR blocks allowed by Chime Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
+      Comma delimited list of public CIDR blocks allowed by Amazon Chime SDK Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
   SiprecLambdaHookFunctionArn:
@@ -76,15 +75,10 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
     Description: >
-      (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or
+      (Optional) Used only when CallAudioSource is set to 'Amazon Chime SDK Voice Connector (SIPREC)' or
       'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively
       choose calls to process, toggle agent/caller streams, assign AgentId, and/or modify values
       for CallId and displayed phone numbers.
-
-  DemoAsteriskDownloadUrl:
-    Type: String
-    Default: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-19-current.tar.gz
-    Description: URL for Asterisk source distribution tar file download - see https://www.asterisk.org/
 
   DemoAsteriskAgentAudioURL:
     Type: String
@@ -116,7 +110,7 @@ Parameters:
     Type: String
     Description: >-
       Arn of Kinesis Data Stream to publish events to
-      
+
   IsPartialTranscriptEnabled:
     Type: String
     Default: 'true'
@@ -131,19 +125,19 @@ Parameters:
     Type: String
     Default: analytics
     AllowedValues:
-        - standard
-        - analytics
+      - standard
+      - analytics
     Description: Set the default operational mode for Transcribe
 
   IsContentRedactionEnabled:
     Type: String
-    Default: "false"
+    Default: 'false'
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
       the 'en-US' language is selected in the TranscribeLanguageCode parameter.
     AllowedValues:
-      - "true"
-      - "false"
+      - 'true'
+      - 'false'
 
   TranscribeContentRedactionType:
     Type: String
@@ -217,7 +211,7 @@ Parameters:
   PcaWebAppURL:
     Type: String
     AllowedPattern: '^(|https:\/\/.*)$'
-    Description: Value of PCA stack "WebAppURL". 
+    Description: Value of PCA stack "WebAppURL".
 
   PcaWebAppCallPathPrefix:
     Type: String
@@ -226,7 +220,7 @@ Parameters:
 
   LCAStackName:
     Type: String
-    Description: Praent LCA Stack name
+    Description: Parent LCA Stack name
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -243,11 +237,11 @@ Conditions:
     !Equals [!Ref InstallDemoAsteriskServer, 'true']
   ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
   ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
-  ShouldInstallCallTranscriber: !Not [!Equals [!Ref UseChimeCallAnalytics, 'true']]
+  ShouldInstallCallTranscriber:
+    !Not [!Equals [!Ref UseChimeCallAnalytics, 'true']]
   ShouldInstallChimeCallAnalytics: !Equals [!Ref UseChimeCallAnalytics, 'true']
 
 Resources:
-
   DeployBoto3LambdaLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -257,8 +251,7 @@ Resources:
       Description: >
         This is a layer with shared python libraries for the custom resource 
         to create the ChimeSDKMediaInsightsPipelineConfiguration.
-      ContentUri:
-        ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
+      ContentUri: ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
   DeployChimeVCAsteriskDemo:
     Type: AWS::CloudFormation::Stack
@@ -267,7 +260,6 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-with-asterisk-server.yaml
       Parameters:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
-        DemoAsteriskDownloadUrl: !Ref DemoAsteriskDownloadUrl
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
 
   DeployChimeVCsiprec:
@@ -276,8 +268,8 @@ Resources:
     Properties:
       TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
       Parameters:
-        CidrBlocks: !Ref SiprecAllowedCidrList
-  
+        SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
+
   DeployCallTranscriber:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallCallTranscriber
@@ -342,15 +334,15 @@ Resources:
       Parameters:
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        CallTranscriberEventTableName: !If 
+        CallTranscriberEventTableName: !If
           - ShouldInstallCallTranscriber
           - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableName
-        CallTranscriberEventTableArn: !If 
+        CallTranscriberEventTableArn: !If
           - ShouldInstallCallTranscriber
           - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableArn
-        IsContentRedactionEnabled: !If 
+        IsContentRedactionEnabled: !If
           - ShouldInstallCallTranscriber
           - !GetAtt DeployCallTranscriber.Outputs.IsContentRedactionEnabled
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.IsContentRedactionEnabled
@@ -369,11 +361,11 @@ Resources:
       Parameters:
         KinesisDataStreamName: !Ref KinesisDataStreamName
         KinesisDataStreamArn: !Ref KinesisDataStreamArn
-        CallTranscriberEventTableName: !If 
+        CallTranscriberEventTableName: !If
           - ShouldInstallCallTranscriber
           - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableName
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableName
-        CallTranscriberEventTableArn: !If 
+        CallTranscriberEventTableArn: !If
           - ShouldInstallCallTranscriber
           - !GetAtt DeployCallTranscriber.Outputs.CallTranscriberEventTableArn
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.CallTranscriberEventTableArn

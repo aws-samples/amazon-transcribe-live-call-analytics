@@ -105,7 +105,11 @@ Parameters:
       - SAGEMAKER
       - LAMBDA
     Default: SAGEMAKER
-  
+
+  QnaBotSettings:
+    Type: String
+    Description: JSON string specifying key/value pairs to configure new defaults for QnAbot Settings
+
   WebAppBucket:
     Type: String
     Description: The LCA Web App Bucket Name.
@@ -302,7 +306,6 @@ Resources:
           iam = boto3.client('iam')
           cloudfront = boto3.client('cloudfront')
 
-
           def propsChanged(props, oldprops, fields):
             for field in fields:
               if props.get(field) != oldprops.get(field):
@@ -349,8 +352,7 @@ Resources:
             contents = contents.replace('${REACT_APP_AWS_REGION}', AWS_REGION)
             contents = contents.replace('${REACT_APP_LEX_IDENTITY_POOL_ID}', props["LexAgentAssistIdentityPoolId"])
             contents = contents.replace('${CLOUDFRONT_DOMAIN}', props["CloudFrontDomainName"])
-            print("New LexWebUI Config:")
-            print(contents)
+            print("New LexWebUI Config: ", json.dumps(contents))
             s3.put_object(Bucket=webAppBucket, Key=configKey, Body=contents)
             print("Done updating lex-web-ui-loader-config.json. Invalidating CloudFront...")
 
@@ -411,13 +413,12 @@ Resources:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "true"
             else:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
-            # Set embedding distance score threshold
-            settings["EMBEDDINGS_SCORE_THRESHOLD"] = "0.92"
-            settings["EMBEDDINGS_SCORE_ANSWER_THRESHOLD"] = "0.90"
             # Set LLM params
             settings["LLM_QA_NO_HITS_REGEX"] = "Sorry,"
-            settings["LLM_QA_SHOW_CONTEXT_TEXT"] = "FALSE"
-
+            # Additional settings provided by param QnaBotSettings
+            additional_QnaBotSettings = json.loads(props.get("QnaBotSettings","{}").replace('\n',''))
+            for k, v in additional_QnaBotSettings.items():
+              settings[k] = v
             # save back to SSM
             response = ssm.put_parameter(
               Name=ssmParamName,
@@ -548,6 +549,7 @@ Resources:
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
       AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
+      QnaBotSettings: !Ref QnaBotSettings
       # Changes to Params below force AgentAssist Setup to execute.
       CallAudioSource: !Ref CallAudioSource
       ComprehendLanguageCode: !Ref ComprehendLanguageCode

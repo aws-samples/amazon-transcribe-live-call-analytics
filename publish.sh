@@ -13,6 +13,29 @@
 
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
+if ! [ -x "$(command -v docker)" ]; then
+  echo 'Error: docker is not running and required.' >&2
+  echo 'Install: https://docs.docker.com/engine/install/' >&2
+  exit 1
+fi
+if ! [ -x "$(command -v sam)" ]; then
+  echo 'Error: sam is not installed and required.' >&2
+  echo 'Install: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html' >&2
+  exit 1
+fi
+if ! [ -x "$(command -v zip)" ]; then
+  echo 'Error: zip is not installed and required.' >&2
+  exit 1
+fi
+if ! [ -x "$(command -v pip)" ]; then
+  echo 'Error: pip is not installed and required.' >&2
+  exit 1
+fi
+if ! [ -x "$(command -v npm)" ]; then
+  echo 'Error: npm is not installed and required.' >&2
+  exit 1
+fi
+
 BUCKET_BASENAME=$1
 [ -z "$BUCKET_BASENAME" ] && echo "Cfn bucket name is a required parameter. Usage $USAGE" && exit 1
 
@@ -91,6 +114,16 @@ pushd $dir
 aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-kendra-stack/template.yaml
 popd
 
+echo "Initialize and update git submodules"
+git submodule init
+git submodule update
+
+dir=submodule-aws-qnabot-plugins
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION/aws-qnabot-plugins || exit 1
+popd
+
 dir=submodule-aws-qnabot
 echo "PACKAGING $dir"
 git submodule init
@@ -102,6 +135,7 @@ cp -v ./patches/qnabot/Makefile $dir/Makefile
 echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
 sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
 pushd $dir
+rm -fr ./ml_model/llm-qa-summarize # remove deleted folder if left over from previous build.
 mkdir -p build/templates/dev
 cat > config.json <<_EOF
 {

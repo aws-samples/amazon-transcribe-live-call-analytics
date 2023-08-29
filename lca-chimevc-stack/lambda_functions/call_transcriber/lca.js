@@ -239,6 +239,7 @@ const writeCallStartEventToKds = async function writeCallStartEventToKds(kinesis
     CustomerPhoneNumber: callData.fromNumber,
     SystemPhoneNumber: callData.toNumber,
     AgentId: callData.agentId,
+    Metadatajson: callData.metadatajson,
     EventType: 'START',
   };
   const putParams = {
