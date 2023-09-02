@@ -162,24 +162,32 @@ Resources:
               parameter_name = '/' + stack_name + '/' + parameter
               parameter_value = ssm_client.get_parameter(Name=parameter_name)
               return parameter_value['Parameter']['Value']
-              
+
+          def delete_ssm(parameter, stack_name):
+              parameter_name = '/' + stack_name + '/' + parameter
+              ssm_client.delete_parameter(Name=parameter_name)
+             
           def get_voiceconnector(stack_name):
               voice_connector = None
               try:
                   voice_connector = get_ssm('voiceConnector', stack_name)
               except Exception as error:
                   print("Unable to get voiceconnector from SSM parameter - get it from stack output instead.")
-                  cloudformation = boto3.resource("cloudformation")
-                  stack = cloudformation.Stack(stack_name)
-                  outputs = {output["OutputKey"]: output["OutputValue"] for output in stack.outputs}
-                  voice_connector = outputs["VoiceConnector"]
-                  print("Got voiceconnector from stack output.. Saving as new SSM param.")
-                  put_ssm(voice_connector, 'voiceConnector', stack_name)
+                  voice_connector = get_voiceconnector_from_stack_output(stack_name)
               return voice_connector
 
-          def delete_ssm(parameter, stack_name):
-              parameter_name = '/' + stack_name + '/' + parameter
-              ssm_client.delete_parameter(Name=parameter_name)
+          def get_voiceconnector_from_stack_output(stack_name):
+              voice_connector = None
+              cloudformation = boto3.resource("cloudformation")
+              stack = cloudformation.Stack(stack_name)
+              try:
+                outputs = {output["OutputKey"]: output["OutputValue"] for output in stack.outputs}
+                voice_connector = outputs["VoiceConnector"]
+                print("Got voiceconnector from stack output.. Saving as new SSM param:", voice_connector)
+                put_ssm(voice_connector, 'voiceConnector', stack_name)
+              except Exception as error:
+                print("Unable to get voiceConnector from stack output.")
+              return voice_connector
 
           def handler(event, context):
               logger.info(json.dumps(event))
@@ -201,7 +209,8 @@ Resources:
                   try:
                       physicalResourceId = event["PhysicalResourceId"]
                       voice_connector = get_voiceconnector(stack_name)
-                      update_streaming_configuration(voice_connector, event)
+                      if voice_connector:
+                        update_streaming_configuration(voice_connector, event)
                       response_data = {'voiceConnectorId': voice_connector}
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId)
                   except Exception as error:
@@ -213,15 +222,18 @@ Resources:
                   try:
                       physicalResourceId = event["PhysicalResourceId"]
                       voice_connector = get_voiceconnector(stack_name)
-                      response = delete_voice_connector(voice_connector, stack_name)
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physicalResourceId)
+                      response = {}
+                      if voice_connector:
+                        response = delete_voice_connector(voice_connector, stack_name)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, physicalResourceId)
                   except Exception as error:
                       error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       logger.error(error_message)
                       cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error_message)
               else:
-                  response_data = {'Message': 'Update is no-op. Returning success status.'}
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                  error_message = f"ERROR: Unknown CF Event type: {event['RequestType']}"
+                  print(error_message)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error_message)
 
   # Trigger Lambda function to create Amazon Chime App & Asterisk Instance creation
   SIPRECVoiceConnectorResource:
