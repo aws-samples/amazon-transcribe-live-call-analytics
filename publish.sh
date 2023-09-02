@@ -35,6 +35,10 @@ if ! [ -x "$(command -v npm)" ]; then
   echo 'Error: npm is not installed and required.' >&2
   exit 1
 fi
+if ! node -v | grep -qF "v16."; then
+    echo 'Node.js version 16.x is not installed and required.' >&2
+    exit 1
+fi
 
 BUCKET_BASENAME=$1
 [ -z "$BUCKET_BASENAME" ] && echo "Cfn bucket name is a required parameter. Usage $USAGE" && exit 1
