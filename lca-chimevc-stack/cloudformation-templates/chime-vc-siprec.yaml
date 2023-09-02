@@ -184,7 +184,6 @@ Resources:
           def handler(event, context):
               logger.info(json.dumps(event))
               stack_name = event["ResourceProperties"]["stackName"]
-              physical_id = 'VoiceConnectorResources'
               if event['RequestType'] == 'Create':
                   logger.info('Create Request')
                   try:
@@ -192,7 +191,7 @@ Resources:
                       update_streaming_configuration(voice_connector, event)
                       put_ssm(voice_connector, 'voiceConnector', stack_name)
                       response_data = {'voiceConnectorId': voice_connector}
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, voice_connector)
                   except Exception as error:
                       error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       logger.error(error_message)
@@ -200,10 +199,11 @@ Resources:
               elif event['RequestType'] == 'Update':
                   logger.info('Update Request')
                   try:
+                      physicalResourceId = event["PhysicalResourceId"]
                       voice_connector = get_voiceconnector(stack_name)
                       update_streaming_configuration(voice_connector, event)
                       response_data = {'voiceConnectorId': voice_connector}
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId)
                   except Exception as error:
                       error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       logger.error(error_message)
@@ -211,9 +211,10 @@ Resources:
               elif event['RequestType'] == 'Delete':
                   logger.info('Delete Request')
                   try:
+                      physicalResourceId = event["PhysicalResourceId"]
                       voice_connector = get_voiceconnector(stack_name)
                       response = delete_voice_connector(voice_connector, stack_name)
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physical_id)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physicalResourceId)
                   except Exception as error:
                       error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       logger.error(error_message)
