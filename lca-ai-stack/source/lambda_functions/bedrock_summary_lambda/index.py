@@ -44,20 +44,21 @@ def get_summary(prompt_data):
     contentType = 'application/json'
 
     summary_text = "Unsupported Bedrock model ID "+modelId+". Unable to generate call summary"
+    provider = modelId.split(".")[0]
 
-    if modelId in ["amazon.titan-tg1-large", "amazon.titan-e1t-medium"]:
+    if provider == "amazon":
         body = json.dumps({"inputText": prompt_data})        
         response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
         response_body = json.loads(response.get('body').read())
         summary_text = response_body.get('results')[0].get('outputText')
 
-    elif modelId in ["ai21.j2-grande-instruct", "ai21.j2-grande-instruct"]:
+    elif provider == "ai21":
         body = json.dumps({"prompt": prompt_data})
         response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
         response_body = json.loads(response.get('body').read())
         summary_text = response_body.get('completions')[0].get('data').get('text')
 
-    elif modelId in ["anthropic.claude-instant-v1", "anthropic.claude-v1"]:
+    elif provider == "anthropic":
         body = json.dumps({"prompt": prompt_data, "max_tokens_to_sample": 512})
         response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
         response_body = json.loads(response.get('body').read())

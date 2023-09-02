@@ -393,16 +393,12 @@ Parameters:
       - 'ai21.j2-jumbo-instruct'
       - 'anthropic.claude-instant-v1'
       - 'anthropic.claude-v1'
+      - 'anthropic.claude-v2'
 
     Description: >
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
       Defaults to 'amazon.titan-tg1-large'
-
-  BedrockPreviewSdkUrl:
-    Type: String
-    Default: https://preview.documentation.bedrock.aws.dev/Documentation/SDK/bedrock-python-sdk.zip
-    Description: URL for the Bedrock SDK zip file (Bedrock preview access only)
-    
+   
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
     MinValue: 0
@@ -589,7 +585,6 @@ Metadata:
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
           - BedrockModelId
-          - BedrockPreviewSdkUrl
           - SummarizationSageMakerInitialInstanceCount
           - SummarizationLLMThirdPartyApiKey
           - EndOfCallLambdaHookFunctionArn
@@ -1088,7 +1083,6 @@ Resources:
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
         BedrockModelId: !Ref BedrockModelId
-        BedrockPreviewSdkUrl: !Ref BedrockPreviewSdkUrl
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         SummarizationLLMThirdPartyApiKey: !Ref SummarizationLLMThirdPartyApiKey
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn

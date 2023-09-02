@@ -137,15 +137,11 @@ Parameters:
       - 'ai21.j2-jumbo-instruct'
       - 'anthropic.claude-instant-v1'
       - 'anthropic.claude-v1'
+      - 'anthropic.claude-v2'
 
     Description: >
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
       Defaults to 'amazon.titan-tg1-large'
-
-  BedrockPreviewSdkUrl:
-    Type: String
-    Default: https://preview.documentation.bedrock.aws.dev/Documentation/SDK/bedrock-python-sdk.zip
-    Description: URL for the Bedrock SDK zip file (Bedrock preview access only)
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -337,8 +333,6 @@ Metadata:
         default: End of Call Transcript Summary
       BedrockModelId: 
         default: Bedrock supported LLM model ID
-      BedrockPreviewSdkUrl:
-        default: Bedrock preview SDK url
       StartOfCallLambdaHookFunctionArn:
         default: Lambda Hook Function ARN for Custom Start of Call Processing (existing)
       PostCallSummaryLambdaHookFunctionArn:
@@ -818,8 +812,6 @@ Resources:
       # yamllint disable rule:line-length
       TemplateURL: !Sub https://s3.${AWS::Region}.amazonaws.com/${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/bedrock-preview-boto3-stack.yaml
       # yamllint enable rule:line-length
-      Parameters:
-        BedrockPreviewSdkUrl: !Ref BedrockPreviewSdkUrl
 
   FetchTranscript:
     Type: AWS::Serverless::Function
@@ -962,12 +954,14 @@ Resources:
 
         - PolicyName: !Sub ${AWS::StackName}-BedrockSummary
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: 2012-10-17
             Statement:
-              - Effect: "Allow"
-                Action: 
-                  - "bedrock:*" 
-                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "bedrock:InvokeModel"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:custom-model/*"
 
   AsyncAgentAssistOrchestrator:
     Type: AWS::Serverless::Function
