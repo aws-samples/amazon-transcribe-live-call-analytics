@@ -162,6 +162,20 @@ Resources:
               parameter_name = '/' + stack_name + '/' + parameter
               parameter_value = ssm_client.get_parameter(Name=parameter_name)
               return parameter_value['Parameter']['Value']
+              
+          def get_voiceconnector(stack_name):
+              voice_connector = None
+              try:
+                  voice_connector = get_ssm('voiceConnector', stack_name)
+              except Exception as error:
+                  print("Unable to get voiceconnector from SSM parameter - get it from stack output instead.")
+                  cloudformation = boto3.resource("cloudformation")
+                  stack = cloudformation.Stack(stack_name)
+                  outputs = {output["OutputKey"]: output["OutputValue"] for output in stack.outputs}
+                  voice_connector = outputs["VoiceConnector"]
+                  print("Got voiceconnector from stack output.. Saving as new SSM param.")
+                  put_ssm(voice_connector, 'voiceConnector', stack_name)
+              return voice_connector
 
           def delete_ssm(parameter, stack_name):
               parameter_name = '/' + stack_name + '/' + parameter
@@ -186,7 +200,7 @@ Resources:
               elif event['RequestType'] == 'Update':
                   logger.info('Update Request')
                   try:
-                      voice_connector = get_ssm('voiceConnector', stack_name)
+                      voice_connector = get_voiceconnector(stack_name)
                       update_streaming_configuration(voice_connector, event)
                       response_data = {'voiceConnectorId': voice_connector}
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
@@ -197,7 +211,7 @@ Resources:
               elif event['RequestType'] == 'Delete':
                   logger.info('Delete Request')
                   try:
-                      voice_connector = get_ssm('voiceConnector', stack_name)
+                      voice_connector = get_voiceconnector(stack_name)
                       response = delete_voice_connector(voice_connector, stack_name)
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physical_id)
                   except Exception as error:
