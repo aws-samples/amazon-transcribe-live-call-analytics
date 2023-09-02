@@ -105,10 +105,10 @@ Resources:
           chime = boto3.client('chime-sdk-voice')
           ssm_client = boto3.client('ssm')
 
-          def create_voice_connector():
+          def create_voice_connector(stack_name):
               logger.info("Creating voice connector...")
               response = chime.create_voice_connector(
-                  Name='LCA-SIPREC-Trunk-' + str(uuid.uuid1()),
+                  Name = stack_name + '-SIPREC-Trunk',
                   AwsRegion=os.environ['AWS_REGION'],
                   RequireEncryption=False
               )
@@ -195,7 +195,7 @@ Resources:
               if event['RequestType'] == 'Create':
                   logger.info('Create Request')
                   try:
-                      voice_connector = create_voice_connector()
+                      voice_connector = create_voice_connector(stack_name)
                       update_streaming_configuration(voice_connector, event)
                       put_ssm(voice_connector, 'voiceConnector', stack_name)
                       response_data = {'voiceConnectorId': voice_connector}

@@ -354,10 +354,10 @@ Resources:
           chime = boto3.client('chime-sdk-voice')
           ssm_client = boto3.client('ssm')
 
-          def create_voice_connector(phone_number):
+          def create_voice_connector(phone_number, stack_name):
               logger.info("Creating voice connector...")
               response = chime.create_voice_connector(
-                  Name='LCA-PSTN-Trunk-'+ str(uuid.uuid1()),
+                  Name = stack_name + '-PSTN-Trunk',
                   AwsRegion=os.environ['AWS_REGION'],
                   RequireEncryption=False
               )
@@ -520,7 +520,7 @@ Resources:
                   try:
                       elastic_ip = event['ResourceProperties']['eip']
                       phone_number = get_phone_number()
-                      voice_connector = create_voice_connector(phone_number)
+                      voice_connector = create_voice_connector(phone_number, stack_name)
                       physicalResourceId = voice_connector["voiceConnectorId"]
                       authorize_eip(voice_connector['voiceConnectorId'], elastic_ip)
                       put_ssm(voice_connector['voiceConnectorId'], 'voiceConnector', stack_name)
