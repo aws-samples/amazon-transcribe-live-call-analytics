@@ -550,7 +550,7 @@ Resources:
                       response = {}
                       if voice_connector:
                         response = delete_voice_connector(voice_connector, stack_name)
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, physicalResourceId)                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physicalResourceId)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physicalResourceId)
                   except Exception as e:
                       error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
                       logger.error(error)
