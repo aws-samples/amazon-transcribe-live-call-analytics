@@ -648,6 +648,7 @@ Resources:
           sed -i "s/PHONE_NUMBER/$PHONE_NUMBER/g" /etc/asterisk/pjsip.conf
           sed -i "s/VOICE_CONNECTOR/$VOICE_CONNECTOR/g" /etc/asterisk/pjsip.conf
           sed -i "s/INSTANCE_ID/$INSTANCE_ID/g" /etc/asterisk/pjsip.conf
+          sed -i "s/PHONE_NUMBER/$PHONE_NUMBER/g" /etc/asterisk/extensions.conf
           groupadd asterisk || echo "Group already exists"
           useradd -r -d /var/lib/asterisk -g asterisk asterisk || echo "User already exists"
           usermod -aG audio,dialout asterisk
@@ -779,7 +780,7 @@ Resources:
                 include => catch-all
 
                 [phones]
-                exten => $PhoneNumber,1,Dial(PJSIP/PHONE_NUMBER)
+                exten => PHONE_NUMBER,1,Dial(PJSIP/PHONE_NUMBER)
             /etc/asterisk/asterisk.conf:
               content: !Sub |
                 [options]
