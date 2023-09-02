@@ -4,7 +4,7 @@ _Companion AWS blog post: [Live call analytics and agent assist for your contact
 
 ## Overview
 
-_Update May 2023 (v0.8.0) - This release introduces (experimental) Generative AI support for both trasncript summarization and Agent Assist with Anthropic's models, which will be released natively on AWS via the new [Amazon Bedrock](https://aws.amazon.com/bedrock/) service. It adds (experimental) support for [Amazon Chime SDK Call Analytics](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html) as a call source in conjunction with [Voice Tone Analysis](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html). Lastly, it includes [Salesforce/CRM plug-in integration](./plugins/salesforce-integration/README.md)._
+_Update September 2023 (v0.8.5) - This release provides (experimental) Generative AI support for both transcript summarization and Agent Assist with [Amazon Bedrock](https://aws.amazon.com/bedrock/) (preview) and Anthropic 3rd party APIs. Also provides (experimental) support for [Amazon Chime SDK Call Analytics](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html) as a call source in conjunction with [Voice Tone Analysis](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html). Lastly, it includes [Salesforce/CRM plug-in integration](./plugins/salesforce-integration/README.md)._
 
 _See [CHANGELOG](./CHANGELOG.md) for latest features and fixes._
 

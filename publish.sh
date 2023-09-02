@@ -11,11 +11,19 @@
 # Upload artifacts to S3 bucket for deployment with CloudFormation
 ##############################################################################################
 
+# Stop the publish process on failures
+set -e
+
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
 if ! [ -x "$(command -v docker)" ]; then
   echo 'Error: docker is not running and required.' >&2
+  echo 'Error: docker is not installed.' >&2
   echo 'Install: https://docs.docker.com/engine/install/' >&2
+  exit 1
+fi
+if ! docker ps &> /dev/null; then
+  echo 'Error: docker is not running.' >&2
   exit 1
 fi
 if ! [ -x "$(command -v sam)" ]; then
@@ -34,6 +42,10 @@ fi
 if ! [ -x "$(command -v npm)" ]; then
   echo 'Error: npm is not installed and required.' >&2
   exit 1
+fi
+if ! node -v | grep -qF "v16."; then
+    echo 'Node.js version 16.x is not installed and required.' >&2
+    exit 1
 fi
 
 BUCKET_BASENAME=$1
