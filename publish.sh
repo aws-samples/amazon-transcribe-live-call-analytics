@@ -11,9 +11,6 @@
 # Upload artifacts to S3 bucket for deployment with CloudFormation
 ##############################################################################################
 
-# Stop the publish process on failures
-set -e
-
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
 if ! [ -x "$(command -v docker)" ]; then
