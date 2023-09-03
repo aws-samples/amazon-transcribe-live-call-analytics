@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fix Chime SDK VoiceConnector problems when updating stack
 - Fix Demo Asterisk configuration preventing use of softphone
+- Misc improvements to build/publish script
 
 ## [0.8.4] - 2023-08-11
 ### Fixed
