@@ -1448,15 +1448,13 @@ Resources:
   PCAIntegrationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Architectures:
-        - arm64
       Description: >-
         AWS Lambda Function that will be triggered Transcribe Call Analytics completes after end of streaming session
       Handler: index.handler
       Layers:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:38"
       Role: !GetAtt PCAIntegrationFunctionRole.Arn
       Runtime: nodejs14.x
       MemorySize: 768

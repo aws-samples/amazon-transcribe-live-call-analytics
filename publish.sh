@@ -11,11 +11,19 @@
 # Upload artifacts to S3 bucket for deployment with CloudFormation
 ##############################################################################################
 
+# Stop the publish process on failures
+set -e
+
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
 if ! [ -x "$(command -v docker)" ]; then
   echo 'Error: docker is not running and required.' >&2
+  echo 'Error: docker is not installed.' >&2
   echo 'Install: https://docs.docker.com/engine/install/' >&2
+  exit 1
+fi
+if ! docker ps &> /dev/null; then
+  echo 'Error: docker is not running.' >&2
   exit 1
 fi
 if ! [ -x "$(command -v sam)" ]; then
@@ -34,6 +42,10 @@ fi
 if ! [ -x "$(command -v npm)" ]; then
   echo 'Error: npm is not installed and required.' >&2
   exit 1
+fi
+if ! node -v | grep -qF "v16."; then
+    echo 'Node.js version 16.x is not installed and required.' >&2
+    exit 1
 fi
 
 BUCKET_BASENAME=$1
@@ -64,8 +76,7 @@ PREFIX_AND_VERSION=${PREFIX}/${VERSION}
 BUCKET=${BUCKET_BASENAME}-${REGION}
 
 # Create bucket if it doesn't already exist
-aws s3api list-buckets --query 'Buckets[].Name' | grep "\"$BUCKET\"" > /dev/null 2>&1
-if [ $? -ne 0 ]; then
+if [ -x $(aws s3api list-buckets --query 'Buckets[].Name' | grep "\"$BUCKET\"") ]; then
   echo "Creating s3 bucket: $BUCKET"
   aws s3 mb s3://${BUCKET} || exit 1
   aws s3api put-bucket-versioning --bucket ${BUCKET} --versioning-configuration Status=Enabled || exit 1
@@ -112,6 +123,16 @@ dir=lca-kendra-stack
 echo "PACKAGING $dir"
 pushd $dir
 aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-kendra-stack/template.yaml
+popd
+
+echo "Initialize and update git submodules"
+git submodule init
+git submodule update
+
+dir=submodule-aws-qnabot-plugins
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION/aws-qnabot-plugins || exit 1
 popd
 
 dir=submodule-aws-qnabot

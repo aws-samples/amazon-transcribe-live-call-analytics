@@ -105,15 +105,19 @@ Resources:
           chime = boto3.client('chime-sdk-voice')
           ssm_client = boto3.client('ssm')
 
-          def create_voice_connector(event):
+          def create_voice_connector(stack_name):
               logger.info("Creating voice connector...")
               response = chime.create_voice_connector(
-                  Name='LCA-SIPREC-Trunk-' + str(uuid.uuid1()),
+                  Name = stack_name + '-SIPREC-Trunk',
                   AwsRegion=os.environ['AWS_REGION'],
                   RequireEncryption=False
               )
               logger.info(response)
               voice_connector_id = response['VoiceConnector']['VoiceConnectorId']
+              return voice_connector_id
+
+          def update_streaming_configuration(voice_connector_id, event):
+              logger.info('Voice Connector to update: %s ', voice_connector_id)
               streaming_configuration = {
                   'DataRetentionInHours': 1,
                   'Disabled': False,
@@ -124,7 +128,6 @@ Resources:
                   StreamingConfiguration=streaming_configuration
               )
               logger.info('Configuration created.')
-              
               if 'SiprecAllowedCidrList' in event['ResourceProperties']:
                   params = {
                       'CpsLimit': 1,
@@ -137,19 +140,10 @@ Resources:
                       VoiceConnectorId=voice_connector_id,
                       Termination=params
                   )
-              
-              # chime.put_voice_connector_logging_configuration(
-              #     VoiceConnectorId=voice_connector_id,
-              #     LoggingConfiguration={
-              #         'EnableSIPLogs': True,
-              #         'EnableMediaMetricLogs': True
-              #     }
-              # )
-              response_data = {'voiceConnectorId': voice_connector_id}
-              return response_data
+              return True
 
           def delete_voice_connector(voice_connector_id, stack_name):
-              logger.info('Voice Connector to delete: ' + voice_connector_id)
+              logger.info('Voice Connector to delete: %s', voice_connector_id)
               voice_connector_response = chime.delete_voice_connector(VoiceConnectorId=voice_connector_id)
               delete_ssm('voiceConnector', stack_name)
               response_data = {'delete_vc': voice_connector_response}
@@ -172,34 +166,75 @@ Resources:
           def delete_ssm(parameter, stack_name):
               parameter_name = '/' + stack_name + '/' + parameter
               ssm_client.delete_parameter(Name=parameter_name)
+             
+          def get_voice_connector_id(stack_name):
+              voice_connector_id = None
+              try:
+                  voice_connector_id = get_ssm('voiceConnector', stack_name)
+              except Exception as error:
+                  print("Unable to get voiceconnector from SSM parameter - get it from stack output instead.")
+                  voice_connector_id = get_stack_output(stack_name, "VoiceConnector")
+                  if voice_connector_id:
+                    print("Got voice_connector_id from stack output.. Saving as new SSM param:", voice_connector_id)
+                    put_ssm(voice_connector_id, 'voiceConnector', stack_name)
+              return voice_connector_id
+
+          def get_stack_output(stack_name, outputKey):
+              val = None
+              cloudformation = boto3.resource("cloudformation")
+              stack = cloudformation.Stack(stack_name)
+              try:
+                outputs = {output["OutputKey"]: output["OutputValue"] for output in stack.outputs}
+                val = outputs[outputKey]
+              except Exception as error:
+                print(f"Unable to get {outputKey} value from stack output.")
+              return val
 
           def handler(event, context):
               logger.info(json.dumps(event))
               stack_name = event["ResourceProperties"]["stackName"]
-              physical_id = 'VoiceConnectorResources'
               if event['RequestType'] == 'Create':
                   logger.info('Create Request')
                   try:
-                      voice_connector = create_voice_connector(event)
-                      put_ssm(voice_connector['voiceConnectorId'], 'voiceConnector', stack_name)
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, voice_connector)
-                  except Exception as e:
-                      error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
-                      logger.error(error)
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error)
+                      voice_connector = create_voice_connector(stack_name)
+                      update_streaming_configuration(voice_connector, event)
+                      put_ssm(voice_connector, 'voiceConnector', stack_name)
+                      response_data = {'voiceConnectorId': voice_connector}
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, voice_connector)
+                  except Exception as error:
+                      error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                      logger.error(error_message)
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error_message)
+              elif event['RequestType'] == 'Update':
+                  logger.info('Update Request')
+                  try:
+                      physicalResourceId = event["PhysicalResourceId"]
+                      voice_connector_id = get_voice_connector_id(stack_name)
+                      if voice_connector_id:
+                        update_streaming_configuration(voice_connector_id, event)
+                      response_data = {'voiceConnectorId': voice_connector_id}
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId)
+                  except Exception as error:
+                      error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                      logger.error(error_message)
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error_message)
               elif event['RequestType'] == 'Delete':
                   logger.info('Delete Request')
                   try:
-                      voice_connector = get_ssm('voiceConnector', stack_name)
-                      response = delete_voice_connector(voice_connector, stack_name)
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physical_id)
-                  except Exception as e:
-                      error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
-                      logger.error(error)
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error)
+                      physicalResourceId = event["PhysicalResourceId"]
+                      voice_connector_id = get_voice_connector_id(stack_name)
+                      response = {}
+                      if voice_connector_id:
+                        response = delete_voice_connector(voice_connector_id, stack_name)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response, physicalResourceId)
+                  except Exception as error:
+                      error_message = f'Exception thrown: {error}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
+                      logger.error(error_message)
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error_message)
               else:
-                  response_data = {'Message': 'Update is no-op. Returning success status.'}
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                  error_message = f"ERROR: Unknown CF Event type: {event['RequestType']}"
+                  print(error_message)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error_message)
 
   # Trigger Lambda function to create Amazon Chime App & Asterisk Instance creation
   SIPRECVoiceConnectorResource:

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] - 2023-09-03
+### Added
+- Update QnABot to latest version 5.4.1
+- Added support for Amazon Bedrock (preview) for QnABot Agent Assist
+### Fixed
+- Fix Chime SDK VoiceConnector problems when updating stack
+- Fix Demo Asterisk configuration preventing use of softphone
+- Misc improvements to build/publish script
+
 ## [0.8.4] - 2023-08-11
 ### Fixed
 - Fix issue with deploying new Chime Voice Connector if in a new AWS account
@@ -284,7 +293,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.3...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...develop
+[0.8.5]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...v0.8.4
+[0.8.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.4...v0.8.3
 [0.8.3]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.0...v0.8.1

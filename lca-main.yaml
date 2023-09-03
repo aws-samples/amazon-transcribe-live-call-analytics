@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.4) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.5) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -145,10 +145,14 @@ Parameters:
   # Options for QnABot Embeddings
   AgentAssistQnABotItemMatchingApi:
     Type: String
-    Description: Method used by QnABot for semantic matching of caller utterances to stored agent assist configuration items and FAQs.
+    Description: >
+      Method used by QnABot for semantic matching of caller utterances to stored agent assist configuration 
+      items and FAQs. Choose 'EMBEDDINGS BEDROCK' only if your account has been allow-listed for 
+      Amazon Bedrock preview access (see https://aws.amazon.com/bedrock).
     AllowedValues:
       - KENDRA FAQ
       - EMBEDDINGS SAGEMAKER
+      - EMBEDDINGS BEDROCK
       - EMBEDDINGS LAMBDA
     Default: KENDRA FAQ
   AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
@@ -177,13 +181,27 @@ Parameters:
     Type: String
     Description:
       Optionally enable (experimental) QnABot question disambiguation and
-      generative question answering using an LLM. To use a custom LAMBDA function, provide additional
-      parameters below. To use a supported third party service, enter the API key below.
+      generative question answering using an LLM. Choose BEDROCK only if your account has been allow-listed for 
+      Amazon Bedrock preview access (see https://aws.amazon.com/bedrock).
+      To use a custom LAMBDA function, provide additional
+      parameters below. To use ANTHROPIC third party service, enter the API key below. 
     AllowedValues:
       - DISABLED
+      - BEDROCK
       - LAMBDA
       - ANTHROPIC
     Default: DISABLED
+  AgentAssistQnABotLLMBedrockModelId:
+    Type: String
+    Default: anthropic.claude-instant-v1
+    AllowedValues:
+      - amazon.titan-tg1-large
+      - ai21.j2-grande-instruct
+      - ai21.j2-jumbo-instruct
+      - anthropic.claude-v1
+      - anthropic.claude-instant-v1
+      - anthropic.claude-v2
+    Description: 'Optional: If LLMApi is BEDROCK, Choose Bedrock modelId'
   AgentAssistQnABotLLMLambdaArn:
     Type: String
     AllowedPattern: '^(|arn:aws:lambda:.*)$'
@@ -196,7 +214,6 @@ Parameters:
     Description: 'Optional: If LLMApi is ANTHROPIC, enter your Anthropic API Key. ** Data will leave your AWS account **'
     Default: ''
     NoEcho: true
-
   S3BucketName:
     Type: String
     Description: >
@@ -357,11 +374,31 @@ Parameters:
       - 'SAGEMAKER'
       - 'LAMBDA'
       - 'ANTHROPIC'
+      - 'BEDROCK'
+
     Description: >
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
       to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
+      BEDROCK option requires preview access to Amazon Bedrock API and requires you to choose one of the supported model IDs from the 
+      provided list (BedrockModelId).
 
+  BedrockModelId:
+    Default: 'amazon.titan-tg1-large'
+    Type: String
+    AllowedValues: 
+      - 'amazon.titan-tg1-large'
+      - 'amazon.titan-e1t-medium'
+      - 'ai21.j2-grande-instruct'
+      - 'ai21.j2-jumbo-instruct'
+      - 'anthropic.claude-instant-v1'
+      - 'anthropic.claude-v1'
+      - 'anthropic.claude-v2'
+
+    Description: >
+      If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
+      Defaults to 'amazon.titan-tg1-large'
+   
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
     MinValue: 0
@@ -518,6 +555,7 @@ Metadata:
           - AgentAssistQnABotEmbeddingsLambdaArn
           - AgentAssistQnABotEmbeddingsLambdaDimensions
           - AgentAssistQnABotLLMApi
+          - AgentAssistQnABotLLMBedrockModelId
           - AgentAssistQnABotLLMLambdaArn
           - AgentAssistQnABotLLMThirdPartyApiKey
       - Label:
@@ -546,6 +584,7 @@ Metadata:
           - TranscriptLambdaHookFunctionArn
           - TranscriptLambdaHookFunctionNonPartialOnly
           - EndOfCallTranscriptSummary
+          - BedrockModelId
           - SummarizationSageMakerInitialInstanceCount
           - SummarizationLLMThirdPartyApiKey
           - EndOfCallLambdaHookFunctionArn
@@ -623,6 +662,8 @@ Metadata:
         default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
       AgentAssistQnABotLLMApi:
         default: Agent Assist QnABot LLM API
+      AgentAssistQnABotLLMBedrockModelId:
+        default: Agent Assist QnABot Bedrock ModelId
       AgentAssistQnABotLLMLambdaArn:
         default: Agent Assist QnABot LLM Lambda Function ARN (existing)
       AgentAssistQnABotLLMThirdPartyApiKey:
@@ -749,6 +790,21 @@ Conditions:
     !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS SAGEMAKER']
   QnABotEmbeddingsApiLambda:
     !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS LAMBDA']
+  QnABotEmbeddingsApiBedrock:
+    !Equals [!Ref AgentAssistQnABotItemMatchingApi, 'EMBEDDINGS BEDROCK']
+  QnABotLLMPluginLambda:
+    !Equals [!Ref AgentAssistQnABotLLMApi, 'LAMBDA']
+  QnABotLLMPluginAnthropic:
+    !Equals [!Ref AgentAssistQnABotLLMApi, 'ANTHROPIC']
+  QnABotLLMPluginBedrock:
+    !Equals [!Ref AgentAssistQnABotLLMApi, 'BEDROCK']
+  QnABotShouldDeloyPluginAnthropic:
+      !Condition QnABotLLMPluginAnthropic
+  QnABotShouldDeloyPluginBedrock:
+    !Or [
+      !Condition QnABotEmbeddingsApiBedrock,
+      !Condition QnABotLLMPluginBedrock,
+    ]
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -873,6 +929,30 @@ Resources:
       ServiceToken: !GetAtt StacknameCheckFunction.Arn
       InputString: !Ref 'AWS::StackName'
       MaxLength: 25
+  
+  ToJSONFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      InlineCode: |
+        import cfnresponse
+        import json
+        def handler(event, context):
+            print(json.dumps(event))
+            status = cfnresponse.SUCCESS
+            reason = "Sucessful"
+            result = {}
+            if event['RequestType'] == "Create":
+              output = {}
+              for k, v in event['ResourceProperties'].items():
+                if k != "ServiceToken":
+                  output[k] = v
+              outputJSON = json.dumps(output)
+              result = {"Output": outputJSON}
+            else:
+              print(f"Request type is {event['RequestType']} - skipping")
+            cfnresponse.send(event, context, status, result, reason=reason)
 
   KENDRA:
     Type: AWS::CloudFormation::Stack
@@ -888,6 +968,30 @@ Resources:
           - ShouldCreateKendraIndexDeveloperEdition
           - 'DEVELOPER_EDITION'
           - 'ENTERPRISE_EDITION'
+
+  QNABOTPLUGINANTHROPIC:
+    Type: AWS::CloudFormation::Stack
+    Condition: QnABotShouldDeloyPluginAnthropic
+    DependsOn: IsStacknameLengthOK
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/anthropic-llm.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        APIKey: !Ref AgentAssistQnABotLLMThirdPartyApiKey
+        LLMModel: 'claude-instant-1'
+
+  QNABOTPLUGINBEDROCK:
+    Type: AWS::CloudFormation::Stack
+    Condition: QnABotShouldDeloyPluginBedrock
+    DependsOn: IsStacknameLengthOK
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/bedrock-embeddings-and-llm.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        EmbeddingsModelId: 'amazon.titan-e1t-medium'
+        LLMModelId: !Ref AgentAssistQnABotLLMBedrockModelId
 
   QNABOT:
     Type: AWS::CloudFormation::Stack
@@ -916,11 +1020,25 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
-        EmbeddingsLambdaArn: !Ref AgentAssistQnABotEmbeddingsLambdaArn
+        EmbeddingsLambdaArn: !If
+          - QnABotEmbeddingsApiBedrock
+          - !GetAtt QNABOTPLUGINBEDROCK.Outputs.EmbeddingsLambdaArn
+          - !Ref AgentAssistQnABotEmbeddingsLambdaArn
         EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
-        LLMApi: !Ref AgentAssistQnABotLLMApi
-        LLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
-        LLMThirdPartyApiKey: !Ref AgentAssistQnABotLLMThirdPartyApiKey
+        LLMApi: !If
+          - QnABotLLMPluginAnthropic
+          - 'LAMBDA'
+          - !If 
+            - QnABotLLMPluginBedrock
+            - 'LAMBDA'
+            - !Ref AgentAssistQnABotLLMApi
+        LLMLambdaArn: !If
+          - QnABotLLMPluginAnthropic
+          - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.LLMLambdaArn
+          - !If 
+            - QnABotLLMPluginBedrock
+            - !GetAtt QNABOTPLUGINBEDROCK.Outputs.LLMLambdaArn
+            - !Ref AgentAssistQnABotLLMLambdaArn
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
@@ -964,11 +1082,58 @@ Resources:
         TranscriptLambdaHookFunctionArn: !Ref TranscriptLambdaHookFunctionArn
         TranscriptLambdaHookFunctionNonPartialOnly: !Ref TranscriptLambdaHookFunctionNonPartialOnly
         EndOfCallTranscriptSummary: !Ref EndOfCallTranscriptSummary
+        BedrockModelId: !Ref BedrockModelId
         SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
         SummarizationLLMThirdPartyApiKey: !Ref SummarizationLLMThirdPartyApiKey
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
         PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
+
+  # Format nested JSON strings before nesting them in QnABotSettings in AGENTASSISTSETUP
+  SettingsJSON:
+    Type: Custom::ToJSON
+    Properties:
+      ServiceToken: !GetAtt ToJSONFunction.Arn
+      EMBEDDINGS_SCORE_THRESHOLD: !If
+      - QnABotEmbeddingsApiBedrock
+      - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingEmbeddingsScoreThreshold
+      - '0.92'
+      EMBEDDINGS_SCORE_ANSWER_THRESHOLD: !If
+      - QnABotEmbeddingsApiBedrock
+      - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingEmbeddingsScoreAnswerThreshold
+      - '0.90'
+      EMBEDDINGS_TEXT_PASSAGE_SCORE_THRESHOLD: !If
+      - QnABotEmbeddingsApiBedrock
+      - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingEmbeddingsTextPassageScoreThreshold
+      - ''
+      LLM_GENERATE_QUERY_MODEL_PARAMS: !If
+      - QnABotLLMPluginAnthropic
+      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryModelParams
+      - !If 
+        - QnABotLLMPluginBedrock
+        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryModelParams
+        - ''
+      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: !If
+      - QnABotLLMPluginAnthropic
+      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryPromptTemplate
+      - !If 
+        - QnABotLLMPluginBedrock
+        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryPromptTemplate
+        - ''
+      LLM_QA_MODEL_PARAMS: !If
+        - QnABotLLMPluginAnthropic
+        - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAModelParams
+        - !If 
+          - QnABotLLMPluginBedrock
+          - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAModelParams
+          - ''
+      LLM_QA_PROMPT_TEMPLATE: !If
+      - QnABotLLMPluginAnthropic
+      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAPromptTemplate
+      - !If 
+        - QnABotLLMPluginBedrock
+        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAPromptTemplate
+        - ''
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -1040,6 +1205,8 @@ Resources:
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         LexAgentAssistIdentityPoolId: !GetAtt AISTACK.Outputs.LexAgentAssistIdentityPoolId
         CloudFrontDomainName: !GetAtt AISTACK.Outputs.CloudFrontDomainName
+        # QnaBotSettings - JSON param with new settings values based on options selected
+        QnaBotSettings: !GetAtt SettingsJSON.Output
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
