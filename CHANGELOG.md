@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.5] - 2023-09-03
 ### Added
 - Update QnABot to latest version 5.4.1
-- Added support for Amazon Bedrock (preview) for QnABot Agent Assist
+- Added support for Amazon Bedrock (preview) for QnABot agent assist and call transcript summarization
 ### Fixed
 - Fix Chime SDK VoiceConnector problems when updating stack
 - Fix Demo Asterisk configuration preventing use of softphone
