@@ -19,8 +19,12 @@ PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
 TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0')) # default 0 - do not truncate.
 SUMMARY_PROMPT_TEMPLATE = os.environ["SUMMARY_PROMPT_TEMPLATE"]
 
+# Optional environment variables allow region / endpoint override for bedrock Boto3
+BEDROCK_REGION = os.environ["BEDROCK_REGION_OVERRIDE"] if "BEDROCK_REGION_OVERRIDE" in os.environ else os.environ["AWS_REGION"]
+BEDROCK_ENDPOINT_URL = os.environ.get("BEDROCK_ENDPOINT_URL", f'https://bedrock.{BEDROCK_REGION}.amazonaws.com')
+
 lambda_client = boto3.client('lambda')
-bedrock = boto3.client(service_name='bedrock') 
+bedrock = boto3.client(service_name='bedrock', region_name=BEDROCK_REGION, endpoint_url=ENDPOINT_URL) 
 
 def get_transcripts(callId):
     payload = {

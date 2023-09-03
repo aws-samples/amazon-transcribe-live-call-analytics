@@ -1109,6 +1109,14 @@ Resources:
                 Resource:
                   - !GetAtt LLMAnthropicSummaryLambda.Arn
               - Ref: AWS::NoValue
+            - !If
+              - ShouldEnableBedrockSummarizer
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt BedrockSummaryLambda.Arn
+              - Ref: AWS::NoValue
 
   ##########################################################################
   # LexWebUI / Agent Assist Bot 
