@@ -906,6 +906,7 @@ Resources:
 
   BedrockSummaryLambda:
     Type: AWS::Serverless::Function
+    Condition: ShouldEnableBedrockSummarizer
     Properties:
       Role: !GetAtt BedrockSummaryLambdaExecutionRole.Arn
       Runtime: python3.9
@@ -931,6 +932,7 @@ Resources:
   
   BedrockSummaryLambdaExecutionRole:
     Type: AWS::IAM::Role
+    Condition: ShouldEnableBedrockSummarizer
     Properties:
       Description: Bedrock Summary Lambda Role
       AssumeRolePolicyDocument:
