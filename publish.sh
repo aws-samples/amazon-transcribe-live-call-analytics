@@ -11,6 +11,9 @@
 # Upload artifacts to S3 bucket for deployment with CloudFormation
 ##############################################################################################
 
+# Stop the publish process on failures
+set -e
+
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
 if ! [ -x "$(command -v docker)" ]; then
@@ -73,8 +76,7 @@ PREFIX_AND_VERSION=${PREFIX}/${VERSION}
 BUCKET=${BUCKET_BASENAME}-${REGION}
 
 # Create bucket if it doesn't already exist
-aws s3api list-buckets --query 'Buckets[].Name' | grep "\"$BUCKET\"" > /dev/null 2>&1
-if [ $? -ne 0 ]; then
+if [ -x $(aws s3api list-buckets --query 'Buckets[].Name' | grep "\"$BUCKET\"") ]; then
   echo "Creating s3 bucket: $BUCKET"
   aws s3 mb s3://${BUCKET} || exit 1
   aws s3api put-bucket-versioning --bucket ${BUCKET} --versioning-configuration Status=Enabled || exit 1
