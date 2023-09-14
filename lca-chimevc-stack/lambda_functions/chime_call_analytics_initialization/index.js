@@ -289,14 +289,14 @@ const writeChimeCallStartEventToDdb = async function writeChimeCallStartEventToD
   }
 };
 
-const writeCallDataToDdb = async function writeCallDataToDdb(callData) {
+const writeCallDataToDdb = async function writeCallDataToDdb(callData, callId) {
   console.log('Write callData to DDB');
   const expiration = getExpiration(1);
   const now = new Date().toISOString();
   const putParams = {
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
     Item: {
-      PK: { S: `cd#${callData.callId}` },
+      PK: { S: `cd#${callId}` },
       SK: { S: 'BOTH' },
       CreatedAt: { S: now },
       ExpiresAfter: { N: expiration.toString() },
@@ -553,7 +553,7 @@ const handler = async function handler(event, context) {
       console.log('Nothing to do - exiting.');
       return;
     }
-    await writeCallDataToDdb(callData);
+    await writeCallDataToDdb(callData, callData.callId);
     console.log('Ready to start processing call');
     await writeCallStartEventToKds(kinesisClient, callData);
 
@@ -599,7 +599,10 @@ const handler = async function handler(event, context) {
       callData = await getCallDataFromChimeEventsWithLambdaHook(event);
 
       console.log('Saving callData to DynamoDB');
-      await writeCallDataToDdb(callData);
+      await writeCallDataToDdb(callData, callData.callId);
+      if(callData.callId !== callData.originalCallId) {
+        await writeCallDataToDdb(callData, callData.originalCallId);
+      }
 
       if (callData.shouldProcessCall === false) {
         console.log('CallData shouldProcessCall is false, exiting.');
@@ -623,11 +626,15 @@ const handler = async function handler(event, context) {
         );
         return;
       }
+      
+      let tempCallData = await getCallDataFromChimeEvents(event);
+      callData = await getCallDataFromDdb(tempCallData.callId);
 
-      callData = await getCallDataFromChimeEvents(event);
+      console.log('Modified callData:');
+      console.log(callData);
       await writeCallEndEventToKds(kinesisClient, callData.callId);
       callData.callStreamingEndTime = new Date().toISOString();
-      await writeCallDataToDdb(callData);
+      await writeCallDataToDdb(callData, callData.callId);
     } 
     else {
       console.log(
