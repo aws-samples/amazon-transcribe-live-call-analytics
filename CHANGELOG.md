@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.6] - 2023-09-14
+### Fixed
+- Fix LCA 0.8.5 Stack updates fail when changing Agent Assist parameters - Issue #96
+
 ## [0.8.5] - 2023-09-03
 ### Added
 - Update QnABot to latest version 5.4.1
@@ -293,7 +297,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...develop
+[0.8.6]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.5
 [0.8.5]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...v0.8.4
 [0.8.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.4...v0.8.3
 [0.8.3]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.2...v0.8.3
