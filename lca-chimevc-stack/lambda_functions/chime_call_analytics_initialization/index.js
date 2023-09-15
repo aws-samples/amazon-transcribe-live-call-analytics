@@ -627,11 +627,7 @@ const handler = async function handler(event, context) {
         return;
       }
       
-      let tempCallData = await getCallDataFromChimeEvents(event);
-      callData = await getCallDataFromDdb(tempCallData.callId);
-
-      console.log('Modified callData:');
-      console.log(callData);
+      callData = await getCallDataFromDdb(event.detail.callId);
       await writeCallEndEventToKds(kinesisClient, callData.callId);
       callData.callStreamingEndTime = new Date().toISOString();
       await writeCallDataToDdb(callData, callData.callId);
