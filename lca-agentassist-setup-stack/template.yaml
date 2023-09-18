@@ -126,6 +126,10 @@ Parameters:
     Type: String
     Description: The domain name of the LCA CloudFront distribution
 
+  TranscriptSummaryFunctionArn:
+    Type: String
+    Description: ARN of Transcript Summary function (if defined)
+
   # Changes to Params below force AgentAssist Setup to update.
   CallAudioSource:
     Type: String
@@ -191,6 +195,80 @@ Resources:
     Properties:
       ServiceToken: !GetAtt GetLowercaseFunction.Arn
       InputString: !Ref LCAStackName
+
+  LambdaHookSummarizeCallRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns: 
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: InlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action: lambda:InvokeFunction
+                Effect: Allow
+                Resource: !Ref TranscriptSummaryFunctionArn
+
+  LambdaHookSummarizeCallFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      # FunctionName must start with 'QNA-' to match QnABot fulfillment role permissions
+      FunctionName: !Sub "QNA-SummarizeCall-${LCAStackName}"
+      Role: !GetAtt LambdaHookSummarizeCallRole.Arn
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: 900
+      Environment:
+        Variables:
+          TRANSCRIPT_SUMMARY_FUNCTION_ARN: !Ref TranscriptSummaryFunctionArn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          TRANSCRIPT_SUMMARY_FUNCTION_ARN = os.environ.get("TRANSCRIPT_SUMMARY_FUNCTION_ARN")
+          LAMBDA_CLIENT = boto3.client("lambda")
+
+          def get_call_summary(callId):
+              event={"CallId": callId}
+              lambda_response = LAMBDA_CLIENT.invoke(
+                  FunctionName=TRANSCRIPT_SUMMARY_FUNCTION_ARN,
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps(event)
+              )
+              result = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+              return result["summary"]
+
+          def format_response(event, summary):
+              # set plaintext, & markdown
+              plainttext = summary
+              markdown = summary
+              ssml = summary
+              # add plaintext, markdown, and ssml fields to event.res
+              event["res"]["message"] = plainttext
+              event["res"]["session"]["appContext"] = {
+                  "altMessages": {
+                      "markdown": markdown,
+                      "ssml": ssml
+                  }
+              }
+              return event
+
+          def handler(event, context):
+              print("Received event: %s" % json.dumps(event))
+              callId = event["req"]["session"].get("callId",{})
+              summary = get_call_summary(callId)
+              event = format_response(event, summary)
+              print("Returning response: %s" % json.dumps(event))
+              return event
 
   LambdaRole:
     Type: "AWS::IAM::Role"

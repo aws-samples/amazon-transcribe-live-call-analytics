@@ -408,6 +408,22 @@ Outputs:
     Description: The full domain name of the CloudFront distribution
     Value: !GetAtt WebAppCloudFrontDistribution.DomainName
 
+  TranscriptSummaryFunctionArn:
+    Description: Call Summarizer Lambda function ARN
+    Value: !If [
+            ShouldDeploySageMakerSummarizer, 
+            !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn],
+            !If [
+              ShouldEnableAnthropicSummarizer,
+              !GetAtt LLMAnthropicSummaryLambda.Arn,
+              !If [
+                ShouldEnableBedrockSummarizer,
+                !GetAtt BedrockSummaryLambda.Arn,
+                !Ref EndOfCallLambdaHookFunctionArn
+              ]
+            ]
+          ]
+
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
   RecordingsBucket:
