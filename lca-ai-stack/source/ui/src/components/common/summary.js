@@ -26,7 +26,7 @@ export const getMarkdownSummary = (callSummaryText) => {
     const jsonSummary = JSON.parse(summary);
     summary = '';
     Object.entries(jsonSummary).forEach(([key, value]) => {
-      summary += `### ${key}\n${value}\n`;
+      summary += `**${key}**\n\n${value}\n\n`;
     });
   } catch (e) {
     return callSummaryText;

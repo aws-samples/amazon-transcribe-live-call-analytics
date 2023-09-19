@@ -1,6 +1,6 @@
 # How to run LCA UI Locally:
 
-1. To get the LCA UI to run locally, you will need to configure a `.env` file in the `/lca-ai-stack/source/ui/` folder. The contents of the `.env` file must contain the environment variables listed below along with their values. 
+1. To get the LCA UI to run locally, you will need to configure a `.env` file in the `/lca-ai-stack/source/ui/` folder. The contents of the `.env` file must contain the environment variables listed below along with their values. The values may be found in the resources tab of the LCA AI Stack, except for the GraphQL URL, which can be found in the AWS AppSync management console, either in the main list
 
 Example contents of `.env` file:
 
@@ -11,6 +11,7 @@ Example contents of `.env` file:
   REACT_APP_APPSYNC_GRAPHQL_URL=https://XXXXXXXXXX.appsync-api.us-west-2.amazonaws.com/graphql
   REACT_APP_AWS_REGION=us-west-2
   REACT_APP_SETTINGS_PARAMETER=CFN-LCASettingsParameter-XXXXXXXXXXXX
+  REACT_APP_ENABLE_LEX_AGENT_ASSIST=true
 ```
 
 2. Make sure you have NodeJS 16+ installed.
@@ -18,7 +19,7 @@ Example contents of `.env` file:
 4. Run `npm run start` to start the local development mode.
 5. Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
-np
+
 Default React App Readme Below:
 
 -------------------------------------------
