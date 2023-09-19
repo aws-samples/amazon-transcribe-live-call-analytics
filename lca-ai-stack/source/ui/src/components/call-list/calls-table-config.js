@@ -9,14 +9,18 @@ import {
   Link,
   SpaceBetween,
   StatusIndicator,
+  Popover,
 } from '@awsui/components-react';
 
+import rehypeRaw from 'rehype-raw';
+import ReactMarkdown from 'react-markdown';
 import { TableHeader } from '../common/table';
 import { CALLS_PATH } from '../../routes/constants';
 import { SentimentIndicator } from '../sentiment-icon/SentimentIcon';
 import { SentimentTrendIndicator } from '../sentiment-trend-icon/SentimentTrendIcon';
 import { CategoryAlertPill } from './CategoryAlertPill';
 import { CategoryPills } from './CategoryPills';
+import { getTextOnlySummary } from '../common/summary';
 
 export const KEY_COLUMN_ID = 'callId';
 
@@ -50,6 +54,25 @@ export const COLUMN_DEFINITIONS_MAIN = [
     sortingField: 'initiationTimeStamp',
     isDescending: false,
     width: 225,
+  },
+  {
+    id: 'summary',
+    header: 'Summary',
+    cell: (item) => {
+      const summary = getTextOnlySummary(item.callSummaryText);
+      return (
+        <Popover
+          dismissButton={false}
+          position="top"
+          size="large"
+          triggerType="text"
+          content={<ReactMarkdown rehypePlugins={[rehypeRaw]}>{summary ?? ''}</ReactMarkdown>}
+        >
+          {summary && summary.length > 20 ? `${summary.substring(0, 20)}...` : summary}
+        </Popover>
+      );
+    },
+    sortingField: 'summary',
   },
   {
     id: 'callerPhoneNumber',
@@ -150,6 +173,7 @@ const VISIBLE_CONTENT_OPTIONS = [
       { id: 'callId', label: 'Call ID', editable: false },
       { id: 'alerts', label: 'Alerts' },
       { id: 'agentId', label: 'Agent' },
+      { id: 'summary', label: 'Summary' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
       { id: 'recordingStatus', label: 'Status' },

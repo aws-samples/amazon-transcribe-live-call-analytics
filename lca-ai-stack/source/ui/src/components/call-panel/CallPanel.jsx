@@ -19,10 +19,10 @@ import {
 } from '@awsui/components-react';
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
-
 import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
 import { Logger } from 'aws-amplify';
 import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
+import { getMarkdownSummary } from '../common/summary';
 
 import RecordingPlayer from '../recording-player';
 import useSettingsContext from '../../contexts/settings';
@@ -343,7 +343,7 @@ const CallSummary = ({ item }) => {
                   {/* eslint-disable-next-line react/no-array-index-key */}
                   <TextContent color="gray">
                     <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                      {item.callSummaryText ?? 'No summary available'}
+                      {getMarkdownSummary(item.callSummaryText) ?? 'No summary available'}
                     </ReactMarkdown>
                   </TextContent>
                 </div>
