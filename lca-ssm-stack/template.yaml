@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Amazon Transcribe Live Call Analytics - LCA SSM Parameters
+
+Parameters:
+  # Required
+  LCAStackName:
+    Type: String
+    Description: LCA Stack Name
+
+  LLMPromptSummaryTemplate:
+    Type: String
+    Description: >-
+      Prompt to use to generate insights for a call. This can be a single string where an LLM returns a string,
+      or a single string where the LLM returns a JSON object with key/value pairs, or a string that contains
+      a JSON Object with key/value pairs, where the LLM will run one inference on each key/value pair with the value
+      containing the prompt. Use {transcript} as a placeholder for where the call transcript will be injected.
+    Default: >-
+      Human: Answer all the questions below as a json object with key value pairs, the key is provided, and answer as the value, based on the transcript. Only return json.
+      <br><questions>
+      <br>Summary: Summarize the call.
+      <br>Topic: Topic of the call. Choose from one of these or make one up (iphone issue, billing issue, cancellation)
+      <br>Product: What product did the customer call about? (internet, broadband, mobile phone, mobile plans)
+      <br>Resolved: Did the agent resolve the customer's questions? (yes or no) 
+      <br>Callback: Was this a callback? (yes or no) 
+      <br>Politeness: Was the agent polite and professional? (yes or no)
+      <br>Actions: What actions did the Agent take? 
+      <br></questions> 
+      <br><transcript>
+      <br>{transcript}
+      <br></transcript>
+      <br>Assistant: Here is the JSON object with the answers to the questions: 
+
+Resources:
+  LLMPromptSummaryTemplateParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
+      Type: String
+      Description: >
+        Prompt to use to generate insights for a call. This can be a single string where an LLM returns a string,
+        or a single string where the LLM returns a JSON object with key/value pairs, or a string that contains
+        a JSON Object with key/value pairs, where the LLM will run one inference on each key/value pair with the value
+        containing the prompt. Use {transcript} as a placeholder for where the call transcript will be injected.
+      Value: !Ref LLMPromptSummaryTemplate
+
+Outputs:
+  LLMPromptSummaryTemplateParameter:
+    Value: !Ref LLMPromptSummaryTemplateParameter

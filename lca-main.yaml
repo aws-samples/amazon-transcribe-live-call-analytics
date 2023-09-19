@@ -1040,6 +1040,13 @@ Resources:
             - !GetAtt QNABOTPLUGINBEDROCK.Outputs.LLMLambdaArn
             - !Ref AgentAssistQnABotLLMLambdaArn
 
+  SSMSTACK:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ssm-stack/<VERSION_TOKEN>/template.yaml
+      Parameters:
+        LCAStackName: !Ref AWS::StackName
+
   AISTACK:
     Type: AWS::CloudFormation::Stack
     DependsOn: IsStacknameLengthOK
@@ -1048,6 +1055,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        LCAStackName: !Ref AWS::StackName
         RecordingsBucketRetentionDays: !Ref RecordingsBucketRetentionDays
         EnableVoiceToneAnalysis: !If
           - ShouldEnableVoiceToneAnalysis
