@@ -6,7 +6,6 @@ export const getTextOnlySummary = (callSummaryText) => {
     return 'Not available';
   }
   let summary = callSummaryText;
-  console.log('text only summary:', summary);
   try {
     const jsonObj = JSON.parse(summary);
     if ('summary' in jsonObj) summary = jsonObj.summary;
