@@ -877,7 +877,7 @@ Resources:
           TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
           SUMMARY_PROMPT_SSM_PARAMETER: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
           SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
-      Timeout: 60
+      Timeout: 900
       MemorySize: 128
       Handler: index.handler
       CodeUri: ../source/lambda_functions/llm_anthropic_summary_lambda
@@ -930,7 +930,7 @@ Resources:
           PROCESS_TRANSCRIPT: "True"
           SUMMARY_PROMPT_SSM_PARAMETER: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
           SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
-      Timeout: 60
+      Timeout: 900
       MemorySize: 512
       Handler: index.handler
       CodeUri: ../source/lambda_functions/bedrock_summary_lambda
