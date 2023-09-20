@@ -766,7 +766,7 @@ const CallInProgressTranscript = ({
   );
 };
 
-const getAgentAssistPanel = (collapseSentiment) => {
+const getAgentAssistPanel = (item, collapseSentiment) => {
   if (process.env.REACT_APP_ENABLE_LEX_AGENT_ASSIST === 'true') {
     return (
       <Container
@@ -788,7 +788,7 @@ const getAgentAssistPanel = (collapseSentiment) => {
           <iframe
             style={{ border: '0px', height: collapseSentiment ? '34vh' : '68vh', margin: '0' }}
             title="Agent Assist"
-            src="/index-lexwebui.html"
+            src={`/index-lexwebui.html?callId=${item.callId}`}
             width="100%"
           />
         </Box>
@@ -930,7 +930,7 @@ const CallTranscriptContainer = ({
           collapseSentiment,
         })}
       </Container>
-      {getAgentAssistPanel(collapseSentiment)}
+      {getAgentAssistPanel(item, collapseSentiment)}
     </Grid>
   );
 };

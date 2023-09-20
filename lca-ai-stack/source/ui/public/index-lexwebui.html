@@ -29,12 +29,18 @@
       // to take the defaults which works in most cases.
       var loader = new Loader(loaderOpts);
 
+      // Get callid from URL params
+      const urlParams = new URLSearchParams(window.location.search);
+      const callId = urlParams.get("callId");
+      console.log(`DEBUG: URL Params: ${urlParams}, CallId: ${callId}`)
+
       // When loading the chatbot UI component, you can optionally pass it a
       // configuration object
       var chatbotUiConfig = {
         lex: {
           sessionAttributes: {
             /* QNAClientFilter: '', */
+            callId: callId,
             userAgent: navigator.userAgent
           }
         }
