@@ -910,6 +910,11 @@ Resources:
               - Effect: "Allow"
                 Action: "lambda:InvokeFunction"
                 Resource: !GetAtt FetchTranscript.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCAStackName}-*"
 
   BedrockSummaryLambda:
     Type: AWS::Serverless::Function
@@ -961,6 +966,11 @@ Resources:
               - Effect: "Allow"
                 Action: "lambda:InvokeFunction"
                 Resource: !GetAtt FetchTranscript.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCAStackName}-*"
 
         - PolicyName: !Sub ${AWS::StackName}-BedrockSummary
           PolicyDocument:
