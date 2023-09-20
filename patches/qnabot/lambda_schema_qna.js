@@ -140,7 +140,6 @@ module.exports={
             },
             propertyOrder: 8
         },
-        /* -- LCA - not needed
         r:{
             title:"Response card",
             description:"Attach images and/or buttons to your answer. A reponse card must have an imageUrl or at least one button.",
@@ -192,7 +191,6 @@ module.exports={
             propertyOrder:9,
             required:["title"]
         },
-        */
         kendraRedirectQueryText:{
             type:"string",
             description:"Enter QueryText to retrieve the answer from the Kendra Fallback index specified in Settings. Answer fields above are ignored when KendraRedirect query is used.",

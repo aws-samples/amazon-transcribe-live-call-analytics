@@ -217,7 +217,7 @@ Resources:
                 Effect: Allow
                 Resource: !Ref TranscriptSummaryFunctionArn
 
-  LambdaHookSummarizeCallFunction:
+  QNASummarizeCallFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       # FunctionName must start with 'QNA-' to match QnABot fulfillment role permissions
@@ -370,6 +370,7 @@ Resources:
           import datetime
           import time
           import os
+          import re
           from botocore.exceptions import ClientError
 
           AWS_REGION = os.environ['AWS_REGION']
@@ -450,7 +451,7 @@ Resources:
 
           def setupQnABot(props, oldprops):
             configureQnabotSettings(props)
-            if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoJson"]):
+            if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoJson", "QNASummarizeCallFunction"]):
               loadQnABotSamplePackage(props)
               buildQnABotLexBot(props)
             else:
@@ -509,10 +510,23 @@ Resources:
           def loadQnABotSamplePackage(props):
             importBucket = getStackResource(props["QNABOTSTACK"], "ImportBucket")
             demoPath = props["QnaAgentAssistDemoJson"]
+            demoparts = demoPath.split('/', 1)
+            demobucket = demoparts[0]
+            demokey = demoparts[1]
             demoFile = os.path.basename(demoPath)
+            demoFileTmp = f'/tmp/{demoFile}'
+            # Download demo file from S3 
+            s3.download_file(demobucket, demokey, demoFileTmp)
+            # Replace Summarize Lambda Hook placeholder with function ARN
+            with open(demoFileTmp, 'r') as f:
+              filedata = f.read()
+            filedata = re.sub('<LCASummarizeCallFunctionName>', props["QNASummarizeCallFunction"], filedata) 
+            with open(demoFileTmp, 'w') as f:
+              f.write(filedata)
+            # Upload edited file to import bucket to trigger import  
             statusFile = f'status/{demoFile}'
             s3.put_object(Bucket=importBucket, Key=f'{statusFile}', Body='{"status":"Starting"}')
-            s3.copy_object(CopySource=demoPath, Bucket=importBucket, Key=f'data/{demoFile}')
+            s3.upload_file(demoFileTmp, importBucket, f'data/{demoFile}')
             print(f"...waiting for {demoFile} import to be complete...")
             status = "Starting"
             while status != "Complete":
@@ -627,6 +641,7 @@ Resources:
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
       AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
+      QNASummarizeCallFunction: !Ref QNASummarizeCallFunction
       QnaBotSettings: !Ref QnaBotSettings
       # Changes to Params below force AgentAssist Setup to execute.
       CallAudioSource: !Ref CallAudioSource

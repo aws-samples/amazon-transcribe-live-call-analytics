@@ -788,7 +788,7 @@ const getAgentAssistPanel = (item, collapseSentiment) => {
           <iframe
             style={{ border: '0px', height: collapseSentiment ? '34vh' : '68vh', margin: '0' }}
             title="Agent Assist"
-            src={"/index-lexwebui.html?callId=" + item.callId}
+            src={`/index-lexwebui.html?callId=${item.callId}`}
             width="100%"
           />
         </Box>
