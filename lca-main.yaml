@@ -1043,7 +1043,7 @@ Resources:
   SSMSTACK:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ssm-stack/<VERSION_TOKEN>/template.yaml
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ssm-stack/template.yaml
       Parameters:
         LCAStackName: !Ref AWS::StackName
 
