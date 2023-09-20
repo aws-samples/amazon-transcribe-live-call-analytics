@@ -17,7 +17,6 @@ BEDROCK_MODEL_ID = os.environ["BEDROCK_MODEL_ID"]
 FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
 TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0')) # default 0 - do not truncate.
-SUMMARY_PROMPT_TEMPLATE = os.getenv('SUMMARY_PROMPT_TEMPLATE','')
 SUMMARY_PROMPT_SSM_PARAMETER = os.environ["SUMMARY_PROMPT_SSM_PARAMETER"]
 
 # Optional environment variables allow region / endpoint override for bedrock Boto3
@@ -28,22 +27,24 @@ lambda_client = boto3.client('lambda')
 ssmClient = boto3.client("ssm")
 bedrock = boto3.client(service_name='bedrock', region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL) 
 
-def get_templates_from_ssm():
-    global SUMMARY_PROMPT_TEMPLATE
+def get_templates_from_ssm(prompt_override):
     templates = []
-    try:
-        SUMMARY_PROMPT_TEMPLATE = ssmClient.get_parameter(Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
+    prompt_template_str = None
+    if prompt_override is not None:
+        prompt_template_str = prompt_override
 
-        prompt_templates = json.loads(SUMMARY_PROMPT_TEMPLATE)
+    try:
+        if prompt_template_str is None:
+            prompt_template_str = ssmClient.get_parameter(Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
+        prompt_templates = json.loads(prompt_template_str)
         for k, v in prompt_templates.items():
             prompt = v.replace("<br>", "\n")
             templates.append({ k:prompt })
     except:
-        prompt = SUMMARY_PROMPT_TEMPLATE.replace("<br>", "\n")
+        prompt = prompt_template_str.replace("<br>", "\n")
         templates.append({
             "Summary": prompt
         })
-        print("Prompt: ",prompt)
     return templates
 
 def get_transcripts(callId):
@@ -90,14 +91,15 @@ def call_bedrock(prompt_data):
     return summary_text
 
 
-def generate_summary(transcript):
+def generate_summary(transcript, prompt_override):
     # first check to see if this is one prompt, or many prompts as a json
-    templates = get_templates_from_ssm()
+    templates = get_templates_from_ssm(prompt_override)
     result = {}
     for item in templates:
         key = list(item.keys())[0]
         prompt = item[key]
         prompt = prompt.replace("{transcript}", transcript)
+        print("Prompt:", prompt)
         response = call_bedrock(prompt)
         print("API Response:", response)
         result[key] = response
@@ -115,14 +117,20 @@ def handler(event, context):
     print("Transcript data:", transcript_data)
     transcript_json = json.loads(transcript_data)
     transcript = transcript_json['transcript']
-    summary_json = None
     summary = "No summary available"
+
+    prompt_override = None
+    if 'prompt' in event:
+        prompt_override = event['prompt']
+    elif 'Prompt' in event:
+        prompt_override = event['Prompt']
+
     try:
-        summary = generate_summary(transcript)
+        summary = generate_summary(transcript, prompt_override)
     except Exception as e:
         print(e)
         summary = 'An error occurred generating summary.'
-        
+
     print("Summary: ", summary)
     return {"summary": summary}
     
