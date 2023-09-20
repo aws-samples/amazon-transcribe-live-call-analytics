@@ -1285,7 +1285,7 @@ Resources:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
       Runtime: python3.9
-      Timeout: 60
+      Timeout: 900
       Environment:
         Variables:
           # XXX add log level parameter or map
