@@ -237,8 +237,10 @@ Resources:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN = os.environ.get("TRANSCRIPT_SUMMARY_FUNCTION_ARN")
           LAMBDA_CLIENT = boto3.client("lambda")
 
-          def get_call_summary(callId):
+          def get_call_summary(callId, prompt):
               event={"CallId": callId}
+              if prompt:
+                event["Prompt"] = prompt
               lambda_response = LAMBDA_CLIENT.invoke(
                   FunctionName=TRANSCRIPT_SUMMARY_FUNCTION_ARN,
                   InvocationType='RequestResponse',
@@ -262,10 +264,19 @@ Resources:
               }
               return event
 
+          def get_prompt_from_lambdahook_args(event):
+              prompt=None
+              lambdahook_args_list = event["res"]["result"].get("args",[])
+              print("LambdaHook args: ", lambdahook_args_list)
+              if len(lambdahook_args_list):
+                prompt = lambdahook_args_list[0]
+              return prompt
+
           def handler(event, context):
               print("Received event: %s" % json.dumps(event))
               callId = event["req"]["session"].get("callId",{})
-              summary = get_call_summary(callId)
+              prompt = get_prompt_from_lambdahook_args(event)
+              summary = get_call_summary(callId, prompt)
               event = format_response(event, summary)
               print("Returning response: %s" % json.dumps(event))
               return event
