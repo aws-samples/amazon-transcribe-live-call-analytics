@@ -33,9 +33,10 @@ def get_templates_from_ssm(prompt_override):
     if prompt_override is not None:
         prompt_template_str = prompt_override
 
+    if prompt_template_str is None:
+        prompt_template_str = ssmClient.get_parameter(Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
+
     try:
-        if prompt_template_str is None:
-            prompt_template_str = ssmClient.get_parameter(Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
         prompt_templates = json.loads(prompt_template_str)
         for k, v in prompt_templates.items():
             prompt = v.replace("<br>", "\n")
@@ -120,9 +121,7 @@ def handler(event, context):
     summary = "No summary available"
 
     prompt_override = None
-    if 'prompt' in event:
-        prompt_override = event['prompt']
-    elif 'Prompt' in event:
+    if 'Prompt' in event:
         prompt_override = event['Prompt']
 
     try:

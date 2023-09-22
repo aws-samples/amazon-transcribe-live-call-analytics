@@ -1374,3 +1374,7 @@ Outputs:
   FetchTranscriptLambdaArn:
     Description: The ARN of a Lambda function that will process and export a call transcript as a string.
     Value: !GetAtt AISTACK.Outputs.FetchTranscriptArn
+
+  LLMPromptSummaryTemplateParameter:
+    Description: The Parameter Store parameter that stores the LLM summary prompt template.
+    Value: !GetAtt SSMSTACK.Outputs.LLMPromptSummaryTemplateParameter
