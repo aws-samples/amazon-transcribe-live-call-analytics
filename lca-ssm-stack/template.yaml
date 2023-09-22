@@ -16,20 +16,16 @@ Parameters:
       a JSON Object with key/value pairs, where the LLM will run one inference on each key/value pair with the value
       containing the prompt. Use {transcript} as a placeholder for where the call transcript will be injected.
     Default: >-
-      Human: Answer all the questions below as a json object with key value pairs, the key is provided, and answer as the value, based on the transcript. Only return json.
-      <br><questions>
-      <br>Summary: Summarize the call.
-      <br>Topic: Topic of the call. Choose from one of these or make one up (iphone issue, billing issue, cancellation)
-      <br>Product: What product did the customer call about? (internet, broadband, mobile phone, mobile plans)
-      <br>Resolved: Did the agent resolve the customer's questions? (yes or no) 
-      <br>Callback: Was this a callback? (yes or no) 
-      <br>Politeness: Was the agent polite and professional? (yes or no)
-      <br>Actions: What actions did the Agent take? 
-      <br></questions> 
-      <br><transcript>
-      <br>{transcript}
-      <br></transcript>
-      <br>Assistant: Here is the JSON object with the answers to the questions: 
+      Human: Answer all the questions below as a json object with key value pairs, the key is provided, and answer as the value, based on the transcript. Only return json. Use gender neutral pronouns.
+      <br><questions> 
+      <br>Summary: Generate a short summary of the call.
+      <br>Topics: List the topics discussed in the transcript. Choose from one or more of these or make one up (iphone issue, billing issue, cancellation).
+      <br>Follow-Up Actions: In a markdown list, provide the follow-up actions the agent needs to take after the call. 
+      <br></questions>  
+      <br><transcript> 
+      <br>{transcript} 
+      <br></transcript> 
+      <br>Assistant: Here is the JSON object with the answers to the questions:
 
 Resources:
   LLMPromptSummaryTemplateParameter:
