@@ -962,6 +962,10 @@ def add_contact_lens_call_category(
     tasks = []
     call_id = message["ContactId"]
 
+    if not appsync_session.client.schema:
+        raise ValueError("invalid AppSync schema")
+    schema = DSLSchema(appsync_session.client.schema)
+
     for segment in message.get("Segments", []):
         # only handle categories and transcripts with issues
         if (
@@ -970,6 +974,25 @@ def add_contact_lens_call_category(
             continue
 
         categories = segment.get("Categories", {})
+        matched_categories = categories.get("MatchedCategories", [])
+
+        if (len(matched_categories) > 0):
+            query = dsl_gql(
+                DSLMutation(
+                    schema.Mutation.addCallCategory.args(
+                        input={"CallId": message["ContactId"], "CallCategories": matched_categories}
+                    ).select(*call_fields(schema))
+                )
+            )
+
+            tasks.append(
+                execute_gql_query_with_retries(
+                    query,
+                    client_session=appsync_session,
+                    logger=LOGGER,
+                ),
+            )
+
         for category in categories.get("MatchedCategories", []):
             category_details = categories["MatchedDetails"][category]
             category_segment = transform_segment_to_categories_agent_assist(
@@ -978,16 +1001,14 @@ def add_contact_lens_call_category(
                 call_id=call_id,
             )
 
-            end_time = category_segment['StartTime'] + 0.1
-
             send_call_category_args.append(
                 dict(
                     category=category_segment['Transcript'],
                     transcript_segment_args=dict(
-                        CallId=message["CallId"],
+                        CallId=message["ContactId"],
                         Channel="CATEGORY_MATCH",
                         CreatedAt=category_segment["CreatedAt"],
-                        EndTime=end_time,
+                        EndTime=category_segment['EndTime'],
                         ExpiresAfter=get_ttl(),
                         SegmentId=str(uuid.uuid4()),
                         StartTime=category_segment['StartTime'],
@@ -1006,9 +1027,10 @@ def add_contact_lens_call_category(
         sns_task = publish_sns_category(
             sns_client=sns_client,
             category_name=category,
-            call_id=message["CallId"]
+            call_id=message["ContactId"]
         )
         tasks.append(sns_task)
+
 
     return tasks
 
@@ -1422,7 +1444,6 @@ async def execute_process_event_api_mutation(
                 )
 
         add_call_category_tasks = []
-        add_contact_lens_agent_assist_tasks = []
 
         if 'ContactId' in message.keys():
             add_call_category_tasks = add_contact_lens_call_category(
@@ -1430,23 +1451,19 @@ async def execute_process_event_api_mutation(
                 appsync_session=appsync_session,
                 sns_client=sns_client,
             )
-            add_contact_lens_agent_assist_tasks = add_contact_lens_agent_assistances(
-                message=message,
-                appsync_session=appsync_session,
-            )
 
         update_call_aggregation_tasks = []
-        if not normalized_message["IsPartial"]:
-            update_call_aggregation_tasks = await get_call_aggregation_tasks(
-                message=normalized_message,
-                appsync_session=appsync_session,
-            )
+        for normalized_message in normalized_messages:
+            if not normalized_message["IsPartial"]:
+                update_call_aggregation_tasks = await get_call_aggregation_tasks(
+                    message=normalized_message,
+                    appsync_session=appsync_session,
+                )
 
         task_responses = await asyncio.gather(
             *add_transcript_tasks,
             *add_transcript_sentiment_tasks,
             *add_call_category_tasks,
-            *add_contact_lens_agent_assist_tasks,
             *update_call_aggregation_tasks,
             # *add_tca_agent_assist_tasks,
             return_exceptions=True,
