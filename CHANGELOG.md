@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - Unreleased
+- Update default Anthropic model to be Claude 2
+
 ## [0.8.6] - 2023-09-14
 ### Fixed
 - Fix LCA 0.8.5 Stack updates fail when changing Agent Assist parameters - Issue #96

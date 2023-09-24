@@ -35,13 +35,13 @@ NOTES:
 ### **ANTHROPIC**
 
 Configure LCA to use 3rd party LLM services from Anthropic by selecting 'ANTHROPIC', and providing an API key issued by the third party provider. Note that when using third party providers, your data will leave your AWS account and the AWS network and will be sent in the payload of the API requests to the third party provider. 
-When using Anthropic, the latest Claude-v1-100k model is used by default. 
+When using Anthropic, the latest Claude-2 model is used by default. 
 
 The LCA deployment creates an AWS Lambda function, `LLMAnthropicSummaryLambda`, that interacts with the Anthropic API on your behalf. You can optionally customize the behavior by modifying function enviornment variables:
 - ANTHROPIC_API_KEY: Set to the value you provided as `End of Call Summarization LLM Third Party API Key` during deployment.
-- ANTHROPIC_MODEL_IDENTIFIER: Set to `claude-v1.3-100k` by default.
+- ANTHROPIC_MODEL_IDENTIFIER: Set to `claude-2` by default.
 - SUMMARY_PROMPT_TEMPLATE: Default prompt template used to generate summary from Claude. Modify this template to customize your summaries. Note, the placeholder `{transcript}` must be present in the prompt template, and will be replaced by the actual call transcript retrieved by `FetchTranscript` Lambda (see more details below). 
-- TOKEN_COUNT: Defaults to '0' which means that the transcript is not truncated prior to inference. The default `claude-v1.3-100k` model supports 100k tokens, which we expect to be more than sufficient to handle even the longest call transcripts.
+- TOKEN_COUNT: Defaults to '0' which means that the transcript is not truncated prior to inference. The default `claude-2` model supports 100k tokens, which we expect to be more than sufficient to handle even the longest call transcripts.
 
 
 ### **LAMBDA**

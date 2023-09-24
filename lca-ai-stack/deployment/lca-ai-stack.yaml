@@ -885,12 +885,12 @@ Resources:
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
-          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3-100k"
+          ANTHROPIC_MODEL_IDENTIFIER: "claude-2"
           ANTHROPIC_API_KEY: !Ref SummarizationLLMThirdPartyApiKey
           ENDPOINT_URL: "https://api.anthropic.com/v1/complete"
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           PROCESS_TRANSCRIPT: "True"
-          TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
+          TOKEN_COUNT: "0"  # using v2 model - do not truncate transcript
           SUMMARY_PROMPT_SSM_PARAMETER: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
       Timeout: 900
       MemorySize: 128
