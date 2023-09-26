@@ -1085,7 +1085,8 @@ Resources:
             ]
           ]
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
-      Timeout: 60
+          BOTO_READ_TIMEOUT: 60
+      Timeout: 240
       MemorySize: 128
       Handler: lambda_function.handler
       Layers:
