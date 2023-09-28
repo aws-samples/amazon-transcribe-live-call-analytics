@@ -147,14 +147,13 @@ Parameters:
     Type: String
     Description: >
       Method used by QnABot for semantic matching of caller utterances to stored agent assist configuration 
-      items and FAQs. Choose 'EMBEDDINGS BEDROCK' only if your account has been allow-listed for 
-      Amazon Bedrock preview access (see https://aws.amazon.com/bedrock).
+      items and FAQs. 
     AllowedValues:
       - KENDRA FAQ
       - EMBEDDINGS SAGEMAKER
       - EMBEDDINGS BEDROCK
       - EMBEDDINGS LAMBDA
-    Default: KENDRA FAQ
+    Default: EMBEDDINGS BEDROCK
   AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
     Type: Number
     MinValue: 0
@@ -170,19 +169,18 @@ Parameters:
       'Optional: If Item Matching Api is LAMBDA, provide ARN for a Lambda function
       that takes JSON {"inputtext":"string"}, and returns JSON {"embedding":[...]}'
     Default: ''
-  AgentAssistQnABotEmbeddingsLambdaDimensions:
+  AgentAssistQnABotEmbeddingsLambdaDimensions2:
     Type: Number
     MinValue: 1
     Description:
       'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
       for embeddings returned by the EmbeddingsLambda function specified above.'
-    Default: 4096
+    Default: 1536
   AgentAssistQnABotLLMApi:
     Type: String
     Description:
       Optionally enable (experimental) QnABot question disambiguation and
-      generative question answering using an LLM. Choose BEDROCK only if your account has been allow-listed for 
-      Amazon Bedrock preview access (see https://aws.amazon.com/bedrock).
+      generative question answering using an LLM.
       To use a custom LAMBDA function, provide additional
       parameters below. To use ANTHROPIC third party service, enter the API key below. 
     AllowedValues:
@@ -190,14 +188,14 @@ Parameters:
       - BEDROCK
       - LAMBDA
       - ANTHROPIC
-    Default: DISABLED
+    Default: BEDROCK
   AgentAssistQnABotLLMBedrockModelId:
     Type: String
     Default: anthropic.claude-instant-v1
     AllowedValues:
-      - amazon.titan-tg1-large
-      - ai21.j2-grande-instruct
-      - ai21.j2-jumbo-instruct
+      - amazon.titan-text-express-v1
+      - ai21.j2-ultra-v1
+      - ai21.j2-mid-v1
       - anthropic.claude-v1
       - anthropic.claude-instant-v1
       - anthropic.claude-v2
@@ -380,7 +378,7 @@ Parameters:
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
       to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
-      BEDROCK option requires preview access to Amazon Bedrock API and requires you to choose one of the supported model IDs from the 
+      BEDROCK option requires you to choose one of the supported model IDs from the 
       provided list (BedrockModelId).
 
   BedrockModelId:
@@ -553,7 +551,7 @@ Metadata:
           - AgentAssistQnABotItemMatchingApi
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
-          - AgentAssistQnABotEmbeddingsLambdaDimensions
+          - AgentAssistQnABotEmbeddingsLambdaDimensions2
           - AgentAssistQnABotLLMApi
           - AgentAssistQnABotLLMBedrockModelId
           - AgentAssistQnABotLLMLambdaArn
@@ -658,7 +656,7 @@ Metadata:
         default: Agent Assist QnABot Embeddings SageMaker Instance Count
       AgentAssistQnABotEmbeddingsLambdaArn:
         default: Agent Assist QnABot Embeddings Lambda Function ARN (existing)
-      AgentAssistQnABotEmbeddingsLambdaDimensions:
+      AgentAssistQnABotEmbeddingsLambdaDimensions2:
         default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
       AgentAssistQnABotLLMApi:
         default: Agent Assist QnABot LLM API
@@ -1024,7 +1022,7 @@ Resources:
           - QnABotEmbeddingsApiBedrock
           - !GetAtt QNABOTPLUGINBEDROCK.Outputs.EmbeddingsLambdaArn
           - !Ref AgentAssistQnABotEmbeddingsLambdaArn
-        EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
+        EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions2
         LLMApi: !If
           - QnABotLLMPluginAnthropic
           - 'LAMBDA'
