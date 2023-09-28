@@ -172,6 +172,7 @@ Parameters:
 
 Conditions:
   ShouldConfigureQnabot: !Not [!Equals [!Ref QNABOTSTACK, '']]
+  HasSummaryLambdaFunction: !Not [!Equals [!Ref TranscriptSummaryFunctionArn, '']]
 
 Resources:
 
@@ -208,14 +209,17 @@ Resources:
         Version: 2012-10-17
       ManagedPolicyArns: 
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-      Policies:
-        - PolicyName: InlinePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Action: lambda:InvokeFunction
-                Effect: Allow
-                Resource: !Ref TranscriptSummaryFunctionArn
+      Policies: 
+        - Fn::If:
+          - HasSummaryLambdaFunction
+          - PolicyName: InlinePolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Action: lambda:InvokeFunction
+                  Effect: Allow
+                  Resource: !Ref TranscriptSummaryFunctionArn
+          - Ref: AWS::NoValue
 
   QNASummarizeCallFunction:
     Type: "AWS::Lambda::Function"
