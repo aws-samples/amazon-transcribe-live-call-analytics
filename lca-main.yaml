@@ -988,7 +988,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/bedrock-embeddings-and-llm.yaml
       # yamllint enable rule:line-length
       Parameters:
-        EmbeddingsModelId: 'amazon.titan-e1t-medium'
+        EmbeddingsModelId: 'amazon.titan-embed-text-v1'
         LLMModelId: !Ref AgentAssistQnABotLLMBedrockModelId
 
   QNABOT:
