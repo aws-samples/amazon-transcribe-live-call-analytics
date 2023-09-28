@@ -21,11 +21,11 @@ SUMMARY_PROMPT_SSM_PARAMETER = os.environ["SUMMARY_PROMPT_SSM_PARAMETER"]
 
 # Optional environment variables allow region / endpoint override for bedrock Boto3
 BEDROCK_REGION = os.environ["BEDROCK_REGION_OVERRIDE"] if "BEDROCK_REGION_OVERRIDE" in os.environ else os.environ["AWS_REGION"]
-BEDROCK_ENDPOINT_URL = os.environ.get("BEDROCK_ENDPOINT_URL", f'https://bedrock.{BEDROCK_REGION}.amazonaws.com')
+BEDROCK_ENDPOINT_URL = os.environ.get("BEDROCK_ENDPOINT_URL", f'https://bedrock-runtime.{BEDROCK_REGION}.amazonaws.com')
 
 lambda_client = boto3.client('lambda')
 ssmClient = boto3.client("ssm")
-bedrock = boto3.client(service_name='bedrock', region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL) 
+bedrock = boto3.client(service_name='bedrock-runtime', region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL) 
 
 def get_templates_from_ssm(prompt_override):
     templates = []
