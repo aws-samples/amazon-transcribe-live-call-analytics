@@ -850,6 +850,7 @@ Resources:
     DependsOn:
       - InstanceDefaultPolicy
       - InstanceRole
+      - voiceConnectorResource
 
   EIPAssociation:
     Type: AWS::EC2::EIPAssociation
