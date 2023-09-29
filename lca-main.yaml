@@ -1053,7 +1053,6 @@ Resources:
       # yamllint enable rule:line-length
       Parameters:
         LCAStackName: !Ref AWS::StackName
-        LCAVersion: <VERSION_TOKEN>
         RecordingsBucketRetentionDays: !Ref RecordingsBucketRetentionDays
         EnableVoiceToneAnalysis: !If
           - ShouldEnableVoiceToneAnalysis
