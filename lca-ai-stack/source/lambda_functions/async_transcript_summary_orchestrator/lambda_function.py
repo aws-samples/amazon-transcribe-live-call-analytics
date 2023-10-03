@@ -31,7 +31,7 @@ else:
 
 BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
-    read_timeout= getenv("BOTO_READ_TIMEOUT", 60),
+    read_timeout= int(getenv("BOTO_READ_TIMEOUT", '60')),
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 
