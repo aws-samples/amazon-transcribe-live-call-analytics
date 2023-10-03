@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generative transcript summarization and LLM powered Agent Assist are now enabled by default using Amazon Bedrock.
 - Agent Assist generative answers are now enabled by default, using an Amazon Bedrock LLM model.
 - Agent Assist now enables semantic similarity item matching by default, using an Amazon Bedrock Embeddings model.
-- Generative transcript summarization now generates multiple cqall insight types.
+- Generative transcript summarization now generates multiple call insight types.
 - Generative transcript summarization and insights now customizable with configurable prompt templates.
 - In-progress call summarization using the Agent Assist bot - quickly bring new agent or supervisor up to speed in transfer and escalation scenarios. Prompt templates are customizable using QnABot's content designer.
 
