@@ -7,14 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.7] - Unreleased
+## [0.8.7] - 2023-10-03
 ### Added
-- Support for Bedrock GA for QnABot agent assist and call transcript summarization
-- Support multiple prompts for call summarization
-- Support to summarize a current call and identify the current topic of the call with the agent assist bot
+- Generative transcript summarization and LLM powered Agent Assist are now enabled by default using Amazon Bedrock.
+- Agent Assist generative answers are now enabled by default, using an Amazon Bedrock LLM model.
+- Agent Assist now enables semantic similarity item matching by default, using an Amazon Bedrock Embeddings model.
+- Generative transcript summarization now generates multiple cqall insight types.
+- Generative transcript summarization and insights now customizable with configurable prompt templates.
+- In-progress call summarization using the Agent Assist bot - quickly bring new agent or supervisor up to speed in transfer and escalation scenarios. Prompt templates are customizable using QnABot's content designer.
 
 ### Fixed
-- Asterisk dependency on voiceConnector to prevent race condition
+- Race condition between Asterisk Server and Chime SDK Voice Connector setup
+- Flawed timeout logic for long running summaries - PR#100
+- Hung calls when using Chime Call Analytics when callid was modified using call initialization lambda - PR#97 
+- ContactLens categories not displayed when using Contact Lens integration
 
 ## [0.8.6] - 2023-09-14
 ### Fixed
