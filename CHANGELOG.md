@@ -7,13 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.0] - Unreleased
-- Update default Anthropic model to be Claude 2
-
 ## [0.8.7] - Unreleased
 ### Added
 - Support for Bedrock GA for QnABot agent assist and call transcript summarization
 - Support multiple prompts for call summarization
+- Support to summarize a current call and identify the current topic of the call with the agent assist bot
 
 ### Fixed
 - Asterisk dependency on voiceConnector to prevent race condition
