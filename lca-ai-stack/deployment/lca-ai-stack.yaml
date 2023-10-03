@@ -19,10 +19,16 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA AI Stack
 
 Parameters:
+  # Required
+  LCAStackName:
+    Type: String
+    Description: LCA Stack Name
+  
   RecordingsBucketRetentionDays:
     Type: Number
     Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
     Default: 30
+
   CallAudioSource:
     Type: String
     AllowedValues:
@@ -278,7 +284,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.8.6
+    Default: 0.8.7
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -407,6 +413,22 @@ Outputs:
   CloudFrontDomainName:
     Description: The full domain name of the CloudFront distribution
     Value: !GetAtt WebAppCloudFrontDistribution.DomainName
+
+  TranscriptSummaryFunctionArn:
+    Description: Call Summarizer Lambda function ARN
+    Value: !If [
+            ShouldDeploySageMakerSummarizer, 
+            !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn],
+            !If [
+              ShouldEnableAnthropicSummarizer,
+              !GetAtt LLMAnthropicSummaryLambda.Arn,
+              !If [
+                ShouldEnableBedrockSummarizer,
+                !GetAtt BedrockSummaryLambda.Arn,
+                !Ref EndOfCallLambdaHookFunctionArn
+              ]
+            ]
+          ]
 
 Resources:
   ## BUCKET TO STORE STEREO RECORDINGS
@@ -863,14 +885,14 @@ Resources:
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
-          ANTHROPIC_MODEL_IDENTIFIER: "claude-v1.3-100k"
+          ANTHROPIC_MODEL_IDENTIFIER: "claude-2"
           ANTHROPIC_API_KEY: !Ref SummarizationLLMThirdPartyApiKey
           ENDPOINT_URL: "https://api.anthropic.com/v1/complete"
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           PROCESS_TRANSCRIPT: "True"
-          TOKEN_COUNT: "0"  # using 100k model - do not truncate transcript
-          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
-      Timeout: 60
+          TOKEN_COUNT: "0"  # using v2 model - do not truncate transcript
+          SUMMARY_PROMPT_SSM_PARAMETER: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
+      Timeout: 900
       MemorySize: 128
       Handler: index.handler
       CodeUri: ../source/lambda_functions/llm_anthropic_summary_lambda
@@ -903,6 +925,11 @@ Resources:
               - Effect: "Allow"
                 Action: "lambda:InvokeFunction"
                 Resource: !GetAtt FetchTranscript.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCAStackName}-*"
 
   BedrockSummaryLambda:
     Type: AWS::Serverless::Function
@@ -916,8 +943,8 @@ Resources:
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           TOKEN_COUNT: "0"
           PROCESS_TRANSCRIPT: "True"
-          SUMMARY_PROMPT_TEMPLATE: "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
-      Timeout: 60
+          SUMMARY_PROMPT_SSM_PARAMETER: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
+      Timeout: 900
       MemorySize: 512
       Handler: index.handler
       CodeUri: ../source/lambda_functions/bedrock_summary_lambda
@@ -953,6 +980,11 @@ Resources:
               - Effect: "Allow"
                 Action: "lambda:InvokeFunction"
                 Resource: !GetAtt FetchTranscript.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCAStackName}-*"
 
         - PolicyName: !Sub ${AWS::StackName}-BedrockSummary
           PolicyDocument:
@@ -1053,7 +1085,8 @@ Resources:
             ]
           ]
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
-      Timeout: 60
+          BOTO_READ_TIMEOUT: 60
+      Timeout: 240
       MemorySize: 128
       Handler: lambda_function.handler
       Layers:
@@ -1267,7 +1300,7 @@ Resources:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
       Runtime: python3.9
-      Timeout: 60
+      Timeout: 900
       Environment:
         Variables:
           # XXX add log level parameter or map

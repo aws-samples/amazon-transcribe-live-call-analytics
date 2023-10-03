@@ -19,10 +19,10 @@ import {
 } from '@awsui/components-react';
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
-
 import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
 import { Logger } from 'aws-amplify';
 import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
+import { getMarkdownSummary } from '../common/summary';
 
 import RecordingPlayer from '../recording-player';
 import useSettingsContext from '../../contexts/settings';
@@ -343,7 +343,7 @@ const CallSummary = ({ item }) => {
                   {/* eslint-disable-next-line react/no-array-index-key */}
                   <TextContent color="gray">
                     <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                      {item.callSummaryText ?? 'No summary available'}
+                      {getMarkdownSummary(item.callSummaryText) ?? 'No summary available'}
                     </ReactMarkdown>
                   </TextContent>
                 </div>
@@ -766,7 +766,7 @@ const CallInProgressTranscript = ({
   );
 };
 
-const getAgentAssistPanel = (collapseSentiment) => {
+const getAgentAssistPanel = (item, collapseSentiment) => {
   if (process.env.REACT_APP_ENABLE_LEX_AGENT_ASSIST === 'true') {
     return (
       <Container
@@ -788,7 +788,7 @@ const getAgentAssistPanel = (collapseSentiment) => {
           <iframe
             style={{ border: '0px', height: collapseSentiment ? '34vh' : '68vh', margin: '0' }}
             title="Agent Assist"
-            src="/index-lexwebui.html"
+            src={`/index-lexwebui.html?callId=${item.callId}`}
             width="100%"
           />
         </Box>
@@ -930,7 +930,7 @@ const CallTranscriptContainer = ({
           collapseSentiment,
         })}
       </Container>
-      {getAgentAssistPanel(collapseSentiment)}
+      {getAgentAssistPanel(item, collapseSentiment)}
     </Grid>
   );
 };

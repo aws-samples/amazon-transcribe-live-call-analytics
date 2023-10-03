@@ -125,6 +125,12 @@ pushd $dir
 aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-kendra-stack/template.yaml
 popd
 
+dir=lca-ssm-stack
+echo "PACKAGING $dir"
+pushd $dir
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-ssm-stack/template.yaml
+popd
+
 echo "Initialize and update git submodules"
 git submodule init
 git submodule update
