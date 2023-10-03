@@ -4,7 +4,7 @@ _Companion AWS blog post: [Live call analytics and agent assist for your contact
 
 ## Overview
 
-_Update September 2023 (v0.8.5) - This release provides (experimental) Generative AI support for both transcript summarization and Agent Assist with [Amazon Bedrock](https://aws.amazon.com/bedrock/) (preview) and Anthropic 3rd party APIs. Also provides (experimental) support for [Amazon Chime SDK Call Analytics](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html) as a call source in conjunction with [Voice Tone Analysis](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html). Lastly, it includes [Salesforce/CRM plug-in integration](./plugins/salesforce-integration/README.md)._
+_Update October 2023 (v0.8.7) - This release provides Amazon Bedrock (generally available) support for both transcript summarization and Agent Assist (QnABot). It supports single prompt and multi-prompt summarization. To learn more, please read [customize transcript summarization](./lca-ai-stack/TranscriptSummarization.md)._
 
 _See [CHANGELOG](./CHANGELOG.md) for latest features and fixes._
 
@@ -37,7 +37,7 @@ When a new caller or agent Kinesis Video stream is initiated, an event is fired 
 
 Each call processing session runs until the call ends. Any session that lasts longer than the maximum duration of an AWS Lambda function invocation (15 minutes) is automatically and seamlessly transitioned to a new ‘chained’ invocation of the same function, while maintaining a continuous transcription session with Amazon Transcribe. This function chaining repeats as needed until the call ends. At the end of the call the function creates a stereo recording file in Amazon S3.
 
-Another Lambda function, the Call Event Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Call Event Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics).The Call Event Processor also invokes the (optional) Transcript Summarization lambda when the call ends, to generate a summary of the call from the full transcript.
+Another Lambda function, the Call Event Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Call Event Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics). The Call Event Processor also invokes the (optional) Transcript Summarization lambda when the call ends, to generate a summary of the call from the full transcript.
 
 The Call Event Processor function interfaces with AWS AppSync to persist changes (mutations) in DynamoDB and to send real-time updates to logged in web clients.
 
