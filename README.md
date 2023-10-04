@@ -102,7 +102,7 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
    2. `Admin Email Address` - Enter the email address of the admin user to be used to log into the web UI. An initial temporary password will be automatically sent via email. This email also includes the link to the web UI
    3. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI  
       **Telephony Ingestion Options**
-   4. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testingAmazon Chime SDK Voice Connector streaming
+   4. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testing Amazon Chime SDK Voice Connector streaming
    5. `Call Audio Processor` - Choose `Amazon Chime SDK Call Analytics` to use the new Amazon Chime SDK Call Analytics service features instead of the LCA Call transcriber Lambda. See [ChimeCallAnalytics](./lca-chimevc-stack/ChimeCallAnalytics.md).
    6. `Chime Voice Tone Analysis` - Choose only when Amazon Chime SDK Call Analytics is used as the call processor. Enables you to analyze caller voices for a positive, negative, or neutral tone. This is different than sentiment analysis, as it analyzes the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice analytics without the caller's consent. Please read https://docs.aws.amazon.com/chime-sdk/latest/dg/va-opt-out.html for more information. See [ChimeCallAnalytics](./lca-chimevc-stack/ChimeCallAnalytics.md).
    7. `Allowed CIDR Block for Demo Softphone` - Ignored if `Call Audio Source` is not set to `Demo Asterisk PBX Server`. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24'
@@ -206,7 +206,7 @@ LCA publishes a notification for each matched category to a topic in the Amazon 
 
 You can test this solution if you installed the demo asterisk server during deployment. To test, perform the following steps:
 
-1. Configure a Zoiper client as described in this [README](lca-chimevc-stack/README.md). This will allow you to receive phone calls from an external phone number to the Zoiper client on your computer.
+1. Configure a Zoiper client as described in this [README](lca-chimevc-stack/Asterisk.md#optional-client-configuration). This will allow you to receive phone calls from an external phone number to the Zoiper client on your computer.
 2. Once installed, log in to the web app created in the [deploy](#deploy) section by opening the Cloudfront URL provided in you CloudFormation outputs (`CloudfrontEndpoint`)
 3. Once logged in, place a phone call using an external phone to the number provided in the CloudFormation outputs (`DemoPBXPhoneNumber`)
 4. You will see the phone call show up on the LCA web page as follows ![CallList](./images/call-list-with-categories-and-alerts.png)
