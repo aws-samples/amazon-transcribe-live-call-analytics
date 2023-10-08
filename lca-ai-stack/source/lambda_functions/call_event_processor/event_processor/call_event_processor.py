@@ -1222,6 +1222,29 @@ def merge_dicts(d1, d2):
 
 
 ##########################################################################
+# Send call id to session id mapping event
+##########################################################################
+
+def send_call_session_mapping_event(call_id, session_id):
+    client = boto3.client('events')
+
+    LOGGER.debug("Sending CALL_SESSION_MAPPING event. callId: %s, SessionId: %s", call_id, session_id)
+    event_response = client.put_events(
+        Entries=[
+            {
+                'Source': "lca-solution",
+                'DetailType': "CALL_SESSION_MAPPING",
+                'Detail': json.dumps({
+                    'callId': call_id,
+                    'sessionId': session_id,
+                }),
+            }
+        ]
+    )
+    LOGGER.debug("Send CALL_SESSION_MAPPING Response: ", extra=event_response)
+
+
+##########################################################################
 # Main event processing
 ##########################################################################
 
@@ -1276,6 +1299,7 @@ async def execute_process_event_api_mutation(
         ADD_CALL_CATEGORY="ADD_CALL_CATEGORY",
         ADD_S3_RECORDING_URL="ADD_S3_RECORDING_URL",
         ADD_PCA_URL="ADD_PCA_URL",
+        CALL_ANALYTICS_METADATA="CALL_ANALYTICS_METADATA",
     )
 
     msg_event_type = message.get("EventType", "")
@@ -1289,9 +1313,14 @@ async def execute_process_event_api_mutation(
         if message.get("CategoryEvent", "") != "":
             message["EventType"] = "ADD_CALL_CATEGORY"
             event_type = "ADD_CALL_CATEGORY"
+        if message.get("Service-type", "") == "CallAnalytics" and message.get("Detail-type", "") == "CallAnalyticsMetadata":
+            message["EventType"] = "CALL_ANALYTICS_METADATA"
+            event_type = "CALL_ANALYTICS_METADATA"
 
     message["EventType"] = event_type
     message["ExpiresAfter"] = get_ttl()
+
+    LOGGER.debug("Process event. eventType: %s, callId: %s", event_type, message.get("CallId", ""))
 
     if event_type == "START":
         # CREATE CALL
@@ -1539,13 +1568,16 @@ async def execute_process_event_api_mutation(
             return_value["errors"].append(response)
         else:
             return_value["successes"].append(response)
-    elif('Metadata' in message.keys()):
+    elif event_type == "CALL_ANALYTICS_METADATA":
         meta = json.loads(message['Metadata'])
         LOGGER.debug("S3 URL from metadata %s", meta['oneTimeMetadata']['s3RecordingUrl'])
 
         bucket = meta['oneTimeMetadata']['s3RecordingUrl'].split("/")[5].split("?")[0]
         region = re.search(r"region\=(.+)\&prefix+", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
-        prefix=re.search(r"\&prefix\=(.+)", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
+        prefix = re.search(r"\&prefix\=(.+)", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
+        session_id = re.search(r"\/(.+\/)*(.+)\.(?i)(wav)$", meta['oneTimeMetadata']['s3RecordingUrl']).group(2)
+
+        send_call_session_mapping_event(meta['callId'], session_id)
 
         new_url = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + prefix
 

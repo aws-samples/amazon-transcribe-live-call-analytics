@@ -65,6 +65,21 @@ Parameters:
         
 Resources:
   ##########################################################################
+  # NodeJS Transcriber Lambda Layer
+  ##########################################################################
+  TranscriberLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs14.x
+        - nodejs16.x
+        - nodejs18.x
+      Description: >
+        This is a layer with shared nodejs libraries for the LCA call transcriber 
+        and call analytics initialization Lambdas.
+      ContentUri: ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
+
+  ##########################################################################
   # Call Transcriber
   ##########################################################################
  
@@ -80,6 +95,7 @@ Resources:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+        - !Ref TranscriberLambdaLayer
       Role: !GetAtt PCAIntegrationFunctionRole.Arn
       Runtime: nodejs14.x
       MemorySize: 768

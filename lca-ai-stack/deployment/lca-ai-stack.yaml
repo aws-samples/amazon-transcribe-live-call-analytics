@@ -1267,6 +1267,11 @@ Resources:
               Action:
                 - comprehend:DetectSentiment
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - events:PutEvents
+              Resource:
+                - !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default'
             - !If
               - ShouldEnableTranscriptLambdaHookFunction
               - Effect: Allow
