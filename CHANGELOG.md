@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.8] - 2023-10-10
+### Added
+- Agent Assist bot can now generate a draft email from agent to caller, summarizing call and next steps
+
+### Fixed
+- Fix #102 - Agent Assist bot widget stopped working - display is blank.
+- Pull latest Qnabot Plugins submodule to get [Bedrock embeddings function whitespace fix](https://github.com/aws-samples/qnabot-on-aws-plugin-samples/blob/develop/CHANGELOG.md#fixed)
+
+
 ## [0.8.7] - 2023-10-03
 ### Added
 - Generative transcript summarization and LLM powered Agent Assist are now enabled by default using Amazon Bedrock.
@@ -312,7 +321,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.8...develop
+[0.8.8]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.7
+[0.8.7]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.6
 [0.8.6]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.5
 [0.8.5]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...v0.8.4
 [0.8.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.4...v0.8.3
