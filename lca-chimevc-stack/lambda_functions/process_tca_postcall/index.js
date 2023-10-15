@@ -30,8 +30,7 @@ const LCA_BUCKET_NAME = process.env.LCA_BUCKET_NAME || '';
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_FILE_PREFIX || 'lca-call-analytics/');
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
 
-// TODO - Refactor to use new TCA Post Call event - now includes Transcript file and Media File Uris.
-function getAnalyticsOutputBuckeyAndKey(sessionId, suffix) {
+function getAnalyticsOutputBucketAndKey(sessionId, suffix) {
   const analyticsfolder = (IS_CONTENT_REDACTION_ENABLED) ? "redacted-analytics/" : "analytics/";
   const buckeyAndKey = {
     Key: `${CALL_ANALYTICS_FILE_PREFIX}${analyticsfolder}${sessionId}${suffix}`,
@@ -128,9 +127,20 @@ function filterCategories(categories) {
   return filteredCategories;
 }
 
-const processFile = async function processFile(s3Client, sessionData) {
-  const bucketAndKey = getAnalyticsOutputBuckeyAndKey(sessionData.sessionId, '.json');
-  analytics = JSON.parse(await readFileFromS3(bucketAndKey));  
+const processFile = async function processFile(s3Client, event, sessionData) {
+  let bucketAndKey;
+  if (event.detail.Transcript && event.detail.Transcript.TranscriptFileUri) {
+    const transcriptFileUri = event.detail.Transcript.TranscriptFileUri;
+    const s3UriMatch = transcriptFileUri.match(/s3:\/\/([^\/]+)\/(.*)/);
+    bucketAndKey = {
+      Key: s3UriMatch[2],
+      Bucket: s3UriMatch[1],
+    };
+  } else {
+    bucketAndKey = getAnalyticsOutputBucketAndKey(sessionData.sessionId, '.json');
+  }
+
+  const analytics = JSON.parse(await readFileFromS3(bucketAndKey));
   // Categories
   if (analytics.Categories) {
     const filteredCategories = filterCategories(analytics.Categories);
@@ -158,7 +168,7 @@ const handler = async function handler(event, context) {
     console.log("ERROR: Can't continue - transcribe post call job failed.");
   }
   if (sessionData && job_completed) {
-    await processFile(s3Client, sessionData);
+    await processFile(s3Client, event, sessionData);
   }
   return;
 };
