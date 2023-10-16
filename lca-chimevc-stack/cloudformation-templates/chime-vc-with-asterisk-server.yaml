@@ -31,6 +31,10 @@ Parameters:
     Type: String
     AllowedPattern: ^([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))$||""
     ConstraintDescription: Must be a valid public CIDR block in the form x.x.x.x/y
+  CustomVoiceConnectorId:
+    Type: String
+    Default: ''
+    Description: Existing Amazon Chime SDK Voice Connector Id.
   DemoAsteriskAgentAudioURL:
     Type: String
     Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
@@ -285,6 +289,7 @@ Resources:
 
   EIP:
     Type: AWS::EC2::EIP
+
   createChimeLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -333,6 +338,7 @@ Resources:
                 Resource: '*'
             Version: '2012-10-17'
           PolicyName: chimePolicy
+
   createVCLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -581,6 +587,7 @@ Resources:
       Handler: index.handler
       Runtime: python3.10
       Timeout: 300
+
   voiceConnectorResource:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -596,6 +603,7 @@ Resources:
         Ref: AWS::StackName
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
+
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -862,6 +870,9 @@ Resources:
 
 Conditions:
   SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
+  # AsteriskInstance depends on voiceConnectorResource. Always create voiceConnectorResource but return
+  # either created VC Id or custom VC Id.
+  ShouldUseCreatedVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, '']
 
 Outputs:
   IPAddress:
@@ -873,12 +884,16 @@ Outputs:
     Value:
       Ref: AsteriskInstance
   PhoneNumber:
-    Value:
-      Fn::GetAtt:
+    Value: !If
+      - ShouldUseCreatedVoiceConnector
+      - Fn::GetAtt:
         - voiceConnectorResource
         - phoneNumber
+      - ''
   VoiceConnector:
-    Value:
-      Fn::GetAtt:
+    Value: !If
+      - ShouldUseCreatedVoiceConnector
+      - Fn::GetAtt:
         - voiceConnectorResource
         - voiceConnectorId
+      - !Ref CustomVoiceConnectorId

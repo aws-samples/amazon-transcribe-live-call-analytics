@@ -44,6 +44,15 @@ Parameters:
       Processor Lambda. Enabling Amazon Chime SDK Call Analytics also allows you to also use Voice Analytics, 
       such as Voice Tone Analysis and Speaker Search.
 
+  CustomVoiceConnectorId:
+    Type: String
+    Default: ''
+    MaxLength: 50
+    Description: >
+      (Optional) The Voice Connector ID (not Name) of an existing Amazon Chime SDK Voice Connector. This Voice Connector will be used as the call audio source.
+      Used only when a call audio source with Amazon Chime SDK Voice Connector or Demo Asterisk PBX Server is selected.
+      Leave blank to automatically create new Amazon Chime SDK Voice Connector.
+
   ChimeVoiceToneAnalysis:
     Type: String
     Default: Disabled
@@ -533,6 +542,7 @@ Metadata:
         Parameters:
           - CallAudioSource
           - CallAudioProcessor
+          - CustomVoiceConnectorId
           - ChimeVoiceToneAnalysis
           # - ChimeSpeakerSearch
           - DemoSoftphoneAllowedCidr
@@ -625,6 +635,8 @@ Metadata:
         default: Audio File Prefix
       CallAnalyticsPrefix:
         default: Call Analytics Output File Prefix
+      CustomVoiceConnectorId:
+        default: Amazon Chime SDK Voice Connector ID (existing)
       AdminEmail:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
@@ -1257,6 +1269,7 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack

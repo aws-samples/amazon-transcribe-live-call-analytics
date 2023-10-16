@@ -276,11 +276,10 @@ const writeCallEndEventToKds = async function writeCallEndEventToKds(kinesisClie
   }
 };
 
-const writeS3UrlToKds = async function writeS3UrlToKds(kinesisClient, callId) {
+const writeS3UrlToKds = async function writeS3UrlToKds(kinesisClient, callId, recordingUrl) {
   console.log('Writing S3 URL To KDS');
   const now = new Date().toISOString();
   const eventType = 'ADD_S3_RECORDING_URL';
-  const recordingUrl = `https://${OUTPUT_BUCKET}.s3.${REGION}.amazonaws.com/${RECORDING_FILE_PREFIX}${callId}.wav`;
   const putObj = {
     CallId: callId,
     RecordingUrl: recordingUrl,
