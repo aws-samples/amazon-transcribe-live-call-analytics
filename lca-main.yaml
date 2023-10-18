@@ -1130,13 +1130,6 @@ Resources:
         - QnABotLLMPluginBedrock
         - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryModelParams
         - ''
-      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: !If
-      - QnABotLLMPluginAnthropic
-      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryPromptTemplate
-      - !If 
-        - QnABotLLMPluginBedrock
-        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryPromptTemplate
-        - ''
       LLM_QA_MODEL_PARAMS: !If
         - QnABotLLMPluginAnthropic
         - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAModelParams
@@ -1144,13 +1137,8 @@ Resources:
           - QnABotLLMPluginBedrock
           - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAModelParams
           - ''
-      LLM_QA_PROMPT_TEMPLATE: !If
-      - QnABotLLMPluginAnthropic
-      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAPromptTemplate
-      - !If 
-        - QnABotLLMPluginBedrock
-        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAPromptTemplate
-        - ''
+      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: "<br><br>Human: Let's think carefully step by step. Here is the transcript of an ongoing phone call between a caller (Human) and an agent (AI) in <transcript> tags:<br><transcript>{history}</transcript><br>And here is a follow up question or statement from the caller in <followUpMessage> tags:<br> <followUpMessage>{input}</followUpMessage><br>Rephrase the caller's follow up question or statement as a standalone question or statement that contains all the context and makes sense on its own without reading the transcript. If the caller is just engaging in small talk or saying thanks, respond with \"small talk\".<br><br>Assistant: Here is the rephrased follow up question or statement, or small talk: "
+      LLM_QA_PROMPT_TEMPLATE: "<br><br>Human: Let's think carefully step by step. You are a friendly AI assistant. You provide answers only based on the provided reference passages. Here are reference passages in <references> tags:<br><references><br>{context}<br></references><br>If the references contain the information needed to respond, then write a confident response in under 50 words, quoting the relevant references. <br>Otherwise, if you can make an informed guess based on the reference passages, then write a less confident response in under 50 words, stating your assumptions.<br>Finally, if the references do not have any relevant information, then respond saying \"Sorry, I don't know\".<br><br>{query}<br><br>Assistant: According to the reference passages, in under 50 words:"
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
