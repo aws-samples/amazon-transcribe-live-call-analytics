@@ -126,6 +126,10 @@ Parameters:
     Type: String
     Description: The domain name of the LCA CloudFront distribution
 
+  FetchTranscriptFunctionArn:
+    Type: String
+    Description: ARN of Fetch Transcript function
+
   TranscriptSummaryFunctionArn:
     Type: String
     Description: ARN of Transcript Summary function (if defined)
@@ -169,6 +173,8 @@ Parameters:
     Type: String
   EndOfCallLambdaHookFunctionArn:
     Type: String
+  Version:
+    Type: String
 
 Conditions:
   ShouldConfigureQnabot: !Not [!Equals [!Ref QNABOTSTACK, '']]
@@ -196,6 +202,97 @@ Resources:
     Properties:
       ServiceToken: !GetAtt GetLowercaseFunction.Arn
       InputString: !Ref LCAStackName
+
+  QNAFetchTranscriptFunctionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns: 
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies: 
+        - PolicyName: InlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action: lambda:InvokeFunction
+                Effect: Allow
+                Resource: !Ref FetchTranscriptFunctionArn
+
+  QNAFetchTranscriptFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      # FunctionName must start with 'QNA-' to match QnABot fulfillment role permissions
+      FunctionName: !Sub "QNA-FetchTranscript-${LCAStackName}"
+      Role: !GetAtt QNAFetchTranscriptFunctionRole.Arn
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: 900
+      Environment:
+        Variables:
+          FETCH_TRANSCRIPT_FUNCTION_ARN: !Ref FetchTranscriptFunctionArn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          FETCH_TRANSCRIPT_FUNCTION_ARN = os.environ['FETCH_TRANSCRIPT_FUNCTION_ARN']
+          LAMBDA_CLIENT = boto3.client("lambda")
+
+          def get_call_transcript(callId):
+              payload = {
+                  'CallId': callId, 
+                  'ProcessTranscript': True
+              }
+              lambda_response = LAMBDA_CLIENT.invoke(
+                  FunctionName=FETCH_TRANSCRIPT_FUNCTION_ARN,
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps(payload)
+              )
+              result = json.loads(lambda_response.get("Payload").read().decode("utf-8"))
+              return result["transcript"]
+
+          def format_response(event, transcript):
+              maxMessages = event["req"]["_settings"].get("LLM_CHAT_HISTORY_MAX_MESSAGES", 20)
+              print(f"Using last {maxMessages} conversation turns (LLM_CHAT_HISTORY_MAX_MESSAGES)")
+              transcriptSegments = transcript.strip().split('\n')
+              # remove final segment if it matches the current utterance
+              lastMessageRole, lastMessageText = transcriptSegments[-1].split(":")
+              if lastMessageText.strip() == event["req"].get("question").strip():
+                transcriptSegments.pop()
+              transcriptSegments = transcriptSegments[-maxMessages:]
+              chatHistory = []
+              role, text = None, None
+              for transcriptSegment in transcriptSegments:
+                role, text = transcriptSegment.split(":")
+                if role == "CALLER":
+                  chatHistory.append({"Human": text.strip()})
+                else:
+                  chatHistory.append({"AI": text.strip()})
+              event.setdefault("req",{}).setdefault("_userInfo",{})["chatMessageHistory"] = json.dumps(chatHistory)
+              return event
+
+          def handler(event, context):
+              print("Received event: %s" % json.dumps(event))
+              # get callId from Request attributes.. set by LCA agentassist orchestrator
+              callId = event["req"]["_event"].get("requestAttributes",{}).get("callId")
+              if callId:
+                print(f"Replacing chat history with call transcript for callId {callId}.")
+                transcript = get_call_transcript(callId)
+                event = format_response(event, transcript)
+                # set callId sessionAttribute for possible later use in QnABot / Handlebars, etc.
+                event["req"]["session"]["callId"] = callId
+                event["res"]["session"]["callId"] = callId
+              else:
+                print("No callId session attribute - nothing to do")
+              print("Returning response: %s" % json.dumps(event))
+              return event
+
 
   LambdaHookSummarizeCallRole:
     Type: "AWS::IAM::Role"
@@ -509,6 +606,8 @@ Resources:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
             # Set LLM params
             settings["LLM_QA_NO_HITS_REGEX"] = "Sorry,"
+            # Set preprocessing hook to pull callid transcript into bot chatMessageHistory
+            settings["LAMBDA_PREPROCESS_HOOK"] = props["QNAFetchTranscriptFunction"]
             # Additional settings provided by param QnaBotSettings
             additional_QnaBotSettings = json.loads(props.get("QnaBotSettings","{}").replace('\n',''))
             for k, v in additional_QnaBotSettings.items():
@@ -657,6 +756,7 @@ Resources:
       QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
       AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
       QNASummarizeCallFunction: !Ref QNASummarizeCallFunction
+      QNAFetchTranscriptFunction: !Ref QNAFetchTranscriptFunction
       QnaBotSettings: !Ref QnaBotSettings
       # Changes to Params below force AgentAssist Setup to execute.
       CallAudioSource: !Ref CallAudioSource
@@ -677,6 +777,7 @@ Resources:
       SummarizationSageMakerInitialInstanceCount: !Ref SummarizationSageMakerInitialInstanceCount
       EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
       CloudFrontDomainName: !Sub "https://${CloudFrontDomainName}/"
+      Version: !Ref Version
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 

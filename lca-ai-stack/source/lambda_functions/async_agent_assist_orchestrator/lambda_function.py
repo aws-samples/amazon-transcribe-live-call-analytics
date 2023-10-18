@@ -148,6 +148,7 @@ def get_lex_agent_assist_transcript(
         bot_id=LEX_BOT_ID,
         bot_alias_id=LEX_BOT_ALIAS_ID,
         locale_id=LEX_BOT_LOCALE_ID,
+        call_id=call_id,
     )
 
     LOGGER.info("Bot Response: ", extra=bot_response)
