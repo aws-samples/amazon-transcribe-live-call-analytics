@@ -691,6 +691,91 @@ Resources:
           echo ================================
           echo Create asterisk configuration
           echo ================================
+
+          echo "pjsip.conf template"
+          echo "[udp]
+          type=transport
+          protocol=udp
+          bind=0.0.0.0
+          external_media_address=PUBLIC_IP
+          external_signaling_address=PUBLIC_IP
+          allow_reload=yes
+
+          [VoiceConnector]
+          type=endpoint
+          context=from-voiceConnector
+          transport=udp
+          disallow=all
+          allow=ulaw
+          aors=VoiceConnector
+          direct_media=no
+          ice_support=yes
+          force_rport=yes
+
+          [VoiceConnector]
+          type=identify
+          endpoint=VoiceConnector
+          match=VOICE_CONNECTOR.voiceconnector.chime.aws
+
+          [VoiceConnector]
+          type=aor
+          contact=sip:VOICE_CONNECTOR.voiceconnector.chime.aws
+
+          [PHONE_NUMBER]
+          type=endpoint
+          context=from-phone
+          disallow=all
+          allow=ulaw
+          transport=udp
+          auth=PHONE_NUMBER
+          aors=PHONE_NUMBER
+          send_pai=yes
+          direct_media=no
+          rewrite_contact=yes
+          ice_support=yes
+          force_rport=yes
+
+          [PHONE_NUMBER]
+          type=auth
+          auth_type=userpass
+          password=INSTANCE_ID
+          username=PHONE_NUMBER
+
+          [PHONE_NUMBER]
+          type=aor
+          max_contacts=5" > /etc/asterisk/pjsip.conf
+
+          echo "extensions.conf template"
+          echo "[general]
+          static=yes
+          writeprotect=no
+          clearglobalvars=no
+
+          [catch-all]
+          exten => _[+0-9].,1,Answer()
+          exten => _[+0-9].,n,Wait(1)
+          exten => _[+0-9].,n,Playback(/var/lib/asterisk/sounds/agent)
+          exten => _[+0-9].,n,Wait(1)
+          exten => _[+0-9].,n,echo()
+          exten => _[+0-9].,n,Wait(1)
+          exten => _[+0-9].,n,Hangup()
+
+          [from-phone]
+          include => outbound_phone
+
+          [outbound_phone]
+          exten => _+X.,1,NoOP(Outbound Normal)
+          same => n,Dial(PJSIP/\${!EXTEN}@VoiceConnector,20)
+          same => n,Congestion
+
+          [from-voiceConnector]
+          include => phones
+          include => catch-all
+
+          [phones]
+          exten => PHONE_NUMBER,1,Dial(PJSIP/PHONE_NUMBER)" > /etc/asterisk/extensions.conf
+
+          echo "Inline edit config file templates"
           TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
           INSTANCE_ID=$( curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
           PUBLIC_IP=${EIP}
@@ -756,89 +841,6 @@ Resources:
 
                 [Install]
                 WantedBy=multi-user.target
-            /etc/asterisk/pjsip.conf:
-              content: !Sub |
-                [udp]
-                type=transport
-                protocol=udp
-                bind=0.0.0.0
-                external_media_address=PUBLIC_IP
-                external_signaling_address=PUBLIC_IP
-                allow_reload=yes
-
-                [VoiceConnector]
-                type=endpoint
-                context=from-voiceConnector
-                transport=udp
-                disallow=all
-                allow=ulaw
-                aors=VoiceConnector
-                direct_media=no
-                ice_support=yes
-                force_rport=yes
-
-                [VoiceConnector]
-                type=identify
-                endpoint=VoiceConnector
-                match=VOICE_CONNECTOR.voiceconnector.chime.aws
-
-                [VoiceConnector]
-                type=aor
-                contact=sip:VOICE_CONNECTOR.voiceconnector.chime.aws
-
-                [PHONE_NUMBER]
-                type=endpoint
-                context=from-phone
-                disallow=all
-                allow=ulaw
-                transport=udp
-                auth=PHONE_NUMBER
-                aors=PHONE_NUMBER
-                send_pai=yes
-                direct_media=no
-                rewrite_contact=yes
-                ice_support=yes
-                force_rport=yes
-
-                [PHONE_NUMBER]
-                type=auth
-                auth_type=userpass
-                password=INSTANCE_ID
-                username=PHONE_NUMBER
-
-                [PHONE_NUMBER]
-                type=aor
-                max_contacts=5
-            /etc/asterisk/extensions.conf:
-              content: !Sub |
-                [general]
-                static=yes
-                writeprotect=no
-                clearglobalvars=no
-
-                [catch-all]
-                exten => _[+0-9].,1,Answer()
-                exten => _[+0-9].,n,Wait(1)
-                exten => _[+0-9].,n,Playback(/var/lib/asterisk/sounds/agent)
-                exten => _[+0-9].,n,Wait(1)
-                exten => _[+0-9].,n,echo()
-                exten => _[+0-9].,n,Wait(1)
-                exten => _[+0-9].,n,Hangup()
-
-                [from-phone]
-                include => outbound_phone
-
-                [outbound_phone]
-                exten => _+X.,1,NoOP(Outbound Normal)
-                same => n,Dial(PJSIP/\${!EXTEN}@VoiceConnector,20)
-                same => n,Congestion
-
-                [from-voiceConnector]
-                include => phones
-                include => catch-all
-
-                [phones]
-                exten => PHONE_NUMBER,1,Dial(PJSIP/PHONE_NUMBER)
             /etc/asterisk/asterisk.conf:
               content: !Sub |
                 [options]
