@@ -29,7 +29,7 @@
     "botAlias": "$LATEST",
     "initialText": "",
     "initialSpeechInstruction": "",
-    "initialUtterance": "Start Agent Assist",
+    "initialUtterance": "QID::AA.StartMessage",
     "reInitSessionAttributesOnRestart": false,
     "region": "${REACT_APP_AWS_REGION}",
     "retryOnLexPostTextTimeout": "false",
