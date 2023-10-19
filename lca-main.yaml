@@ -157,6 +157,12 @@ Parameters:
     Description: >-
       Comma separated list of public web sites to crawl automatically - for Agent Assist Kendra knowledge store
 
+  AgentAssistQnABotKendraWebCrawlDepth:
+    Type: String
+    Default: 0
+    Description: >-
+      Number of levels from the above URLs that Amazon Kendra should crawl - restricted to same host domain
+
   # Options for QnABot Embeddings
   AgentAssistQnABotItemMatchingApi:
     Type: String
@@ -564,6 +570,7 @@ Metadata:
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
           - AgentAssistQnABotKendraWebCrawlURLs
+          - AgentAssistQnABotKendraWebCrawlDepth
           - AgentAssistQnABotItemMatchingApi
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
@@ -670,6 +677,8 @@ Metadata:
         default: Agent Assist Lambda Function ARN (existing)
       AgentAssistQnABotKendraWebCrawlURLs:
         default: Agent Assist QnABot Kendra Web Crawl URLs
+      AgentAssistQnABotKendraWebCrawlDepth:
+        default: Agent Assist QnABot Kendra Web Crawl Depth
       AgentAssistQnABotItemMatchingApi:
         default: Agent Assist QnABot Item Matching Api
       AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
@@ -1207,6 +1216,7 @@ Resources:
             - 'SAGEMAKER'
             - 'LAMBDA'
         AgentAssistQnABotKendraWebCrawlURLs: !Ref AgentAssistQnABotKendraWebCrawlURLs
+        AgentAssistQnABotKendraWebCrawlDepth: !Ref AgentAssistQnABotKendraWebCrawlDepth
         AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
         AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
