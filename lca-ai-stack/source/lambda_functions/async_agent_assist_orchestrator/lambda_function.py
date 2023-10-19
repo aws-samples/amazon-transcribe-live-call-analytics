@@ -162,10 +162,6 @@ def get_lex_agent_assist_transcript(
 
 def process_lex_bot_response(bot_response):
     message = ""
-    if is_qnabot_noanswer(bot_response):
-        # ignore 'noanswer' responses from QnABot
-        LOGGER.info("QnABot \"Dont't know\" response - ignoring")
-        return ""
     # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
     appContextJSON = bot_response.get("sessionState", {}).get(
         "sessionAttributes", {}).get("appContext")
@@ -177,7 +173,21 @@ def process_lex_bot_response(bot_response):
     # otherwise use bot message
     if not message and "messages" in bot_response and bot_response["messages"]:
         message = bot_response["messages"][0]["content"]
+    # suppress bot response if response is no_hits (noanswer) response, and does not contain debug.
+    if is_qnabot_noanswer(bot_response):
+        if not is_qnabot_debug_response(message):
+            # ignore 'noanswer' responses from QnABot
+            LOGGER.info("QnABot \"Dont't know\" response - no debug info - ignoring")
+            return ""
     return message
+
+def is_qnabot_debug_response(message):
+    # QnABot debug responses are contained in opening [] section, starting with User Input 
+    pattern = r'^\**\[User Input.*?\]\**'
+    match = re.search(pattern, message)
+    if match:
+        return match.group()
+    return None
 
 def is_qnabot_noanswer(bot_response):
     if (
