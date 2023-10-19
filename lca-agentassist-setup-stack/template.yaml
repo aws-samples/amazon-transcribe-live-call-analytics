@@ -88,11 +88,11 @@ Parameters:
     Description: >-
       Location of QnABot agent assist sample/demo file (in JSON lines format) 
 
-  QnaAgentAssistDemoWebCrawlURLs:
+  AgentAssistQnABotKendraWebCrawlURLs:
     Type: String
     Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
     Description: >-
-      Comma separated list of public web sites to crawl automatically - for Agent assist demo
+      Comma separated list of public web sites to crawl automatically - for Agent Assist Kendra knowledge store
   
   AgentAssistQnABotEmbeddingsApi:
     Type: String
@@ -574,8 +574,8 @@ Resources:
                   syncQnABotSamplePackageToKendra(props)
                 else:
                   print("QnABot stack configured to use embeddings - skipping Kendra FAQ sync")
-            if propsChanged(props, oldprops, ["QNABOTSTACK", "QnaAgentAssistDemoWebCrawlURLs"]):
-              if props["QnaAgentAssistDemoWebCrawlURLs"]:
+            if propsChanged(props, oldprops, ["QNABOTSTACK", "AgentAssistQnABotKendraWebCrawlURLs"]):
+              if props["AgentAssistQnABotKendraWebCrawlURLs"]:
                 startKendraCrawler(props)
             else:
               print("Kendra web crawl URLs unchanged - skipping web crawler update.")
@@ -599,8 +599,8 @@ Resources:
             settings["KENDRA_WEB_PAGE_INDEX"] = props["KendraIndexId"]
             settings["KENDRA_INDEXER_CRAWL_DEPTH"] = "0"
             settings["KENDRA_INDEXER_CRAWL_MODE"] = "HOST_ONLY"
-            settings["KENDRA_INDEXER_URLS"] = props["QnaAgentAssistDemoWebCrawlURLs"]
-            if props["QnaAgentAssistDemoWebCrawlURLs"]:
+            settings["KENDRA_INDEXER_URLS"] = props["AgentAssistQnABotKendraWebCrawlURLs"]
+            if props["AgentAssistQnABotKendraWebCrawlURLs"]:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "true"
             else:
               settings["ENABLE_KENDRA_WEB_INDEXER"] = "false"
@@ -753,7 +753,7 @@ Resources:
       LexAgentAssistIdentityPoolId: !Ref LexAgentAssistIdentityPoolId
       KendraIndexId: !Ref KendraIndexId
       QnaAgentAssistDemoJson: !Ref QnaAgentAssistDemoJson
-      QnaAgentAssistDemoWebCrawlURLs: !Ref QnaAgentAssistDemoWebCrawlURLs
+      AgentAssistQnABotKendraWebCrawlURLs: !Ref AgentAssistQnABotKendraWebCrawlURLs
       AgentAssistQnABotEmbeddingsApi: !Ref AgentAssistQnABotEmbeddingsApi
       QNASummarizeCallFunction: !Ref QNASummarizeCallFunction
       QNAFetchTranscriptFunction: !Ref QNAFetchTranscriptFunction

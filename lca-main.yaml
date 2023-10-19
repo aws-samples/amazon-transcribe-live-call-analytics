@@ -151,6 +151,12 @@ Parameters:
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
       Provide the function ARN of an existing Lambda function to be used for Agent Assist."
 
+  AgentAssistQnABotKendraWebCrawlURLs:
+    Type: String
+    Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
+    Description: >-
+      Comma separated list of public web sites to crawl automatically - for Agent Assist Kendra knowledge store
+
   # Options for QnABot Embeddings
   AgentAssistQnABotItemMatchingApi:
     Type: String
@@ -557,6 +563,7 @@ Metadata:
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
+          - AgentAssistQnABotKendraWebCrawlURLs
           - AgentAssistQnABotItemMatchingApi
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
@@ -661,6 +668,8 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      AgentAssistQnABotKendraWebCrawlURLs:
+        default: Agent Assist QnABot Kendra Web Crawl URLs
       AgentAssistQnABotItemMatchingApi:
         default: Agent Assist QnABot Item Matching Api
       AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
@@ -1197,6 +1206,7 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
+        AgentAssistQnABotKendraWebCrawlURLs: !Ref AgentAssistQnABotKendraWebCrawlURLs
         AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
         AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
