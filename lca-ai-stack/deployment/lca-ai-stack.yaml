@@ -1304,7 +1304,7 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
-      Runtime: python3.11
+      Runtime: python3.10
       Timeout: 900
       Environment:
         Variables:
@@ -1344,7 +1344,7 @@ Resources:
   TranscriptEnrichmentPythonLayer:
     Type: AWS::Serverless::LayerVersion
     Metadata:
-      BuildMethod: python3.9
+      BuildMethod: python3.10
     Properties:
       Description:
         !Sub "Transcript Enrichment Python Layer for stack: ${AWS::StackName}"
@@ -1352,7 +1352,7 @@ Resources:
       CompatibleArchitectures:
         - arm64
       CompatibleRuntimes:
-        - python3.9
+        - python3.10
       RetentionPolicy: Delete
 
   ##########################################################################

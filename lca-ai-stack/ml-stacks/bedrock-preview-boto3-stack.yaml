@@ -135,7 +135,7 @@ Resources:
         S3Bucket: !GetAtt BedrockBoto3Zip.Bucket
         S3Key: !GetAtt BedrockBoto3Zip.Key
       CompatibleRuntimes:
-        - python3.9
+        - python3.11
 
 Outputs:
 

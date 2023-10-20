@@ -35,8 +35,8 @@ if ! [ -x "$(command -v zip)" ]; then
   echo 'Error: zip is not installed and required.' >&2
   exit 1
 fi
-if ! [ -x "$(command -v pip)" ]; then
-  echo 'Error: pip is not installed and required.' >&2
+if ! [ -x "$(command -v pip3)" ]; then
+  echo 'Error: pip3 is not installed and required.' >&2
   exit 1
 fi
 if ! python3 -c "import virtualenv"; then
