@@ -193,7 +193,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       Timeout: 30
       InlineCode: |
           import cfnresponse
@@ -477,7 +477,7 @@ Resources:
     Properties:
       Role: !GetAtt LambdaRole.Arn
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       Timeout: 900
       Code:
         ZipFile: |

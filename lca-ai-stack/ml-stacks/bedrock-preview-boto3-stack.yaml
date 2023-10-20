@@ -41,7 +41,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.10
+      Runtime: python3.11
       Role: !GetAtt 'BedrockBoto3ZipFunctionRole.Arn'
       Timeout: 60
       MemorySize: 512

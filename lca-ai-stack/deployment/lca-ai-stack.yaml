@@ -780,7 +780,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Timeout: 60
       MemorySize: 128
       Handler: lambda_start_codebuild.handler
@@ -839,7 +839,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaFetchTranscriptExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
@@ -881,7 +881,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LLMAnthropicSummaryLambdaExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
@@ -936,7 +936,7 @@ Resources:
     Condition: ShouldEnableBedrockSummarizer
     Properties:
       Role: !GetAtt BedrockSummaryLambdaExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
@@ -1001,7 +1001,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt AsyncAgentAssistOrchestratorExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
@@ -1068,7 +1068,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [
@@ -1304,7 +1304,7 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Timeout: 900
       Environment:
         Variables:
@@ -1872,7 +1872,7 @@ Resources:
     Condition: ShouldAllowSignUpEmailDomain
     Properties:
       Handler: index.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       Timeout: 3
       Environment:
         Variables:
@@ -1956,7 +1956,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: "index.lambda_handler"
-      Runtime: python3.9
+      Runtime: python3.11
       MemorySize: 128
       Timeout: 60
       Role: !GetAtt BucketDeleteLambdaRole.Arn
