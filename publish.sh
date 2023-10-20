@@ -39,12 +39,17 @@ if ! [ -x "$(command -v pip)" ]; then
   echo 'Error: pip is not installed and required.' >&2
   exit 1
 fi
+if ! python3 -c "import virtualenv"; then
+  echo 'Error: virtualenv python package is not installed and required.' >&2
+  echo 'Run "pip3 install virtualenv"' >&2
+  exit 1
+fi
 if ! [ -x "$(command -v npm)" ]; then
   echo 'Error: npm is not installed and required.' >&2
   exit 1
 fi
-if ! node -v | grep -qF "v16."; then
-    echo 'Node.js version 16.x is not installed and required.' >&2
+if ! node -v | grep -qF "v18."; then
+    echo 'Node.js version 18.x is not installed and required.' >&2
     exit 1
 fi
 
@@ -146,6 +151,10 @@ echo "PACKAGING $dir"
 git submodule init
 git submodule update
 echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
+# temp fix for QnABot 5.4.3 bug.. Remove when issue is fixed (in v5.4.4)
+# https://github.com/aws-solutions/qnabot-on-aws/issues/651
+cp -v ./patches/qnabot/lambda_fulfillment_lib_middleware_2_preprocess.js $dir/lambda/fulfillment/lib/middleware/2_preprocess.js
+# LCA customizations
 cp -v ./patches/qnabot/lambda_schema_qna.js $dir/lambda/schema/qna.js
 cp -v ./patches/qnabot/website_js_admin.vue $dir/website/js/admin.vue
 cp -v ./patches/qnabot/Makefile $dir/Makefile
