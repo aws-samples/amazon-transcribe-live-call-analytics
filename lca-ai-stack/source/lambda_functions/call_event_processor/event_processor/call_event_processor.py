@@ -1225,7 +1225,7 @@ def merge_dicts(d1, d2):
 # Send call id to session id mapping event
 ##########################################################################
 
-def send_call_session_mapping_event(call_id, session_id, recording_url):
+def send_call_session_mapping_event(call_id, session_id):
     client = boto3.client('events')
 
     LOGGER.debug("Sending CALL_SESSION_MAPPING event. callId: %s, SessionId: %s", call_id, session_id)
@@ -1237,7 +1237,6 @@ def send_call_session_mapping_event(call_id, session_id, recording_url):
                 'Detail': json.dumps({
                     'callId': call_id,
                     'sessionId': session_id,
-                    'recordingUrl': recording_url,
                 }),
             }
         ]
@@ -1573,13 +1572,8 @@ async def execute_process_event_api_mutation(
         meta = json.loads(message['Metadata'])
         LOGGER.debug("S3 URL from metadata %s", meta['oneTimeMetadata']['s3RecordingUrl'])
 
-        bucket = meta['oneTimeMetadata']['s3RecordingUrl'].split("/")[5].split("?")[0]
-        region = re.search(r"region\=(.+)\&prefix+", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
-        prefix = re.search(r"\&prefix\=(.+)", meta['oneTimeMetadata']['s3RecordingUrl']).group(1)
         session_id = re.search(r"\/(.+\/)*(.+)\.(?i)(wav)$", meta['oneTimeMetadata']['s3RecordingUrl']).group(2)
-        recording_url = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + prefix
-
-        send_call_session_mapping_event(meta['callId'], session_id, recording_url)
+        send_call_session_mapping_event(meta['callId'], session_id)
 
     else:
         LOGGER.warning("unknown event type [%s]", event_type)

@@ -392,6 +392,7 @@ Resources:
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.IsContentRedactionEnabled
         LCAS3BucketName: !Ref S3BucketName
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        UsedChimeCallAnalytics: !Ref UseChimeCallAnalytics
 
 Outputs:
   DemoPBXIPAddress:

@@ -29,6 +29,7 @@ const TRANSCRIBER_CALL_EVENT_TABLE_NAME = process.env.TRANSCRIBER_CALL_EVENT_TAB
 const LCA_BUCKET_NAME = process.env.LCA_BUCKET_NAME || '';
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_FILE_PREFIX || 'lca-call-analytics/');
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
+const USED_CHIME_CALL_ANALYTICS = (process.env.USED_CHIME_CALL_ANALYTICS || 'true') === 'true';
 
 function getAnalyticsOutputBucketAndKey(sessionId, suffix) {
   const analyticsfolder = (IS_CONTENT_REDACTION_ENABLED) ? "redacted-analytics/" : "analytics/";
@@ -98,6 +99,29 @@ const writeCategoryEventToKds = async function writeCategoryEventToKds(
   }
 };
 
+const writeS3UrlToKds = async function writeS3UrlToKds(kinesisClient, callId, recordingUrl) {
+  console.log('Writing S3 URL To KDS');
+  const now = new Date().toISOString();
+  const eventType = 'ADD_S3_RECORDING_URL';
+  const putObj = {
+    CallId: callId,
+    RecordingUrl: recordingUrl,
+    EventType: eventType.toString(),
+    CreatedAt: now,
+  };
+  const putParams = {
+    StreamName: KINESIS_STREAM_NAME,
+    PartitionKey: callId,
+    Data: Buffer.from(JSON.stringify(putObj)),
+  };
+  const putCmd = new PutRecordCommand(putParams);
+  console.log('Sending ADD_S3_RECORDING_URL event on KDS: ', JSON.stringify(putObj));
+  try {
+    await kinesisClient.send(putCmd);
+  } catch (error) {
+    console.error('Error writing ADD_S3_RECORDING_URL event', error);
+  }
+};
 
 const readFileFromS3 = async function readFileFromS3(bucketAndKey) {
   console.log("reading file: ", bucketAndKey)
@@ -127,16 +151,54 @@ function filterCategories(categories) {
   return filteredCategories;
 }
 
-const processFile = async function processFile(s3Client, event, sessionData) {
-  let bucketAndKey;
-  if (event.detail.Transcript && event.detail.Transcript.TranscriptFileUri) {
-    const transcriptFileUri = event.detail.Transcript.TranscriptFileUri;
-    const s3UriMatch = transcriptFileUri.match(/s3:\/\/([^\/]+)\/(.*)/);
-    bucketAndKey = {
-      Key: s3UriMatch[2],
-      Bucket: s3UriMatch[1],
-    };
+const parseBucketAndKey = function(s3Uri) {
+  const s3UriMatch = s3Uri.match(/s3:\/\/([^\/]+)\/(.*)/);
+  return  {
+    Key: s3UriMatch[2],
+    Bucket: s3UriMatch[1],
+  };
+}
+
+const processRecordingFile = async function processRecordingFile(s3Client, event, sessionData) {
+  if (!USED_CHIME_CALL_ANALYTICS) {
+    console.log("Skip Writing ADD_S3_RECORDING_URL event To KDS for non Chime SDK Call Analytics");
+    return;
+  }
+
+  let bucketAndKey = undefined;
+  if (IS_CONTENT_REDACTION_ENABLED) {
+    if (event.detail.Transcript && event.detail.Media.RedactedMediaFileUri) {
+      bucketAndKey = parseBucketAndKey(event.detail.Media.RedactedMediaFileUri);
+    }
   } else {
+    if (event.detail.Transcript && event.detail.Media.MediaFileUri) {
+      bucketAndKey = parseBucketAndKey(event.detail.Media.MediaFileUri);
+    }
+  }
+
+  if (bucketAndKey === undefined) {
+    bucketAndKey = getAnalyticsOutputBucketAndKey(sessionData.sessionId, '.wav');
+  }
+
+  console.log("Writing ADD_S3_RECORDING_URL event To KDS");
+  const encodedKey = bucketAndKey.Key.split("/").map(part => encodeURIComponent(part)).join('/');
+  const recordingUrl = `https://${bucketAndKey.Bucket}.s3.${REGION}.amazonaws.com/${encodedKey}`;
+  await writeS3UrlToKds(kinesisClient, sessionData.callId, recordingUrl);
+}
+
+const processTranscriptFile = async function processTranscriptFile(s3Client, event, sessionData) {
+  let bucketAndKey = undefined;
+  if (IS_CONTENT_REDACTION_ENABLED) {
+    if (event.detail.Transcript && event.detail.Transcript.RedactedTranscriptFileUri) {
+      bucketAndKey = parseBucketAndKey(event.detail.Transcript.RedactedTranscriptFileUri);
+    }
+  } else {
+    if (event.detail.Transcript && event.detail.Transcript.TranscriptFileUri) {
+      bucketAndKey = parseBucketAndKey(event.detail.Transcript.TranscriptFileUri);
+    }
+  }
+
+  if (bucketAndKey === undefined) {
     bucketAndKey = getAnalyticsOutputBucketAndKey(sessionData.sessionId, '.json');
   }
 
@@ -160,17 +222,20 @@ const handler = async function handler(event, context) {
     console.log("ERROR Job failed - Failure reason:", event.detail.FailureReason);
     job_completed = false;
   }
+
   const sessionData = await getSessionDataFromDdb(dynamoClient, sessionId);
   if (!sessionData) {
     console.log("ERROR: Can't continue - no sessionData found.");
   }
+
   if (!job_completed) {
     console.log("ERROR: Can't continue - transcribe post call job failed.");
   }
+
   if (sessionData && job_completed) {
-    await processFile(s3Client, event, sessionData);
+    await processTranscriptFile(s3Client, event, sessionData);
+    await processRecordingFile(s3Client, event, sessionData);
   }
-  return;
 };
 
 exports.handler = handler;

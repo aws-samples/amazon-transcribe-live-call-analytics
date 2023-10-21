@@ -25,7 +25,6 @@ const {
   formatPath,
   writeCallStartEventToKds,
   writeCallEndEventToKds,
-  writeS3UrlToKds,
 } = require('./lca');
 
 const REGION = process.env.REGION || 'us-east-1';
@@ -686,10 +685,6 @@ const handler = async function handler(event, context) {
       return;
     }
 
-    // save recording url to callData in order to send the ADD_S3_RECORDING_URL KDS at the end of the call
-    callData.recordingUrl = event.detail.recordingUrl;
-    await writeCallDataToDdb(callData);
-
     const sessionData = {
       sessionId: event.detail.sessionId,
       callId: callId,
@@ -767,10 +762,6 @@ const handler = async function handler(event, context) {
 
       await writeCallEndEventToKds(kinesisClient, callDataFromDdb.callId);
       await writeCallDataToDdb(callDataFromDdb);
-
-      if (callDataFromDdb.recordingUrl) {
-        await writeS3UrlToKds(kinesisClient, callDataFromDdb.callId, callDataFromDdb.recordingUrl);
-      }
 
       if (callDataFromDdb.mediaPipelineId) {
         // wait 2 seconds to allow media pipeline to process the remaining audio stream
