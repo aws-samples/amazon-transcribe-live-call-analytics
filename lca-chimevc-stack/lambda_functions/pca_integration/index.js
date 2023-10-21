@@ -50,7 +50,6 @@ function mkTcaFilename(sessionData) {
   return f;
 }
 
-// TODO - Refactor to use new TCA Post Call event - now includes Transcript file and Media File Uris.
 function getAnalyticsOutputUri(sessionId, suffix) {
   const analyticsfolder = (IS_CONTENT_REDACTION_ENABLED) ? "redacted-analytics/" : "analytics/";
   const uri = `/${LCA_BUCKET_NAME}/${CALL_ANALYTICS_FILE_PREFIX}${analyticsfolder}${sessionId}${suffix}`;
@@ -115,10 +114,18 @@ const getS3PathFromUri = function getS3SourceUri(s3Uri) {
 };
 
 const copyAudioRecordingToPca = async function copyAudioRecordingToPca(s3Client, event, sessionData) {
-  let s3SourcePath;
-  if (event.detail.Media && event.detail.Media.MediaFileUri) {
-    s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Media.MediaFileUri));
+  let s3SourcePath = undefined;
+  if (IS_CONTENT_REDACTION_ENABLED) {
+    if (event.detail.Media && event.detail.Media.RedactedMediaFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Media.RedactedMediaFileUri));
+    }
   } else {
+    if (event.detail.Media && event.detail.Media.MediaFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Media.MediaFileUri));
+    }
+  }
+
+  if (s3SourcePath === undefined) {
     s3SourcePath = encodeURI(getAnalyticsOutputUri(sessionData.sessionId, '.wav'));
   }
 
@@ -137,10 +144,18 @@ const copyAudioRecordingToPca = async function copyAudioRecordingToPca(s3Client,
 };
 
 const copyPostCallAnalyticsToPca = async function copyPostCallAnalyticsToPca(s3Client, event, sessionData) {
-  let s3SourcePath;
-  if (event.detail.Transcript && event.detail.Transcript.TranscriptFileUri) {
-    s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Transcript.TranscriptFileUri));
+  let s3SourcePath = undefined;
+  if (IS_CONTENT_REDACTION_ENABLED) {
+    if (event.detail.Transcript && event.detail.Transcript.RedactedTranscriptFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Transcript.RedactedTranscriptFileUri));
+    }
   } else {
+    if (event.detail.Transcript && event.detail.Transcript.TranscriptFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Transcript.TranscriptFileUri));
+    }
+  }
+
+  if (s3SourcePath === undefined) {
     s3SourcePath = encodeURI(getAnalyticsOutputUri(sessionData.sessionId, '.json'));
   }
 
