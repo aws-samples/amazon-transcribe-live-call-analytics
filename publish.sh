@@ -31,6 +31,13 @@ if ! [ -x "$(command -v sam)" ]; then
   echo 'Install: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html' >&2
   exit 1
 fi
+sam_version=$(sam --version | awk '{print $4}')
+min_sam_version="1.99.0"
+if [[ $(echo -e "$min_sam_version\n$sam_version" | sort -V | tail -n1) == $min_sam_version && $min_sam_version != $sam_version ]]; then
+    echo "Error: sam version >= $min_sam_version is not installed and required. (Installed version is $sam_version)" >&2
+    echo 'Install: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/manage-sam-cli-versions.html' >&2
+    exit 1
+fi
 if ! [ -x "$(command -v zip)" ]; then
   echo 'Error: zip is not installed and required.' >&2
   exit 1
@@ -49,7 +56,7 @@ if ! [ -x "$(command -v npm)" ]; then
   exit 1
 fi
 if ! node -v | grep -qF "v18."; then
-    echo 'Node.js version 18.x is not installed and required.' >&2
+    echo 'Error: Node.js version 18.x is not installed and required.' >&2
     exit 1
 fi
 
