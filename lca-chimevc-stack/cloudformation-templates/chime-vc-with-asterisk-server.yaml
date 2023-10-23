@@ -686,11 +686,11 @@ Resources:
               local exit_code=${!2:-1}
               local troubleshoot=${Ec2Troubleshoot}
               [[ $troubleshoot == 'false' ]] && {
-                /opt/aws/bin/cfn-signal -e $exit_code -r "$error_reason" --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} || true
+                /usr/local/bin/cfn-signal -e $exit_code -r "$error_reason" --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} || true
                 exit $exit_code
               }
             fi
-            /opt/aws/bin/cfn-signal --success true --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} || true
+            /usr/local/bin/cfn-signal --success true --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} || true
           }
           trap error_exit EXIT
 
