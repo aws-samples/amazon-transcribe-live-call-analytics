@@ -48,6 +48,9 @@ Parameters:
     AllowedValues:
       - true
       - false
+  Version:
+    Type: String
+
 Resources:
   AsteriskVPC:
     Type: AWS::EC2::VPC
@@ -601,6 +604,7 @@ Resources:
         Ref: EIP
       stackName:
         Ref: AWS::StackName
+      Version: !Ref Version
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
@@ -667,9 +671,32 @@ Resources:
           Content-Disposition: attachment; filename="userdata.txt"
 
           #!/bin/bash -xe
+
           echo "remove old userdata for upgraded servers, if it exists"
           rm -f /var/lib/cloud/instance/scripts/part-001 
-          #!/bin/bash
+
+          echo ====================================
+          echo trap errors and handle cfn signals
+          echo ====================================
+          completed=0
+          function error_exit
+          {
+            if [ $completed -eq 0 ]; then
+              local error_reason=${!1:-failure}
+              local exit_code=${!2:-1}
+              local troubleshoot=${Ec2Troubleshoot}
+              [[ $troubleshoot == 'false' ]] && {
+                /opt/aws/bin/cfn-signal -e $exit_code -r "$error_reason" --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} || true
+                exit $exit_code
+              }
+            fi
+            /opt/aws/bin/cfn-signal --success true --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} || true
+          }
+          trap error_exit EXIT
+
+          echo =========================================
+          echo Install packages
+          echo =========================================
           sudo apt-get update
           while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do sleep 1 ; done
           sudo apt-get install unzip asterisk python3-pip jq -y
@@ -680,7 +707,6 @@ Resources:
           sudo pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
           sudo ln -s -f /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           /usr/local/bin/cfn-init -v  --stack ${AWS::StackName} --resource AsteriskInstance --configsets full_install  --region ${AWS::Region}
-          /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region}
 
           echo =========================================
           echo Create crontab to reload asterisk hourly
@@ -691,7 +717,6 @@ Resources:
           echo ================================
           echo Create asterisk configuration
           echo ================================
-
           echo "pjsip.conf template"
           echo "[udp]
           type=transport
@@ -778,11 +803,13 @@ Resources:
           echo "Inline edit config file templates"
           TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
           INSTANCE_ID=$( curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+          [ -z "$INSTANCE_ID" ] && echo "Unable to get INSTANCE_ID from instance metadata" && exit 1
           PUBLIC_IP=${EIP}
-          REGION=$( curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region )
           PHONE_NUMBER=$( aws ssm get-parameter --name /${AWS::StackName}/phoneNumber --region ${AWS::Region} | jq -r '.Parameter.Value' )
+          [ -z "$PHONE_NUMBER" ] && echo "Unable to get PHONE_NUMBER from SSM" && exit 1
           VOICE_CONNECTOR=$( aws ssm get-parameter --name /${AWS::StackName}/voiceConnector --region ${AWS::Region} | jq -r '.Parameter.Value' )
-          curl -L ${DemoAsteriskAgentAudioURL} --output /var/lib/asterisk/sounds/agent.wav
+          [ -z "$VOICE_CONNECTOR" ] && echo "Unable to get VOICE_CONNECTOR from SSM" && exit 1
+          curl -f -L ${DemoAsteriskAgentAudioURL} --output /var/lib/asterisk/sounds/agent.wav
           echo Public IP: $PUBLIC_IP
           echo Phone Number: $PHONE_NUMBER
           echo Voice Connector: $VOICE_CONNECTOR
@@ -804,6 +831,8 @@ Resources:
           echo Start asterisk and exit
           echo ================================
           systemctl restart asterisk
+          completed=1
+          exit
           --//--
     Metadata:
       AWS::CloudFormation::Init:

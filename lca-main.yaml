@@ -1281,6 +1281,7 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        Version: <VERSION_TOKEN>
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack

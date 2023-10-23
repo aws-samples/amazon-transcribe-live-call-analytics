@@ -227,6 +227,9 @@ Parameters:
     Type: String
     Description: Parent LCA Stack name
 
+  Version:
+    Type: String
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -272,6 +275,7 @@ Resources:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        Version: !Ref Version
 
   DeployChimeVCsiprec:
     Type: AWS::CloudFormation::Stack
