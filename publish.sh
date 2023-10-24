@@ -158,9 +158,6 @@ echo "PACKAGING $dir"
 git submodule init
 git submodule update
 echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
-# temp fix for QnABot 5.4.3 bug.. Remove when issue is fixed (in v5.4.4)
-# https://github.com/aws-solutions/qnabot-on-aws/issues/651
-cp -v ./patches/qnabot/lambda_fulfillment_lib_middleware_2_preprocess.js $dir/lambda/fulfillment/lib/middleware/2_preprocess.js
 # LCA customizations
 cp -v ./patches/qnabot/lambda_schema_qna.js $dir/lambda/schema/qna.js
 cp -v ./patches/qnabot/website_js_admin.vue $dir/website/js/admin.vue
