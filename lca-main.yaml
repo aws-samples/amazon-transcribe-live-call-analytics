@@ -1314,7 +1314,7 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
-WEBSOCKETSTACK:
+  WEBSOCKETSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
     Properties:

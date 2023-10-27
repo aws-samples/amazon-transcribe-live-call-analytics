@@ -36,6 +36,8 @@ Parameters:
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
+      - LCA WebSocket
+
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
       Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
