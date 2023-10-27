@@ -13,9 +13,8 @@ import {
 } from "../types";
 
 
-const sampleRate = import.meta.env.VITE_TRANSCRIBE_SAMPLING_RATE;
-const language = import.meta.env.VITE_TRANSCRIBE_LANGUAGE_CODE as LanguageCode;
-const audiosource = import.meta.env.VITE_TRANSCRIBE_AUDIO_SOURCE;
+const sampleRate = 48000
+const language = 'en-US'
 
 
 const startStreaming = async (
@@ -24,19 +23,22 @@ const startStreaming = async (
 ) => {
 
   const audioContext = new window.AudioContext();
-  let stream;
-  
-  if (audiosource === 'ScreenCapture') {
-    stream = await window.navigator.mediaDevices.getDisplayMedia({
+  const stream = await window.navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
     });
-  } else {
-    stream = await window.navigator.mediaDevices.getUserMedia({
-      video: false,
-      audio: true,
-    });
-  }
+
+  // if (audiosource === 'ScreenCapture') {
+  //   stream = await window.navigator.mediaDevices.getDisplayMedia({
+  //     video: true,
+  //     audio: true,
+  //   });
+  // } else {
+  //   stream = await window.navigator.mediaDevices.getUserMedia({
+  //     video: false,
+  //     audio: true,
+  //   });
+  // }
 
   const source1 = audioContext.createMediaStreamSource(stream);
 
@@ -71,7 +73,7 @@ const startStreaming = async (
     console.log(`Error receving message from worklet ${error}`);
   };
 
-  const audioDataIterator = pEvent.iterator<'message', MessageEvent>(mediaRecorder.port, 'message');
+  const audioDataIterator = pEvent.iterator<'message'>(mediaRecorder.port, 'message');
 
   const getAudioStream = async function* () {
     for await (const chunk of audioDataIterator) {
@@ -127,8 +129,8 @@ const startStreaming = async (
 
 
 const stopStreaming = async (
-  mediaRecorder: AudioWorkletNode,
-  transcribeClient: { destroy: () => void; }
+  mediaRecorder,
+  transcribeClient
 ) => {
   if (mediaRecorder) {
     mediaRecorder.port.postMessage({
@@ -146,7 +148,7 @@ const stopStreaming = async (
   }
 };
 
-const pcmEncode = (input: Float32Array) => {
+const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
   const view = new DataView(buffer);
   for (let i = 0; i < input.length; i++) {
@@ -156,7 +158,7 @@ const pcmEncode = (input: Float32Array) => {
   return buffer;
 };
 
-const LiveTranscriptions = (props: LiveTranscriptionProps) => {
+const LiveTranscriptions = (props) => {
   const {
     transcribeStatus,
     mediaRecorder,
@@ -168,10 +170,10 @@ const LiveTranscriptions = (props: LiveTranscriptionProps) => {
   } = props;
 
   const onTranscriptionDataReceived = (
-    data: string,
-    partial: boolean,
-    transcriptionClient: TranscribeStreamingClient,
-    mediaRecorder: AudioWorkletNode,
+    data,
+    partial,
+    transcriptionClient,
+    mediaRecorder,
   ) => {
     setTranscript({
       channel: '0',
