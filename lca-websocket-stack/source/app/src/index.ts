@@ -106,10 +106,8 @@ const registerHandlers = (ws: WebSocket): void => {
 };
 
 const onBinaryMessage = (data: Uint8Array): void => {
-    server.log.info(`Binary message. Size: ${data.length}`);
-
+    // server.log.info(`Binary message. Size: ${data.length}`);
     if (audioInputStream) {
-        // console.log(Buffer.from(data).toString('hex'));
         audioInputStream.write(data);
     } else {
         server.log.error('Error: received audio data before metadata');
@@ -117,10 +115,10 @@ const onBinaryMessage = (data: Uint8Array): void => {
 };
 
 const onTextMessage = (data: string): void => {
-    server.log.info(`Text message received. Size: ${data.length}`);
+    // server.log.info(`Text message received. Size: ${data.length}`);
     try {
         callMetaData = JSON.parse(data);
-        server.log.info('Call Metadata received from client : ', callMetaData);
+        // server.log.info('Call Metadata received from client : ', callMetaData);
     } catch (error) {
         server.log.error('Error parsing call metadata: ', data);
         callMetaData.callId = randomUUID();

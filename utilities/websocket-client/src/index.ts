@@ -51,7 +51,7 @@ new Command()
 
           ws.send(JSON.stringify(metadata));
 
-          const CHUNK_SIZE = SAMPLE_RATE * (CHUNK_SIZE_IN_MS/1000) * BYTES_PER_SAMPLE * 2 ;
+          const CHUNK_SIZE = SAMPLE_RATE * (CHUNK_SIZE_IN_MS/1000) * BYTES_PER_SAMPLE * 2;
           
           const audiopipeline:Chain = new Chain([
             fs.createReadStream(options.wavfile as fs.PathLike, { highWaterMark: CHUNK_SIZE }),

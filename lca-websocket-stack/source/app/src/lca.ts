@@ -57,6 +57,7 @@ const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] |
 const TCA_DATA_ACCESS_ROLE_ARN = process.env['TCA_DATA_ACCESS_ROLE_ARN'] || '';
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env['CALL_ANALYTICS_FILE_PREFIX'] || 'lca-call-analytics-json/');
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || null;
+const SAMPLING_RATE = parseInt(process.env['SAMPLING_RATE'] || '48000', 10);
 // optional - provide custom Transcribe endpoint via env var
 // optional - disable post call analytics output
 const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYTICS_ENABLED'] || 'false') === 'true';
@@ -105,11 +106,8 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
 // BabuS: TODO - writeTranscriptionSegment should be changed to support CustomCallTranscriptEvent 
 
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid) {
-    console.log(transcribeMessageJson);
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
-        console.log('Transcription results found');
         if (transcribeMessageJson.Transcript?.Results[0].Alternatives && transcribeMessageJson.Transcript?.Results[0].Alternatives?.length > 0) {
-            console.log('Transcription transcripts found');
 
             const result = transcribeMessageJson.Transcript?.Results[0];
 
@@ -144,20 +142,15 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
-                console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-                console.info(JSON.stringify(kdsObject));
+                // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
+                // console.info(JSON.stringify(kdsObject));
+                // console.info(kdsObject.Transcript);
             } catch (error) {
                 console.error('Error writing transcription segment (TRANSCRIBE) to KDS', error);
                 console.debug(JSON.stringify(kdsObject));
             }
-        } else {
-            console.error('No transcripts found in transcription message');
-        }
-        
-    } else {
-        console.error('No results found in transcription message');
-    }
-    
+        } 
+    } 
 };
 
 export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:UtteranceEvent | undefined , 
@@ -201,8 +194,8 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
-        console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-        console.info(JSON.stringify(kdsObject));
+        // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
+        // console.info(JSON.stringify(kdsObject));
     } catch (error) {
         console.error('Error writing transcription segment to KDS', error);
         console.debug(JSON.stringify(kdsObject));
@@ -230,8 +223,8 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
         const putCmd = new PutRecordCommand(putParams);
         try {
             await kinesisClient.send(putCmd);
-            console.debug('Written ADD_CALL_CATEGORY to KDS');
-            console.debug(JSON.stringify(kdsObject));
+            // console.debug('Written ADD_CALL_CATEGORY to KDS');
+            // console.debug(JSON.stringify(kdsObject));
         } catch (error) {
             console.error('Error writing ADD_CALL_CATEGORY to KDS', error);
             console.debug(JSON.stringify(kdsObject));
@@ -295,7 +288,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
     
     const tsParams:transcriptionCommandInput<typeof isTCAEnabled> = {
         LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
-        MediaSampleRateHertz: 44100,
+        MediaSampleRateHertz: SAMPLING_RATE,
         MediaEncoding: 'pcm',
         AudioStream: transcribeInput()
     };
@@ -337,31 +330,23 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         tsStream = stream.Readable.from(outputCallAnalyticsStream);
     } else if (outputTranscriptStream) {
         tsStream = stream.Readable.from(outputTranscriptStream);
-        console.log('Output Transcribe stream setup');
     }
 
     try {
         if (tsStream) {
-            console.log('Transcribe stream is NOT empty');
-
             for await (const event of tsStream) {
-                console.log('Event ', event);
-                console.log('Processing result stream loop');
+                // console.log('Event ', event);
                 if (event.TranscriptEvent) {
-                    console.log('Transcript event detected');
                     const message: TranscriptEvent = event.TranscriptEvent;
                     await writeTranscriptionSegment(message, callMetaData.callId);
                 }
                 if (event.CategoryEvent && event.CategoryEvent.MatchedCategories) {
-                    console.log('category event detected');
                     await writeAddCallCategoryEvent(event.CategoryEvent, callMetaData.callId);
                 }
                 if (event.UtteranceEvent && event.UtteranceEvent.UtteranceId) {
-                    console.log('Utterance event detected');
                     await writeAddTranscriptSegmentEvent(event.UtteranceEvent, undefined, callMetaData.callId);
                 }
             }
-            console.log('Finished processing Transcribe results');
 
         } else {
             console.log('Transcribe stream is empty');
