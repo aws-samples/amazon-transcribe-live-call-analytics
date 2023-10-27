@@ -7,7 +7,7 @@ import { AppLayout, Flashbar } from '@awsui/components-react';
 import { Logger } from 'aws-amplify';
 import useNotifications from '../../hooks/use-notifications';
 
-import StreamAudio from '../audio-streamer/StreamAudio';
+import StreamAudio from '../stream-audio/StreamAudio';
 import { appLayoutLabels } from '../common/labels';
 
 import Navigation from './navigation';

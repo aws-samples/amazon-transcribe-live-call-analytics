@@ -3,7 +3,7 @@
 import React from 'react';
 import { Route, Switch, useRouteMatch } from 'react-router-dom';
 
-import StreamAudioToolsPanel from '../audio-streamer/tools-panel';
+import StreamAudioToolsPanel from '../stream-audio/tools-panel';
 
 const ToolsPanel = () => {
   const { path } = useRouteMatch();
