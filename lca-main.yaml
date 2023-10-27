@@ -26,11 +26,13 @@ Parameters:
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
+      - LCA WebSocket
+
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
       Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
-      or integrate with Amazon Connect Contact Lens.
+      integrate with Amazon Connect Contact Lens or a websocket interface for streaming audio from microphone and web browser.
 
   CallAudioProcessor:
     Type: String
@@ -768,6 +770,8 @@ Conditions:
     ]
   ShouldInstallGenesysAudiohookStack:
     !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
+  ShouldInstallWebSocketStack:
+    !Equals [!Ref CallAudioSource, 'LCA WebSocket']
   ShouldInstallConnectIntegrationStack:
     !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldUseChimeCallAnalytics:
@@ -1310,6 +1314,33 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
 
+WEBSOCKETSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallWebSocketStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-stack/<VERSION_TOKEN>/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        TranscribeApiMode: !Ref TranscribeApiMode
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallConnectIntegrationStack
@@ -1378,6 +1409,13 @@ Outputs:
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
+  LCAWebsocketEndpoint:
+    Description: Websocket endpoint for websocket integration
+    Value: !If
+      - ShouldInstallWebSocketStack  
+      - !GetAtt WEBSOCKETSTACK.Outputs.WebSocketEndpoint
+      - ' Web Socket not enabled'
+      
   QnaBotContentDesigner:
     Description: Agent Assist Content Designer URL (QnABot on AWS)
     Value: !If
