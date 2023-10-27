@@ -44,8 +44,8 @@ const Navigation = ({
   <Switch>
     <Route path={CALLS_PATH}>
       <SideNavigation
-        items={items || callsNavHeader}
-        header={header || callsNavItems}
+        items={items || callsNavItems}
+        header={header || callsNavHeader}
         activeHref={activeHref || `#${CALLS_PATH}`}
         onFollow={onFollowHandler}
       />
