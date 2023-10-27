@@ -17,17 +17,10 @@ import '@awsui/global-styles/index.css';
 import useWebSocket from 'react-use-websocket';
 
 // eslint-disable-next-line prettier/prettier
-// const JWT_TOKEN =
+const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0I';
 // const WSS_ENDPOINT = 'wss://d2ydfdkcykyfr0.cloudfront.net/api/v1/ws';
 const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
-// const tone1kHz8kUlaw2ch = Uint8Array.from(
-//   new Array(1000)
-//     .fill([
-//       0xff, 0xff, 0x0d, 0x0d, 0x06, 0x06, 0x0d, 0x0d, 0xff, 0xff, 0x8d, 0x8d, 0x86, 0x86, 0x8d,
-//       0x8d,
-//     ])
-//     .flat(),
-// );
+
 const StreamAudio = () => {
   const [callMetaData, setCallMetaData] = useState({
     callId: crypto.randomUUID(),
@@ -36,9 +29,9 @@ const StreamAudio = () => {
     toNumber: '+8001112222',
   });
   const { sendMessage } = useWebSocket(WSS_ENDPOINT, {
-    // queryParams: {
-    //   authorization: `Bearer ${JWT_TOKEN}`,
-    // },
+    queryParams: {
+      authorization: `Bearer ${JWT_TOKEN}`,
+    },
     onClose: (event) => {
       console.log(event);
       // eslint-disable-next-line no-use-before-define
@@ -50,6 +43,7 @@ const StreamAudio = () => {
       setRecording(false);
     },
   });
+  const [mediaRecorder, setMediaRecorder] = useState();
   const [recording, setRecording] = useState(false);
 
   const handleCallIdChange = (e) => {
@@ -79,88 +73,89 @@ const StreamAudio = () => {
       toNumber: e.detail.value,
     });
   };
-  useEffect(() => {
-    let mediaRecorder;
-    let dstream;
-    let audioContext;
 
-    // const encodePCMChunk = (input) => {
-    //   let offset = 0;
-    //   const buffer = new ArrayBuffer(input.length * 2);
-    //   const view = new DataView(buffer);
-    //   // eslint-disable-next-line no-plusplus
-    //   for (let i = 0; i < input.length; i++, offset += 2) {
-    //     const s = Math.max(-1, Math.min(1, input[i]));
-    //     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    //   }
-    //   return Buffer.from(buffer);
-    // };
-
-    const startRecording = async () => {
-      dstream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100,
-        },
-      });
-
-      audioContext = new AudioContext();
-      const destination = audioContext.createMediaStreamDestination();
-      const source1 = audioContext.createMediaStreamSource(dstream);
-
-      mediaRecorder = audioContext.createScriptProcessor(4096, 1, 1);
-      source1.connect(mediaRecorder).connect(destination);
-
-      const recorderProcess = (e) => {
-        const { inputBuffer } = e;
-        const inputData = inputBuffer.getChannelData(0);
-        console.log('Buffer size ', inputData.length);
-        sendMessage(inputData);
-      };
-      mediaRecorder.onaudioprocess = recorderProcess;
-    };
-
-    const stopRecording = () => {
-      try {
-        dstream.getAudioTracks()[0].stop();
-      } catch (error) {
-        console.log(error);
-      }
-      // mediaRecorder.disconnect();
-      try {
-        audioContext.close();
-      } catch (error) {
-        console.log(error);
-      }
+  const stopRecording = async () => {
+    if (mediaRecorder) {
       if (mediaRecorder) {
-        mediaRecorder.getTracks().forEach((track) => track.stop());
-        mediaRecorder.stop();
+        mediaRecorder.port.postMessage({
+          message: 'UPDATE_RECORDING_STATE',
+          setRecording: false,
+        });
+        mediaRecorder.port.close();
+        mediaRecorder.disconnect();
+      } else {
+        console.log('no media recorder available to stop');
       }
-      setRecording(false);
-    };
-
-    if (recording) {
-      startRecording();
     } else {
-      stopRecording();
+      console.log('no media recorder');
     }
+  };
 
-    return () => {
-      if (mediaRecorder) {
-        mediaRecorder.getTracks().forEach((track) => track.stop());
+  const startRecording = async () => {
+    try {
+      const audioContext = new window.AudioContext();
+
+      const stream = await window.navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+      const source1 = audioContext.createMediaStreamSource(stream);
+      const recordingprops = {
+        numberOfChannels: 1,
+        sampleRate: audioContext.sampleRate,
+        maxFrameCount: (audioContext.sampleRate * 1) / 10,
+      };
+
+      try {
+        await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
+      } catch (error) {
+        console.log(`Add module error ${error}`);
       }
-    };
-  }, [recording, sendMessage]);
+      const recorder = new AudioWorkletNode(audioContext, 'recording-processor', {
+        processorOptions: recordingprops,
+      });
+      setMediaRecorder(recorder);
 
-  const startCall = () => {
-    if (!recording) {
-      sendMessage(JSON.stringify(callMetaData));
+      const destination = audioContext.createMediaStreamDestination();
+      mediaRecorder.port.postMessage({
+        message: 'UPDATE_RECORDING_STATE',
+        setRecording: true,
+      });
+      source1.connect(mediaRecorder).connect(destination);
+      mediaRecorder.port.onmessageerror = (error) => {
+        console.log(`Error receving message from worklet ${error}`);
+      };
+      mediaRecorder.port.onmessage = (event) => {
+        sendMessage(event.data);
+      };
+    } catch (error) {
+      alert(`An error occurred while recording: ${error}`);
+      await stopRecording();
     }
+  };
+
+  async function toggleRecording() {
+    if (recording) {
+      console.log('startRecording');
+      await startRecording();
+    } else {
+      console.log('stopRecording');
+      await stopRecording();
+    }
+  }
+
+  useEffect(() => {
+    toggleRecording();
+  }, [recording]);
+
+  const handleRecording = () => {
     setRecording(!recording);
-    // eslint-disable-next-line max-len
-    // sendMessage(tone1kHz8kUlaw2ch);
+    if (recording) {
+      console.log('Stopping transcription');
+    } else {
+      console.log('Starting transcription');
+    }
+    return recording;
   };
 
   return (
@@ -168,7 +163,7 @@ const StreamAudio = () => {
       <Form
         actions={
           <SpaceBetween direction="horizontal" size="xs">
-            <Button variant="primary" onClick={startCall}>
+            <Button variant="primary" onClick={handleRecording}>
               {recording ? 'Stop Streaming' : 'Start Streaming'}
             </Button>
           </SpaceBetween>

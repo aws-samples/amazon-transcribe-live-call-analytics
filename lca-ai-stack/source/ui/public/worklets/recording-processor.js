@@ -1,4 +1,6 @@
-// Based on sample from 
+/* eslint-disable no-underscore-dangle */
+/* eslint-disable no-plusplus */
+// Based on sample from
 // https://github.com/GoogleChromeLabs/web-audio-samples/blob/main/src/audio-worklet/migration/worklet-recorder/recording-processor.js
 
 class RecordingProcessor extends AudioWorkletProcessor {
@@ -9,19 +11,17 @@ class RecordingProcessor extends AudioWorkletProcessor {
     this.numberOfChannels = 0;
 
     if (options && options.processorOptions) {
-      const {
-        numberOfChannels,
-        sampleRate,
-        maxFrameCount,
-      } = options.processorOptions;
+      const { numberOfChannels, sampleRate, maxFrameCount } = options.processorOptions;
 
       this.sampleRate = sampleRate;
       this.maxRecordingFrames = maxFrameCount;
       this.numberOfChannels = numberOfChannels;
     }
 
-    this._recordingBuffer = new Array(this.numberOfChannels)
-        .fill(new Float32Array(this.maxRecordingFrames));
+    // eslint-disable-next-line no-underscore-dangle
+    this._recordingBuffer = new Array(this.numberOfChannels).fill(
+      new Float32Array(this.maxRecordingFrames),
+    );
 
     this.recordedFrames = 0;
     this.isRecording = false;
@@ -44,13 +44,12 @@ class RecordingProcessor extends AudioWorkletProcessor {
 
           // Copy data to recording buffer.
           if (this.isRecording) {
-            this._recordingBuffer[channel][sample+this.recordedFrames] =
-                currentSample;
+            this._recordingBuffer[channel][sample + this.recordedFrames] = currentSample;
           }
 
           // Pass data directly to output, unchanged.
+          // eslint-disable-next-line no-param-reassign
           outputs[input][channel][sample] = currentSample;
-
         }
       }
     }
@@ -64,14 +63,13 @@ class RecordingProcessor extends AudioWorkletProcessor {
 
         // Post a recording recording length update on the clock's schedule
         if (shouldPublish) {
-
           this.port.postMessage({
             message: 'SHARE_RECORDING_BUFFER',
             buffer: this._recordingBuffer,
-            recordingLength: this.recordedFrames
+            recordingLength: this.recordedFrames,
           });
           this.framesSinceLastPublish = 0;
-          this.recordedFrames = 0
+          this.recordedFrames = 0;
         } else {
           this.framesSinceLastPublish += 128;
         }
@@ -80,15 +78,14 @@ class RecordingProcessor extends AudioWorkletProcessor {
         this.port.postMessage({
           message: 'SHARE_RECORDING_BUFFER',
           buffer: this._recordingBuffer,
-          recordingLength: this.recordedFrames
+          recordingLength: this.recordedFrames,
         });
 
         this.recordedFrames = 0;
         this.framesSinceLastPublish = 0;
-
-      } 
+      }
     } else {
-      console.log('stopping worklet processor node')
+      console.log('stopping worklet processor node');
       this.recordedFrames = 0;
       this.framesSinceLastPublish = 0;
       return false;
