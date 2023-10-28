@@ -12,6 +12,7 @@ import {
     startTranscribe, 
     CallMetaData, 
     writeCallStartEvent,
+    writeCallEndEvent,
 } from './lca';
 
 import { randomUUID } from 'crypto';
@@ -94,6 +95,9 @@ const registerHandlers = (ws: WebSocket): void => {
     ws.on('close', (code: number) => {
         try {
             onWsClose(ws, code);
+            (async () => {
+                await writeCallEndEvent(callMetaData);
+            })();
         } catch (err) {
             server.log.error('Error in WS close handler: ', err);
         }

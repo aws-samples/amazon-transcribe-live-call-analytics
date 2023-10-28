@@ -57,7 +57,7 @@ const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] |
 const TCA_DATA_ACCESS_ROLE_ARN = process.env['TCA_DATA_ACCESS_ROLE_ARN'] || '';
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env['CALL_ANALYTICS_FILE_PREFIX'] || 'lca-call-analytics-json/');
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || null;
-const SAMPLING_RATE = parseInt(process.env['SAMPLING_RATE'] || '48000', 10);
+const SAMPLING_RATE = parseInt(process.env['SAMPLING_RATE'] || '44100', 10);
 // optional - provide custom Transcribe endpoint via env var
 // optional - disable post call analytics output
 const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYTICS_ENABLED'] || 'false') === 'true';
@@ -144,7 +144,7 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
                 await kinesisClient.send(putCmd);
                 // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
                 // console.info(JSON.stringify(kdsObject));
-                // console.info(kdsObject.Transcript);
+                console.info(kdsObject.Transcript);
             } catch (error) {
                 console.error('Error writing transcription segment (TRANSCRIBE) to KDS', error);
                 console.debug(JSON.stringify(kdsObject));

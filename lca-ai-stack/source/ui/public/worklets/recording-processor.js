@@ -31,6 +31,7 @@ class RecordingProcessor extends AudioWorkletProcessor {
 
     this.port.onmessage = (event) => {
       if (event.data.message === 'UPDATE_RECORDING_STATE') {
+        console.log('received state update message from client');
         this.isRecording = event.data.setRecording;
       }
     };

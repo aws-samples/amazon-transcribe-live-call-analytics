@@ -21,6 +21,16 @@ const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkw
 // const WSS_ENDPOINT = 'wss://d2ydfdkcykyfr0.cloudfront.net/api/v1/ws';
 const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
 
+const pcmEncode = (input) => {
+  const buffer = new ArrayBuffer(input.length * 2);
+  const view = new DataView(buffer);
+  for (let i = 0; i < input.length; i += 1) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buffer;
+};
+
 const StreamAudio = () => {
   const [callMetaData, setCallMetaData] = useState({
     callId: crypto.randomUUID(),
@@ -43,7 +53,8 @@ const StreamAudio = () => {
       setRecording(false);
     },
   });
-  const [mediaRecorder, setMediaRecorder] = useState();
+  // const [mediaRecorder, setMediaRecorder] = useState();
+  let mediaRecorder;
   const [recording, setRecording] = useState(false);
 
   const handleCallIdChange = (e) => {
@@ -76,18 +87,14 @@ const StreamAudio = () => {
 
   const stopRecording = async () => {
     if (mediaRecorder) {
-      if (mediaRecorder) {
-        mediaRecorder.port.postMessage({
-          message: 'UPDATE_RECORDING_STATE',
-          setRecording: false,
-        });
-        mediaRecorder.port.close();
-        mediaRecorder.disconnect();
-      } else {
-        console.log('no media recorder available to stop');
-      }
+      mediaRecorder.port.postMessage({
+        message: 'UPDATE_RECORDING_STATE',
+        setRecording: false,
+      });
+      mediaRecorder.port.close();
+      mediaRecorder.disconnect();
     } else {
-      console.log('no media recorder');
+      console.log('no media recorder available to stop');
     }
   };
 
@@ -106,16 +113,26 @@ const StreamAudio = () => {
         maxFrameCount: (audioContext.sampleRate * 1) / 10,
       };
 
+      sendMessage(JSON.stringify(callMetaData));
       try {
         await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
       } catch (error) {
         console.log(`Add module error ${error}`);
       }
-      const recorder = new AudioWorkletNode(audioContext, 'recording-processor', {
+      mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
         processorOptions: recordingprops,
       });
-      setMediaRecorder(recorder);
-
+      if (mediaRecorder) {
+        console.log('media recorder was not created');
+      } else {
+        console.log('media recorder was created');
+      }
+      // setMediaRecorder(recorder);
+      if (mediaRecorder) {
+        console.log('media recorder was not created');
+      } else {
+        console.log('media recorder was created');
+      }
       const destination = audioContext.createMediaStreamDestination();
       mediaRecorder.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',
@@ -126,7 +143,9 @@ const StreamAudio = () => {
         console.log(`Error receving message from worklet ${error}`);
       };
       mediaRecorder.port.onmessage = (event) => {
-        sendMessage(event.data);
+        const abuffer = pcmEncode(event.data.buffer[0]);
+        const audiodata = new Uint8Array(abuffer);
+        sendMessage(audiodata);
       };
     } catch (error) {
       alert(`An error occurred while recording: ${error}`);
