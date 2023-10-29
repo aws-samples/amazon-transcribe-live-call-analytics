@@ -4,4 +4,4 @@ dist/
 .eslintcache
 .DS_Store
 .env
-.env_local
+.env.local

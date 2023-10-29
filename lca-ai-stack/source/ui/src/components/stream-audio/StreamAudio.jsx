@@ -17,8 +17,7 @@ import '@awsui/global-styles/index.css';
 import useWebSocket from 'react-use-websocket';
 
 // eslint-disable-next-line prettier/prettier
-const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0I';
-// const WSS_ENDPOINT = 'wss://d2ydfdkcykyfr0.cloudfront.net/api/v1/ws';
+const JWT_TOKEN = '';
 const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
 
 const pcmEncode = (input) => {
