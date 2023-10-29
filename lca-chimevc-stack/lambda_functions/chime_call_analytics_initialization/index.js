@@ -436,6 +436,10 @@ const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent
     console.log(`ERROR: Call ${callId} is already processed/processing - exiting.`);
     return undefined;
   }
+  if (callData.callStreamingEndTime) {
+    console.log(`ERROR: Call ${callId} has already ended - exiting.`);
+    return undefined;
+  }
   // Add Start Call Event info to saved callData object and write back to DDB for tracing
   callData.startCallProcessingEvent = scpevent;
   callData.callProcessingStartTime = new Date().toISOString();
