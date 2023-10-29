@@ -2,10 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 
 
-const USERPOOL_ID = process.env['USERPOOL_ID'];
-
+const USERPOOL_ID = process.env['USERPOOL_ID'] || '';
 const cognitoJwtVerifier = CognitoJwtVerifier.create({
-    userPoolId: USERPOOL_ID!,
+    userPoolId: USERPOOL_ID,
 });
 
 type queryobj = {
@@ -14,9 +13,7 @@ type queryobj = {
 
 export const jwtVerifier = async (request: FastifyRequest, reply: FastifyReply) => {
 
-    const { authorization } = request.headers;
-    // const { authorization }= request.query as queryobj;
-    console.log(authorization);
+    const { authorization }= request.query as queryobj;
     
     if (!authorization) {
         return reply.status(401).send();

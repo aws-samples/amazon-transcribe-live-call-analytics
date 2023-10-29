@@ -426,7 +426,7 @@ Resources:
                   aws ecr get-login-password --region $AWS_DEFAULT_REGION |
                   docker login --username AWS
                   --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-                - npm install -g npm@7.23.0
+                - npm install -g npm@8.4.1
                 - cd source/app
                 - npm install
             build:
@@ -1286,36 +1286,6 @@ Resources:
           - TranscribingWebsocketLoadBalancerSecurityGroup
           - GroupId
       ToPort: 8080
-
-  TranscriberWebsocketFargateServiceTaskCountTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MaxCapacity: 3
-      MinCapacity: 1
-      ResourceId:
-        !Sub "service/${TranscribingCluster}/\
-              ${TranscriberWebsocketFargateService.Name}"
-      RoleARN:
-        !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/\
-        ecs.application-autoscaling.amazonaws.com/\
-        AWSServiceRoleForApplicationAutoScaling_ECSService"
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
-
-  TranscriberWebsocketFargateServiceTaskCountTargetCpuScaling:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Sub "${AWS::StackName}\
-        TranscriberWebsocketFargateServiceTaskCountTargetCpuScaling"
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId:
-        Ref: TranscriberWebsocketFargateServiceTaskCountTarget
-      TargetTrackingScalingPolicyConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ECSServiceAverageCPUUtilization
-        ScaleInCooldown: 60
-        ScaleOutCooldown: 60
-        TargetValue: 50
 
   CloudFrontOriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity

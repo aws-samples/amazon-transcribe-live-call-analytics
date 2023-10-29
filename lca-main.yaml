@@ -26,13 +26,12 @@ Parameters:
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
-      - LCA WebSocket
 
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
       Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
-      a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
-      integrate with Amazon Connect Contact Lens or a websocket interface for streaming audio from microphone and web browser.
+      a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center or,
+      integrate with Amazon Connect Contact Lens. 
 
   CallAudioProcessor:
     Type: String
@@ -45,6 +44,15 @@ Parameters:
       Amazon Chime SDK Call Analytics ingest the audio and send it to Transcribe, or use the example LCA Call 
       Processor Lambda. Enabling Amazon Chime SDK Call Analytics also allows you to also use Voice Analytics, 
       such as Voice Tone Analysis and Speaker Search.
+
+  WebSocketAudioInput:
+    Type: String
+    Default: Disabled
+    AllowedValues:
+      - Enabled
+      - Disabled
+    Description: >
+      Enable or Disable Websocket interface for streaming audio input from microphone and browser tabs.
 
   CustomVoiceConnectorId:
     Type: String
@@ -771,7 +779,7 @@ Conditions:
   ShouldInstallGenesysAudiohookStack:
     !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallWebSocketStack:
-    !Equals [!Ref CallAudioSource, 'LCA WebSocket']
+    !Equals [!Ref WebSocketAudioInput, 'Enabled']
   ShouldInstallConnectIntegrationStack:
     !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldUseChimeCallAnalytics:

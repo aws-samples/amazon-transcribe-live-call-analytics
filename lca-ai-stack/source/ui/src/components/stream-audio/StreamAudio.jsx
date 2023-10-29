@@ -16,9 +16,10 @@ import {
 import '@awsui/global-styles/index.css';
 import useWebSocket from 'react-use-websocket';
 
+import useAppContext from '../contexts/app';
+
 // eslint-disable-next-line prettier/prettier
-const JWT_TOKEN = '';
-const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
+const WSS_ENDPOINT = 'wss://babusri.people.aws.dev/api/v1/ws';
 
 const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
@@ -31,11 +32,15 @@ const pcmEncode = (input) => {
 };
 
 const StreamAudio = () => {
+  const { currentSession } = useAppContext();
+  const JWT_TOKEN = currentSession.getAccessToken().getJwtToken();
+
   const [callMetaData, setCallMetaData] = useState({
     callId: crypto.randomUUID(),
     agentId: 'AudioStream',
     fromNumber: '+9165551234',
     toNumber: '+8001112222',
+    samplingRate: 48000,
   });
   const { sendMessage } = useWebSocket(WSS_ENDPOINT, {
     queryParams: {
@@ -78,8 +83,7 @@ const StreamAudio = () => {
   };
 
   const handletoNumberChange = (e) => {
-    setCallMetaData({
-      ...callMetaData,
+    setCallMetaData({      ...callMetaData,
       toNumber: e.detail.value,
     });
   };
@@ -106,13 +110,19 @@ const StreamAudio = () => {
         audio: true,
       });
       const source1 = audioContext.createMediaStreamSource(stream);
+      
       const recordingprops = {
         numberOfChannels: 1,
         sampleRate: audioContext.sampleRate,
         maxFrameCount: (audioContext.sampleRate * 1) / 10,
       };
-
+      
+      setCallMetaData({
+        ...callMetaData,
+        samplingRate: recordingprops.sampleRate,
+      });
       sendMessage(JSON.stringify(callMetaData));
+      
       try {
         await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
       } catch (error) {
@@ -121,17 +131,7 @@ const StreamAudio = () => {
       mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
         processorOptions: recordingprops,
       });
-      if (mediaRecorder) {
-        console.log('media recorder was not created');
-      } else {
-        console.log('media recorder was created');
-      }
-      // setMediaRecorder(recorder);
-      if (mediaRecorder) {
-        console.log('media recorder was not created');
-      } else {
-        console.log('media recorder was created');
-      }
+
       const destination = audioContext.createMediaStreamDestination();
       mediaRecorder.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',

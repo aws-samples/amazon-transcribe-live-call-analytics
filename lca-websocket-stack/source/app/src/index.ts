@@ -7,7 +7,7 @@ import WebSocket from 'ws'; // type structure for the websocket object used by f
 import stream from 'stream';
 import os from 'os';
 
-// import { jwtVerifier } from './jwt-verifier';
+import { jwtVerifier } from './jwt-verifier';
 import {  
     startTranscribe, 
     CallMetaData, 
@@ -37,10 +37,10 @@ const server = fastify({
 server.register(websocket);
 
 // Setup preHandler hook to authenticate 
-// server.addHook('preHandler', async (request, reply) => {
-//     console.log(request.query);
-//     return jwtVerifier(request, reply);
-// });
+server.addHook('preHandler', async (request, reply) => {
+    // console.log(request.query);
+    return jwtVerifier(request, reply);
+});
 
 // Setup Route for websocket connection
 server.get('/api/v1/ws', { websocket: true, logLevel: 'info' }, (connection, request) => {
