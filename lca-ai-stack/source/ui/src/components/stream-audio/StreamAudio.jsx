@@ -17,7 +17,7 @@ import useWebSocket from 'react-use-websocket';
 
 import useAppContext from '../../contexts/app';
 
-const WSS_ENDPOINT = 'wss://babusri.people.aws.dev/api/v1/ws';
+const WSS_ENDPOINT = 'wss://d18s53aywh6p0l.cloudfront.net/api/v1/ws';
 // const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
 
 const pcmEncode = (input) => {
