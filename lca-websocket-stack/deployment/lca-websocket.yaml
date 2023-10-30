@@ -1320,7 +1320,7 @@ Resources:
             - "signature"
 
         QueryStringsConfig: 
-          QueryStringBehavior: none
+          QueryStringBehavior: all
 
   WebSocketCloudFrontDistribution:
     Type: AWS::CloudFront::Distribution

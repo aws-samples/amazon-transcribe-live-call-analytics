@@ -109,18 +109,18 @@ const StreamAudio = () => {
       });
       const source1 = audioContext.createMediaStreamSource(stream);
 
-      const stream2 = await window.navigator.mediaDevices.getUserMedia({
-        video: false,
-        audio: true,
-      });
-      const source2 = audioContext.createMediaStreamSource(stream2);
+      // const stream2 = await window.navigator.mediaDevices.getUserMedia({
+      //   video: false,
+      //   audio: true,
+      // });
+      // const source2 = audioContext.createMediaStreamSource(stream2);
 
-      const merger = audioContext.createChannelMerger(2);
-      source1.connect(merger);
-      source2.connect(merger);
+      // const merger = audioContext.createChannelMerger(2);
+      // source1.connect(merger);
+      // source2.connect(merger);
 
       const recordingprops = {
-        numberOfChannels: 2,
+        numberOfChannels: 1,
         sampleRate: audioContext.sampleRate,
         maxFrameCount: (audioContext.sampleRate * 1) / 10,
       };
@@ -138,9 +138,9 @@ const StreamAudio = () => {
       }
       mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
         processorOptions: recordingprops,
-        numberOfInputs: 1,
-        numberOfOutputs: 1,
-        numberOfChannels: 2,
+        // numberOfInputs: 1,
+        // numberOfOutputs: 1,
+        // numberOfChannels: 2,
       });
 
       const destination = audioContext.createMediaStreamDestination();
@@ -148,7 +148,7 @@ const StreamAudio = () => {
         message: 'UPDATE_RECORDING_STATE',
         setRecording: true,
       });
-      merger.connect(mediaRecorder).connect(destination);
+      source1.connect(mediaRecorder).connect(destination);
 
       mediaRecorder.port.onmessageerror = (error) => {
         console.log(`Error receving message from worklet ${error}`);
