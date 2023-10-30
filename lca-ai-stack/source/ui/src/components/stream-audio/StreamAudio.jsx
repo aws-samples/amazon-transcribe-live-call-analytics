@@ -17,7 +17,7 @@ import useWebSocket from 'react-use-websocket';
 
 import useAppContext from '../../contexts/app';
 
-const WSS_ENDPOINT = 'wss://d18s53aywh6p0l.cloudfront.net/api/v1/ws';
+const WSS_ENDPOINT = 'wss://dwygax9cpnefd.cloudfront.net/api/v1/ws';
 // const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
 
 const pcmEncode = (input) => {
@@ -108,8 +108,19 @@ const StreamAudio = () => {
         audio: true,
       });
       const source1 = audioContext.createMediaStreamSource(stream);
+
+      const stream2 = await window.navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true,
+      });
+      const source2 = audioContext.createMediaStreamSource(stream2);
+
+      const merger = audioContext.createChannelMerger(2);
+      source1.connect(merger);
+      source2.connect(merger);
+
       const recordingprops = {
-        numberOfChannels: 1,
+        numberOfChannels: 2,
         sampleRate: audioContext.sampleRate,
         maxFrameCount: (audioContext.sampleRate * 1) / 10,
       };
@@ -127,6 +138,9 @@ const StreamAudio = () => {
       }
       mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
         processorOptions: recordingprops,
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        numberOfChannels: 2,
       });
 
       const destination = audioContext.createMediaStreamDestination();
@@ -134,7 +148,8 @@ const StreamAudio = () => {
         message: 'UPDATE_RECORDING_STATE',
         setRecording: true,
       });
-      source1.connect(mediaRecorder).connect(destination);
+      merger.connect(mediaRecorder).connect(destination);
+
       mediaRecorder.port.onmessageerror = (error) => {
         console.log(`Error receving message from worklet ${error}`);
       };

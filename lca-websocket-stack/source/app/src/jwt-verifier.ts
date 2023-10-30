@@ -13,19 +13,19 @@ type queryobj = {
 };
 
 export const jwtVerifier = async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = request.query as queryobj;
-    const headers = request.headers;
+    // const query = request.query as queryobj;
+    // const headers = request.headers;
 
-    const auth = query.authorization || headers.authorization;
-
-    if (!auth) {
-        request.log.error('No authorization header or query string found');
+    // const auth = query.authorization || headers.authorization;
+    const { authorization } = request.query as queryobj;
+    if (!authorization) {
+        request.log.error('No authorization query string found');
         return reply.status(401).send();
     }
 
-    const match = auth?.match(/^Bearer (.+)$/);
+    const match = authorization?.match(/^Bearer (.+)$/);
     if (!match) {
-        request.log.error('No Bearer token found in header or query string')
+        request.log.error('No Bearer token found in header or query string');
         return reply.status(401).send();
     }
 
