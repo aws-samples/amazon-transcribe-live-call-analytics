@@ -13,14 +13,17 @@ type queryobj = {
 };
 
 export const jwtVerifier = async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as queryobj;
+    const headers = request.headers;
+    const auth = query.authorization || headers.authorization;
 
-    const { authorization }= request.query as queryobj;
-    
-    if (!authorization) {
+    // const { authorization }= request.query as queryobj;
+
+    if (!auth) {
         return reply.status(401).send();
     }
 
-    const match = authorization?.match(/^Bearer (.+)$/);
+    const match = auth?.match(/^Bearer (.+)$/);
     if (!match) {
         return reply.status(401).send();
     }

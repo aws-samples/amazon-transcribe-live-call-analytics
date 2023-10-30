@@ -47,6 +47,7 @@ new Command()
             fromNumber: process.env['CALL_FROM_NUMBER'] || '+9165551234',
             toNumber: process.env['CALL_TO_NUMBER'] || '+8001112222',
             agentId: process.env['AGENT_ID'] || 'websocket',
+            samplingRate: SAMPLE_RATE,
           };
 
           ws.send(JSON.stringify(metadata));

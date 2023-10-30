@@ -37,9 +37,9 @@ server.register(websocket);
 
 // Setup preHandler hook to authenticate 
 server.addHook('preHandler', async (request, reply) => {
-    console.log(request);
+    // console.log(request);
     if (!request.url.includes('health/check')) { 
-        return jwtVerifier(request, reply);
+        await jwtVerifier(request, reply);
     }
 });
 
@@ -52,9 +52,9 @@ server.get('/api/v1/ws', { websocket: true, logLevel: 'info' }, (connection, req
 
 // Setup Route for health check 
 server.get('/health/check', { logLevel: 'warn' }, (request, response) => {
-    const cpuUsge = os.loadavg()[0] / os.cpus().length * 100;
+    const cpuUsage = os.loadavg()[0] / os.cpus().length * 100;
 
-    const isHealthy = cpuUsge > CPU_HEALTH_THRESHOLD ? true : false;
+    const isHealthy = cpuUsage > CPU_HEALTH_THRESHOLD ? false : true;
     const status = isHealthy ? 200 : 503;
 
     response
