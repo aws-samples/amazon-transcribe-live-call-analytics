@@ -57,8 +57,6 @@ const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] |
 const TCA_DATA_ACCESS_ROLE_ARN = process.env['TCA_DATA_ACCESS_ROLE_ARN'] || '';
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env['CALL_ANALYTICS_FILE_PREFIX'] || 'lca-call-analytics-json/');
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || null;
-const SAMPLING_RATE = parseInt(process.env['SAMPLING_RATE'] || '44100', 10);
-// optional - provide custom Transcribe endpoint via env var
 // optional - disable post call analytics output
 const IS_TCA_POST_CALL_ANALYTICS_ENABLED = (process.env['IS_TCA_POST_CALL_ANALYTICS_ENABLED'] || 'false') === 'true';
 // optional - when redaction is enabled, choose 'redacted' only (dafault), or 'redacted_and_unredacted' for both
@@ -78,7 +76,8 @@ export type CallMetaData = {
     fromNumber?: string,
     toNumber?: string,
     shouldRecordCall?: boolean,
-    agentId?: string
+    agentId?: string,
+    samplingRate: number,
 };
 
 const kinesisClient = new KinesisClient({ region: AWS_REGION });
@@ -102,8 +101,6 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
         console.debug(callEvent);
     }
 };
-
-// BabuS: TODO - writeTranscriptionSegment should be changed to support CustomCallTranscriptEvent 
 
 export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid) {
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
@@ -288,7 +285,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
     
     const tsParams:transcriptionCommandInput<typeof isTCAEnabled> = {
         LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
-        MediaSampleRateHertz: SAMPLING_RATE,
+        MediaSampleRateHertz: callMetaData.samplingRate,
         MediaEncoding: 'pcm',
         AudioStream: transcribeInput()
     };

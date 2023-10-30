@@ -6,22 +6,21 @@ import websocket from '@fastify/websocket';
 import WebSocket from 'ws'; // type structure for the websocket object used by fastify/websocket
 import stream from 'stream';
 import os from 'os';
+import { randomUUID } from 'crypto';
 
-import { jwtVerifier } from './jwt-verifier';
 import {  
     startTranscribe, 
     CallMetaData, 
     writeCallStartEvent,
     writeCallEndEvent,
 } from './lca';
-
-import { randomUUID } from 'crypto';
+import { jwtVerifier } from './jwt-verifier';
 
 let callMetaData: CallMetaData;  // Type structure for call metadata sent by the client
 let audioInputStream: stream.PassThrough; // audio chunks are written to this stream for Transcribe SDK to consume
 
 const CPU_HEALTH_THRESHOLD = parseInt(process.env['CPU_HEALTH_THRESHOLD'] || '50', 10);
-const isDev = process.env['SERVER_ENVIRONMENT'] !== 'PROD';
+const isDev = process.env['NODE_ENV'] !== 'PROD';
 
 // create fastify server (with logging enabled for non-PROD environments)
 const server = fastify({
@@ -38,7 +37,7 @@ server.register(websocket);
 
 // Setup preHandler hook to authenticate 
 server.addHook('preHandler', async (request, reply) => {
-    // console.log(request.query);
+    console.log(request.query);
     return jwtVerifier(request, reply);
 });
 

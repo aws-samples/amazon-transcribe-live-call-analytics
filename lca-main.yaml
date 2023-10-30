@@ -1332,6 +1332,7 @@ Resources:
       Parameters:
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
+        UserPoolId: !GetAtt AISTACK.Outputs.UserPoolId
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn

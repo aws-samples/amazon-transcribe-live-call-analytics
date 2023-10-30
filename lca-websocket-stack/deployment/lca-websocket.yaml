@@ -19,6 +19,10 @@ Transform: AWS::Serverless-2016-10-31
 Description: LCA Websocket
 
 Parameters:
+  UserPoolId: 
+    Type: String
+    Description: >
+      Cognito User Pool ID
 
   S3BucketName:
     Type: String
@@ -1102,6 +1106,10 @@ Resources:
               Value: !Ref AWS::Region
             - Name: NODE_ENV
               Value: 'DEV'
+            - Name: CPU_HEALTH_THRESHOLD
+              Value: '50'
+            - Name: USERPOOL_ID
+              Value: !Ref UserPoolId
             - Name: RECORDINGS_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX

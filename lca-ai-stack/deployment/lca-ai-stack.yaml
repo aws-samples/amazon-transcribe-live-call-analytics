@@ -366,13 +366,17 @@ Conditions:
 
 Outputs:
   CallDataStreamName:
-      Description: >-
-        The Name of Kinesis Data Stream to write the call data to.
-      Value: !Ref CallDataStream
+    Description: >-
+      The Name of Kinesis Data Stream to write the call data to.
+    Value: !Ref CallDataStream
   CallDataStreamArn:
     Description: >-
       The ARN of Kinesis Data Stream to write the call data to.
     Value: !GetAtt CallDataStream.Arn
+  UserPoolId:
+    Description: >-
+      The id of Cognito user pool.
+    Value: !Ref UserPool
   S3BucketName:
     Description: Bucket which contains all the call recordings
     Value: !If

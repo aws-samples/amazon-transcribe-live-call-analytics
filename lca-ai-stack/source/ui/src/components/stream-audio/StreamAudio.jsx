@@ -1,7 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React, { useState, useEffect } from 'react';
-// import bufferFrom from 'buffer-from';
 
 import {
   Form,
@@ -16,10 +15,10 @@ import {
 import '@awsui/global-styles/index.css';
 import useWebSocket from 'react-use-websocket';
 
-import useAppContext from '../contexts/app';
+import useAppContext from '../../contexts/app';
 
-// eslint-disable-next-line prettier/prettier
 const WSS_ENDPOINT = 'wss://babusri.people.aws.dev/api/v1/ws';
+// const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
 
 const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
@@ -42,24 +41,22 @@ const StreamAudio = () => {
     toNumber: '+8001112222',
     samplingRate: 48000,
   });
+  const [recording, setRecording] = useState(false);
+
   const { sendMessage } = useWebSocket(WSS_ENDPOINT, {
     queryParams: {
       authorization: `Bearer ${JWT_TOKEN}`,
     },
     onClose: (event) => {
       console.log(event);
-      // eslint-disable-next-line no-use-before-define
       setRecording(false);
     },
     onError: (event) => {
       console.log(event);
-      // eslint-disable-next-line no-use-before-define
       setRecording(false);
     },
   });
-  // const [mediaRecorder, setMediaRecorder] = useState();
   let mediaRecorder;
-  const [recording, setRecording] = useState(false);
 
   const handleCallIdChange = (e) => {
     setCallMetaData({
@@ -83,7 +80,8 @@ const StreamAudio = () => {
   };
 
   const handletoNumberChange = (e) => {
-    setCallMetaData({      ...callMetaData,
+    setCallMetaData({
+      ...callMetaData,
       toNumber: e.detail.value,
     });
   };
@@ -110,19 +108,18 @@ const StreamAudio = () => {
         audio: true,
       });
       const source1 = audioContext.createMediaStreamSource(stream);
-      
       const recordingprops = {
         numberOfChannels: 1,
         sampleRate: audioContext.sampleRate,
         maxFrameCount: (audioContext.sampleRate * 1) / 10,
       };
-      
+
       setCallMetaData({
         ...callMetaData,
         samplingRate: recordingprops.sampleRate,
       });
+
       sendMessage(JSON.stringify(callMetaData));
-      
       try {
         await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
       } catch (error) {

@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
-
+import dotenv from 'dotenv';
+dotenv.config();
 
 const USERPOOL_ID = process.env['USERPOOL_ID'] || '';
 const cognitoJwtVerifier = CognitoJwtVerifier.create({

@@ -26,7 +26,6 @@
     "buffer-from": "^1.1.2",
     "dotenv": "^16.0.0",
     "fastify": "^3.27.3",
-    "p-event": "^4.2.0",
     "pino-pretty": "^10.2.0",
     "uuid": "^8.3.2"
   },
