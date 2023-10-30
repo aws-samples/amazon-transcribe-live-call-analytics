@@ -37,8 +37,10 @@ server.register(websocket);
 
 // Setup preHandler hook to authenticate 
 server.addHook('preHandler', async (request, reply) => {
-    console.log(request.query);
-    return jwtVerifier(request, reply);
+    console.log(request);
+    if (!request.url.includes('health/check')) { 
+        return jwtVerifier(request, reply);
+    }
 });
 
 // Setup Route for websocket connection

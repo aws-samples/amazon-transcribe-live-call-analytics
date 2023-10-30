@@ -564,6 +564,7 @@ Metadata:
         Parameters:
           - CallAudioSource
           - CallAudioProcessor
+          - WebSocketAudioInput
           - CustomVoiceConnectorId
           - ChimeVoiceToneAnalysis
           # - ChimeSpeakerSearch
@@ -667,6 +668,8 @@ Metadata:
         default: Authorized Account Email Domain(s)
       CallAudioSource:
         default: Call Audio Source
+      WebSocketAudioInput:
+        default: Web Socket streaming audio input
       DemoSoftphoneAllowedCidr:
         default: Allowed CIDR Block for Demo Softphone
       SiprecAllowedCidrList:
