@@ -23,12 +23,31 @@ const WSS_ENDPOINT = 'wss://dwygax9cpnefd.cloudfront.net/api/v1/ws';
 const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
   const view = new DataView(buffer);
-  for (let i = 0; i < input.length; i += 1) {
+  for (let i = 0; i < input.length; i++) {
     const s = Math.max(-1, Math.min(1, input[i]));
     view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
   return buffer;
 };
+
+const interleave = (lbuffer, rbuffer) => {
+  let left_audio_buffer = new ArrayBuffer(lbuffer.length*2);
+  left_audio_buffer = pcmEncode(lbuffer);
+  const left_view = new DataView(left_audio_buffer);
+
+  let right_audio_buffer = new ArrayBuffer(rbuffer.length*2);
+  right_audio_buffer = pcmEncode(rbuffer);
+  const right_view = new DataView(right_audio_buffer);
+
+  let buffer = new ArrayBuffer(left_audio_buffer.byteLength*2);
+  const view = new DataView(buffer);
+
+  for (let i=0, j=0; i<left_audio_buffer.byteLength/2; i+=2, j+=4) {
+    view.setInt16(j, left_view.getInt16(i, true), true);
+    view.setInt16(j+2, right_view.getInt16(i, true), true);
+  }
+  return buffer;
+}
 
 const StreamAudio = () => {
   const { currentSession } = useAppContext();
@@ -102,60 +121,64 @@ const StreamAudio = () => {
   const startRecording = async () => {
     try {
       const audioContext = new window.AudioContext();
-
-      const stream = await window.navigator.mediaDevices.getDisplayMedia({
+      const videostream = await window.navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true,
       });
-      const source1 = audioContext.createMediaStreamSource(stream);
+      const track1 = videostream.getAudioTracks()[0];
 
-      // const stream2 = await window.navigator.mediaDevices.getUserMedia({
-      //   video: false,
-      //   audio: true,
-      // });
-      // const source2 = audioContext.createMediaStreamSource(stream2);
+      const micstream = await window.navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true,
+      });
+      const track2 = micstream.getAudioTracks()[0]
+    
+      const source1 = audioContext.createMediaStreamSource(new MediaStream([track2]));
+      const source2 = audioContext.createMediaStreamSource(new MediaStream([track1]));
 
-      // const merger = audioContext.createChannelMerger(2);
-      // source1.connect(merger);
-      // source2.connect(merger);
-
-      const recordingprops = {
-        numberOfChannels: 1,
-        sampleRate: audioContext.sampleRate,
-        maxFrameCount: (audioContext.sampleRate * 1) / 10,
-      };
+      const merger = audioContext.createChannelMerger(2);
+      source1.connect(merger,0, 0);
+      source2.connect(merger,0, 1);
 
       setCallMetaData({
         ...callMetaData,
-        samplingRate: recordingprops.sampleRate,
+        samplingRate: audioContext.sampleRate,
       });
-
       sendMessage(JSON.stringify(callMetaData));
+
       try {
         await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
       } catch (error) {
         console.log(`Add module error ${error}`);
       }
-      mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
-        processorOptions: recordingprops,
-        // numberOfInputs: 1,
-        // numberOfOutputs: 1,
-        // numberOfChannels: 2,
-      });
 
-      const destination = audioContext.createMediaStreamDestination();
+      mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
+        processorOptions: {
+          numberOfChannels: 2,
+          sampleRate: audioContext.sampleRate,
+          maxFrameCount: (audioContext.sampleRate * 1) / 10,
+        },
+      });
+      
       mediaRecorder.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',
         setRecording: true,
       });
-      source1.connect(mediaRecorder).connect(destination);
+
+      mediaRecorder.port.postMessage({
+        message: 'UPDATE_RECORDING_STATE',
+        setRecording: true,
+      });
+      
+      const destination = audioContext.createMediaStreamDestination();
+      merger.connect(mediaRecorder).connect(destination);
 
       mediaRecorder.port.onmessageerror = (error) => {
         console.log(`Error receving message from worklet ${error}`);
       };
+
       mediaRecorder.port.onmessage = (event) => {
-        const abuffer = pcmEncode(event.data.buffer[0]);
-        const audiodata = new Uint8Array(abuffer);
+        const audiodata = new Uint8Array(interleave(event.data.buffer[0], event.data.buffer[1]));
         sendMessage(audiodata);
       };
     } catch (error) {
