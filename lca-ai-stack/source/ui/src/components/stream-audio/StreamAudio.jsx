@@ -23,7 +23,7 @@ const WSS_ENDPOINT = 'wss://dwygax9cpnefd.cloudfront.net/api/v1/ws';
 const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
   const view = new DataView(buffer);
-  for (let i = 0; i < input.length; i++) {
+  for (let i = 0; i < input.length; i += 1) {
     const s = Math.max(-1, Math.min(1, input[i]));
     view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
@@ -31,20 +31,20 @@ const pcmEncode = (input) => {
 };
 
 const interleave = (lbuffer, rbuffer) => {
-  let left_audio_buffer = new ArrayBuffer(lbuffer.length*2);
-  left_audio_buffer = pcmEncode(lbuffer);
-  const left_view = new DataView(left_audio_buffer);
+  let leftAudioBuffer = new ArrayBuffer(lbuffer.length * 2);
+  leftAudioBuffer = pcmEncode(lbuffer);
+  const leftView = new DataView(leftAudioBuffer);
 
-  let right_audio_buffer = new ArrayBuffer(rbuffer.length*2);
-  right_audio_buffer = pcmEncode(rbuffer);
-  const right_view = new DataView(right_audio_buffer);
+  let rightAudioBuffer = new ArrayBuffer(rbuffer.length * 2);
+  rightAudioBuffer = pcmEncode(rbuffer);
+  const rightView = new DataView(rightAudioBuffer);
 
-  let buffer = new ArrayBuffer(left_audio_buffer.byteLength*2);
+  let buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
   const view = new DataView(buffer);
 
-  for (let i=0, j=0; i<left_audio_buffer.byteLength/2; i+=2, j+=4) {
-    view.setInt16(j, left_view.getInt16(i, true), true);
-    view.setInt16(j+2, right_view.getInt16(i, true), true);
+  for (let i = 0, j = 0; i < leftAudioBuffer.byteLength / 2; i += 2, j += 4) {
+    view.setInt16(j, leftView.getInt16(i, true), true);
+    view.setInt16(j + 2, rightView.getInt16(i, true), true);
   }
   return buffer;
 }
