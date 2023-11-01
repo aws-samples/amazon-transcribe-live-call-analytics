@@ -39,7 +39,7 @@ const interleave = (lbuffer, rbuffer) => {
   rightAudioBuffer = pcmEncode(rbuffer);
   const rightView = new DataView(rightAudioBuffer);
 
-  let buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
+  const buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
   const view = new DataView(buffer);
 
   for (let i = 0, j = 0; i < leftAudioBuffer.byteLength / 2; i += 2, j += 4) {
@@ -47,7 +47,7 @@ const interleave = (lbuffer, rbuffer) => {
     view.setInt16(j + 2, rightView.getInt16(i, true), true);
   }
   return buffer;
-}
+};
 
 const StreamAudio = () => {
   const { currentSession } = useAppContext();
@@ -131,14 +131,20 @@ const StreamAudio = () => {
         video: false,
         audio: true,
       });
-      const track2 = micstream.getAudioTracks()[0]
-    
+      const track2 = micstream.getAudioTracks()[0];
+
+      setCallMetaData({
+        ...callMetaData,
+        samplingRate: audioContext.sampleRate,
+      });
+      sendMessage(JSON.stringify(callMetaData));
+
       const source1 = audioContext.createMediaStreamSource(new MediaStream([track2]));
       const source2 = audioContext.createMediaStreamSource(new MediaStream([track1]));
 
       const merger = audioContext.createChannelMerger(2);
-      source1.connect(merger,0, 0);
-      source2.connect(merger,0, 1);
+      source1.connect(merger, 0, 0);
+      source2.connect(merger, 0, 1);
 
       setCallMetaData({
         ...callMetaData,
@@ -159,7 +165,7 @@ const StreamAudio = () => {
           maxFrameCount: (audioContext.sampleRate * 1) / 10,
         },
       });
-      
+
       mediaRecorder.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',
         setRecording: true,
@@ -169,7 +175,7 @@ const StreamAudio = () => {
         message: 'UPDATE_RECORDING_STATE',
         setRecording: true,
       });
-      
+
       const destination = audioContext.createMediaStreamDestination();
       merger.connect(mediaRecorder).connect(destination);
 

@@ -139,8 +139,8 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
-                // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-                // console.info(JSON.stringify(kdsObject));
+                console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
+                console.info(JSON.stringify(kdsObject));
                 console.info(kdsObject.Transcript);
             } catch (error) {
                 console.error('Error writing transcription segment (TRANSCRIBE) to KDS', error);
@@ -191,8 +191,8 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
-        // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-        // console.info(JSON.stringify(kdsObject));
+        console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
+        console.info(JSON.stringify(kdsObject));
     } catch (error) {
         console.error('Error writing transcription segment to KDS', error);
         console.debug(JSON.stringify(kdsObject));
