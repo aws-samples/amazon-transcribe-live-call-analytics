@@ -17,7 +17,6 @@ import useWebSocket from 'react-use-websocket';
 
 import useAppContext from '../../contexts/app';
 
-const WSS_ENDPOINT = 'wss://dwygax9cpnefd.cloudfront.net/api/v1/ws';
 // const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
 
 const pcmEncode = (input) => {
@@ -61,21 +60,13 @@ const StreamAudio = () => {
     samplingRate: 48000,
   });
   const [recording, setRecording] = useState(false);
+  const [wssEndpoint, setWSSEndpoint] = useState('wss://<domainname>/api/v1/ws');
 
-  const { sendMessage } = useWebSocket(WSS_ENDPOINT, {
-    queryParams: {
-      authorization: `Bearer ${JWT_TOKEN}`,
-    },
-    onClose: (event) => {
-      console.log(event);
-      setRecording(false);
-    },
-    onError: (event) => {
-      console.log(event);
-      setRecording(false);
-    },
-  });
   let mediaRecorder;
+
+  const handleWSSChange = (e) => {
+    setWSSEndpoint(e.detail.value);
+  };
 
   const handleCallIdChange = (e) => {
     setCallMetaData({
@@ -120,6 +111,19 @@ const StreamAudio = () => {
 
   const startRecording = async () => {
     try {
+      const { sendMessage } = useWebSocket(wssEndpoint, {
+        queryParams: {
+          authorization: `Bearer ${JWT_TOKEN}`,
+        },
+        onClose: (event) => {
+          console.log(event);
+          setRecording(false);
+        },
+        onError: (event) => {
+          console.log(event);
+          setRecording(false);
+        },
+      });
       const audioContext = new window.AudioContext();
       const videostream = await window.navigator.mediaDevices.getDisplayMedia({
         video: true,
@@ -228,9 +232,19 @@ const StreamAudio = () => {
           </SpaceBetween>
         }
       >
+        <Container>
+          <FormField
+            label="WebSocket Server Endpoint"
+            stretch
+            required
+            description="Websocket Server Endpoint"
+          >
+            <Input value="wss://<domainname>/api/v1/ws" onChange={handleWSSChange} />
+          </FormField>
+        </Container>
         <Container header={<Header variant="h2">Call Meta data</Header>}>
           <ColumnLayout columns={2}>
-            <FormField label="Call ID" stretch required description="Auto-enerated Unique call ID">
+            <FormField label="Call ID" stretch required description="Auto-generated Unique call ID">
               <Input value={callMetaData.callId} onChange={handleCallIdChange} />
             </FormField>
             <FormField label="Agent ID" stretch required description="Unique Agent ID">
