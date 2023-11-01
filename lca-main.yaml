@@ -1402,20 +1402,20 @@ Outputs:
       - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXPhoneNumber
       - 'Demo Asterisk PBX not enabled'
 
-  WebSocketEndpoint:
+  GenesysAudiohookWebSocketEndpoint:
     Description: Websocket endpoint for Genesys Cloud Audiohook integration
     Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
-  WebSocketAPIKey:
+  GenesysAudiohookWebSocketAPIKey:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIKey
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
-  WebSocketAPIClientSecret:
+  GenesysAudiohookWebSocketAPIClientSecret:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
