@@ -52,7 +52,7 @@ popd
 boto3_layer_dir=lambda_layers/boto3_layer
 echo "Installing dependencies for $boto3_layer_dir"
 pushd $boto3_layer_dir
-pip install -r requirements.txt -t python/lib/python3.8/site-packages/.
+pip3 install -r requirements.txt -t python/lib/python3.8/site-packages/.
 zip -r boto3_lambda_layer.zip *
 popd
 

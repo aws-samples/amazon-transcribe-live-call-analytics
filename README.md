@@ -4,8 +4,6 @@ _Companion AWS blog post: [Live call analytics and agent assist for your contact
 
 ## Overview
 
-_Update October 2023 (v0.8.7) - This release provides Amazon Bedrock (generally available) support for both transcript summarization and Agent Assist (QnABot). It supports single prompt and multi-prompt summarization. To learn more, please read [customize transcript summarization](./lca-ai-stack/TranscriptSummarization.md)._
-
 _See [CHANGELOG](./CHANGELOG.md) for latest features and fixes._
 
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.

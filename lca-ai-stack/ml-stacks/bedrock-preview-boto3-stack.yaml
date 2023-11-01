@@ -41,7 +41,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.10
+      Runtime: python3.11
       Role: !GetAtt 'BedrockBoto3ZipFunctionRole.Arn'
       Timeout: 60
       MemorySize: 512
@@ -58,6 +58,7 @@ Resources:
           import boto3
           import zipfile
           import urllib3
+          import json
           from datetime import datetime
           import cfnresponse
           boto3_bucket = os.environ['BOTO3_BUCKET']
@@ -82,16 +83,21 @@ Resources:
                                               os.path.join(path, '..')))
             zipf.close()
 
-          def empty_bucket(bucket_name):
+          def deleteObject(existingZip):
+              print(f'Deleting Existing Zip: {existingZip}')
               s3_client = boto3.client('s3')
-              response = s3_client.list_objects_v2(Bucket=bucket_name)
-              if 'Contents' in response:
-                  keys = [{'Key': obj['Key']} for obj in response['Contents']]
-                  s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': keys})
+              s3_client.delete_object(Bucket=existingZip["Bucket"], Key=existingZip["Key"])
               return
 
           def handler(event, context):
-            print("Event: ", event)
+            print("Event: ", json.dumps(event))
+            physicalResourceId = event.get("PhysicalResourceId", None)
+            existingZip = None
+            if physicalResourceId:
+              try:
+                existingZip = json.loads(physicalResourceId)
+              except:
+                existingZip = ""
             responseData={}
             reason=""
             status = cfnresponse.SUCCESS
@@ -105,14 +111,17 @@ Resources:
                 print(f"uploading {boto3_zip_name} to s3 bucket {boto3_bucket}")
                 upload_file_to_s3(boto3_zip_name, boto3_bucket, boto3_zip_name)
                 responseData = {"Bucket": boto3_bucket, "Key": boto3_zip_name}
+                physicalResourceId = json.dumps(responseData)
               else:
-                # delete - empty the bucket so it can be deleted by the stack.
-                empty_bucket(boto3_bucket)
+                print(f"RequestType is: {event['RequestType']}")
             except Exception as e:
               print(e)
               status = cfnresponse.FAILED
               reason = f"Exception thrown: {e}"
-            cfnresponse.send(event, context, status, responseData, reason=reason)
+            # delete any previously created zip file (during update or delete), so that bucket can be deleted
+            if existingZip:
+              deleteObject(existingZip)
+            cfnresponse.send(event, context, status, responseData, reason=reason, physicalResourceId=physicalResourceId)
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -127,6 +136,7 @@ Resources:
       ServiceToken: !GetAtt BedrockBoto3ZipFunction.Arn
       # Rerun BedrockBoto3ZipFunction if any of the following parameters change
       BOTO3_BUCKET: !Ref BedrockBoto3Bucket
+      VERSION: 1
 
   BedrockBoto3Layer:
     Type: "AWS::Lambda::LayerVersion"
@@ -135,7 +145,7 @@ Resources:
         S3Bucket: !GetAtt BedrockBoto3Zip.Bucket
         S3Key: !GetAtt BedrockBoto3Zip.Key
       CompatibleRuntimes:
-        - python3.9
+        - python3.11
 
 Outputs:
 

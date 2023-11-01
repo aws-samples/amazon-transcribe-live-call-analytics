@@ -218,9 +218,17 @@ Parameters:
     Default: dashboard/parsedFiles/
     Description: PCA path prefix for call detail pages.
 
+  CustomVoiceConnectorId:
+    Type: String
+    Default: ''
+    Description: Existing Amazon Chime SDK Voice Connector Id.
+
   LCAStackName:
     Type: String
     Description: Parent LCA Stack name
+
+  Version:
+    Type: String
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -235,11 +243,16 @@ Metadata:
 Conditions:
   ShouldInstallDemoAsteriskServer:
     !Equals [!Ref InstallDemoAsteriskServer, 'true']
-  ShouldInstallChimeVCsiprec: !Equals [!Ref InstallDemoAsteriskServer, 'false']
+  ShouldInstallChimeVCsiprec:
+    !And [
+      !Equals [!Ref InstallDemoAsteriskServer, 'false'],
+      !Equals [!Ref CustomVoiceConnectorId, '']
+    ]
   ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
   ShouldInstallCallTranscriber:
     !Not [!Equals [!Ref UseChimeCallAnalytics, 'true']]
   ShouldInstallChimeCallAnalytics: !Equals [!Ref UseChimeCallAnalytics, 'true']
+  ShouldCreateVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, '']
 
 Resources:
   DeployBoto3LambdaLayer:
@@ -261,6 +274,8 @@ Resources:
       Parameters:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
+        CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        Version: !Ref Version
 
   DeployChimeVCsiprec:
     Type: AWS::CloudFormation::Stack
@@ -290,11 +305,13 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
-        VoiceConnectorId:
-          'Fn::If':
+        VoiceConnectorId: !If
+          - ShouldCreateVoiceConnector
+          - !If
             - ShouldInstallDemoAsteriskServer
             - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
+          - !Ref CustomVoiceConnectorId
 
   DeployChimeCallAnalyticsProcessor:
     Type: AWS::CloudFormation::Stack
@@ -320,11 +337,15 @@ Resources:
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
         Boto3LayerArn: !Ref DeployBoto3LambdaLayer
-        VoiceConnectorId:
-          'Fn::If':
-            - ShouldInstallDemoAsteriskServer
-            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
-            - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
+        CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        # when existing/custom VC is provided, set VC ID to empty so custom VC resource Lambda will skip updating VC configuration
+        VoiceConnectorId: !If
+            - ShouldCreateVoiceConnector
+            - !If
+              - ShouldInstallDemoAsteriskServer
+              - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+              - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
+            - ''
 
   DeployPcaIntegration:
     Type: AWS::CloudFormation::Stack
@@ -375,6 +396,7 @@ Resources:
           - !GetAtt DeployChimeCallAnalyticsProcessor.Outputs.IsContentRedactionEnabled
         LCAS3BucketName: !Ref S3BucketName
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        UsedChimeCallAnalytics: !Ref UseChimeCallAnalytics
 
 Outputs:
   DemoPBXIPAddress:

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -148,6 +148,7 @@ def get_lex_agent_assist_transcript(
         bot_id=LEX_BOT_ID,
         bot_alias_id=LEX_BOT_ALIAS_ID,
         locale_id=LEX_BOT_LOCALE_ID,
+        call_id=call_id,
     )
 
     LOGGER.info("Bot Response: ", extra=bot_response)
@@ -161,10 +162,6 @@ def get_lex_agent_assist_transcript(
 
 def process_lex_bot_response(bot_response):
     message = ""
-    if is_qnabot_noanswer(bot_response):
-        # ignore 'noanswer' responses from QnABot
-        LOGGER.info("QnABot \"Dont't know\" response - ignoring")
-        return ""
     # Use markdown if present in appContext.altMessages.markdown session attr (Lex Web UI / QnABot)
     appContextJSON = bot_response.get("sessionState", {}).get(
         "sessionAttributes", {}).get("appContext")
@@ -176,7 +173,21 @@ def process_lex_bot_response(bot_response):
     # otherwise use bot message
     if not message and "messages" in bot_response and bot_response["messages"]:
         message = bot_response["messages"][0]["content"]
+    # suppress bot response if response is no_hits (noanswer) response, and does not contain debug.
+    if is_qnabot_noanswer(bot_response):
+        if not is_qnabot_debug_response(message):
+            # ignore 'noanswer' responses from QnABot
+            LOGGER.info("QnABot \"Dont't know\" response - no debug info - ignoring")
+            return ""
     return message
+
+def is_qnabot_debug_response(message):
+    # QnABot debug responses are contained in opening [] section, starting with User Input 
+    pattern = r'^\**\[User Input.*?\]\**'
+    match = re.search(pattern, message)
+    if match:
+        return match.group()
+    return None
 
 def is_qnabot_noanswer(bot_response):
     if (
@@ -338,10 +349,7 @@ def publish_contact_lens_lex_agent_assist_transcript_segment(
     # only send relevant segments to agent assist
     # BobS: Modified to process Utterance rather than Transcript events
     # to lower latency
-    # Kishore: Switch back to using Transcript events because Utterances
-    # do not have is_partial flag and does not contain full transcripts
-    # anymore.
-    if not ("ContactLensTranscript" in segment or "Categories" in segment):
+    if not ("Utterance" in segment or "Categories" in segment):
         return
 
     if (
@@ -374,43 +382,8 @@ def publish_contact_lens_lex_agent_assist_transcript_segment(
                 ),
             )
         )
-    # BobS - Issue detection code will not be invoked since we are not processing
-    # Transcript events now.
 
     issues_detected = segment.get("ContactLensTranscript", {}).get("IssuesDetected", [])
-
-    if (
-        "ContactLensTranscript" in segment
-        and segment["ContactLensTranscript"].get("ParticipantRole") == "CUSTOMER"
-        and not issues_detected
-    ):
-        is_partial = False
-        segment_item = segment["ContactLensTranscript"]
-        content = segment_item["Content"]
-        segment_id = str(uuid.uuid4())
-
-        created_at = datetime.utcnow().astimezone().isoformat()
-        start_time = segment_item["BeginOffsetMillis"] / 1000
-        end_time = segment_item["EndOffsetMillis"] / 1000
-        end_time = end_time + 0.001  # UI sort order
-
-        send_lex_agent_assist_args.append(
-            dict(
-                content=content,
-                transcript_segment_args=dict(
-                    CallId=call_id,
-                    Channel=channel,
-                    CreatedAt=created_at,
-                    EndTime=end_time,
-                    ExpiresAfter=get_ttl(),
-                    IsPartial=is_partial,
-                    SegmentId=segment_id,
-                    StartTime=start_time,
-                    Status=status,
-                ),
-            )
-        )
-
     for issue in issues_detected:
         issue_segment = transform_segment_to_issues_agent_assist(
             segment={**segment, "CallId": call_id},

@@ -90,14 +90,14 @@ PYTHON_TARGET_BUILD_REQUIREMENTS := $(patsubst \
 $(PYTHON_TARGET_DEV_REQUIREMENTS): $(OUT_DIR)/%: $(PYTHON_REQUIREMENTS_DIR)/% | $(OUT_DIR) $(VENV_DEV_CFG)
 	@echo "[INFO] Installing python dev dependencies file: [$(^)]"
 	@source '$(VIRTUALENV_DEV_BIN_DIR)/activate' && \
-		pip install -r $(^) | tee $(@)
+		pip3 install -r $(^) | tee $(@)
 install-python-dev-requirements: $(PYTHON_TARGET_DEV_REQUIREMENTS)
 .PHONY: install-python-dev-requirements
 
 $(PYTHON_TARGET_BUILD_REQUIREMENTS): $(OUT_DIR)/%: $(PYTHON_REQUIREMENTS_DIR)/% | $(OUT_DIR) $(VENV_BUILD_CFG)
 	@echo "[INFO] Installing python build dependencies file: [$(^)]"
 	@source '$(VIRTUALENV_BUILD_BIN_DIR)/activate' && \
-		pip install -r $(^) | tee $(@)
+		pip3 install -r $(^) | tee $(@)
 install-python-build-requirements: $(PYTHON_TARGET_BUILD_REQUIREMENTS)
 .PHONY: install-python-build-requirements
 
@@ -472,7 +472,7 @@ $(SAM_INVOKE_TARGETS): local-invoke-%: $(LAMBDA_FUNCTIONS_DIR)/% | $(OUT_DIR) $(
 		echo -n "[ERROR] failed to parse sam build toml file. "; >&2 \
 		echo -n "Check that you have sourced the python virtual env and "; >&2 \
 		echo -n "run the command: "; >&2 \
-		echo "[pip install -r $(PYTHON_REQUIREMENTS_DIR)/requirements-dev.txt]"; >&2 \
+		echo "[pip3 install -r $(PYTHON_REQUIREMENTS_DIR)/requirements-dev.txt]"; >&2 \
 		exit 1; \
 	} && \
 	EVENT_FILE="$${EVENT_FILE:-$(EVENTS_DIR)/$(*)/$(CONFIG_ENV).json}" && \

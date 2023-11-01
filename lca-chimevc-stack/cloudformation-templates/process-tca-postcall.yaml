@@ -37,9 +37,33 @@ Parameters:
 
   IsContentRedactionEnabled:
     Type: String
-    Description: Is Content Redaction enabled 'true' or 'false' 
+    Description: Is Content Redaction enabled 'true' or 'false'
+
+  UsedChimeCallAnalytics:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: >
+      Whether Amazon Chime SDK Call Analytics is used, instead the call transcriber Lambda.  
         
 Resources:
+  ##########################################################################
+  # NodeJS Transcriber Lambda Layer
+  ##########################################################################
+  TranscriberLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs14.x
+        - nodejs16.x
+        - nodejs18.x
+      Description: >
+        This is a layer with shared nodejs libraries for the LCA call transcriber 
+        and call analytics initialization Lambdas.
+      ContentUri: ../lambda_layers/node_transcriber_layer/transcriber-layer.zip
+
   ##########################################################################
   # Call Transcriber
   ##########################################################################
@@ -56,8 +80,9 @@ Resources:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
+        - !Ref TranscriberLambdaLayer
       Role: !GetAtt ProcessTCAPostCallFunctionRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active
@@ -69,6 +94,7 @@ Resources:
           LCA_BUCKET_NAME: !Ref LCAS3BucketName
           CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
           IS_CONTENT_REDACTION_ENABLED: !Ref IsContentRedactionEnabled
+          USED_CHIME_CALL_ANALYTICS: !Ref UsedChimeCallAnalytics
       CodeUri: ../lambda_functions/process_tca_postcall
 
   ProcessTCAPostCallFunctionRole:

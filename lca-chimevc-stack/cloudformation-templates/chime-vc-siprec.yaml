@@ -87,7 +87,7 @@ Resources:
         - CreateVCFunctionRole
         - Arn
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       Timeout: 300
       Code:
         ZipFile: |

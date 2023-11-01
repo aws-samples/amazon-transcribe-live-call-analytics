@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.8) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.9) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -43,6 +43,15 @@ Parameters:
       Amazon Chime SDK Call Analytics ingest the audio and send it to Transcribe, or use the example LCA Call 
       Processor Lambda. Enabling Amazon Chime SDK Call Analytics also allows you to also use Voice Analytics, 
       such as Voice Tone Analysis and Speaker Search.
+
+  CustomVoiceConnectorId:
+    Type: String
+    Default: ''
+    MaxLength: 50
+    Description: >
+      (Optional) The Voice Connector ID (not Name) of an existing Amazon Chime SDK Voice Connector. This Voice Connector will be used as the call audio source.
+      Used only when a call audio source with Amazon Chime SDK Voice Connector or Demo Asterisk PBX Server is selected.
+      Leave blank to automatically create new Amazon Chime SDK Voice Connector.
 
   ChimeVoiceToneAnalysis:
     Type: String
@@ -141,6 +150,18 @@ Parameters:
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
       Provide the function ARN of an existing Lambda function to be used for Agent Assist."
+
+  AgentAssistQnABotKendraWebCrawlURLs:
+    Type: String
+    Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
+    Description: >-
+      Comma separated list of public web sites to crawl automatically - for Agent Assist Kendra knowledge store
+
+  AgentAssistQnABotKendraWebCrawlDepth:
+    Type: String
+    Default: 0
+    Description: >-
+      Number of levels from the above URLs that Amazon Kendra should crawl - restricted to same host domain
 
   # Options for QnABot Embeddings
   AgentAssistQnABotItemMatchingApi:
@@ -533,6 +554,7 @@ Metadata:
         Parameters:
           - CallAudioSource
           - CallAudioProcessor
+          - CustomVoiceConnectorId
           - ChimeVoiceToneAnalysis
           # - ChimeSpeakerSearch
           - DemoSoftphoneAllowedCidr
@@ -547,6 +569,8 @@ Metadata:
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
+          - AgentAssistQnABotKendraWebCrawlURLs
+          - AgentAssistQnABotKendraWebCrawlDepth
           - AgentAssistQnABotItemMatchingApi
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
@@ -625,6 +649,8 @@ Metadata:
         default: Audio File Prefix
       CallAnalyticsPrefix:
         default: Call Analytics Output File Prefix
+      CustomVoiceConnectorId:
+        default: Amazon Chime SDK Voice Connector ID (existing)
       AdminEmail:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
@@ -649,6 +675,10 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      AgentAssistQnABotKendraWebCrawlURLs:
+        default: Agent Assist QnABot Kendra Web Crawl URLs
+      AgentAssistQnABotKendraWebCrawlDepth:
+        default: Agent Assist QnABot Kendra Web Crawl Depth
       AgentAssistQnABotItemMatchingApi:
         default: Agent Assist QnABot Item Matching Api
       AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
@@ -901,7 +931,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       InlineCode: |
         import cfnresponse
         import time
@@ -931,7 +961,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       InlineCode: |
         import cfnresponse
         import json
@@ -1118,13 +1148,6 @@ Resources:
         - QnABotLLMPluginBedrock
         - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryModelParams
         - ''
-      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: !If
-      - QnABotLLMPluginAnthropic
-      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryPromptTemplate
-      - !If 
-        - QnABotLLMPluginBedrock
-        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryPromptTemplate
-        - ''
       LLM_QA_MODEL_PARAMS: !If
         - QnABotLLMPluginAnthropic
         - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAModelParams
@@ -1132,13 +1155,9 @@ Resources:
           - QnABotLLMPluginBedrock
           - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAModelParams
           - ''
-      LLM_QA_PROMPT_TEMPLATE: !If
-      - QnABotLLMPluginAnthropic
-      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAPromptTemplate
-      - !If 
-        - QnABotLLMPluginBedrock
-        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAPromptTemplate
-        - ''
+      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: "<br><br>Human: Let's think carefully step by step. Here is the transcript of an ongoing phone call between a caller (Human) and an agent (AI) in <transcript> tags:<br><transcript>{history}</transcript><br>And here is a follow up question or statement from the caller in <followUpMessage> tags:<br> <followUpMessage>{input}</followUpMessage><br>Rephrase the caller's follow up question or statement as a standalone question or statement that contains all the context and makes sense on its own without reading the transcript. If the caller is just engaging in small talk or saying thanks, respond with \"small talk\".<br><br>Assistant: Here is the rephrased follow up question or statement, or small talk: "
+      LLM_QA_PROMPT_TEMPLATE: "<br><br>Human: Let's think carefully step by step. You are a call center assistant. Your job is to advise a call center agent how best to respond to a caller query, based on the reference passages provided inside <references></reference> XML tags. The caller's query is below, inside <query></query> XML tags.<br><references><br>{context}<br></references><br><br><query><br>{query}<br></query><br><br>If the references contain the information needed to answer the query, then write a confident response in under 50 words, quoting the relevant references.<br>If you can make an informed guess on how to answer the query based on the reference passages, then write a tentative response in under 50 words, stating your assumptions.<br>If the reference passages do not have any information that you can use to answer the query, then respond saying \"Sorry, I don't know\".<br>If the query contains \"small talk\" then respond saying \"Sorry, I cannot respond to small talk\".<br>Think carefully, step by step.<br><br>Assistant:"
+      EMPTYMESSAGE: "No response from agent assist QnAbot"
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -1196,6 +1215,8 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
+        AgentAssistQnABotKendraWebCrawlURLs: !Ref AgentAssistQnABotKendraWebCrawlURLs
+        AgentAssistQnABotKendraWebCrawlDepth: !Ref AgentAssistQnABotKendraWebCrawlDepth
         AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
         AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
@@ -1210,9 +1231,11 @@ Resources:
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         LexAgentAssistIdentityPoolId: !GetAtt AISTACK.Outputs.LexAgentAssistIdentityPoolId
         CloudFrontDomainName: !GetAtt AISTACK.Outputs.CloudFrontDomainName
+        FetchTranscriptFunctionArn: !GetAtt AISTACK.Outputs.FetchTranscriptArn
         TranscriptSummaryFunctionArn: !GetAtt AISTACK.Outputs.TranscriptSummaryFunctionArn
         # QnaBotSettings - JSON param with new settings values based on options selected
         QnaBotSettings: !GetAtt SettingsJSON.Output
+        Version: v0.8.8
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
@@ -1257,6 +1280,8 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        Version: <VERSION_TOKEN>
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack

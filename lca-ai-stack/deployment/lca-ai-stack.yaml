@@ -284,7 +284,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.8.8
+    Default: 0.8.9
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -780,7 +780,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Timeout: 60
       MemorySize: 128
       Handler: lambda_start_codebuild.handler
@@ -839,7 +839,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaFetchTranscriptExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
@@ -881,7 +881,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LLMAnthropicSummaryLambdaExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
@@ -936,7 +936,7 @@ Resources:
     Condition: ShouldEnableBedrockSummarizer
     Properties:
       Role: !GetAtt BedrockSummaryLambdaExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
@@ -1001,7 +1001,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt AsyncAgentAssistOrchestratorExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
@@ -1068,7 +1068,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [
@@ -1267,6 +1267,11 @@ Resources:
               Action:
                 - comprehend:DetectSentiment
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - events:PutEvents
+              Resource:
+                - !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default'
             - !If
               - ShouldEnableTranscriptLambdaHookFunction
               - Effect: Allow
@@ -1299,7 +1304,7 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Timeout: 900
       Environment:
         Variables:
@@ -1339,7 +1344,7 @@ Resources:
   TranscriptEnrichmentPythonLayer:
     Type: AWS::Serverless::LayerVersion
     Metadata:
-      BuildMethod: python3.9
+      BuildMethod: python3.11
     Properties:
       Description:
         !Sub "Transcript Enrichment Python Layer for stack: ${AWS::StackName}"
@@ -1347,7 +1352,7 @@ Resources:
       CompatibleArchitectures:
         - arm64
       CompatibleRuntimes:
-        - python3.9
+        - python3.11
       RetentionPolicy: Delete
 
   ##########################################################################
@@ -1867,7 +1872,7 @@ Resources:
     Condition: ShouldAllowSignUpEmailDomain
     Properties:
       Handler: index.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       Timeout: 3
       Environment:
         Variables:
@@ -1951,7 +1956,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: "index.lambda_handler"
-      Runtime: python3.9
+      Runtime: python3.11
       MemorySize: 128
       Timeout: 60
       Role: !GetAtt BucketDeleteLambdaRole.Arn

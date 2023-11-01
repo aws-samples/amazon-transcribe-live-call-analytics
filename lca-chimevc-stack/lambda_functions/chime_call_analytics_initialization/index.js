@@ -13,8 +13,12 @@ const { KinesisClient } = require('@aws-sdk/client-kinesis');
 /* Transcribe and Streaming Libraries */
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
-const { ChimeSDKMediaPipelinesClient, CreateMediaInsightsPipelineCommand, } = require('@aws-sdk/client-chime-sdk-media-pipelines')
-const { ChimeSDKVoiceClient, StartVoiceToneAnalysisTaskCommand, } = require('@aws-sdk/client-chime-sdk-voice')
+const {
+  ChimeSDKMediaPipelinesClient,
+  CreateMediaInsightsPipelineCommand,
+  DeleteMediaPipelineCommand,
+  StartVoiceToneAnalysisTaskCommand
+} = require('@aws-sdk/client-chime-sdk-media-pipelines')
 
 /* Local libraries */
 const {
@@ -289,14 +293,14 @@ const writeChimeCallStartEventToDdb = async function writeChimeCallStartEventToD
   }
 };
 
-const writeCallDataToDdb = async function writeCallDataToDdb(callData, callId) {
+const writeCallDataToDdb = async function writeCallDataToDdb(callData) {
   console.log('Write callData to DDB');
   const expiration = getExpiration(1);
   const now = new Date().toISOString();
   const putParams = {
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
     Item: {
-      PK: { S: `cd#${callId}` },
+      PK: { S: `cd#${callData.callId}` },
       SK: { S: 'BOTH' },
       CreatedAt: { S: now },
       ExpiresAfter: { N: expiration.toString() },
@@ -309,6 +313,29 @@ const writeCallDataToDdb = async function writeCallDataToDdb(callData, callId) {
     await dynamoClient.send(putCmd);
   } catch (error) {
     console.error('Error writing Call Data to Ddb', error);
+  }
+};
+
+const writeCallDataIdMappingToDdb = async function writeCallDataIdMappingToDdb(originalCallId, callId) {
+  console.log(`Write callData mapping: ${originalCallId} => ${callId} to DDB`);
+  const expiration = getExpiration(1);
+  const now = new Date().toISOString();
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `cm#${originalCallId}` },
+      SK: { S: 'CALL_ID_MAPPING' },
+      CallId: { S: callId },
+      CreatedAt: { S: now },
+      ExpiresAfter: { N: expiration.toString() },
+    },
+  };
+  console.log(putParams);
+  const putCmd = new PutItemCommand(putParams);
+  try {
+    await dynamoClient.send(putCmd);
+  } catch (error) {
+    console.error(`Error writing callData mapping: ${originalCallId} => ${callId} to DDB`, error);
   }
 };
 
@@ -335,6 +362,41 @@ const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) 
   }
 };
 
+const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOriginalCallIdFromDdb(originalCallId) {
+  // Set the parameters
+  const params = {
+    Key: {
+      PK: {
+        S: `cm#${originalCallId}`,
+      },
+      SK: {
+        S: 'CALL_ID_MAPPING',
+      },
+    },
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+  };
+  console.log('GetItem params: ', JSON.stringify(params));
+  const command = new GetItemCommand(params);
+  let callData = undefined;
+  try {
+    const data = await dynamoClient.send(command);
+    console.log('GetItem result: ', JSON.stringify(data));
+    callData = getCallDataFromDdb(data.Item.CallId.S);
+  } catch (error) {
+    console.log('Error retrieving callData - Possibly invalid callId?: ', error);
+  }
+
+  // LCA stack may be updating while calls are in progress. Use originalCallId to retrieve the call data without the mapping
+  if (callData === undefined) {
+    try {
+      callData = getCallDataFromDdb(originalCallId);
+    } catch (error) {
+      console.log('Error retrieving callData using originalCallId - Possibly invalid callId?: ', error);
+    }
+  }
+
+  return callData;
+};
 
 const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
   // Set the parameters
@@ -364,13 +426,18 @@ const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
 
 const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent(scpevent) {
   const { callId } = scpevent;
-  const callData = await getCallDataFromDdb(callId);
+  // START_CALL_PROCESSING event uses the original callId. Use originalCallId to get the callData.
+  const callData = await getCallDataWithOriginalCallIdFromDdb(callId);
   if (!callData) {
     console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
     return undefined;
   }
   if (callData.callProcessingStartTime) {
     console.log(`ERROR: Call ${callId} is already processed/processing - exiting.`);
+    return undefined;
+  }
+  if (callData.callStreamingEndTime) {
+    console.log(`ERROR: Call ${callId} has already ended - exiting.`);
     return undefined;
   }
   // Add Start Call Event info to saved callData object and write back to DDB for tracing
@@ -415,7 +482,7 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
       'KinesisVideoStreamSourceRuntimeConfiguration': {
         'Streams': [
           {
-            "StreamArn": callData.agentStreamArn,
+            'StreamArn': callData.agentStreamArn,
             'StreamChannelDefinition': {
               'NumberOfChannels': 1,
               'ChannelDefinitions': [
@@ -424,9 +491,9 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
                       'ParticipantRole': 'CUSTOMER'
                   },
               ]
-            }
+            },
           },{
-            "StreamArn": callData.callerStreamArn,
+            'StreamArn': callData.callerStreamArn,
             'StreamChannelDefinition': {
               'NumberOfChannels': 1,
               'ChannelDefinitions': [
@@ -448,21 +515,47 @@ const startChimeCallAnalyticsMediaPipeline = async function startChimeCallAnalyt
     let response = await mediaPipelineClient.send(command);
     console.log('Media Pipeline Started');
     console.log(JSON.stringify(response));
+
+    /*
     let getPipelineInput = { // GetMediaPipelineRequest
       MediaPipelineId: response['MediaInsightsPipeline']['MediaPipelineId'], // required
     };
 
-    /*for(let i = 0; i < 20; i++) {
+    for(let i = 0; i < 20; i++) {
       await sleep(1000);
       command = new GetMediaPipelineCommand(getPipelineInput);
       response = await mediaPipelineClient.send(command);
       console.log(JSON.stringify(response));
-    }*/
+    }
+    */
+
+    return response['MediaInsightsPipeline']['MediaPipelineId'];
   } catch (error) {
-    console.error('Error writing Chime Call Start event', error);
+    console.error('Failed to create media insight pipeline', error);
+    return undefined;
   }
 }
 
+const StopChimeCallAnalyticsMediaPipeline = async function StopChimeCallAnalyticsMediaPipeline(mediaPipelineClient, mediaPipelineId) {
+  if (mediaPipelineId === undefined) {
+    console.error('Cannot stop media pipeline. Invalid mediaPipelineId');
+    return;
+  }
+
+  try {
+    console.log('Deleting Media Pipeline...');
+    let deleteMediaPipelineCommand = {
+      'MediaPipelineId': mediaPipelineId,
+    };
+
+    console.log(`Media Pipeline Command: ${JSON.stringify(deleteMediaPipelineCommand)}`);
+    let command = new DeleteMediaPipelineCommand(deleteMediaPipelineCommand);
+    let response = await mediaPipelineClient.send(command);
+    console.log(`Media Pipeline deleted: ${JSON.stringify(response)}`);
+  } catch (error) {
+    console.error('Failed to delete media insight pipeline', error);
+  }
+};
 
 /**
  * Create voice tone analysis task mapping record in DDB. The record is used to look up callId with taskId.
@@ -495,18 +588,21 @@ const putVoiceToneAnalysisTask = async function(voiceToneAnalysisTaskId, callId)
 /**
  * Start voice tone analysis task for a given call.
  */
-const startVoiceToneAnalysisTask = async function startVoiceToneAnalysisTask(chimeVoiceClient, callData){
+const startVoiceToneAnalysisTask = async function startVoiceToneAnalysisTask(chimeMediaPipelinesClient, mediaPipelineId, callData){
   try {
     console.log('Starting voice tone analysis task...');
     const request = {
-      VoiceConnectorId: callData.voiceConnectorId,
-      TransactionId: callData.transactionId,
+      KinesisVideoStreamSourceTaskConfiguration: {
+        ChannelId: 0,
+        StreamArn: callData.agentStreamArn,
+      },
+      Identifier: mediaPipelineId,
       LanguageCode: "en-US",
     };
     console.log("Starting voice tone analysis task command. Request:");
     console.log(JSON.stringify(request));
     const command = new StartVoiceToneAnalysisTaskCommand(request);
-    const response = await chimeVoiceClient.send(command);
+    const response = await chimeMediaPipelinesClient.send(command);
     console.log('Started voice tone analysis task. Response:');
     console.log(JSON.stringify(response));
 
@@ -515,6 +611,23 @@ const startVoiceToneAnalysisTask = async function startVoiceToneAnalysisTask(chi
     console.error('Error starting voice tone analytics tasks', error);
   }
 }
+
+
+const startCallProcessing = async function startCallProcessing(chimeMediaPipelinesClient, callData) {
+  // execute the media pipeline
+  const mediaPipelineId = await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
+  if (mediaPipelineId === undefined) {
+    console.error("Media pipeline is not started. Skip start voice tone analysis.");
+    return undefined;
+  }
+
+  // start voice tone analysis task
+  if (ENABLE_VOICETONE === 'true') {
+    await startVoiceToneAnalysisTask(chimeMediaPipelinesClient, mediaPipelineId, callData);
+  }
+
+  return mediaPipelineId;
+};
 
 
 // MAIN LAMBDA HANDLER - FUNCTION ENTRY POINT
@@ -527,7 +640,6 @@ const handler = async function handler(event, context) {
   dynamoClient = new DynamoDBClient({ region: REGION });
   kinesisClient = new KinesisClient({ region: REGION });
   chimeMediaPipelinesClient = new ChimeSDKMediaPipelinesClient({ region: REGION });
-  chimeVoiceClient = new ChimeSDKVoiceClient({ region: REGION });
 
   /*
   Create a callData object for incoming event:
@@ -553,17 +665,39 @@ const handler = async function handler(event, context) {
       console.log('Nothing to do - exiting.');
       return;
     }
-    await writeCallDataToDdb(callData, callData.callId);
+    await writeCallDataToDdb(callData);
     console.log('Ready to start processing call');
     await writeCallStartEventToKds(kinesisClient, callData);
 
     // start media insight pipeline
-    await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
-
-    // start voice tone analysis task
-    if (ENABLE_VOICETONE === 'true') {
-      await startVoiceToneAnalysisTask(chimeVoiceClient, callData);
+    const mediaPipelineId = await startCallProcessing(chimeMediaPipelinesClient, callData);
+    if (mediaPipelineId) {
+      // save media pipeline id to stop media pipeline
+      console.log(`Call processing started. Persists ${mediaPipelineId} to stop media pipeline`);
+      callData.mediaPipelineId = mediaPipelineId;
+      await writeCallDataToDdb(callData);
     }
+  } else if (event.source === 'lca-solution' && event['detail-type'] === 'CALL_SESSION_MAPPING') {
+    console.log('CALL_SESSION_MAPPING event received, create session data for PCA.');
+
+    // callId may be modified by Lambda hook and this Lambda provides the modified callId to MediaInsightsRuntimeMetadata.
+    // The callId from event is modified callId. Get the callData from DDB using the modified callId instead of originalCallId.
+    const callId = event.detail.callId;
+    const callData = await getCallDataFromDdb(callId);
+    if (!callData) {
+      console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
+      return;
+    }
+
+    const sessionData = {
+      sessionId: event.detail.sessionId,
+      callId: callId,
+      fromNumber: callData.fromNumber,
+      agentId: callData.agentId,
+      callStreamingStartTime: callData.callStreamingStartTime,
+    };
+    await writeSessionDataToDdb(sessionData);
+
   } else if (event.source === 'aws.chime') {
     if (event.detail.streamingStatus === 'STARTED') {
       if (event.detail.isCaller === undefined) {
@@ -599,10 +733,8 @@ const handler = async function handler(event, context) {
       callData = await getCallDataFromChimeEventsWithLambdaHook(event);
 
       console.log('Saving callData to DynamoDB');
-      await writeCallDataToDdb(callData, callData.callId);
-      if(callData.callId !== callData.originalCallId) {
-        await writeCallDataToDdb(callData, callData.originalCallId);
-      }
+      await writeCallDataToDdb(callData);
+      await writeCallDataIdMappingToDdb(callData.originalCallId, callData.callId);
 
       if (callData.shouldProcessCall === false) {
         console.log('CallData shouldProcessCall is false, exiting.');
@@ -611,12 +743,13 @@ const handler = async function handler(event, context) {
       console.log('Ready to start processing call');
       await writeCallStartEventToKds(kinesisClient, callData);
 
-      // it is now time to execute the media pipeline
-      await startChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callData);
-
-      // start voice tone analysis task
-      if (ENABLE_VOICETONE === 'true') {
-        await startVoiceToneAnalysisTask(chimeVoiceClient, callData);
+      // it is now time to process call
+      const mediaPipelineId = await startCallProcessing(chimeMediaPipelinesClient, callData);
+      if (mediaPipelineId) {
+        // save media pipeline id to stop media pipeline
+        console.log(`Call processing started. Persists ${mediaPipelineId} to stop media pipeline`);
+        callData.mediaPipelineId = mediaPipelineId;
+        await writeCallDataToDdb(callData);
       }
 
     } else if (event.detail.streamingStatus === 'ENDED') {
@@ -626,12 +759,20 @@ const handler = async function handler(event, context) {
         );
         return;
       }
-      
-      callData = await getCallDataFromDdb(event.detail.callId);
-      await writeCallEndEventToKds(kinesisClient, callData.callId);
-      callData.callStreamingEndTime = new Date().toISOString();
-      await writeCallDataToDdb(callData, callData.callId);
-    } 
+
+      // VC streaming ENDED uses the original callId. Use originalCallId to get the callData.
+      const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(event.detail.callId);
+      callDataFromDdb.callStreamingEndTime = new Date().toISOString();
+
+      await writeCallEndEventToKds(kinesisClient, callDataFromDdb.callId);
+      await writeCallDataToDdb(callDataFromDdb);
+
+      if (callDataFromDdb.mediaPipelineId) {
+        // wait 2 seconds to allow media pipeline to process the remaining audio stream
+        await sleep(2000);
+        await StopChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callDataFromDdb.mediaPipelineId);
+      }
+    }
     else {
       console.log(
         `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,

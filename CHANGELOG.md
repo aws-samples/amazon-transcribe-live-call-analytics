@@ -7,12 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.9] - 2023-11-01
+### Added
+- Allow customer to specify their own Voice Connector as a CloudFormation Template parameter. If the customer provided Voice Connector is provided, LCA will not deploy a new VC. (#102) 
+
+### Fixed
+- Fix LCA/PCA integration when using Chime SDK Call Analytics (PR #108, #102)
+- Call recording player now appears when recording file is available 1-2 minutes after the call when using Chime SDK Call Analytics (#108)  
+- Prevent START_CALL_PROCESSING if call has already ended. This removes possibility that START CALL PROCESSING picks up re-purposed KVS streams for a different callId (PR #114)
+- Reduce agent assist latency when using Connect / Contact Lens by processing Utterance rather than Transcript events (PR #113)
+- Improved markdown formatting for demo script agent assist responses
+- Addressed stack update issues with Chime SDK Voice Connector, demo Asterisk instance, & Bedrock boto3 layer
+- Use latest QnAbot on AWS release (5.4.4) for Agent Assist
+- Dependabot security updates
+
 ## [0.8.8] - 2023-10-10
 ### Added
 - Agent Assist bot can now generate a draft email from agent to caller, summarizing call and next steps
 
 ### Fixed
-- Fix #102 - Agent Assist bot widget stopped working - display is blank.
+- Fix #103 - Agent Assist bot widget stopped working - display is blank.
 - Pull latest Qnabot Plugins submodule to get [Bedrock embeddings function whitespace fix](https://github.com/aws-samples/qnabot-on-aws-plugin-samples/blob/develop/CHANGELOG.md#fixed)
 
 
@@ -321,12 +335,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.8...develop
-[0.8.8]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.7
-[0.8.7]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.6
-[0.8.6]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.5
-[0.8.5]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...v0.8.4
-[0.8.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.4...v0.8.3
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...develop
+[0.8.9]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.9
+[0.8.8]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.8
+[0.8.7]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.7
+[0.8.6]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...v0.8.6
+[0.8.5]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.4...v0.8.5
+[0.8.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.0...v0.8.1
