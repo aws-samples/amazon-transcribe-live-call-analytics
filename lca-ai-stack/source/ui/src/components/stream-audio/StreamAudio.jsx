@@ -1,6 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 import {
   Form,
@@ -67,6 +67,26 @@ const StreamAudio = () => {
   const handleWSSChange = (e) => {
     setWSSEndpoint(e.detail.value);
   };
+  const getSocketUrl = useCallback(() => {
+    console.log(`connecting to ${wssEndpoint}`);
+    return new Promise((resolve) => {
+      if (!wssEndpoint.includes('domainname')) resolve(wssEndpoint);
+    });
+  }, [wssEndpoint]);
+
+  const { sendMessage } = useWebSocket(getSocketUrl, {
+    queryParams: {
+      authorization: `Bearer ${JWT_TOKEN}`,
+    },
+    onClose: (event) => {
+      console.log(event);
+      setRecording(false);
+    },
+    onError: (event) => {
+      console.log(event);
+      setRecording(false);
+    },
+  });
 
   const handleCallIdChange = (e) => {
     setCallMetaData({
@@ -104,26 +124,22 @@ const StreamAudio = () => {
       });
       mediaRecorder.port.close();
       mediaRecorder.disconnect();
+      setCallMetaData({
+        ...callMetaData,
+        callId: '',
+      });
     } else {
       console.log('no media recorder available to stop');
     }
   };
 
   const startRecording = async () => {
+    setWSSEndpoint(wssEndpoint);
+    // setCallMetaData({
+    //   ...callMetaData,
+    //   callId: crypto.randomUUID(),
+    // });
     try {
-      const { sendMessage } = useWebSocket(wssEndpoint, {
-        queryParams: {
-          authorization: `Bearer ${JWT_TOKEN}`,
-        },
-        onClose: (event) => {
-          console.log(event);
-          setRecording(false);
-        },
-        onError: (event) => {
-          console.log(event);
-          setRecording(false);
-        },
-      });
       const audioContext = new window.AudioContext();
       const videostream = await window.navigator.mediaDevices.getDisplayMedia({
         video: true,
@@ -239,7 +255,7 @@ const StreamAudio = () => {
             required
             description="Websocket Server Endpoint"
           >
-            <Input value="wss://<domainname>/api/v1/ws" onChange={handleWSSChange} />
+            <Input value={wssEndpoint} onChange={handleWSSChange} />
           </FormField>
         </Container>
         <Container header={<Header variant="h2">Call Meta data</Header>}>
