@@ -159,7 +159,7 @@ const onTextMessage = (data: string): void => {
     (async () => {
         await writeCallStartEvent(callMetaData);
         tempRecordingFilename = `${callMetaData.callId}.wav`;
-        wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'PCMU', callMetaData.samplingRate || 48000, 2);
+        wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'L16', callMetaData.samplingRate || 48000, 2);
     })();
     audioInputStream = new stream.PassThrough();
     startTranscribe(callMetaData, audioInputStream);
