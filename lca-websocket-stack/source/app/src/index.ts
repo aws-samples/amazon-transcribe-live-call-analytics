@@ -22,13 +22,16 @@ import {
     writeCallEndEvent,
 } from './lca';
 import { jwtVerifier } from './jwt-verifier';
-import { WavFileWriter } from './wav';
+// import { WavFileWriter } from './wav';
 
 let callMetaData: CallMetaData;  // Type structure for call metadata sent by the client
 let audioInputStream: stream.PassThrough; // audio chunks are written to this stream for Transcribe SDK to consume
 
 let tempRecordingFilename: string;
-let wavWriter: WavFileWriter;
+let wavFileName: string;
+let recordingFileSize: number = 0;
+// let wavWriter: WavFileWriter;
+let writeRecordingStream: fs.WriteStream;
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefined;
@@ -114,10 +117,23 @@ const registerHandlers = (ws: WebSocket): void => {
             onWsClose(ws, code);
             (async () => {
                 await writeCallEndEvent(callMetaData);
-                const written = await wavWriter.close();
-                server.log.info(`${written} samples to wav file`);
+                // const written = await wavWriter.close();
+                // server.log.info(`${written} samples to wav file`);
+                writeRecordingStream.end();
+
+                const header = createHeader(recordingFileSize);
+                const readStream = fs.createReadStream(path.join('/tmp/',tempRecordingFilename));
+                const writeStream = fs.createWriteStream(path.join('/tmp/', wavFileName));
+                writeStream.write(header);
+                for await (const chunk of readStream) {
+                    writeStream.write(chunk);
+                }
+                writeStream.end();
+
                 await writeToS3(tempRecordingFilename);
+                await writeToS3(wavFileName);
                 await deleteTempFile(path.join('/tmp/',tempRecordingFilename));
+                await deleteTempFile(path.join('/tmp/', wavFileName));
             })();
         } catch (err) {
             server.log.error('Error in WS close handler: ', err);
@@ -134,7 +150,9 @@ const onBinaryMessage = (data: Uint8Array): void => {
     // server.log.info(`Binary message. Size: ${data.length}`);
     if (audioInputStream) {
         audioInputStream.write(data);
-        wavWriter.writeAudio(data);
+        // wavWriter.writeAudio(data);
+        writeRecordingStream.write(data);
+        recordingFileSize += data.length;
     } else {
         server.log.error('Error: received audio data before metadata');
     }
@@ -158,8 +176,11 @@ const onTextMessage = (data: string): void => {
 
     (async () => {
         await writeCallStartEvent(callMetaData);
-        tempRecordingFilename = `${callMetaData.callId}.wav`;
-        wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'L16', callMetaData.samplingRate || 48000, 2);
+        tempRecordingFilename = `${callMetaData.callId}.raw`;
+        wavFileName = `${callMetaData.callId}.wav`
+        // wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'L16', callMetaData.samplingRate || 48000, 2);
+        writeRecordingStream = fs.createWriteStream(path.join('/tmp/', tempRecordingFilename));
+        recordingFileSize = 0;
     })();
     audioInputStream = new stream.PassThrough();
     startTranscribe(callMetaData, audioInputStream);
@@ -203,3 +224,35 @@ const deleteTempFile = async(sourceFile:string) => {
         console.error('error deleting: ', err);
     }
 };
+
+const createHeader = function createHeader(length:number) {
+    const buffer = Buffer.alloc(44);
+  
+    // RIFF identifier 'RIFF'
+    buffer.writeUInt32BE(1380533830, 0);
+    // file length minus RIFF identifier length and file description length
+    buffer.writeUInt32LE(36 + length, 4);
+    // RIFF type 'WAVE'
+    buffer.writeUInt32BE(1463899717, 8);
+    // format chunk identifier 'fmt '
+    buffer.writeUInt32BE(1718449184, 12);
+    // format chunk length
+    buffer.writeUInt32LE(16, 16);
+    // sample format (raw)
+    buffer.writeUInt16LE(1, 20);
+    // channel count
+    buffer.writeUInt16LE(2, 22);
+    // sample rate
+    buffer.writeUInt32LE(callMetaData.samplingRate, 24);
+    // byte rate (sample rate * block align)
+    buffer.writeUInt32LE(callMetaData.samplingRate * 2 * 2, 28);
+    // block align (channel count * bytes per sample)
+    buffer.writeUInt16LE(2 * 2, 32);
+    // bits per sample
+    buffer.writeUInt16LE(16, 34);
+    // data chunk identifier 'data'
+    buffer.writeUInt32BE(1684108385, 36);
+    buffer.writeUInt32LE(length, 40);
+  
+    return buffer;
+  };
