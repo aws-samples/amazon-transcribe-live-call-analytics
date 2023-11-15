@@ -27,7 +27,7 @@ import { WavFileWriter } from './wav';
 let callMetaData: CallMetaData;  // Type structure for call metadata sent by the client
 let audioInputStream: stream.PassThrough; // audio chunks are written to this stream for Transcribe SDK to consume
 
-const tempRecordingFilename = 'audio.wav';
+let tempRecordingFilename: string;
 let wavWriter: WavFileWriter;
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
@@ -158,6 +158,7 @@ const onTextMessage = (data: string): void => {
 
     (async () => {
         await writeCallStartEvent(callMetaData);
+        tempRecordingFilename = `${callMetaData.callId}.wav`;
         wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'PCMU', callMetaData.samplingRate || 48000, 2);
     })();
     audioInputStream = new stream.PassThrough();
