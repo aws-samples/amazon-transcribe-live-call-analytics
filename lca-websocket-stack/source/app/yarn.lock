@@ -84,7 +84,7 @@
     "@aws-sdk/util-utf8-browser" "^3.0.0"
     tslib "^1.11.1"
 
-"@aws-sdk/client-dynamodb@^3.420.0":
+"@aws-sdk/client-dynamodb@^3.451.0":
   version "3.451.0"
   resolved "https://registry.yarnpkg.com/@aws-sdk/client-dynamodb/-/client-dynamodb-3.451.0.tgz#e95f4a49bfc54fdd052dfa0f22b9672832416bc1"
   integrity sha512-2oPaxOkX1RBjFI9irbKo9oRAhFjfqYulaPpndMmBCmFlXsnSpfxW6nBYOkV41zdA/AmvLf5aTSWSCvlwXZjX9A==
@@ -132,7 +132,7 @@
     tslib "^2.5.0"
     uuid "^8.3.2"
 
-"@aws-sdk/client-kinesis@^3.418.0":
+"@aws-sdk/client-kinesis@^3.451.0":
   version "3.451.0"
   resolved "https://registry.yarnpkg.com/@aws-sdk/client-kinesis/-/client-kinesis-3.451.0.tgz#4ee6fbe2629dd331d52316b1d1137f0b2c403f62"
   integrity sha512-Wz2mQCmCWbcgtOwY7Rchyi2sVUEnqMPrQNnpovXZ9gceoVPyl+IHzHCFoqD+6tFrnDMOUOYG31gW4xz82OrUoQ==
@@ -332,7 +332,7 @@
     fast-xml-parser "4.2.5"
     tslib "^2.5.0"
 
-"@aws-sdk/client-transcribe-streaming@^3.418.0":
+"@aws-sdk/client-transcribe-streaming@^3.451.0":
   version "3.451.0"
   resolved "https://registry.yarnpkg.com/@aws-sdk/client-transcribe-streaming/-/client-transcribe-streaming-3.451.0.tgz#e7ea313eb2a436779eba68c4b66fd65f5471865b"
   integrity sha512-NX4+vdoHnrrQZ/yWmfEUsA0etpyCQii1Ua40/dL0zWW4jYJDjH9jeEyUkU2Yv6lLrfFna/bcu/83VP6cIl0Sow==
@@ -1398,17 +1398,12 @@
   resolved "https://registry.yarnpkg.com/@types/json-schema/-/json-schema-7.0.15.tgz#596a1747233694d50f6ad8a7869fcb6f56cf5841"
   integrity sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==
 
-"@types/node@*":
+"@types/node@*", "@types/node@^20.9.0":
   version "20.9.0"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-20.9.0.tgz#bfcdc230583aeb891cf51e73cfdaacdd8deae298"
   integrity sha512-nekiGu2NDb1BcVofVcEKMIwzlx4NjHlcjhoxxKBNLtz15Y1z7MYf549DFvkHSId02Ax6kGwWntIBPC3l/JZcmw==
   dependencies:
     undici-types "~5.26.4"
-
-"@types/node@^16.11.26":
-  version "16.18.61"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-16.18.61.tgz#5ea47e3018348bf3bbbe646b396ba5e720310be1"
-  integrity sha512-k0N7BqGhJoJzdh6MuQg1V1ragJiXTh8VUBAZTWjJ9cUq23SG0F0xavOwZbhiP4J3y20xd6jxKx+xNUhkMAi76Q==
 
 "@types/semver@^7.3.12":
   version "7.5.5"
