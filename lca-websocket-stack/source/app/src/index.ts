@@ -6,6 +6,8 @@ import websocket from '@fastify/websocket';
 import WebSocket from 'ws'; // type structure for the websocket object used by fastify/websocket
 import stream from 'stream';
 import os from 'os';
+import fs from 'fs';
+
 import { randomUUID } from 'crypto';
 
 import {  
@@ -18,6 +20,8 @@ import { jwtVerifier } from './jwt-verifier';
 
 let callMetaData: CallMetaData;  // Type structure for call metadata sent by the client
 let audioInputStream: stream.PassThrough; // audio chunks are written to this stream for Transcribe SDK to consume
+const tempRecordingFilename = 'audio.raw';
+const writeRecordingStream = fs.createWriteStream('/tmp/' + tempRecordingFilename);
 
 const CPU_HEALTH_THRESHOLD = parseInt(process.env['CPU_HEALTH_THRESHOLD'] || '50', 10);
 const isDev = process.env['NODE_ENV'] !== 'PROD';
@@ -114,6 +118,7 @@ const onBinaryMessage = (data: Uint8Array): void => {
     // server.log.info(`Binary message. Size: ${data.length}`);
     if (audioInputStream) {
         audioInputStream.write(data);
+        writeRecordingStream.write(data);
     } else {
         server.log.error('Error: received audio data before metadata');
     }
@@ -147,6 +152,7 @@ const onWsClose = (ws:WebSocket, code: number): void => {
     ws.close(code);
     if (audioInputStream) {
         audioInputStream.end();
+        writeRecordingStream.end();
     }
 };
 
