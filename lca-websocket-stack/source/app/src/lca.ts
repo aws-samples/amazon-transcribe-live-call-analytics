@@ -14,14 +14,16 @@ import {
     ConfigurationEvent,
     ParticipantRole,
     ChannelDefinition,
-    StartStreamTranscriptionCommandInput
+    StartStreamTranscriptionCommandInput,
+    ContentRedactionOutput,
+    LanguageCode,
+    ContentRedactionType
 } from '@aws-sdk/client-transcribe-streaming';
 
 import { 
     KinesisClient, 
     PutRecordCommand 
 } from '@aws-sdk/client-kinesis';
-
 
 import { 
     CallStartEvent,
@@ -267,7 +269,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
                     DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
                 };
                 if (IS_CONTENT_REDACTION_ENABLED) {
-                    configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
+                    configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT as ContentRedactionOutput;
                 }
             }
             yield { ConfigurationEvent: configuration_event };
@@ -284,14 +286,14 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
     let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
     
     const tsParams:transcriptionCommandInput<typeof isTCAEnabled> = {
-        LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
+        LanguageCode: TRANSCRIBE_LANGUAGE_CODE as LanguageCode,
         MediaSampleRateHertz: callMetaData.samplingRate,
         MediaEncoding: 'pcm',
         AudioStream: transcribeInput()
     };
     
     if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
-        tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
+        tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as ContentRedactionType;
         if (TRANSCRIBE_PII_ENTITY_TYPES) {
             tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
         }
@@ -354,5 +356,4 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
     } finally {
         writeCallEndEvent(callMetaData);
     }
-
 };

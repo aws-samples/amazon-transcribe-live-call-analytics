@@ -20,6 +20,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.420.0",
     "@aws-sdk/client-kinesis": "^3.418.0",
+    "@aws-sdk/client-s3": "^3.451.0",
     "@aws-sdk/client-transcribe-streaming": "^3.418.0",
     "@fastify/websocket": "^5.0.0",
     "aws-jwt-verify": "^4.0.0",

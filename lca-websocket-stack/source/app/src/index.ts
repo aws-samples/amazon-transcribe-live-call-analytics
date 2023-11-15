@@ -6,8 +6,13 @@ import websocket from '@fastify/websocket';
 import WebSocket from 'ws'; // type structure for the websocket object used by fastify/websocket
 import stream from 'stream';
 import os from 'os';
-import fs from 'fs';
+import path from 'path';
+import { 
+    S3Client, 
+    PutObjectCommand
+} from '@aws-sdk/client-s3';
 
+import fs from 'fs';
 import { randomUUID } from 'crypto';
 
 import {  
@@ -17,13 +22,20 @@ import {
     writeCallEndEvent,
 } from './lca';
 import { jwtVerifier } from './jwt-verifier';
+import { WavFileWriter } from './wav';
 
 let callMetaData: CallMetaData;  // Type structure for call metadata sent by the client
 let audioInputStream: stream.PassThrough; // audio chunks are written to this stream for Transcribe SDK to consume
-const tempRecordingFilename = 'audio.raw';
-const writeRecordingStream = fs.createWriteStream('/tmp/' + tempRecordingFilename);
 
+const tempRecordingFilename = 'audio.wav';
+let wavWriter: WavFileWriter;
+
+const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
+const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefined;
 const CPU_HEALTH_THRESHOLD = parseInt(process.env['CPU_HEALTH_THRESHOLD'] || '50', 10);
+
+const s3Client = new S3Client({ region: AWS_REGION });
+
 const isDev = process.env['NODE_ENV'] !== 'PROD';
 
 // create fastify server (with logging enabled for non-PROD environments)
@@ -102,6 +114,10 @@ const registerHandlers = (ws: WebSocket): void => {
             onWsClose(ws, code);
             (async () => {
                 await writeCallEndEvent(callMetaData);
+                const written = await wavWriter.close();
+                server.log.info(`${written} samples to wav file`);
+                await writeToS3(tempRecordingFilename);
+                await deleteTempFile(path.join('/tmp/',tempRecordingFilename));
             })();
         } catch (err) {
             server.log.error('Error in WS close handler: ', err);
@@ -118,7 +134,7 @@ const onBinaryMessage = (data: Uint8Array): void => {
     // server.log.info(`Binary message. Size: ${data.length}`);
     if (audioInputStream) {
         audioInputStream.write(data);
-        writeRecordingStream.write(data);
+        wavWriter.writeAudio(data);
     } else {
         server.log.error('Error: received audio data before metadata');
     }
@@ -142,6 +158,7 @@ const onTextMessage = (data: string): void => {
 
     (async () => {
         await writeCallStartEvent(callMetaData);
+        wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'L16', 8000, 2);
     })();
     audioInputStream = new stream.PassThrough();
     startTranscribe(callMetaData, audioInputStream);
@@ -152,9 +169,36 @@ const onWsClose = (ws:WebSocket, code: number): void => {
     ws.close(code);
     if (audioInputStream) {
         audioInputStream.end();
-        writeRecordingStream.end();
     }
 };
 
+const writeToS3 = async (tempFileName:string) => {
+    const sourceFile = path.join('/tmp/', tempFileName);
 
+    console.log('Uploading audio to S3');
+    let data;
+    const fileStream = fs.createReadStream(sourceFile);
+    const uploadParams = {
+        Bucket: RECORDINGS_BUCKET_NAME,
+        Key: 'lca-audio-wav/' + tempFileName,
+        Body: fileStream,
+    };
+    try {
+        data = await s3Client.send(new PutObjectCommand(uploadParams));
+        console.log('Uploading to S3 complete: ', data);
+    } catch (err) {
+        console.error('S3 upload error: ', err);
+    } finally {
+        fileStream.destroy();
+    }
+    return data;
+};
 
+const deleteTempFile = async(sourceFile:string) => {
+    try {
+        console.log('deleting tmp file');
+        await fs.promises.unlink(sourceFile);
+    } catch (err) {
+        console.error('error deleting: ', err);
+    }
+};
