@@ -1388,6 +1388,16 @@ Resources:
       ManagedPolicyArns: 
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       Policies:
+        - PolicyName: updateSSMStore
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  = ssm:PutParameter
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameterName}"
 
   UpdateWSEndpointSettings:
     Type: "AWS::Lambda::Function"
@@ -1437,7 +1447,6 @@ Resources:
                       - - 'wss://'
                         - !GetAtt WebSocketCloudFrontDistribution.DomainName
                         - '/api/v1/ws'
-
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 

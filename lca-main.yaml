@@ -1352,7 +1352,7 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
-        LCASettingsParameterName: !GetAtt AISTACK.LCASettingsParameterName
+        LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
