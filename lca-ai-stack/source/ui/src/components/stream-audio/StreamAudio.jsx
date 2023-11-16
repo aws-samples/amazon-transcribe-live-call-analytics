@@ -1,6 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 import {
   Form,
@@ -97,7 +97,20 @@ const StreamAudio = () => {
 
   let mediaRecorder;
 
-  const { sendMessage } = useWebSocket(settings.WSEndpoint, {
+  console.log(settings.CategoryAlertRegex);
+  console.log(`IN StreamAudio: ${settings.WSEndpoint}`);
+
+  const getSocketUrl = useCallback(() => {
+    console.log('Getting websocket url');
+    return new Promise((resolve) => {
+      if (settings.WSEndpoint) {
+        console.log(`Resolving to ${settings.WSEndpoint}`);
+        resolve(settings.WSEndpoint);
+      }
+    });
+  }, [settings.WSEndpoint]);
+
+  const { sendMessage } = useWebSocket(getSocketUrl, {
     queryParams: {
       authorization: `Bearer ${JWT_TOKEN}`,
     },
