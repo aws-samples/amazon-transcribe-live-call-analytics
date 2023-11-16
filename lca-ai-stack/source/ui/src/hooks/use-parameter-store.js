@@ -25,9 +25,6 @@ const useParameterStore = (creds) => {
       }
     }
     setSettings(lcaSettings);
-    console.log(lcaSettings);
-    console.log(lcaSettings.CategoryAlertRegex);
-    console.log(lcaSettings.WSEndpoint);
   };
 
   useEffect(async () => {

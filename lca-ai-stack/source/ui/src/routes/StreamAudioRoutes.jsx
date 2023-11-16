@@ -11,7 +11,7 @@ const logger = new Logger('StreamAudioRoutes');
 
 const StreamAudioRoutes = () => {
   const { path } = useRouteMatch();
-  logger.debug('path', path);
+  logger.info('path ', path);  
 
   return (
     <Switch>

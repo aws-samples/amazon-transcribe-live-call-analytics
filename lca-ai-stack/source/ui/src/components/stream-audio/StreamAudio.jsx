@@ -97,14 +97,12 @@ const StreamAudio = () => {
 
   let mediaRecorder;
 
-  console.log(settings.CategoryAlertRegex);
-  console.log(`IN StreamAudio: ${settings.WSEndpoint}`);
 
   const getSocketUrl = useCallback(() => {
-    console.log('Getting websocket url');
+    // console.log('Getting websocket url');
     return new Promise((resolve) => {
       if (settings.WSEndpoint) {
-        console.log(`Resolving to ${settings.WSEndpoint}`);
+        console.log(`Resolving Websocket URL to ${settings.WSEndpoint}`);
         resolve(settings.WSEndpoint);
       }
     });

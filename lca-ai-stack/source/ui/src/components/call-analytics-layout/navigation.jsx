@@ -4,11 +4,12 @@ import React from 'react';
 import { Route, Switch } from 'react-router-dom';
 import { SideNavigation } from '@awsui/components-react';
 
-import { CALLS_PATH, DEFAULT_PATH } from '../../routes/constants';
+import { CALLS_PATH, STREAM_AUDIO_PATH, DEFAULT_PATH } from '../../routes/constants';
 
 export const callsNavHeader = { text: 'Call Analytics', href: `#${DEFAULT_PATH}` };
 export const callsNavItems = [
   { type: 'link', text: 'Calls', href: `#${CALLS_PATH}` },
+  { type: 'link', text: 'Stream Audio', href: `#${STREAM_AUDIO_PATH}` },
   {
     type: 'section',
     text: 'Resources',
