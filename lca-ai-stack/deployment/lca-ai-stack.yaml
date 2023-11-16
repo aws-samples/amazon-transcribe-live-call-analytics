@@ -418,7 +418,10 @@ Outputs:
   CloudFrontDomainName:
     Description: The full domain name of the CloudFront distribution
     Value: !GetAtt WebAppCloudFrontDistribution.DomainName
-
+  LCASettingsParameterName:
+    Description: Name of the Parameter store 
+    Value: !Ref LCASettingsParameter
+    
   TranscriptSummaryFunctionArn:
     Description: Call Summarizer Lambda function ARN
     Value: !If [
@@ -550,7 +553,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Type: String
-      Value: !Sub '{ "CategoryAlertRegex":"${CategoryAlertRegEx}", "EnableVoiceToneAnalysis":"${EnableVoiceToneAnalysis}" }'
+      Value: !Sub '{ "CategoryAlertRegex":"${CategoryAlertRegEx}", "EnableVoiceToneAnalysis":"${EnableVoiceToneAnalysis}", "WSEndpoint":"" }'
 
   ##########################################################################
   # CodeBuild

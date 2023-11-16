@@ -1,6 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import {
   Form,
@@ -16,8 +16,38 @@ import '@awsui/global-styles/index.css';
 import useWebSocket from 'react-use-websocket';
 
 import useAppContext from '../../contexts/app';
+import useSettingsContext from '../../contexts/settings';
 
-// const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
+
+const TARGET_SAMPLING_RATE = 8000;
+let SOURCE_SAMPLING_RATE;
+
+export const downsampleBuffer = (buffer, inputSampleRate = 44100, outputSampleRate = 16000) => {
+  if (outputSampleRate === inputSampleRate) {
+    return buffer;
+  }
+
+  const sampleRateRatio = inputSampleRate / outputSampleRate;
+  const newLength = Math.round(buffer.length / sampleRateRatio);
+  const result = new Float32Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+    let accum = 0;
+    let count = 0;
+
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i += 1) {
+      accum += buffer[i];
+      count += 1;
+    }
+    result[offsetResult] = accum / count;
+    offsetResult += 1;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+};
 
 const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
@@ -31,11 +61,15 @@ const pcmEncode = (input) => {
 
 const interleave = (lbuffer, rbuffer) => {
   let leftAudioBuffer = new ArrayBuffer(lbuffer.length * 2);
-  leftAudioBuffer = pcmEncode(lbuffer);
+  leftAudioBuffer = pcmEncode(
+    downsampleBuffer(lbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+  );
   const leftView = new DataView(leftAudioBuffer);
 
   let rightAudioBuffer = new ArrayBuffer(rbuffer.length * 2);
-  rightAudioBuffer = pcmEncode(rbuffer);
+  rightAudioBuffer = pcmEncode(
+    downsampleBuffer(rbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+  );
   const rightView = new DataView(rightAudioBuffer);
 
   const buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
@@ -50,6 +84,7 @@ const interleave = (lbuffer, rbuffer) => {
 
 const StreamAudio = () => {
   const { currentSession } = useAppContext();
+  const { settings } = useSettingsContext();
   const JWT_TOKEN = currentSession.getAccessToken().getJwtToken();
 
   const [callMetaData, setCallMetaData] = useState({
@@ -57,34 +92,26 @@ const StreamAudio = () => {
     agentId: 'AudioStream',
     fromNumber: '+9165551234',
     toNumber: '+8001112222',
-    samplingRate: 48000,
   });
   const [recording, setRecording] = useState(false);
-  const [wssEndpoint, setWSSEndpoint] = useState('wss://<domainname>/api/v1/ws');
+  const [streamingStarted, setStreamingStarted] = useState(false);
 
   let mediaRecorder;
 
-  const handleWSSChange = (e) => {
-    setWSSEndpoint(e.detail.value);
-  };
-  const getSocketUrl = useCallback(() => {
-    console.log(`connecting to ${wssEndpoint}`);
-    return new Promise((resolve) => {
-      if (!wssEndpoint.includes('domainname')) resolve(wssEndpoint);
-    });
-  }, [wssEndpoint]);
 
-  const { sendMessage } = useWebSocket(getSocketUrl, {
+
+  const { sendMessage } = useWebSocket(settings.WSEndpoint, {
     queryParams: {
       authorization: `Bearer ${JWT_TOKEN}`,
     },
+    onOpen: (event) => {
+      console.log(event);
+    },
     onClose: (event) => {
       console.log(event);
-      setRecording(false);
     },
     onError: (event) => {
       console.log(event);
-      setRecording(false);
     },
   });
 
@@ -124,26 +151,26 @@ const StreamAudio = () => {
       });
       mediaRecorder.port.close();
       mediaRecorder.disconnect();
-      setCallMetaData({
-        ...callMetaData,
-        callId: '',
-      });
     } else {
       console.log('no media recorder available to stop');
+    }
+    if (streamingStarted && !recording) {
+      callMetaData.callEvent = 'END';
+      sendMessage(JSON.stringify(callMetaData));
+      setStreamingStarted(false);
     }
   };
 
   const startRecording = async () => {
-    setWSSEndpoint(wssEndpoint);
-    // setCallMetaData({
-    //   ...callMetaData,
-    //   callId: crypto.randomUUID(),
-    // });
     try {
       const audioContext = new window.AudioContext();
       const videostream = await window.navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true,
+        audio: {
+          noiseSuppression: true,
+          autoGainControl: true,
+          echoCancellation: true,
+        },
       });
       const track1 = videostream.getAudioTracks()[0];
 
@@ -152,12 +179,12 @@ const StreamAudio = () => {
         audio: true,
       });
       const track2 = micstream.getAudioTracks()[0];
+      SOURCE_SAMPLING_RATE = audioContext.sampleRate;
 
-      setCallMetaData({
-        ...callMetaData,
-        samplingRate: audioContext.sampleRate,
-      });
+      callMetaData.samplingRate = TARGET_SAMPLING_RATE;
+      callMetaData.callEvent = 'START';
       sendMessage(JSON.stringify(callMetaData));
+      setStreamingStarted(true);
 
       const source1 = audioContext.createMediaStreamSource(new MediaStream([track2]));
       const source2 = audioContext.createMediaStreamSource(new MediaStream([track1]));
@@ -165,12 +192,6 @@ const StreamAudio = () => {
       const merger = audioContext.createChannelMerger(2);
       source1.connect(merger, 0, 0);
       source2.connect(merger, 0, 1);
-
-      setCallMetaData({
-        ...callMetaData,
-        samplingRate: audioContext.sampleRate,
-      });
-      sendMessage(JSON.stringify(callMetaData));
 
       try {
         await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
@@ -181,7 +202,7 @@ const StreamAudio = () => {
       mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
         processorOptions: {
           numberOfChannels: 2,
-          sampleRate: audioContext.sampleRate,
+          sampleRate: SOURCE_SAMPLING_RATE,
           maxFrameCount: (audioContext.sampleRate * 1) / 10,
         },
       });
@@ -215,10 +236,8 @@ const StreamAudio = () => {
 
   async function toggleRecording() {
     if (recording) {
-      console.log('startRecording');
       await startRecording();
     } else {
-      console.log('stopRecording');
       await stopRecording();
     }
   }
@@ -229,11 +248,6 @@ const StreamAudio = () => {
 
   const handleRecording = () => {
     setRecording(!recording);
-    if (recording) {
-      console.log('Stopping transcription');
-    } else {
-      console.log('Starting transcription');
-    }
     return recording;
   };
 
@@ -248,16 +262,6 @@ const StreamAudio = () => {
           </SpaceBetween>
         }
       >
-        <Container>
-          <FormField
-            label="WebSocket Server Endpoint"
-            stretch
-            required
-            description="Websocket Server Endpoint"
-          >
-            <Input value={wssEndpoint} onChange={handleWSSChange} />
-          </FormField>
-        </Container>
         <Container header={<Header variant="h2">Call Meta data</Header>}>
           <ColumnLayout columns={2}>
             <FormField label="Call ID" stretch required description="Auto-generated Unique call ID">
