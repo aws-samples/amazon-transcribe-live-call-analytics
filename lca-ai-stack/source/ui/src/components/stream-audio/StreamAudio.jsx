@@ -18,7 +18,6 @@ import useWebSocket from 'react-use-websocket';
 import useAppContext from '../../contexts/app';
 import useSettingsContext from '../../contexts/settings';
 
-
 const TARGET_SAMPLING_RATE = 8000;
 let SOURCE_SAMPLING_RATE;
 
@@ -97,8 +96,6 @@ const StreamAudio = () => {
   const [streamingStarted, setStreamingStarted] = useState(false);
 
   let mediaRecorder;
-
-
 
   const { sendMessage } = useWebSocket(settings.WSEndpoint, {
     queryParams: {
