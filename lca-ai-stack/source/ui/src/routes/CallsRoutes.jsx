@@ -11,8 +11,7 @@ const logger = new Logger('CallsRoutes');
 
 const CallsRoutes = () => {
   const { path } = useRouteMatch();
-  // console.log(`CallsRoutes Path: ${path}`);
-  logger.info('path ', path);  
+  logger.info('path ', path);
 
   return (
     <Switch>

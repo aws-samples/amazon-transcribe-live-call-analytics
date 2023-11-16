@@ -19,7 +19,7 @@ const logger = new Logger('StreamAudioLayout');
 const StreamAudioLayout = () => {
   const { path } = useRouteMatch();
   // console.log(`StreamAudioLayout Path: ${path}`);
-  logger.info('path ', path);  
+  logger.info('path ', path);
 
   const notifications = useNotifications();
   const [toolsOpen, setToolsOpen] = useState(false);
