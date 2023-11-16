@@ -20,22 +20,25 @@ import {
     CallMetaData, 
     writeCallStartEvent,
     writeCallEndEvent,
+    writeCallEvent,
 } from './lca';
+import { CallRecordingEvent } from './entities-lca';
+
 import { jwtVerifier } from './jwt-verifier';
-// import { WavFileWriter } from './wav';
 
 let callMetaData: CallMetaData;  // Type structure for call metadata sent by the client
 let audioInputStream: stream.PassThrough; // audio chunks are written to this stream for Transcribe SDK to consume
 
 let tempRecordingFilename: string;
 let wavFileName: string;
-let recordingFileSize: number = 0;
-// let wavWriter: WavFileWriter;
+let recordingFileSize = 0;
 let writeRecordingStream: fs.WriteStream;
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefined;
+const RECORDING_FILE_PREFIX = process.env['RECORDING_FILE_PREFIX'] || 'lca-audio-wav/';
 const CPU_HEALTH_THRESHOLD = parseInt(process.env['CPU_HEALTH_THRESHOLD'] || '50', 10);
+const LOCAL_TEMP_DIR = process.env['LOCAL_TEMP_DIR'] || '/tmp/';
 
 const s3Client = new S3Client({ region: AWS_REGION });
 
@@ -63,7 +66,7 @@ server.addHook('preHandler', async (request, reply) => {
 });
 
 // Setup Route for websocket connection
-server.get('/api/v1/ws', { websocket: true, logLevel: 'info' }, (connection, request) => {
+server.get('/api/v1/ws', { websocket: true, logLevel: 'debug' }, (connection, request) => {
     server.log.info(`Websocket Request - URI: <${request.url}>, SocketRemoteAddr: ${request.socket.remoteAddress}, Headers: ${JSON.stringify(request.headers, null, 1)}`);
 
     registerHandlers(connection.socket); // setup the handler functions for websocket events
@@ -105,36 +108,16 @@ const registerHandlers = (ws: WebSocket): void => {
                 const audioinput = Buffer.from(data as Uint8Array);
                 onBinaryMessage(audioinput);
             } else {
-                onTextMessage(Buffer.from(data as Uint8Array).toString('utf8'));
+                onTextMessage(ws, Buffer.from(data as Uint8Array).toString('utf8'));
             }
         } catch (err) {
-            server.log.error('Error processing message: ', err);
+            server.log.error(`Error processing message: ${err}`);
         }
     });
 
     ws.on('close', (code: number) => {
         try {
             onWsClose(ws, code);
-            (async () => {
-                await writeCallEndEvent(callMetaData);
-                // const written = await wavWriter.close();
-                // server.log.info(`${written} samples to wav file`);
-                writeRecordingStream.end();
-
-                const header = createHeader(recordingFileSize);
-                const readStream = fs.createReadStream(path.join('/tmp/',tempRecordingFilename));
-                const writeStream = fs.createWriteStream(path.join('/tmp/', wavFileName));
-                writeStream.write(header);
-                for await (const chunk of readStream) {
-                    writeStream.write(chunk);
-                }
-                writeStream.end();
-
-                await writeToS3(tempRecordingFilename);
-                await writeToS3(wavFileName);
-                await deleteTempFile(path.join('/tmp/',tempRecordingFilename));
-                await deleteTempFile(path.join('/tmp/', wavFileName));
-            })();
         } catch (err) {
             server.log.error('Error in WS close handler: ', err);
         }
@@ -147,10 +130,8 @@ const registerHandlers = (ws: WebSocket): void => {
 };
 
 const onBinaryMessage = (data: Uint8Array): void => {
-    // server.log.info(`Binary message. Size: ${data.length}`);
     if (audioInputStream) {
         audioInputStream.write(data);
-        // wavWriter.writeAudio(data);
         writeRecordingStream.write(data);
         recordingFileSize += data.length;
     } else {
@@ -158,11 +139,10 @@ const onBinaryMessage = (data: Uint8Array): void => {
     }
 };
 
-const onTextMessage = (data: string): void => {
-    // server.log.info(`Text message received. Size: ${data.length}`);
+const onTextMessage = (ws: WebSocket, data: string): void => {
     try {
         callMetaData = JSON.parse(data);
-        // server.log.info('Call Metadata received from client : ', callMetaData);
+        server.log.info(`Call Metadata received from client :  ${data}`);
     } catch (error) {
         server.log.error('Error parsing call metadata: ', data);
         callMetaData.callId = randomUUID();
@@ -173,21 +153,51 @@ const onTextMessage = (data: string): void => {
     callMetaData.toNumber = callMetaData.toNumber || 'System Phone';
     callMetaData.shouldRecordCall = callMetaData.shouldRecordCall || false;
     callMetaData.agentId = callMetaData.agentId || randomUUID();
+    
+    if (callMetaData.callEvent === 'START') {        
+        (async () => {
+            await writeCallStartEvent(callMetaData);
+            tempRecordingFilename = `${callMetaData.callId}.raw`;
+            wavFileName = `${callMetaData.callId}.wav`;
+            writeRecordingStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
+            recordingFileSize = 0;
+        })();
+        audioInputStream = new stream.PassThrough();
+        startTranscribe(callMetaData, audioInputStream);
+    } else if (callMetaData.callEvent === 'END') {
+        (async () => {
+            await writeCallEndEvent(callMetaData);
+            writeRecordingStream.end();
 
-    (async () => {
-        await writeCallStartEvent(callMetaData);
-        tempRecordingFilename = `${callMetaData.callId}.raw`;
-        wavFileName = `${callMetaData.callId}.wav`
-        // wavWriter = await WavFileWriter.create(path.join('/tmp/', tempRecordingFilename), 'L16', callMetaData.samplingRate || 48000, 2);
-        writeRecordingStream = fs.createWriteStream(path.join('/tmp/', tempRecordingFilename));
-        recordingFileSize = 0;
-    })();
-    audioInputStream = new stream.PassThrough();
-    startTranscribe(callMetaData, audioInputStream);
+            const header = createHeader(recordingFileSize);
+            const readStream = fs.createReadStream(path.join(LOCAL_TEMP_DIR,tempRecordingFilename));
+            const writeStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, wavFileName));
+            writeStream.write(header);
+            for await (const chunk of readStream) {
+                writeStream.write(chunk);
+            }
+            writeStream.end();
+
+            await writeToS3(tempRecordingFilename);
+            await writeToS3(wavFileName);
+            await deleteTempFile(path.join(LOCAL_TEMP_DIR,tempRecordingFilename));
+            await deleteTempFile(path.join(LOCAL_TEMP_DIR, wavFileName));
+
+            const url = new URL(RECORDING_FILE_PREFIX+wavFileName, `https://${RECORDINGS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com`);
+            const recordingUrl = url.href;
+            
+            const callEvent: CallRecordingEvent = {
+                EventType: 'ADD_S3_RECORDING_URL',
+                CallId: callMetaData.callId,
+                RecordingUrl: recordingUrl
+            };
+            await writeCallEvent(callEvent);
+        })();
+        onWsClose(ws, 1000);
+    }
 };
 
 const onWsClose = (ws:WebSocket, code: number): void => {
-    server.log.info('Received close message from client: ',code);
     ws.close(code);
     if (audioInputStream) {
         audioInputStream.end();
@@ -195,14 +205,14 @@ const onWsClose = (ws:WebSocket, code: number): void => {
 };
 
 const writeToS3 = async (tempFileName:string) => {
-    const sourceFile = path.join('/tmp/', tempFileName);
+    const sourceFile = path.join(LOCAL_TEMP_DIR, tempFileName);
 
     console.log('Uploading audio to S3');
     let data;
     const fileStream = fs.createReadStream(sourceFile);
     const uploadParams = {
         Bucket: RECORDINGS_BUCKET_NAME,
-        Key: 'lca-audio-wav/' + tempFileName,
+        Key: RECORDING_FILE_PREFIX + tempFileName,
         Body: fileStream,
     };
     try {
@@ -255,4 +265,4 @@ const createHeader = function createHeader(length:number) {
     buffer.writeUInt32LE(length, 40);
   
     return buffer;
-  };
+};
