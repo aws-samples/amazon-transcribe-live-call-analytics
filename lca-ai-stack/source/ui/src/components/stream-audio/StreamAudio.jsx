@@ -1,6 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+// import MultiStreamsMixer from 'multistreamsmixer';
 
 import {
   Form,
@@ -17,35 +18,37 @@ import useWebSocket from 'react-use-websocket';
 
 import useAppContext from '../../contexts/app';
 
-const WSS_ENDPOINT = 'wss://dwygax9cpnefd.cloudfront.net/api/v1/ws';
+const WSS_ENDPOINT = 'wss://d59lqabyazbry.cloudfront.net/api/v1/ws';
 // const WSS_ENDPOINT = 'ws://127.0.0.1:8080/api/v1/ws';
-
-const pcmEncode = (input) => {
-  const buffer = new ArrayBuffer(input.length * 2);
-  const view = new DataView(buffer);
-  for (let i = 0; i < input.length; i += 1) {
-    const s = Math.max(-1, Math.min(1, input[i]));
-    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-  }
-  return buffer;
-};
 
 const StreamAudio = () => {
   const { currentSession } = useAppContext();
   const JWT_TOKEN = currentSession.getAccessToken().getJwtToken();
-
   const [callMetaData, setCallMetaData] = useState({
     callId: crypto.randomUUID(),
     agentId: 'AudioStream',
     fromNumber: '+9165551234',
     toNumber: '+8001112222',
     samplingRate: 48000,
+    shouldRecordCall: true,
   });
   const [recording, setRecording] = useState(false);
+
+  // audio components:
+  const processor = useRef();
+  const finalMerger = useRef();
+  const micSource = useRef();
+  const displaySource = useRef();
+  const audioContext = useRef();
+  const displayStream = useRef();
+  const micStream = useRef();
 
   const { sendMessage } = useWebSocket(WSS_ENDPOINT, {
     queryParams: {
       authorization: `Bearer ${JWT_TOKEN}`,
+    },
+    onOpen: () => {
+      console.log('websocket opened');
     },
     onClose: (event) => {
       console.log(event);
@@ -56,7 +59,6 @@ const StreamAudio = () => {
       setRecording(false);
     },
   });
-  let mediaRecorder;
 
   const handleCallIdChange = (e) => {
     setCallMetaData({
@@ -86,107 +88,139 @@ const StreamAudio = () => {
     });
   };
 
-  const stopRecording = async () => {
-    if (mediaRecorder) {
-      mediaRecorder.port.postMessage({
-        message: 'UPDATE_RECORDING_STATE',
-        setRecording: false,
-      });
-      mediaRecorder.port.close();
-      mediaRecorder.disconnect();
-    } else {
-      console.log('no media recorder available to stop');
+  const floatTo16BitPCM = (input) => {
+    const output = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i += 1) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
+    return output;
+  };
+
+  const decodeWebMToAudioBuffer = (audioBuffer) => {
+    const left32Bit = audioBuffer.getChannelData(0);
+    const right32Bit = audioBuffer.getChannelData(1);
+    const left16Bit = floatTo16BitPCM(left32Bit);
+    const right16Bit = floatTo16BitPCM(right32Bit);
+    const length = left16Bit.length + right16Bit.length;
+    const interleaved = new Int16Array(length);
+
+    for (let i = 0, j = 0; i < length; j += 1) {
+      interleaved[(i += 1)] = left16Bit[j];
+      interleaved[(i += 1)] = right16Bit[j];
+    }
+
+    return interleaved;
+  };
+
+  const stopRecording = () => {
+    // console.log(`total blob length: ${tempBlob.size}`);
+    if (processor.current) {
+      processor.current.onaudioprocess = null;
+
+      // clean up nodes
+      processor.current.disconnect();
+      finalMerger.current.disconnect();
+
+      displayStream.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+
+      micStream.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+
+      micSource.current.disconnect();
+      displaySource.current.disconnect();
+
+      audioContext.current.close().then(() => {
+        console.log('AudioContext closed.');
+      });
+      // processor = undefined;
+
+      setCallMetaData({
+        ...callMetaData,
+        callId: crypto.randomUUID(),
+      });
+    }
+  };
+
+  const convertToMono = (audioSource) => {
+    const splitter = audioContext.current.createChannelSplitter(2);
+    const merger = audioContext.current.createChannelMerger(1);
+    audioSource.connect(splitter);
+    splitter.connect(merger, 0, 0);
+    splitter.connect(merger, 1, 0);
+    return merger;
   };
 
   const startRecording = async () => {
     try {
-      const audioContext = new window.AudioContext();
+      audioContext.current = new window.AudioContext();
 
-      const stream = await window.navigator.mediaDevices.getDisplayMedia({
+      displayStream.current = await window.navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true,
       });
-      const source1 = audioContext.createMediaStreamSource(stream);
+      displaySource.current = audioContext.current.createMediaStreamSource(displayStream.current);
 
-      // const stream2 = await window.navigator.mediaDevices.getUserMedia({
-      //   video: false,
-      //   audio: true,
-      // });
-      // const source2 = audioContext.createMediaStreamSource(stream2);
-
-      // const merger = audioContext.createChannelMerger(2);
-      // source1.connect(merger);
-      // source2.connect(merger);
+      micStream.current = await window.navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true,
+      });
+      micSource.current = audioContext.current.createMediaStreamSource(micStream.current);
 
       const recordingprops = {
-        numberOfChannels: 1,
-        sampleRate: audioContext.sampleRate,
-        maxFrameCount: (audioContext.sampleRate * 1) / 10,
+        numberOfChannels: 2,
+        sampleRate: audioContext.current.sampleRate,
+        maxFrameCount: (audioContext.current.sampleRate * 1) / 10,
       };
+
+      console.log(`Sample rate: ${audioContext.current.sampleRate}`);
 
       setCallMetaData({
         ...callMetaData,
         samplingRate: recordingprops.sampleRate,
       });
-
+      console.log('sending initial metadata:');
       sendMessage(JSON.stringify(callMetaData));
-      try {
-        await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
-      } catch (error) {
-        console.log(`Add module error ${error}`);
-      }
-      mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
-        processorOptions: recordingprops,
-        // numberOfInputs: 1,
-        // numberOfOutputs: 1,
-        // numberOfChannels: 2,
-      });
 
-      const destination = audioContext.createMediaStreamDestination();
-      mediaRecorder.port.postMessage({
-        message: 'UPDATE_RECORDING_STATE',
-        setRecording: true,
-      });
-      source1.connect(mediaRecorder).connect(destination);
+      const monoDisplaySource = convertToMono(displaySource.current);
+      const monoMicSource = convertToMono(micSource.current);
 
-      mediaRecorder.port.onmessageerror = (error) => {
-        console.log(`Error receving message from worklet ${error}`);
-      };
-      mediaRecorder.port.onmessage = (event) => {
-        const abuffer = pcmEncode(event.data.buffer[0]);
-        const audiodata = new Uint8Array(abuffer);
-        sendMessage(audiodata);
+      finalMerger.current = audioContext.current.createChannelMerger(2);
+      monoMicSource.connect(finalMerger.current, 0, 0);
+      monoDisplaySource.connect(finalMerger.current, 0, 1);
+
+      processor.current = audioContext.current.createScriptProcessor(4096, 2, 2);
+      finalMerger.current.connect(processor.current);
+      processor.current.connect(audioContext.current.destination);
+
+      processor.current.onaudioprocess = function (event) {
+        const pcm = decodeWebMToAudioBuffer(event.inputBuffer);
+        // console.log('received pcm', pcm);
+        sendMessage(pcm);
       };
     } catch (error) {
       alert(`An error occurred while recording: ${error}`);
-      await stopRecording();
+      stopRecording();
     }
   };
-
-  async function toggleRecording() {
-    if (recording) {
-      console.log('startRecording');
-      await startRecording();
-    } else {
-      console.log('stopRecording');
-      await stopRecording();
-    }
-  }
-
-  useEffect(() => {
-    toggleRecording();
-  }, [recording]);
 
   const handleRecording = () => {
     setRecording(!recording);
-    if (recording) {
-      console.log('Stopping transcription');
-    } else {
-      console.log('Starting transcription');
-    }
-    return recording;
   };
+
+  useEffect(() => {
+    console.log('recording is set to: ', recording);
+    if (recording) {
+      console.log('startRecording');
+      startRecording();
+    } else {
+      console.log('stopRecording');
+      stopRecording();
+    }
+  }, [recording]);
 
   return (
     <form onSubmit={(e) => e.preventDefault()}>
@@ -199,7 +233,7 @@ const StreamAudio = () => {
           </SpaceBetween>
         }
       >
-        <Container header={<Header variant="h2">Call Meta data</Header>}>
+        <Container header={<Header variant="h2">Call Metadata</Header>}>
           <ColumnLayout columns={2}>
             <FormField label="Call ID" stretch required description="Auto-enerated Unique call ID">
               <Input value={callMetaData.callId} onChange={handleCallIdChange} />
