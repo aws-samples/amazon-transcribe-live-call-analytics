@@ -14,9 +14,12 @@ const BYTES_PER_SAMPLE = parseInt(process.env['BYTES_PER_SAMPLE'] || '2', 10);
 const CHUNK_SIZE_IN_MS = parseInt(process.env['CHUNK_SIZE_IN_MS'] || '200', 10);
 
 type CmdOptions = {
-  uri?: string;
-  wavfile?: string;
+    uri?: string;
+    wavfile?: string;
 };
+const _CALL_ID = randomUUID();
+
+const timer = (millisec: number) => new Promise(cb => setTimeout(cb, millisec));
 
 new Command()
     .description('LCA Websocket client')
@@ -25,63 +28,87 @@ new Command()
     .option('--uri <uri>', 'URI of websocket server')
     .option('--wavfile <wavfile>', 'WAV file to stream')
     .action(async (serveruri: string | undefined, options: CmdOptions, command: Command): Promise<void> => {
-      if(options.uri && serveruri) {
-        command.error('More than one server URI specified!');
-      }
+        if(options.uri && serveruri) {
+            command.error('More than one server URI specified!');
+        }
 
-      const uri = options.uri ?? serveruri;
-      if (uri) {
-        let jwtToken = process.env['LCA_JWT_TOKEN'] || undefined;
+        const uri = options.uri ?? serveruri;
+        if (uri) {
+          const jwtToken = process.env['LCA_JWT_TOKEN'] || undefined;
 
-        const ws = new WebSocket(uri, {
-          headers: {
-            authorization: 'Bearer ' + jwtToken
-          }
-        });
-
-        ws.on('open', () => {
-          console.log('Connected to server');
-
-          const metadata: CallMetaData = {
-            callId: randomUUID(),
-            fromNumber: process.env['CALL_FROM_NUMBER'] || '+9165551234',
-            toNumber: process.env['CALL_TO_NUMBER'] || '+8001112222',
-            agentId: process.env['AGENT_ID'] || 'websocket',
-            samplingRate: SAMPLE_RATE,
-          };
-
-          ws.send(JSON.stringify(metadata));
-
-          const CHUNK_SIZE = SAMPLE_RATE * (CHUNK_SIZE_IN_MS/1000) * BYTES_PER_SAMPLE * 2;
-          
-          const audiopipeline:Chain = new Chain([
-            fs.createReadStream(options.wavfile as fs.PathLike, { highWaterMark: CHUNK_SIZE }),
-            async data => {
-                // await timer(CHUNK_SIZE_IN_MS);
-                return data;
+          const ws = new WebSocket(uri, {
+            headers: {
+              authorization: `Bearer ${jwtToken}`
             }
-          ]);
+          });
 
-          (async () => {
-            for await (const chunk of audiopipeline) {
-              console.log(`Sending chunk of size ${chunk.length}`);
-              ws.send(chunk, {
-                binary: true
+          ws.on('open', () => {
+            console.log('Connected to server');
+
+            console.log('Sending Call start event');
+
+            (async () => {
+              const metadata: CallMetaData = {
+                callId: _CALL_ID,
+                fromNumber: process.env['CALL_FROM_NUMBER'] || '+9165551234',
+                toNumber: process.env['CALL_TO_NUMBER'] || '+8001112222',
+                agentId: process.env['AGENT_ID'] || 'websocket',
+                samplingRate: SAMPLE_RATE,
+                callEvent: 'START'
+              };
+              ws.send(JSON.stringify(metadata), {
+                binary: false
               });
-            }
-          })();
-        });
-        
-        ws.on('message', (message: string) => {
-          console.log(`Received message from server: ${message}`);
-        });
-        
-        ws.on('close', () => {
-          console.log('Disconnected from server');
-        });
-      }
-    })
-    .parseAsync(process.argv);
+              await timer(2000);
+            })();
+
+            const CHUNK_SIZE = SAMPLE_RATE * (CHUNK_SIZE_IN_MS/1000) * BYTES_PER_SAMPLE * 2;
+            
+            const audiopipeline:Chain = new Chain([
+              fs.createReadStream(options.wavfile as fs.PathLike, { highWaterMark: CHUNK_SIZE }),
+              async data => {
+                  await timer(CHUNK_SIZE_IN_MS);
+                  return data;
+              }
+            ]);
+
+            console.log('Sending the audio data chunks');
+            (async () => {
+              for await (const chunk of audiopipeline) {
+                // console.log(`Sending chunk of size ${chunk.length}`);
+                ws.send(chunk, {
+                  binary: true
+                });
+              }
+            })().finally(()=>{
+              console.log('Finished Sending the audio data chunks');
+              console.log('Sending Call End Event');
+
+              const metadata: CallMetaData = {
+                callId: _CALL_ID,
+                fromNumber: process.env['CALL_FROM_NUMBER'] || '+9165551234',
+                toNumber: process.env['CALL_TO_NUMBER'] || '+8001112222',
+                agentId: process.env['AGENT_ID'] || 'websocket',
+                samplingRate: SAMPLE_RATE,
+                callEvent: 'END'
+              };
+              ws.send(JSON.stringify(metadata), {
+                binary: false
+              });
+            });
+
+          });
+          
+          ws.on('message', (message: string) => {
+            console.log(`Received message from server: ${message}`);
+          });
+          
+          ws.on('close', () => {
+            console.log('Disconnected from server');
+          });
+        }
+      })
+      .parseAsync(process.argv);
 
 emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);

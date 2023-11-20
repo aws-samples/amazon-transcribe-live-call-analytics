@@ -112,6 +112,7 @@ const registerHandlers = (ws: WebSocket): void => {
             }
         } catch (err) {
             server.log.error(`Error processing message: ${err}`);
+            process.exit(1);
         }
     });
 
@@ -152,7 +153,7 @@ const onTextMessage = (ws: WebSocket, data: string): void => {
     callMetaData.fromNumber = callMetaData.fromNumber || 'Customer Phone';
     callMetaData.toNumber = callMetaData.toNumber || 'System Phone';
     callMetaData.shouldRecordCall = callMetaData.shouldRecordCall || false;
-    callMetaData.agentId = callMetaData.agentId || randomUUID();
+    callMetaData.agentId = callMetaData.agentId || randomUUID();  
     
     if (callMetaData.callEvent === 'START') {        
         (async () => {
