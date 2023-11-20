@@ -14,16 +14,18 @@ import Navigation from './navigation';
 import Breadcrumbs from './breadcrumbs';
 import ToolsPanel from './tools-panel';
 
+import useAppContext from '../../contexts/app';
+
 const logger = new Logger('StreamAudioLayout');
 
 const StreamAudioLayout = () => {
+  const { navigationOpen, setNavigationOpen } = useAppContext();
   const { path } = useRouteMatch();
   // console.log(`StreamAudioLayout Path: ${path}`);
   logger.info('path ', path);
 
   const notifications = useNotifications();
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [navigationOpen, setNavigationOpen] = useState(false);
 
   return (
     <AppLayout

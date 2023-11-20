@@ -26,16 +26,18 @@ import {
   PERIODS_TO_LOAD_STORAGE_KEY,
 } from '../call-list/calls-table-config';
 
+import useAppContext from '../../contexts/app';
+
 const logger = new Logger('CallAnalyticsLayout');
 
 const CallAnalyticsLayout = () => {
+  const { navigationOpen, setNavigationOpen } = useAppContext();
+
   const { path } = useRouteMatch();
   logger.debug('path', path);
 
   const notifications = useNotifications();
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [navigationOpen, setNavigationOpen] = useState(false);
-
   const [selectedItems, setSelectedItems] = useState([]);
 
   const getInitialPeriodsToLoad = () => {

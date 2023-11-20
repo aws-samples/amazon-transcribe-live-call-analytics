@@ -32,7 +32,8 @@ export const callsNavItems = [
 
 const defaultOnFollowHandler = (ev) => {
   // XXX keep the locked href for our demo pages
-  ev.preventDefault();
+  // ev.preventDefault();
+  console.log(ev);
 };
 
 /* eslint-disable react/prop-types */
