@@ -26,7 +26,8 @@ export type CallEventBase<Type extends EventType = EventType> = {
 
 export type CallStartEvent = CallEventBase<'START'> & {
     CustomerPhoneNumber: string,
-    SystemPhoneNumber: string
+    SystemPhoneNumber: string,
+    AgentId: string | undefined,
 };
 
 export type CallEndEvent = CallEventBase<'END'> & {

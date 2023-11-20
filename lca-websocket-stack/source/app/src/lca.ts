@@ -239,6 +239,7 @@ export const writeCallStartEvent = async (callMetaData: CallMetaData): Promise<v
         CallId: callMetaData.callId,
         CustomerPhoneNumber: callMetaData.fromNumber || 'Customer Phone',
         SystemPhoneNumber: callMetaData.toNumber || 'System Phone',
+        AgentId: callMetaData.agentId,
         CreatedAt: new Date().toISOString()
     };
     await writeCallEvent(callStartEvent);  
