@@ -58,15 +58,40 @@ const pcmEncode = (input) => {
   return buffer;
 };
 
+// const pcmEncode = (input) => {
+//   const output = new Int16Array(input.length);
+//   for (let i = 0; i < input.length; i += 1) {
+//     const s = Math.max(-1, Math.min(1, input[i]));
+//     output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+//   }
+//   return output;
+// };
+
 const interleave = (lbuffer, rbuffer) => {
-  let leftAudioBuffer = new ArrayBuffer(lbuffer.length * 2);
-  leftAudioBuffer = pcmEncode(
+  // const left16Bit = floatTo16BitPCM(
+  //   downsampleBuffer(left32Bit, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+  // );
+  // const right16Bit = floatTo16BitPCM(
+  //   downsampleBuffer(right32Bit, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+  // );
+  // const length = left16Bit.length + right16Bit.length;
+
+  // const buffer = new Int16Array(length);
+
+  // for (let i = 0, j = 0; i < length; j += 1) {
+  //   buffer[(i += 1)] = left16Bit[j];
+  //   buffer[(i += 1)] = right16Bit[j];
+  // }
+  // return buffer;
+
+  // let leftAudioBuffer = new ArrayBuffer(lbuffer.length);
+  const leftAudioBuffer = pcmEncode(
     downsampleBuffer(lbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
   );
   const leftView = new DataView(leftAudioBuffer);
 
-  let rightAudioBuffer = new ArrayBuffer(rbuffer.length * 2);
-  rightAudioBuffer = pcmEncode(
+  // let rightAudioBuffer = new ArrayBuffer(rbuffer.length);
+  const rightAudioBuffer = pcmEncode(
     downsampleBuffer(rbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
   );
   const rightView = new DataView(rightAudioBuffer);
@@ -74,7 +99,7 @@ const interleave = (lbuffer, rbuffer) => {
   const buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
   const view = new DataView(buffer);
 
-  for (let i = 0, j = 0; i < leftAudioBuffer.byteLength / 2; i += 2, j += 4) {
+  for (let i = 0, j = 0; i < leftAudioBuffer.byteLength; i += 2, j += 4) {
     view.setInt16(j, leftView.getInt16(i, true), true);
     view.setInt16(j + 2, rightView.getInt16(i, true), true);
   }
@@ -212,11 +237,6 @@ const StreamAudio = () => {
           sampleRate: SOURCE_SAMPLING_RATE,
           maxFrameCount: (audioContext.sampleRate * 1) / 10,
         },
-      });
-
-      mediaRecorder.port.postMessage({
-        message: 'UPDATE_RECORDING_STATE',
-        setRecording: true,
       });
 
       mediaRecorder.port.postMessage({
