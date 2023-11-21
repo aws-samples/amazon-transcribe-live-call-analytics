@@ -262,7 +262,11 @@ const StreamAudio = () => {
   }, [recording]);
 
   const handleRecording = () => {
-    setRecording(!recording);
+    if (settings.WSEndpoint) {
+      setRecording(!recording);
+    } else {
+      alert('Enable Websocket Audio input to use this feature');
+    }
     return recording;
   };
 
