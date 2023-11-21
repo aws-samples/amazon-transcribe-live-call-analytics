@@ -18,35 +18,35 @@ import useWebSocket from 'react-use-websocket';
 import useAppContext from '../../contexts/app';
 import useSettingsContext from '../../contexts/settings';
 
-const TARGET_SAMPLING_RATE = 8000;
+// const TARGET_SAMPLING_RATE = 8000;
 let SOURCE_SAMPLING_RATE;
 
-export const downsampleBuffer = (buffer, inputSampleRate = 44100, outputSampleRate = 16000) => {
-  if (outputSampleRate === inputSampleRate) {
-    return buffer;
-  }
+// export const downsampleBuffer = (buffer, inputSampleRate = 44100, outputSampleRate = 16000) => {
+//   if (outputSampleRate === inputSampleRate) {
+//     return buffer;
+//   }
 
-  const sampleRateRatio = inputSampleRate / outputSampleRate;
-  const newLength = Math.round(buffer.length / sampleRateRatio);
-  const result = new Float32Array(newLength);
-  let offsetResult = 0;
-  let offsetBuffer = 0;
+//   const sampleRateRatio = inputSampleRate / outputSampleRate;
+//   const newLength = Math.round(buffer.length / sampleRateRatio);
+//   const result = new Float32Array(newLength);
+//   let offsetResult = 0;
+//   let offsetBuffer = 0;
 
-  while (offsetResult < result.length) {
-    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-    let accum = 0;
-    let count = 0;
+//   while (offsetResult < result.length) {
+//     const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+//     let accum = 0;
+//     let count = 0;
 
-    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i += 1) {
-      accum += buffer[i];
-      count += 1;
-    }
-    result[offsetResult] = accum / count;
-    offsetResult += 1;
-    offsetBuffer = nextOffsetBuffer;
-  }
-  return result;
-};
+//     for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i += 1) {
+//       accum += buffer[i];
+//       count += 1;
+//     }
+//     result[offsetResult] = accum / count;
+//     offsetResult += 1;
+//     offsetBuffer = nextOffsetBuffer;
+//   }
+//   return result;
+// };
 
 const pcmEncode = (input) => {
   const buffer = new ArrayBuffer(input.length * 2);
@@ -58,42 +58,17 @@ const pcmEncode = (input) => {
   return buffer;
 };
 
-// const pcmEncode = (input) => {
-//   const output = new Int16Array(input.length);
-//   for (let i = 0; i < input.length; i += 1) {
-//     const s = Math.max(-1, Math.min(1, input[i]));
-//     output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-//   }
-//   return output;
-// };
-
 const interleave = (lbuffer, rbuffer) => {
-  // const left16Bit = floatTo16BitPCM(
-  //   downsampleBuffer(left32Bit, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+  // const leftAudioBuffer = pcmEncode(
+  //   downsampleBuffer(lbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
   // );
-  // const right16Bit = floatTo16BitPCM(
-  //   downsampleBuffer(right32Bit, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
-  // );
-  // const length = left16Bit.length + right16Bit.length;
-
-  // const buffer = new Int16Array(length);
-
-  // for (let i = 0, j = 0; i < length; j += 1) {
-  //   buffer[(i += 1)] = left16Bit[j];
-  //   buffer[(i += 1)] = right16Bit[j];
-  // }
-  // return buffer;
-
-  // let leftAudioBuffer = new ArrayBuffer(lbuffer.length);
-  const leftAudioBuffer = pcmEncode(
-    downsampleBuffer(lbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
-  );
+  const leftAudioBuffer = pcmEncode(lbuffer);
   const leftView = new DataView(leftAudioBuffer);
 
-  // let rightAudioBuffer = new ArrayBuffer(rbuffer.length);
-  const rightAudioBuffer = pcmEncode(
-    downsampleBuffer(rbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
-  );
+  // const rightAudioBuffer = pcmEncode(
+  //   downsampleBuffer(rbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+  // );
+  const rightAudioBuffer = pcmEncode(rbuffer);
   const rightView = new DataView(rightAudioBuffer);
 
   const buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
@@ -213,7 +188,9 @@ const StreamAudio = () => {
       const track2 = micstream.getAudioTracks()[0];
       SOURCE_SAMPLING_RATE = audioContext.sampleRate;
 
-      callMetaData.samplingRate = TARGET_SAMPLING_RATE;
+      // callMetaData.samplingRate = TARGET_SAMPLING_RATE;
+      callMetaData.samplingRate = SOURCE_SAMPLING_RATE;
+
       callMetaData.callEvent = 'START';
       sendMessage(JSON.stringify(callMetaData));
       setStreamingStarted(true);
@@ -252,7 +229,7 @@ const StreamAudio = () => {
       };
 
       mediaRecorder.port.onmessage = (event) => {
-        const audiodata = new Uint8Array(interleave(event.data.buffer[0], event.data.buffer[1]));
+        const audiodata = new Uint8Array(interleave(event.data.buffer[1], event.data.buffer[0]));
         sendMessage(audiodata);
       };
     } catch (error) {
@@ -294,7 +271,7 @@ const StreamAudio = () => {
             <FormField label="Call ID" stretch required description="Auto-generated Unique call ID">
               <Input value={callMetaData.callId} onChange={handleCallIdChange} />
             </FormField>
-            <FormField label="Agent ID" stretch required description="Unique Agent ID">
+            <FormField label="Agent ID" stretch required description="Agent ID">
               <Input value={callMetaData.agentId} onChange={handleAgentIdChange} />
             </FormField>
             <FormField label="Customer Phone" stretch required description="Customer Phone">
