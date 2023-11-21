@@ -201,8 +201,8 @@ const StreamAudio = () => {
       sendMessage(JSON.stringify(callMetaData));
       setStreamingStarted(true);
 
-      const source1 = audioContext.createMediaStreamSource(new MediaStream([track2]));
-      const source2 = audioContext.createMediaStreamSource(new MediaStream([track1]));
+      const source1 = audioContext.createMediaStreamSource(new MediaStream([track1]));
+      const source2 = audioContext.createMediaStreamSource(new MediaStream([track2]));
 
       const merger = audioContext.createChannelMerger(2);
       source1.connect(merger, 0, 0);
@@ -236,7 +236,7 @@ const StreamAudio = () => {
 
       mediaRecorder.port.onmessage = (event) => {
         let audiodata;
-        if (micInputOption === 'agent') {
+        if (micInputOption.value === 'agent') {
           audiodata = new Uint8Array(interleave(event.data.buffer[0], event.data.buffer[1]));
         } else {
           audiodata = new Uint8Array(interleave(event.data.buffer[1], event.data.buffer[0]));
