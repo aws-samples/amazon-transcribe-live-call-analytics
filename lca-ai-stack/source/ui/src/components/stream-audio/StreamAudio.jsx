@@ -11,6 +11,7 @@ import {
   Input,
   Header,
   ColumnLayout,
+  Select,
 } from '@awsui/components-react';
 import '@awsui/global-styles/index.css';
 import useWebSocket from 'react-use-websocket';
@@ -94,6 +95,7 @@ const StreamAudio = () => {
   });
   const [recording, setRecording] = useState(false);
   const [streamingStarted, setStreamingStarted] = useState(false);
+  const [micInputOption, setMicInputOption] = useState({ label: 'AGENT', value: '1' });
 
   let mediaRecorder;
 
@@ -148,6 +150,10 @@ const StreamAudio = () => {
       ...callMetaData,
       toNumber: e.detail.value,
     });
+  };
+
+  const handleMicInputOptionSelection = (e) => {
+    setMicInputOption(e.detail.selectedOption);
   };
 
   const stopRecording = async () => {
@@ -229,7 +235,12 @@ const StreamAudio = () => {
       };
 
       mediaRecorder.port.onmessage = (event) => {
-        const audiodata = new Uint8Array(interleave(event.data.buffer[1], event.data.buffer[0]));
+        let audiodata;
+        if (micInputOption === 'agent') {
+          audiodata = new Uint8Array(interleave(event.data.buffer[0], event.data.buffer[1]));
+        } else {
+          audiodata = new Uint8Array(interleave(event.data.buffer[1], event.data.buffer[0]));
+        }
         sendMessage(audiodata);
       };
     } catch (error) {
@@ -279,6 +290,16 @@ const StreamAudio = () => {
             </FormField>
             <FormField label="System Phone" stretch required description="System Phone">
               <Input value={callMetaData.toNumber} onChange={handletoNumberChange} />
+            </FormField>
+            <FormField label="Microphone Role" stretch required description="Mic input">
+              <Select
+                selectedOption={micInputOption}
+                onChange={handleMicInputOptionSelection}
+                options={[
+                  { label: 'CALLER', value: 'caller' },
+                  { label: 'AGENT', value: 'agent' },
+                ]}
+              />
             </FormField>
           </ColumnLayout>
         </Container>
