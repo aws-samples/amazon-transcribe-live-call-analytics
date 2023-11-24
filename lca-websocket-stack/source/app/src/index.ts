@@ -194,7 +194,11 @@ const onTextMessage = (ws: WebSocket, data: string): void => {
             };
             await writeCallEvent(callEvent);
         })();
-        onWsClose(ws, 1000);
+        // onWsClose(ws, 1000);
+        if (audioInputStream) {
+            audioInputStream.end();
+            audioInputStream.destroy();
+        }
     }
 };
 

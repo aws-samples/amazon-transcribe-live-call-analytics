@@ -1,6 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 import {
   Form,
@@ -49,39 +49,6 @@ let SOURCE_SAMPLING_RATE;
 //   return result;
 // };
 
-const pcmEncode = (input) => {
-  const buffer = new ArrayBuffer(input.length * 2);
-  const view = new DataView(buffer);
-  for (let i = 0; i < input.length; i += 1) {
-    const s = Math.max(-1, Math.min(1, input[i]));
-    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-  }
-  return buffer;
-};
-
-const interleave = (lbuffer, rbuffer) => {
-  // const leftAudioBuffer = pcmEncode(
-  //   downsampleBuffer(lbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
-  // );
-  const leftAudioBuffer = pcmEncode(lbuffer);
-  const leftView = new DataView(leftAudioBuffer);
-
-  // const rightAudioBuffer = pcmEncode(
-  //   downsampleBuffer(rbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
-  // );
-  const rightAudioBuffer = pcmEncode(rbuffer);
-  const rightView = new DataView(rightAudioBuffer);
-
-  const buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
-  const view = new DataView(buffer);
-
-  for (let i = 0, j = 0; i < leftAudioBuffer.byteLength; i += 2, j += 4) {
-    view.setInt16(j, leftView.getInt16(i, true), true);
-    view.setInt16(j + 2, rightView.getInt16(i, true), true);
-  }
-  return buffer;
-};
-
 const StreamAudio = () => {
   const { currentSession } = useAppContext();
   const { settings } = useSettingsContext();
@@ -93,11 +60,10 @@ const StreamAudio = () => {
     fromNumber: '+9165551234',
     toNumber: '+8001112222',
   });
+
   const [recording, setRecording] = useState(false);
   const [streamingStarted, setStreamingStarted] = useState(false);
   const [micInputOption, setMicInputOption] = useState({ label: 'AGENT', value: '1' });
-
-  let mediaRecorder;
 
   const getSocketUrl = useCallback(() => {
     console.log('Trying to resolve websocket url...');
@@ -109,7 +75,7 @@ const StreamAudio = () => {
     });
   }, [settings.WSEndpoint]);
 
-  const { sendMessage } = useWebSocket(getSocketUrl, {
+  const { sendMessage } = useWebSocket(getSocketUrl(), {
     queryParams: {
       authorization: `Bearer ${JWT_TOKEN}`,
     },
@@ -156,14 +122,57 @@ const StreamAudio = () => {
     setMicInputOption(e.detail.selectedOption);
   };
 
+  const audioProcessor = useRef();
+  const audioContext = useRef();
+  const displayStream = useRef();
+  const micStream = useRef();
+  const displayAudioSource = useRef();
+  const micAudioSource = useRef();
+  const channelMerger = useRef();
+  const destination = useRef();
+  const audioData = useRef();
+
+  const pcmEncode = (input) => {
+    const buffer = new ArrayBuffer(input.length * 2);
+    const view = new DataView(buffer);
+    for (let i = 0; i < input.length; i += 1) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return buffer;
+  };
+
+  const interleave = (lbuffer, rbuffer) => {
+    // const leftAudioBuffer = pcmEncode(
+    //   downsampleBuffer(lbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+    // );
+    const leftAudioBuffer = pcmEncode(lbuffer);
+    const leftView = new DataView(leftAudioBuffer);
+
+    // const rightAudioBuffer = pcmEncode(
+    //   downsampleBuffer(rbuffer, SOURCE_SAMPLING_RATE, TARGET_SAMPLING_RATE),
+    // );
+    const rightAudioBuffer = pcmEncode(rbuffer);
+    const rightView = new DataView(rightAudioBuffer);
+
+    const buffer = new ArrayBuffer(leftAudioBuffer.byteLength * 2);
+    const view = new DataView(buffer);
+
+    for (let i = 0, j = 0; i < leftAudioBuffer.byteLength; i += 2, j += 4) {
+      view.setInt16(j, leftView.getInt16(i, true), true);
+      view.setInt16(j + 2, rightView.getInt16(i, true), true);
+    }
+    return buffer;
+  };
+
   const stopRecording = async () => {
-    if (mediaRecorder) {
-      mediaRecorder.port.postMessage({
+    if (audioProcessor.current) {
+      audioProcessor.current.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',
         setRecording: false,
       });
-      mediaRecorder.port.close();
-      mediaRecorder.disconnect();
+      audioProcessor.current.port.close();
+      audioProcessor.current.disconnect();
     } else {
       console.log('no media recorder available to stop');
     }
@@ -171,13 +180,17 @@ const StreamAudio = () => {
       callMetaData.callEvent = 'END';
       sendMessage(JSON.stringify(callMetaData));
       setStreamingStarted(false);
+      setCallMetaData({
+        ...callMetaData,
+        callId: crypto.randomUUID(),
+      });
     }
   };
 
   const startRecording = async () => {
     try {
-      const audioContext = new window.AudioContext();
-      const videostream = await window.navigator.mediaDevices.getDisplayMedia({
+      audioContext.current = new window.AudioContext();
+      displayStream.current = await window.navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: {
           noiseSuppression: true,
@@ -185,14 +198,16 @@ const StreamAudio = () => {
           echoCancellation: true,
         },
       });
-      const track1 = videostream.getAudioTracks()[0];
 
-      const micstream = await window.navigator.mediaDevices.getUserMedia({
+      micStream.current = await window.navigator.mediaDevices.getUserMedia({
         video: false,
-        audio: true,
+        audio: {
+          noiseSuppression: true,
+          autoGainControl: true,
+          echoCancellation: true,
+        },
       });
-      const track2 = micstream.getAudioTracks()[0];
-      SOURCE_SAMPLING_RATE = audioContext.sampleRate;
+      SOURCE_SAMPLING_RATE = audioContext.current.sampleRate;
 
       // callMetaData.samplingRate = TARGET_SAMPLING_RATE;
       callMetaData.samplingRate = SOURCE_SAMPLING_RATE;
@@ -201,47 +216,54 @@ const StreamAudio = () => {
       sendMessage(JSON.stringify(callMetaData));
       setStreamingStarted(true);
 
-      const source1 = audioContext.createMediaStreamSource(new MediaStream([track1]));
-      const source2 = audioContext.createMediaStreamSource(new MediaStream([track2]));
+      displayAudioSource.current = audioContext.current.createMediaStreamSource(
+        new MediaStream([displayStream.current.getAudioTracks()[0]]),
+      );
+      micAudioSource.current = audioContext.current.createMediaStreamSource(
+        new MediaStream([micStream.current.getAudioTracks()[0]]),
+      );
 
-      const merger = audioContext.createChannelMerger(2);
-      source1.connect(merger, 0, 0);
-      source2.connect(merger, 0, 1);
+      channelMerger.current = audioContext.current.createChannelMerger(2);
+      displayAudioSource.current.connect(channelMerger.current, 0, 0);
+      micAudioSource.current.connect(channelMerger.current, 0, 1);
 
       try {
-        await audioContext.audioWorklet.addModule('./worklets/recording-processor.js');
+        await audioContext.current.audioWorklet.addModule('./worklets/recording-processor.js');
       } catch (error) {
         console.log(`Add module error ${error}`);
       }
 
-      mediaRecorder = new AudioWorkletNode(audioContext, 'recording-processor', {
+      audioProcessor.current = new AudioWorkletNode(audioContext.current, 'recording-processor', {
         processorOptions: {
           numberOfChannels: 2,
           sampleRate: SOURCE_SAMPLING_RATE,
-          maxFrameCount: (audioContext.sampleRate * 1) / 10,
+          maxFrameCount: (audioContext.current.sampleRate * 1) / 10,
         },
       });
 
-      mediaRecorder.port.postMessage({
+      audioProcessor.current.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',
         setRecording: true,
       });
 
-      const destination = audioContext.createMediaStreamDestination();
-      merger.connect(mediaRecorder).connect(destination);
+      destination.current = audioContext.current.createMediaStreamDestination();
+      channelMerger.current.connect(audioProcessor.current).connect(destination.current);
 
-      mediaRecorder.port.onmessageerror = (error) => {
+      audioProcessor.current.port.onmessageerror = (error) => {
         console.log(`Error receving message from worklet ${error}`);
       };
 
-      mediaRecorder.port.onmessage = (event) => {
-        let audiodata;
+      audioProcessor.current.port.onmessage = (event) => {
         if (micInputOption.value === 'agent') {
-          audiodata = new Uint8Array(interleave(event.data.buffer[0], event.data.buffer[1]));
+          audioData.current = new Uint8Array(
+            interleave(event.data.buffer[1], event.data.buffer[0]),
+          );
         } else {
-          audiodata = new Uint8Array(interleave(event.data.buffer[1], event.data.buffer[0]));
+          audioData.current = new Uint8Array(
+            interleave(event.data.buffer[0], event.data.buffer[1]),
+          );
         }
-        sendMessage(audiodata);
+        sendMessage(audioData.current);
       };
     } catch (error) {
       alert(`An error occurred while recording: ${error}`);

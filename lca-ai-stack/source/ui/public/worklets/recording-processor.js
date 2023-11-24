@@ -48,7 +48,7 @@ class RecordingProcessor extends AudioWorkletProcessor {
           if (this.isRecording) {
             if (channel == 0) {
               this._leftRecordingBuffer[sample+this.recordedFrames] = currentSample;
-            } else { channel == 1} {
+            } else if (channel == 1) {
               this._rightRecordingBuffer[sample+this.recordedFrames] = currentSample;
             }
           }
