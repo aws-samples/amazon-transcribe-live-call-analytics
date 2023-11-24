@@ -75,7 +75,7 @@ const StreamAudio = () => {
     });
   }, [settings.WSEndpoint]);
 
-  const { sendMessage } = useWebSocket(getSocketUrl(), {
+  const { sendMessage } = useWebSocket(getSocketUrl, {
     queryParams: {
       authorization: `Bearer ${JWT_TOKEN}`,
     },
