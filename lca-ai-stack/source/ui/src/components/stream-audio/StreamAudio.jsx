@@ -63,7 +63,7 @@ const StreamAudio = () => {
 
   const [recording, setRecording] = useState(false);
   const [streamingStarted, setStreamingStarted] = useState(false);
-  const [micInputOption, setMicInputOption] = useState({ label: 'AGENT', value: '1' });
+  const [micInputOption, setMicInputOption] = useState({ label: 'AGENT', value: 'agent' });
 
   const getSocketUrl = useCallback(() => {
     console.log('Trying to resolve websocket url...');
@@ -253,14 +253,15 @@ const StreamAudio = () => {
         console.log(`Error receving message from worklet ${error}`);
       };
 
+      // buffer[0] - display stream,  buffer[1] - mic stream
       audioProcessor.current.port.onmessage = (event) => {
         if (micInputOption.value === 'agent') {
           audioData.current = new Uint8Array(
-            interleave(event.data.buffer[1], event.data.buffer[0]),
+            interleave(event.data.buffer[0], event.data.buffer[1]),
           );
         } else {
           audioData.current = new Uint8Array(
-            interleave(event.data.buffer[0], event.data.buffer[1]),
+            interleave(event.data.buffer[1], event.data.buffer[0]),
           );
         }
         sendMessage(audioData.current);
