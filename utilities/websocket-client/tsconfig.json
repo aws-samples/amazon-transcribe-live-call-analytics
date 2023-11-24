@@ -23,7 +23,11 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],    
-    "outDir": "./dist"    
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"]
+    }   
   },
   "include": [
     "src/**/*"
