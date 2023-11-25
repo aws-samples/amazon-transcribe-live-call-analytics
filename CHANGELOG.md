@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.10] - 2023-11-25
+### Added
+- New! Websocket audio ingestion server (optional). Use it to enable audio streaming from a custom desktop client application, from the sample streaming app (below), or from the new LCA Web UI audio streaming client. See [Websocket server](./lca-websocket-stack/README.md).
+- New! Sample audio streaming application which streams a stereo audio file from your desktop to LCA via the new websocket server. Use this to replay recordings, e.g. for testing transcription accuracy after CV/CLM changes, for testing agent assist features, etc. Or use the code as a reference implementation for building your own custom streaming app for LCA. See [Websocket client app](./utilities/websocket-client/README.md).  
+- New! Web UI audio streaming client built into the LCA UI. Use this to stream audio into LCA from (a) your computer microphone, and (b) from a local broswer tab that is running a softphone or meeting app, or playing an audio recording. See [Web UI streaming client](./lca-ai-stack/WebUIStreamingClient.md).
+### Fix
+- publish.sh script now runs on MacOS (now works with GNU or BSD sed command).
+
 ## [0.8.9] - 2023-11-01
 ### Added
 - Allow customer to specify their own Voice Connector as a CloudFormation Template parameter. If the customer provided Voice Connector is provided, LCA will not deploy a new VC. (#102) 
@@ -335,8 +343,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...develop
-[0.8.9]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.9
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...develop
+[0.8.10]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...v0.8.10
+[0.8.9]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.8...v0.8.9
 [0.8.8]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.8
 [0.8.7]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.6...v0.8.7
 [0.8.6]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.5...v0.8.6
