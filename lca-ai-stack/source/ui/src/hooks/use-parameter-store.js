@@ -21,6 +21,7 @@ const useParameterStore = (creds) => {
       const response = await ssmClient.send(getParameterCmd);
       if (response.Parameter?.Value) {
         lcaSettings = JSON.parse(response.Parameter.Value);
+        console.log(response.Parameter.Value);
       }
     }
     setSettings(lcaSettings);

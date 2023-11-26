@@ -430,7 +430,7 @@ Resources:
                   aws ecr get-login-password --region $AWS_DEFAULT_REGION |
                   docker login --username AWS
                   --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-                - npm install -g npm@7.23.0
+                - npm install -g npm@8.4.1
                 - cd source/app
                 - npm install
             build:

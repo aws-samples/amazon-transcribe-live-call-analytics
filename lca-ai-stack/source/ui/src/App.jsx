@@ -22,6 +22,7 @@ const App = () => {
   const { authState, user } = useUserAuthState(awsConfig);
   const { currentSession, currentCredentials } = useCurrentSessionCreds({ authState });
   const [errorMessage, setErrorMessage] = useState();
+  const [navigationOpen, setNavigationOpen] = useState(true);
 
   // eslint-disable-next-line react/jsx-no-constructed-context-values
   const appContextValue = {
@@ -32,6 +33,8 @@ const App = () => {
     currentSession,
     setErrorMessage,
     user,
+    navigationOpen,
+    setNavigationOpen,
   };
   logger.debug('appContextValue', appContextValue);
 
