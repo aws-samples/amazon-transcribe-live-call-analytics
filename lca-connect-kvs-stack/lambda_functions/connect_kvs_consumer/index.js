@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-param-reassign */
 
-const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand, CopyObjectCommand } = require('@aws-sdk/client-s3');
 const { KinesisClient } = require('@aws-sdk/client-kinesis');
 
@@ -84,7 +83,6 @@ const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
 
 let s3Client;
 let lambdaClient;
-let dynamoClient;
 // eslint-disable-next-line no-unused-vars
 let kinesisClient;
 
@@ -133,42 +131,6 @@ const deleteTempFile = async function deleteTempFile(sourceFile) {
   } catch (err) {
     console.error('error deleting: ', err);
   }
-};
-
-// Retrieve Chime stream event for specified channel, waiting for up to 10s
-const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(callId, channel, retries) {
-  // Set the parameters
-  const params = {
-    Key: {
-      PK: {
-        S: `ce#${callId}`,
-      },
-      SK: {
-        S: `${channel}`,
-      },
-    },
-    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
-  };
-  console.log('GetItem params: ', JSON.stringify(params));
-  const command = new GetItemCommand(params);
-  let agentStreamArn;
-  let loopCount = 0;
-
-  // eslint-disable-next-line no-plusplus
-  while (agentStreamArn === undefined && loopCount++ < retries) {
-    const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
-    if (data.Item) {
-      if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
-    } else {
-      console.log(`${channel} stream not yet available.`);
-      if (loopCount < retries) {
-        console.log(loopCount, `Sleeping 100ms.`);
-        await sleep(100);
-      }
-    }
-  }
-  return agentStreamArn;
 };
 
 // eslint-disable-next-line max-len
@@ -291,267 +253,6 @@ const getCallDataFromContactFlowEvent = async function getCallDataFromContactFlo
   return callData;
 }
 
-const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(callEvent) {
-  const callerStreamArn = callEvent.detail.streamArn;
-  const agentStreamArn = await getChannelStreamFromDynamo(callEvent.detail.callId, 'AGENT', 100);
-  if (agentStreamArn === undefined) {
-    console.log('Timed out waiting for AGENT stream event after 10s. Exiting.');
-    return undefined;
-  }
-
-  const now = new Date().toISOString();
-  const callData = {
-    callId: callEvent.detail.callId,
-    originalCallId: callEvent.detail.callId,
-    callStreamingStartTime: now,
-    callProcessingStartTime: now,
-    callStreamingEndTime: '',
-    shouldProcessCall: true,
-    shouldRecordCall: true,
-    fromNumber: callEvent.detail.fromNumber,
-    toNumber: callEvent.detail.toNumber,
-    agentId: callEvent.detail.agentId,
-    metadatajson: undefined,
-    callerStreamArn,
-    agentStreamArn,
-    lambdaCount: 0,
-    sessionId: undefined,
-    tcaOutputLocation: `s3://${OUTPUT_BUCKET}/${CALL_ANALYTICS_FILE_PREFIX}`,
-  };
-
-  // Call customer LambdaHook, if present
-  if (LAMBDA_HOOK_FUNCTION_ARN) {
-    // invoke lambda function
-    // if it fails, just throw an exception and exit
-    console.log(`Invoking LambdaHook: ${LAMBDA_HOOK_FUNCTION_ARN}`);
-    const invokeCmd = new InvokeCommand({
-      FunctionName: LAMBDA_HOOK_FUNCTION_ARN,
-      InvocationType: 'RequestResponse',
-      Payload: JSON.stringify(callEvent),
-    });
-    const lambdaResponse = await lambdaClient.send(invokeCmd);
-    const payload = JSON.parse(Buffer.from(lambdaResponse.Payload));
-    console.log(`LambdaHook response: ${JSON.stringify(payload)}`);
-    if (lambdaResponse.FunctionError) {
-      console.log('Lambda failed to run, throwing an exception');
-      throw new Error(payload);
-    }
-    /* Process the response. All fields optional:
-        {
-          // all fields optional
-          originalCallId: <string>,
-          shouldProcessCall: <boolean>,
-          isCaller: <boolean>,
-          callId: <string>,
-          agentId: <string>,
-          fromNumber: <string>,
-          toNumber: <string>,
-          shouldRecordCall: <boolean>,
-          metadatajson: <string>
-        }
-    */
-
-    // New CallId?
-    if (payload.callId) {
-      console.log(`Lambda hook returned new callId: "${payload.callId}"`);
-      callData.callId = payload.callId;
-    }
-
-    // Swap caller and agent channels?
-    if (payload.isCaller === false) {
-      console.log('Lambda hook returned isCaller=false, swapping caller/agent streams');
-      [callData.agentStreamArn, callData.callerStreamArn] = [
-        callData.callerStreamArn,
-        callData.agentStreamArn,
-      ];
-    }
-    if (payload.isCaller === true) {
-      console.log('Lambda hook returned isCaller=true, caller/agent streams not swapped');
-    }
-
-    // AgentId?
-    if (payload.agentId) {
-      console.log(`Lambda hook returned agentId: "${payload.agentId}"`);
-      callData.agentId = payload.agentId;
-    }
-
-    // New 'to' or 'from' phone numbers?
-    if (payload.fromNumber) {
-      console.log(`Lambda hook returned fromNumber: "${payload.fromNumber}"`);
-      callData.fromNumber = payload.fromNumber;
-    }
-    if (payload.toNumber) {
-      console.log(`Lambda hook returned toNumber: "${payload.toNumber}"`);
-      callData.toNumber = payload.toNumber;
-    }
-
-    // Metadata?
-    if (payload.metadatajson) {
-      console.log(`Lambda hook returned metadatajson: "${payload.metadatajson}"`);
-      callData.metadatajson = payload.metadatajson;
-    }
-
-    // Should we process this call?
-    if (payload.shouldProcessCall === false) {
-      console.log('Lambda hook returned shouldProcessCall=false.');
-      callData.shouldProcessCall = false;
-      callData.callProcessingStartTime = '';
-    }
-    if (payload.shouldProcessCall === true) {
-      console.log('Lambda hook returned shouldProcessCall=true.');
-    }
-
-    // Should we record this call?
-    if (payload.shouldRecordCall === false) {
-      console.log('Lambda hook returned shouldRecordCall=false.');
-      callData.shouldRecordCall = false;
-    }
-    if (payload.shouldRecordCall === true) {
-      console.log('Lambda hook returned shouldRecordCall=true.');
-    }
-  }
-  return callData;
-};
-
-const writeChimeCallStartEventToDdb = async function writeChimeCallStartEventToDdb(callEvent) {
-  const expiration = getExpiration(1);
-  const eventType = EVENT_TYPE[callEvent.detail.streamingStatus];
-  const channel = callEvent.detail.isCaller ? 'CALLER' : 'AGENT';
-  const now = new Date().toISOString();
-
-  const putParams = {
-    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
-    Item: {
-      PK: { S: `ce#${callEvent.detail.callId}` },
-      SK: { S: `${channel}` },
-      CallId: { S: callEvent.detail.callId },
-      ExpiresAfter: { N: expiration.toString() },
-      CreatedAt: { S: now },
-      CustomerPhoneNumber: { S: callEvent.detail.fromNumber },
-      SystemPhoneNumber: { S: callEvent.detail.toNumber },
-      Channel: { S: channel },
-      EventType: { S: eventType },
-      StreamArn: { S: callEvent.detail.streamArn },
-    },
-  };
-  console.log('Writing Chime Call Start event to DynamoDB: ', JSON.stringify(putParams));
-  const putCmd = new PutItemCommand(putParams);
-  try {
-    await dynamoClient.send(putCmd);
-  } catch (error) {
-    console.error('Error writing Chime Call Start event', error);
-  }
-};
-
-const writeCallDataToDdb = async function writeCallDataToDdb(callData) {
-  console.log('Write callData to DDB');
-  const expiration = getExpiration(1);
-  const now = new Date().toISOString();
-  const putParams = {
-    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
-    Item: {
-      PK: { S: `cd#${callData.callId}` },
-      SK: { S: 'BOTH' },
-      CreatedAt: { S: now },
-      ExpiresAfter: { N: expiration.toString() },
-      CallData: { S: JSON.stringify(callData) },
-    },
-  };
-  console.log(putParams);
-  const putCmd = new PutItemCommand(putParams);
-  try {
-    await dynamoClient.send(putCmd);
-  } catch (error) {
-    console.error('Error writing Call Data to Ddb', error);
-  }
-};
-
-const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) {
-  console.log('Write sessionData to DDB');
-  const expiration = getExpiration(1);
-  const now = new Date().toISOString();
-  const putParams = {
-    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
-    Item: {
-      PK: { S: `sd#${sessionData.sessionId}` },
-      SK: { S: 'TRANSCRIBE SESSION' },
-      CreatedAt: { S: now },
-      ExpiresAfter: { N: expiration.toString() },
-      SessionData: { S: JSON.stringify(sessionData) },
-    },
-  };
-  console.log(putParams);
-  const putCmd = new PutItemCommand(putParams);
-  try {
-    await dynamoClient.send(putCmd);
-  } catch (error) {
-    console.error('Error writing Session Data to Ddb', error);
-  }
-};
-
-
-const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
-  // Set the parameters
-  const params = {
-    Key: {
-      PK: {
-        S: `cd#${callId}`,
-      },
-      SK: {
-        S: 'BOTH',
-      },
-    },
-    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
-  };
-  console.log('GetItem params: ', JSON.stringify(params));
-  const command = new GetItemCommand(params);
-  let callData;
-  try {
-    const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
-    callData = JSON.parse(data.Item.CallData.S);
-  } catch (error) {
-    console.log('Error retrieving callData - Possibly invalid callId?: ', error);
-  }
-  return callData;
-};
-
-const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent(scpevent) {
-  const { callId } = scpevent;
-  const callData = await getCallDataFromDdb(callId);
-  if (!callData) {
-    console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
-    return undefined;
-  }
-  if (callData.callProcessingStartTime) {
-    console.log(`ERROR: Call ${callId} is already processed/processing - exiting.`);
-    return undefined;
-  }
-  // Add Start Call Event info to saved callData object and write back to DDB for tracing
-  callData.startCallProcessingEvent = scpevent;
-  callData.callProcessingStartTime = new Date().toISOString();
-  /* Start Call Event can contain following optional fields, used to modify callData:
-          agentId: <string>,
-          fromNumber: <string>,
-          toNumber: <string>
-  */
-  // AgentId?
-  if (scpevent.agentId) {
-    console.log(`START_CALL_PROCESSING event contains agentId: "${scpevent.agentId}"`);
-    callData.agentId = scpevent.agentId;
-  }
-  // New 'to' or 'from' phone numbers?
-  if (scpevent.fromNumber) {
-    console.log(`START_CALL_PROCESSING event contains fromNumber: "${scpevent.fromNumber}"`);
-    callData.fromNumber = scpevent.fromNumber;
-  }
-  if (scpevent.toNumber) {
-    console.log(`START_CALL_PROCESSING event contains toNumber: "${scpevent.toNumber}"`);
-    callData.toNumber = scpevent.toNumber;
-  }
-  return callData;
-};
-
 function timestampDeltaCheck(n) {
   // Log delta between producer and server timestamps for our two streams.
   const kvsProducerTimestampDelta = Math.abs(
@@ -615,8 +316,8 @@ const readStereoKVS = async (streamArn, lastFragment, callerStream, agentStream)
           timestampDeltaCheck(1);
         }
         try {
-          if(chunk.track == 1) agentStream.write(chunk.payload);
-          if(chunk.track == 2) callerStream.write(chunk.payload);
+          if(chunk.track == 2) agentStream.write(chunk.payload);
+          if(chunk.track == 1) callerStream.write(chunk.payload);
         } catch (error) {
           console.error('Error posting payload chunk', error);
         }
@@ -807,21 +508,6 @@ const go = async function go(callData) {
 
   sessionId = tsResponse.SessionId;
   console.log('Transcribe SessionId: ', sessionId);
-
-  /* cache session data in DDB - use to process post call output if/when needed */
-  if (lambdaCount == 0) {
-    const sessionData = {
-      sessionId: sessionId,
-      callId: callId,
-      fromNumber: fromNumber,
-      agentId: agentId,
-      callStreamingStartTime: callStreamingStartTime,
-      tcaOutputLocation: tcaOutputLocation,
-      tsParams: tsParams,
-    };
-    await writeSessionDataToDdb(sessionData);
-  }
-
   console.log('creating readable from transcript stream');
   console.log('creating interleave streams');
   const agentBlock = new BlockStream(2);
@@ -887,27 +573,9 @@ const go = async function go(callData) {
 const handler = async function handler(event, context) {
   console.log('Event: ', JSON.stringify(event));
 
-  // Initialize clients (globals) each invocation to avoid possibility of ECONNRESET
-  // in subsequent invocations.
   s3Client = new S3Client({ region: REGION });
   lambdaClient = new LambdaClient({ region: REGION });
-  dynamoClient = new DynamoDBClient({ region: REGION });
   kinesisClient = new KinesisClient({ region: REGION });
-
-  /*
-  Create a callData object for incoming event:
-  A LAMBDA_CONTINUE event contains callData object ready to use
-  A START_CALL_PROCESSING event contains callId which is used to look up a previously
-  stored callData object
-  Chime stream STARTED events for both AGENT and CALLER streams are combined to create
-  a new callData object
-    - the AGENT event is stored to DynamoDB and the function exits
-    - the CALLER event is correlated with stored AGENT event to create callData object
-    - an optional user defined Lambda hook may:
-         - manipulate callData object fields
-         - save callData object to DynamoDB and delay or disable call processing until/if
-          a START_CALL_PROCESSING is received later
-  */
 
   let callData;
 
@@ -922,25 +590,9 @@ const handler = async function handler(event, context) {
       console.log('Stopping due to runaway recursive Lambda.');
       return;
     }
-  } else if (event.source === 'lca-solution' && event['detail-type'] === 'START_CALL_PROCESSING') {
-    console.log('START_CALL_PROCESSING event received, Retrieving previously stored callData.');
-    callData = await getCallDataForStartCallEvent(event.detail);
-    if (!callData) {
-      console.log('Nothing to do - exiting.');
-      return;
-    }
-    await writeCallDataToDdb(callData);
-    console.log('Ready to start processing call');
-    await writeCallStartEventToKds(kinesisClient, callData);
   } else if (event.Name === 'ContactFlowEvent' && event.Details.ContactData.Channel === 'VOICE') {
-    console.log('Amazon Connect stream STARTED event received. Save event record to DynamoDB.');
-    await writeChimeCallStartEventToDdb(event);
-
+    console.log('Amazon Connect stream STARTED event received.');
     callData = await getCallDataFromContactFlowEvent(event);
-
-    console.log('Saving callData to DynamoDB');
-    await writeCallDataToDdb(callData);
-
     if (callData.shouldProcessCall === false) {
       console.log('CallData shouldProcessCall is false, exiting.');
       return;
@@ -949,11 +601,10 @@ const handler = async function handler(event, context) {
     await writeCallStartEventToKds(kinesisClient, callData);
   } else {
     console.log(
-      `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
+      `Amazon Connect stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
     );
     return;
   }
-
 
   if (!callData) {
     console.log('Nothing to do - exiting');
@@ -985,7 +636,6 @@ const handler = async function handler(event, context) {
       // Call has ended
       await writeCallEndEventToKds(kinesisClient, callData.callId);
       callData.callStreamingEndTime = new Date().toISOString();
-      await writeCallDataToDdb(callData);
     }
 
     if (callData.shouldRecordCall) {
@@ -1011,45 +661,3 @@ const handler = async function handler(event, context) {
 };
 
 exports.handler = handler;
-
-handler({
-  "Details": {
-      "ContactData": {
-          "Attributes": {},
-          "AwsRegion": "us-east-1",
-          "Channel": "VOICE",
-          "ContactId": "f348a6f4-6486-4838-b9b8-6bc020bb2e21",
-          "CustomerEndpoint": {
-              "Address": "+19163162631",
-              "Type": "TELEPHONE_NUMBER"
-          },
-          "CustomerId": null,
-          "Description": null,
-          "InitialContactId": "f348a6f4-6486-4838-b9b8-6bc020bb2e21",
-          "InitiationMethod": "INBOUND",
-          "InstanceARN": "arn:aws:connect:us-east-1:109902885450:instance/36dc760b-d74e-47ec-8fee-d89df454b765",
-          "LanguageCode": "en-US",
-          "MediaStreams": {
-              "Customer": {
-                  "Audio": {
-                      "StartFragmentNumber": "91343852333181432392682062658297552190418665479",
-                      "StartTimestamp": "1700179064006",
-                      "StreamARN": "arn:aws:kinesisvideo:us-east-1:109902885450:stream/stream-connect-chris-agent-assist-swb-contact-b5596806-30d7-4940-a16d-0a22c821387d/1698785873159"
-                  }
-              }
-          },
-          "Name": null,
-          "PreviousContactId": "f348a6f4-6486-4838-b9b8-6bc020bb2e21",
-          "Queue": null,
-          "References": {},
-          "RelatedContactId": null,
-          "SystemEndpoint": {
-              "Address": "+18334152501",
-              "Type": "TELEPHONE_NUMBER"
-          }
-      },
-      "Parameters": {}
-  },
-  "Name": "ContactFlowEvent"
-}
-, null)

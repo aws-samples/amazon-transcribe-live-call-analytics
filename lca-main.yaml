@@ -26,11 +26,12 @@ Parameters:
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
+      - Amazon Connect Kinesis Video Streams
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
       Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
-      or integrate with Amazon Connect Contact Lens.
+      integrate with Amazon Connect Contact Lens, or integrate with Amazon Connect Kinesis Video Streams.
 
   CallAudioProcessor:
     Type: String
@@ -766,6 +767,8 @@ Conditions:
       !Condition ShouldInstallDemoAsteriskServer,
       !Condition ShouldInstallChimeVCsiprec,
     ]
+  ShouldInstallConnectKVSStack:
+    !Equals [!Ref CallAudioSource, 'Amazon Connect Kinesis Video Streams']
   ShouldInstallGenesysAudiohookStack:
     !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
   ShouldInstallConnectIntegrationStack:
@@ -1283,6 +1286,27 @@ Resources:
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
         Version: <VERSION_TOKEN>
 
+  CONNECTKVSSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallConnectKVSStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-kvs-stack/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
+        TranscribeApiMode: !Ref TranscribeApiMode
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallGenesysAudiohookStack
@@ -1400,3 +1424,11 @@ Outputs:
   LLMPromptSummaryTemplateParameter:
     Description: The LLM summary prompt template in SSM Parameter Store - open to customise call summary prompts.
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/parameters/${SSMSTACK.Outputs.LLMPromptSummaryTemplateParameter}"
+
+
+  ConnectStartLCAFunctionName:
+    Description: Amazon Connect Lambda function for contact flow integration when Amazon Connect KVS is selected as an audio source.
+    Value: !If
+      - ShouldInstallConnectKVSStack
+      - !GetAtt CONNECTKVSSTACK.Outputs.StartLCAFunctionName
+      - 'Amazon Connect KVS audio source not enabled'
