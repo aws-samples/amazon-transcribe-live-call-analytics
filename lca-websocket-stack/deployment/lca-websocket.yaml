@@ -973,7 +973,45 @@ Resources:
       ListenerArn:
         Ref: TranscribingWebsocketLoadBalancerListener
       Priority: 200
-   
+  
+  ECSCleanupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../source/lambda_functions/ecs_cleanup
+      Handler: ecs_cleanup.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt ECSCleanupLambdaRole.Arn
+      Timeout: 120 # Adjust as needed
+
+  ECSCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: LambdaECSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DeleteService
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                Resource: '*'
+
+  ECSCleanupCustomResource:
+    Type: Custom::ECSCleanup
+    Properties:
+      ServiceToken: !GetAtt ECSCleanupLambda.Arn
+      ClusterName: !Ref TranscribingCluster
+
   ##########################################################################
   # ECS
   #########################################################################
