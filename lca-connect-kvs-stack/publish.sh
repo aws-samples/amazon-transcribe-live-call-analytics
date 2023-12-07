@@ -59,7 +59,6 @@ else
 fi
 
 echo -n "$STACK: Make temp dir: "
-timestamp=$(date "+%Y%m%d_%H%M")
 tmpdir=/tmp/connectkvs
 [ -d $tmpdir ] && rm -fr $tmpdir
 mkdir -p $tmpdir
