@@ -978,6 +978,48 @@ Resources:
   # ECS
   #########################################################################
 
+  ECSCleanupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../source/lambda_functions/ecs_cleanup
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt ECSCleanupLambdaRole.Arn
+      Timeout: 720
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+
+  ECSCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: LambdaECSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DeleteService
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                Resource: '*'
+
+  ECSCleanupCustomResource:
+    Type: Custom::ECSCleanup
+    Properties:
+      ServiceToken: !GetAtt ECSCleanupLambda.Arn
+      ClusterName: !Ref TranscribingCluster
+
+
   TranscriberWebsocketTaskDefTaskRole:
     Type: AWS::IAM::Role
     Properties:
