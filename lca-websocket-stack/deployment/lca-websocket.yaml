@@ -981,14 +981,41 @@ Resources:
   ECSCleanupLambda:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ../source/lambda_functions/ecs_cleanup
-      Handler: index.lambda_handler
-      Runtime: python3.8
+      Handler: index.handler
+      Runtime: python3.11
       Role: !GetAtt ECSCleanupLambdaRole.Arn
       Timeout: 720
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
-        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      InlineCode: |
+        import json
+        import boto3
+        import cfnresponse
+
+        def handler(event, context):
+            print(json.dumps(event))
+            ecs = boto3.client('ecs')
+            response_data = {}
+            try:
+                if event['RequestType'] == 'Delete':
+                    cluster_name = event['ResourceProperties']['ClusterName']
+                    
+                    # List services in the cluster
+                    services = ecs.list_services(cluster=cluster_name)['serviceArns']
+                    if services:
+                        # Update services to desired count 0
+                        for service in services:
+                            ecs.update_service(cluster=cluster_name, service=service, desiredCount=0)                        
+                        # Wait for running tasks to stop
+                        waiter = ecs.get_waiter('services_stable')
+                        waiter.wait(cluster=cluster_name, services=services)                        
+                        # Delete services
+                        for service in services:
+                            ecs.delete_service(cluster=cluster_name, service=service)
+                    response_data['Message'] = "ECS services stopped and deleted successfully"
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+            except Exception as e:
+                print(e)
+                response_data['Message'] = str(e)
+                cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
 
   ECSCleanupLambdaRole:
     Type: AWS::IAM::Role
@@ -1000,6 +1027,10 @@ Resources:
             Principal:
               Service: [lambda.amazonaws.com]
             Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
       Policies:
         - PolicyName: LambdaECSPolicy
           PolicyDocument:
@@ -1018,7 +1049,6 @@ Resources:
     Properties:
       ServiceToken: !GetAtt ECSCleanupLambda.Arn
       ClusterName: !Ref TranscribingCluster
-
 
   TranscriberWebsocketTaskDefTaskRole:
     Type: AWS::IAM::Role
