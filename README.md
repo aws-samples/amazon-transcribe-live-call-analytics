@@ -29,7 +29,7 @@ LCA also now also supports three additional input sources, using different archi
 
 - The Genesys Cloud AudioHook integration option - see [Genesys AudioHook Integration README](/lca-genesys-audiohook-stack/README.md) for details.
 - The new Connect Contact Lens integration option - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) for details.
-- Amazon Chime SDK Call Analytics and voice tone analysis - see [Amazon Connect Kinesis Video Streams README](./lca-connect-kvs-stack/README.md)
+- Amazon Connect Kinesis Video Streams integration option - see [Amazon Connect Kinesis Video Streams README](./lca-connect-kvs-stack/README.md)
 - Amazon Chime SDK Call Analytics and voice tone analysis - see [Amazon Chime SDK Call Analytics README](./lca-chimevc-stack/ChimeCallAnalytics.md)
 
 When a new caller or agent Kinesis Video stream is initiated, an event is fired using EventBridge. This event triggers the Call Transcriber Lambda function. When both the caller and agent streams have been established, your custom call initialization Lambda hook function, if specified, is invoked for you - see [LambdaHookFunction](./lca-chimevc-stack/LambdaHookFunction.md). Then the Call Transcriber function starts consuming real time audio fragments from both input streams and combines them to create a new stereo audio stream. The stereo audio is streamed to an Amazon Transcribe Real-time Call Analytics or standard Amazon Transcribe session (depending on stack parameter value), and the transcription results are written in real time to Kinesis Data Streams.
