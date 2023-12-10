@@ -53,6 +53,7 @@ The `StartLCA` Lambda function is what starts the LCA integration process, and i
 7. Choose **Save** for the entire contact flow.
 8. Choose **Publish**
 
+**How it works:**  This whisper flow is invoked after a call is transferred to an agent, right when the agent answers. It sets the contact flow attribute `AgentId` with the current agent's username, and then invokes the `UpdateAgent` Lambda function. The Lambda function's event parameters will include the contact flow attributes, including the AgentId. The Lambda will then update the current call's AgentId by writing an `UPDATE_AGENT` message to Kinesis Data Streams. 
 
 ### Configure Amazon Connect Contact Flow
 
@@ -94,3 +95,4 @@ Now that Connect has permission to invoke the StartLCA function, you need to con
 20. In the **Contact Flow / IVR** dropdown, select the Contact Flow you created (`LCA-EXAMPLE`), and choose **Save**
 
 This contact flow contains a [start media streaming block](https://docs.aws.amazon.com/connect/latest/adminguide/use-media-streams-blocks.html). The media stream block will start streaming audio from the call to Kinesis Video Streams. The block after the media stream block invokes the `StartLCA` Lambda function that will then asynchronously invoke the call transcriber Lambda that will consume the audio from KVS and send it to Transcribe and LCA. 
+
