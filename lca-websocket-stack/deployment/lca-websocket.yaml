@@ -1042,7 +1042,15 @@ Resources:
                   - ecs:DeleteService
                   - ecs:ListServices
                   - ecs:DescribeServices
+                Resource:
+                 - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${TranscribingCluster}/*'
+              - Effect: Allow
+                Action:
+                  - ecs:ListServices
                 Resource: '*'
+                Condition:
+                  ArnEquals: 
+                    ecs:cluster: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${TranscribingCluster}'
 
   ECSCleanupCustomResource:
     Type: Custom::ECSCleanup
@@ -1339,7 +1347,6 @@ Resources:
       TaskDefinition:
         Ref: TranscriberWebsocketTaskDef
     DependsOn:
-      - TranscribingWebsocketLoadBalancerListenerTargetGroup
       - TranscribingWebsocketLoadBalancerListenerRule1
       - TranscribingWebsocketLoadBalancerListenerRule2
       - TranscribingWebsocketLoadBalancerListener
@@ -1353,7 +1360,6 @@ Resources:
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       VpcId: !Ref TranscribingVPC
-
 
   TranscriberWebsocketFargateServiceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -1523,6 +1529,7 @@ Resources:
     DeletionPolicy: Delete
 
   PCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::Serverless::Function
     Properties:
       Description: >-
@@ -1553,6 +1560,7 @@ Resources:
       CodeUri: ../source/lambda_functions/pca_integration
 
   PCAIntegrationFunctionRole:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -1620,6 +1628,7 @@ Resources:
                     - bucket: !Ref PcaS3BucketName
 
   AllowEventBridgeToCallPCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !Ref PCAIntegrationFunction
@@ -1629,6 +1638,7 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
 
   EventBridgeRuleToTriggerPCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::Events::Rule
     Properties:
       Description: "This rule is triggered when TCA post call output job completes"
