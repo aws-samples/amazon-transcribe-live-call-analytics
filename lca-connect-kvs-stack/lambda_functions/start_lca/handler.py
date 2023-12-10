@@ -4,7 +4,14 @@ import json
 
 def lambda_handler(event, context):
   connect_kvs_consumer_arn = getenv('CONNECT_KVS_CONSUMER_ARN','')
+  connect_instance_arn = getenv('CONNECT_INSTANCE_ARN', '')
 
+  if(connect_instance_arn != event['Details']['ContactData']['InstanceARN']):
+     return {
+        'statusCode':500,
+        'body': json.dumps(f"Invalid Amazon Connect instance.")
+     }
+                                
   lambda_client = boto3.client('lambda')
 
   try:

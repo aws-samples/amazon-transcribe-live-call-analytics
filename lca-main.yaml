@@ -110,8 +110,9 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:connect:.*)$'
     Description: >
-      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'.
-      Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
+      Required when CallAudioSource is set to 'Amazon Connect Contact Lens' or 'Amazon Connect Kinesis Video Streams'.
+      Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled, or 
+      Media Streams must be enabled.
 
   AgentAssistOption:
     Type: String
@@ -905,10 +906,10 @@ Mappings:
 
 Rules:
   ConnectInstanceArn:
-    RuleCondition: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+    RuleCondition: !Or [!Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens'], !Equals [!Ref CallAudioSource, 'Amazon Connect Kinesis Video Streams']]
     Assertions:
       - Assert: !Not [!Equals [!Ref ConnectInstanceArn, '']]
-        AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens'
+        AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens' or 'Amazon Connect Kinesis Video Streams'
 
   AgentAssistExistingKendraIndexId:
     RuleCondition:
@@ -1308,6 +1309,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-kvs-stack/template.yaml
       # yamllint enable rule:line-length
       Parameters:
+        ConnectInstanceArn: !Ref ConnectInstanceArn
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
         KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
@@ -1481,4 +1483,11 @@ Outputs:
     Value: !If
       - ShouldInstallConnectKVSStack
       - !GetAtt CONNECTKVSSTACK.Outputs.StartLCAFunctionName
+      - 'Amazon Connect KVS audio source not enabled'
+
+  ConnectUpdateAgentFunctionName:
+    Description: Amazon Connect Lambda function to update the Agent's name when Amazon Connect KVS is selected as an audio source.
+    Value: !If
+      - ShouldInstallConnectKVSStack
+      - !GetAtt CONNECTKVSSTACK.Outputs.UpdateAgentFunctionName
       - 'Amazon Connect KVS audio source not enabled'

@@ -42,7 +42,7 @@ const {
 } = require('./lca');
 
 const REGION = process.env.REGION || 'us-east-1';
-const TRANSCRIBER_CALL_EVENT_TABLE_NAME = process.env.TRANSCRIBER_CALL_EVENT_TABLE_NAME || 'LCA087-AISTACK-13SAT1DJ8MAKV-EventSourcingTable-1DFE2K1DDVGPV';
+const TRANSCRIBER_CALL_EVENT_TABLE_NAME = process.env.TRANSCRIBER_CALL_EVENT_TABLE_NAME || '';
 const OUTPUT_BUCKET = process.env.OUTPUT_BUCKET || '';
 const RECORDING_FILE_PREFIX = formatPath(process.env.RECORDING_FILE_PREFIX || 'lca-audio-recordings/');
 const CALL_ANALYTICS_FILE_PREFIX = formatPath(process.env.CALL_ANALYTICS_FILE_PREFIX || 'lca-call-analytics-json/');
@@ -61,6 +61,7 @@ const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 const TRANSCRIBE_API_MODE = process.env.TRANSCRIBE_API_MODE || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
+const CONNECT_INSTANCE_ARN = process.env.CONNECT_INSTANCE_ARN || '';
 
 // optional - provide custom Transcribe endpoint via env var
 const TRANSCRIBE_ENDPOINT = process.env.TRANSCRIBE_ENDPOINT || '';
@@ -140,6 +141,10 @@ const getCallDataFromContactFlowEvent = async function getCallDataFromContactFlo
   const callId = contactFlowEvent.Details.ContactData.ContactId;
   const fromNumber = contactFlowEvent.Details.ContactData.CustomerEndpoint.Address;
   const toNumber = contactFlowEvent.Details.ContactData.SystemEndpoint.Address;
+  let agentId = '';
+  if (contactFlowEvent.Details.ContactData.Attributes?.AgentId !== undefined) {
+    agentId = contactFlowEvent.Details.ContactData.Attributes.AgentId;
+  }
   const callData = {
     callId,
     originalCallId: contactFlowEvent.Details.ContactData.InitialContactId,
@@ -150,7 +155,7 @@ const getCallDataFromContactFlowEvent = async function getCallDataFromContactFlo
     shouldRecordCall: true,
     fromNumber,
     toNumber,
-    agentId: '',
+    agentId: agentId,
     metadatajson: undefined,
     callerStreamArn: streamArn,
     agentStreamArn: streamArn,
@@ -572,6 +577,14 @@ const go = async function go(callData) {
 // MAIN LAMBDA HANDLER - FUNCTION ENTRY POINT
 const handler = async function handler(event, context) {
   console.log('Event: ', JSON.stringify(event));
+
+  if (event.Details.ContactData.InstanceARN !== CONNECT_INSTANCE_ARN) {
+    console.log('Wrong Amazon Connect instance.');
+    return {
+      'statusCode': 500,
+      'body': 'Wrong Amazon Connect Instance'
+    };
+  }
 
   s3Client = new S3Client({ region: REGION });
   lambdaClient = new LambdaClient({ region: REGION });
