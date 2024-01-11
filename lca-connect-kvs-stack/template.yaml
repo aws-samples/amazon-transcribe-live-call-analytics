@@ -213,37 +213,6 @@ Resources:
           - id: W89
             reason: Customer can use VPC if desired
 
-  UpdateAgentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-        Handler: index.handler
-        Runtime: nodejs18.x
-        CodeUri: ./lambda_functions/update_agent
-        MemorySize: 128
-        Timeout: 10
-        Environment:
-          Variables:
-            KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
-            REGION: !Ref AWS::Region
-            CONNECT_INSTANCE_ARN: !Ref ConnectInstanceArn
-        Policies:
-          - Statement:
-            - Sid: AllowLogGroups
-              Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource:
-                - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
-                  ${AWS::AccountId}:log-group:/aws/lambda/*"
-            - Sid: AllowKDSPutRecord
-              Effect: Allow
-              Action:
-                - kinesis:PutRecord
-              Resource:
-                - !Ref KinesisDataStreamArn
-
   CallTranscriberFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -422,9 +391,6 @@ Outputs:
 
   StartLCAFunctionName:
     Value: !Ref StartLCAFunction
-  
-  UpdateAgentFunctionName:
-    Value: !Ref UpdateAgentFunction
 
   CallTranscriberEventTableName:
     Value: !Ref TranscriberCallEventTable

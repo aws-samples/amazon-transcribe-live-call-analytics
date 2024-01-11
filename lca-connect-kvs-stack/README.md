@@ -27,33 +27,16 @@ Use the following steps to create a new Amazon Connect instance. *If you already
 
 1. To configure LCA to use Amazon Connect Kinesis Video Streams, update the main stack (or if you are deploying a new stack). For the **Call Audio Source** parameter, choose `Amazon Connect Kinesis Video Streams`.
 2. Scroll down to the **Amazon Connect Instance Arn** and fill in the parameter with your Amazon Connect Instance Arn. It should look similar to *arn:aws:connect:us-east-1:123456789012:instance/123456-1234-1234-1234-123456789012*
-2. When the stack is done updating (or deploying), navigate to the main stack outputs and find the *StartLCAFunctionName* and *UpdateAgentFunctionName* outputs. Save these values - they should look something like **LCA-CONNECTKVSSTACK-1234567890-StartLCA-1234567890** and **LCA-CONNECTKVSSTACK-1234567890-UpdateAgent-1234567890**. 
+2. When the stack is done updating (or deploying), navigate to the main stack outputs and find the *StartLCAFunctionName*  output. Save this value. It should look something like **LCA-CONNECTKVSSTACK-1234567890-StartLCA-1234567890**. 
 
-### Add the LCA Connect KVS Lambda functions in Connect
+### Add the LCA Connect KVS Lambda function in Connect
 
-The `StartLCA` Lambda function is what starts the LCA integration process, and it is invoked from a Connect contact flow. The `UpdateAgent` Lambda function is what updates a call with the agent's username when the agent answers, and is invoked from an agent whisper contact flow. You must authorize Amazon Connect to 
+The `StartLCA` Lambda function is what starts the LCA integration process, and it is invoked from a Connect contact flow. You must authorize Amazon Connect to invoke this function.
 
 1. Within the AWS Management Console, navigate to **Amazon Connect**. Select your Amazon Connect instance.
 2. Navigate to Flows, and scroll down to AWS Lambda. 
 3. Under Lambda Functions dropdown, choose the `StartLCAFunctionName` Lambda Function name from the previous section.  You can quickly find this by typing *StartLCA* in the search box that appears when selecting the dropdown. Select the function when you find it. 
 4. Select the **+Add Lambda Function** button. The function should then appear in the list of Lambda Functions below.
-5. Repeat steps 3 and 4 for the `UpdateAgentFunctionName`. You should now have at least 2 functions in Lambda Functions list.
-
-### Configure Amazon Connect Agent Whisper Flow
-
-1. Download the [example agent contact flow](./lca-kvs-agent-whisper.json).
-2. Login to your Amazon Connect instance.
-3. In the Routing menu on the left, choose **Contact flows**
-4. On Contact Flow screen choose the **dropdown** next to Create flow and choose **Create agent whisper flow**
-5. Choose the dropdown on the top right and choose **Import Flow (beta)**
-6. Choose the `lca-kvs-agent-whisper.json` file that you downloaded from step 1. Choose **Import**.
-7. Choose the **Update Agent / Invoke AWS Lambda function** block. A details panel should appear on the right side of the screen.
-8. Scroll down to **Function Arn** and choose the `UpdateAgentFunctionName` Lambda function arn from the previous section.
-9. Choose **Save** from within the *Invoke AWS Lambda function* details panel.
-7. Choose **Save** for the entire contact flow.
-8. Choose **Publish**
-
-**How it works:**  This whisper flow is invoked after a call is transferred to an agent, right when the agent answers. It sets the contact flow attribute `AgentId` with the current agent's username, and then invokes the `UpdateAgent` Lambda function. The Lambda function's event parameters will include the contact flow attributes, including the AgentId. The Lambda will then update the current call's AgentId by writing an `UPDATE_AGENT` message to Kinesis Data Streams. 
 
 ### Configure Amazon Connect Contact Flow
 
@@ -67,12 +50,6 @@ Now that Connect has permission to invoke the StartLCA function, you need to con
 4. On Contact Flow screen choose **Create contact flow**
 5. Choose the dropdown on the top right and choose **Import Flow (beta)**
 6. Choose the `lca-contact-flow.json` file that you downloaded from step 1. Choose **Import**.
-
-#### Set the whisper flow block
-
-7. Choose the **Set whisper flow** block. A details panel should appear on the right side of the screen.
-8. Scroll down to *Whisper flow* and choose **To Agent**, **Set manually**, and choose the **LCA Update Agent Whisper** from the dropdown. 
-9. Choose **Save** from within the *Set whisper flow* details panel.
 
 #### Set the Start LCA function arn
 
