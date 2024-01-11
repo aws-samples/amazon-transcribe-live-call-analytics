@@ -60,7 +60,7 @@ Now that Connect has permission to invoke the StartLCA function, you need to con
 #### Set working queue
 
 13. Choose the **Set working queue** block. A details panel should appear on the right side of the screen.
-14. Choose **By queue**, **Set manually**, and choose a queue from the dropdown. Defailt should be **BasicQueue**.
+14. Choose **By queue**, **Set manually**, and choose a queue from the dropdown. Default should be **BasicQueue**.
 15. Choose **Save** from within the *Set working queue* details panel.
 
 #### Save, publish the contact flow, and assign it to a phone number.
