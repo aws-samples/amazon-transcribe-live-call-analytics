@@ -264,7 +264,7 @@ Resources:
               return result["transcript"]
 
           def format_response(event, transcript):
-              maxMessages = event["req"]["_settings"].get("LLM_CHAT_HISTORY_MAX_MESSAGES", 20)
+              maxMessages = int(event["req"]["_settings"].get("LLM_CHAT_HISTORY_MAX_MESSAGES", 20))
               print(f"Using last {maxMessages} conversation turns (LLM_CHAT_HISTORY_MAX_MESSAGES)")
               transcriptSegments = transcript.strip().split('\n')
               # remove final segment if it matches the current utterance
