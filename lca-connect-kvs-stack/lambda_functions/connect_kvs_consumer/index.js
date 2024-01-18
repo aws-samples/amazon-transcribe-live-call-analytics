@@ -280,7 +280,9 @@ const readStereoKVS = async (streamArn, lastFragment, callerStream, agentStream)
   let firstDecodeEbml = true;
   let totalSize = 0;
   let lastMessageTime;
-  let currentTrack = 1;
+  let currentTrack;
+  let currentTrackName;
+  let trackDictionary = {};
 
   console.log('inside readKVS worker', REGION, streamArn);
   const decoder = new EbmlStreamDecoder({
@@ -296,8 +298,16 @@ const readStereoKVS = async (streamArn, lastFragment, callerStream, agentStream)
       if (timeToStop) actuallyStop = true;
     }
     if (!timeToStop) {
-      if (chunk.id === EbmlTagId.Tracks) {
-        console.log(chunk);
+      if (chunk.id === EbmlTagId.TrackNumber) {
+        console.log('TrackNumber', chunk.data);
+        currentTrack = parseInt(chunk.data);
+      }
+      if (chunk.id === EbmlTagId.Name) {
+        console.log('TrackName', chunk.data);
+        currentTrackName = chunk.data;
+        if(currentTrack && currentTrackName) {
+          trackDictionary[currentTrack] = currentTrackName;
+        }
       }
       if (chunk.id === EbmlTagId.SimpleTag) {
         if (chunk.Children[0].data === 'AWS_KINESISVIDEO_FRAGMENT_NUMBER') {
@@ -321,8 +331,8 @@ const readStereoKVS = async (streamArn, lastFragment, callerStream, agentStream)
           timestampDeltaCheck(1);
         }
         try {
-          if(chunk.track == 2) agentStream.write(chunk.payload);
-          if(chunk.track == 1) callerStream.write(chunk.payload);
+          if(trackDictionary[chunk.track] === 'AUDIO_TO_CUSTOMER') agentStream.write(chunk.payload);
+          if(trackDictionary[chunk.track] === 'AUDIO_FROM_CUSTOMER') callerStream.write(chunk.payload);
         } catch (error) {
           console.error('Error posting payload chunk', error);
         }
@@ -524,7 +534,7 @@ const go = async function go(callData) {
     passthroughStream.write(chunk);
     writeRecordingStream.write(chunk);
   });
-  interleave([agentBlock, callerBlock]).pipe(combinedStream);
+  interleave([callerBlock, agentBlock]).pipe(combinedStream);
   console.log('starting workers');
   const callerWorker = readStereoKVS(callerStreamArn, lastFragment, callerBlock, agentBlock);
 
