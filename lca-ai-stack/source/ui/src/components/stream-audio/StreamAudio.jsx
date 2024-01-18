@@ -173,8 +173,21 @@ const StreamAudio = () => {
       });
       audioProcessor.current.port.close();
       audioProcessor.current.disconnect();
+
+      displayStream.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+
+      micStream.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+
+      audioContext.current.close().then(() => {
+        console.log('AudioContext closed.');
+      });
     } else {
       console.log('no media recorder available to stop');
+      setRecording(false);
     }
     if (streamingStarted && !recording) {
       callMetaData.callEvent = 'END';
