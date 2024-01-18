@@ -23,7 +23,7 @@ Use the following steps to create a new Amazon Connect instance. *If you already
 
 ### Cloudformation Deployment
 
-`Amazon Connect KVS` is an optional audio source component for LCA. LCA deploys a nested stack named `CONNECTKVSSTACK`, which uses an AWS Lambda function named `StartLCA`, that will be invoked from within an Amazon Connect contact flow block we will configure in a later step. First, we have to install LCA or update an existing stack to use Connect KVS as an audio ingestion source.
+`Amazon Connect KVS` is an audio source option for LCA. When selected, LCA deploys a nested stack named `CONNECTKVSSTACK`, which uses an AWS Lambda function named `StartLCA` that will be invoked from within an Amazon Connect contact flow block that we will configure in a later step. First, we have to install LCA or update an existing stack to use Connect KVS as an audio ingestion source.
 
 1. To configure LCA to use Amazon Connect Kinesis Video Streams, update the main stack (or if you are deploying a new stack). For the **Call Audio Source** parameter, choose `Amazon Connect Kinesis Video Streams`.
 2. Scroll down to the **Amazon Connect Instance Arn** and fill in the parameter with your Amazon Connect Instance Arn. It should look similar to *arn:aws:connect:us-east-1:123456789012:instance/123456-1234-1234-1234-123456789012*
