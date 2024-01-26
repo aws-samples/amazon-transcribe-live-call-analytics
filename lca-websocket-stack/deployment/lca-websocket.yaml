@@ -1040,13 +1040,10 @@ Resources:
                 Action:
                   - ecs:UpdateService
                   - ecs:DeleteService
+                  - ecs:ListServices
                   - ecs:DescribeServices
                 Resource:
                  - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${TranscribingCluster}/*'
-              - Effect: Allow
-                Action:
-                  - ecs:ListServices
-                Resource:  !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${TranscribingCluster}'
 
   ECSCleanupCustomResource:
     Type: Custom::ECSCleanup
