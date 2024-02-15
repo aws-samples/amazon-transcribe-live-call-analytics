@@ -152,7 +152,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
       </Header>
     }
   >
-    <ColumnLayout columns={6} variant="text-grid">
+    <ColumnLayout columns={6} borders="vertical">
       <SpaceBetween size="xs">
         <div>
           <Box margin={{ bottom: 'xxxs' }} color="text-label">
@@ -984,36 +984,36 @@ const CallStatsContainer = ({
   collapseSentiment,
   setCollapseSentiment,
 }) => (
-  <>
-    <Container
-      disableContentPaddings={collapseSentiment ? '' : 'true'}
-      header={
-        <Header
-          variant="h4"
-          info={
-            <Link
-              variant="info"
-              target="_blank"
-              href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
-            >
-              Info
-            </Link>
-          }
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button
-                variant="inline-icon"
-                iconName={collapseSentiment ? 'angle-up' : 'angle-down'}
-                onClick={() => setCollapseSentiment(!collapseSentiment)}
-              />
-            </SpaceBetween>
-          }
-        >
-          Call Sentiment Analysis
-        </Header>
-      }
-    >
-      {collapseSentiment ? (
+  <Container
+    disableContentPaddings={collapseSentiment ? '' : 'true'}
+    header={
+      <Header
+        variant="h4"
+        info={
+          <Link
+            variant="info"
+            target="_blank"
+            href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
+          >
+            Info
+          </Link>
+        }
+        actions={
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button
+              variant="inline-icon"
+              iconName={collapseSentiment ? 'angle-up' : 'angle-down'}
+              onClick={() => setCollapseSentiment(!collapseSentiment)}
+            />
+          </SpaceBetween>
+        }
+      >
+        Call Sentiment Analysis
+      </Header>
+    }
+  >
+    {collapseSentiment ? (
+      <>
         <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
           <SentimentFluctuationChart
             item={item}
@@ -1021,10 +1021,6 @@ const CallStatsContainer = ({
           />
           <SentimentPerQuarterChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
         </Grid>
-      ) : null}
-    </Container>
-    {collapseSentiment ? (
-      <Container style={{ display: collapseSentiment ? 'block' : 'none' }}>
         <ColumnLayout columns={4} variant="text-grid">
           <SpaceBetween size="xs">
             <div>
@@ -1075,9 +1071,9 @@ const CallStatsContainer = ({
             </div>
           </SpaceBetween>
         </ColumnLayout>
-      </Container>
+      </>
     ) : null}
-  </>
+  </Container>
 );
 
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {
