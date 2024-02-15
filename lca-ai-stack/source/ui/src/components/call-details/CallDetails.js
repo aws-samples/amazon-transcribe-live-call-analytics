@@ -55,7 +55,7 @@ const CallDetails = () => {
     };
   }, [callId]);
 
-  useEffect(async () => {
+  useEffect(() => {
     if (!callId || !call || !calls?.length) {
       return;
     }

@@ -631,60 +631,62 @@ const CallInProgressTranscript = ({
   }, [targetLanguage, agentTranscript, translateOn, item.recordingStatusLabel]);
 
   // Translate real-time segments when the call is in progress.
-  useEffect(async () => {
-    const c = getSegments();
-    // prettier-ignore
-    if (
-      translateOn
-      && targetLanguage !== ''
-      && c.length > 0
-      && item.recordingStatusLabel === IN_PROGRESS_STATUS
-    ) {
-      const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
-      const n = {};
-      if (c[c.length - 1].isPartial === false && cacheSeen[k] === undefined) {
-        n[k] = { seen: true };
-        setCacheSeen((state) => ({
-          ...state,
-          ...n,
-        }));
+  useEffect(() => {
+    (async () => {
+      const c = getSegments();
+      // prettier-ignore
+      if (
+        translateOn
+        && targetLanguage !== ''
+        && c.length > 0
+        && item.recordingStatusLabel === IN_PROGRESS_STATUS
+      ) {
+        const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
+        const n = {};
+        if (c[c.length - 1].isPartial === false && cacheSeen[k] === undefined) {
+          n[k] = { seen: true };
+          setCacheSeen((state) => ({
+            ...state,
+            ...n,
+          }));
 
-        // prettier-ignore
-        if (translateCache[k] === undefined) {
-          // Now call translate API
-          const params = {
-            Text: c[c.length - 1].transcript,
-            SourceLanguageCode: 'auto',
-            TargetLanguageCode: targetLanguage,
-          };
-          const command = new TranslateTextCommand(params);
-
-          logger.debug('Translate API being invoked for:', c[c.length - 1].transcript, targetLanguage);
-
-          try {
-            const data = await translateClient.send(command);
-            const o = {};
-            logger.debug('Translate API response:', c[c.length - 1].transcript, data.TranslatedText);
-            o[k] = {
-              cacheId: k,
-              transcript: c[c.length - 1].transcript,
-              translated: data.TranslatedText,
+          // prettier-ignore
+          if (translateCache[k] === undefined) {
+            // Now call translate API
+            const params = {
+              Text: c[c.length - 1].transcript,
+              SourceLanguageCode: 'auto',
+              TargetLanguageCode: targetLanguage,
             };
-            setTranslateCache((state) => ({
-              ...state,
-              ...o,
-            }));
-          } catch (error) {
-            logger.debug('Error from translate:', error);
+            const command = new TranslateTextCommand(params);
+
+            logger.debug('Translate API being invoked for:', c[c.length - 1].transcript, targetLanguage);
+
+            try {
+              const data = await translateClient.send(command);
+              const o = {};
+              logger.debug('Translate API response:', c[c.length - 1].transcript, data.TranslatedText);
+              o[k] = {
+                cacheId: k,
+                transcript: c[c.length - 1].transcript,
+                translated: data.TranslatedText,
+              };
+              setTranslateCache((state) => ({
+                ...state,
+                ...o,
+              }));
+            } catch (error) {
+              logger.debug('Error from translate:', error);
+            }
           }
         }
+        if (Date.now() - lastUpdated > 500) {
+          setUpdateFlag((state) => !state);
+          logger.debug('Updating turn by turn with latest cache');
+        }
       }
-      if (Date.now() - lastUpdated > 500) {
-        setUpdateFlag((state) => !state);
-        logger.debug('Updating turn by turn with latest cache');
-      }
-    }
-    setLastUpdated(Date.now());
+      setLastUpdated(Date.now());
+    })();
   }, [callTranscriptPerCallId]);
 
   const getTurnByTurnSegments = () => {

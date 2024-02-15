@@ -27,8 +27,10 @@ const useParameterStore = (creds) => {
     setSettings(lcaSettings);
   };
 
-  useEffect(async () => {
-    refreshSettings(creds);
+  useEffect(() => {
+    (async () => {
+      refreshSettings(creds);
+    })();
   }, []);
 
   return settings;
