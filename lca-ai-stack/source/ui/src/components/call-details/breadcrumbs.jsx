@@ -3,7 +3,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 
-import { BreadcrumbGroup } from '@awsui/components-react';
+import BreadcrumbGroup from '@cloudscape-design/components/breadcrumb-group';
 
 import { CALLS_PATH } from '../../routes/constants';
 import { callListBreadcrumbItems } from '../call-list/breadcrumbs';

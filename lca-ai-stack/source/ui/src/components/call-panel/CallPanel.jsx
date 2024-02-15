@@ -1,22 +1,22 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Badge,
-  Box,
-  Button,
-  ColumnLayout,
-  Container,
-  Grid,
-  Header,
-  Link,
-  Popover,
-  SpaceBetween,
-  StatusIndicator,
-  Tabs,
-  TextContent,
-  Toggle,
-} from '@awsui/components-react';
+
+import Badge from '@cloudscape-design/components/badge';
+import Box from '@cloudscape-design/components/box';
+import Button from '@cloudscape-design/components/button';
+import ColumnLayout from '@cloudscape-design/components/column-layout';
+import Container from '@cloudscape-design/components/container';
+import Grid from '@cloudscape-design/components/grid';
+import Header from '@cloudscape-design/components/header';
+import Link from '@cloudscape-design/components/link';
+import Popover from '@cloudscape-design/components/popover';
+import SpaceBetween from '@cloudscape-design/components/space-between';
+import StatusIndicator from '@cloudscape-design/components/status-indicator';
+import Tabs from '@cloudscape-design/components/tabs';
+import TextContent from '@cloudscape-design/components/text-content';
+import Toggle from '@cloudscape-design/components/toggle';
+
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
 import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
