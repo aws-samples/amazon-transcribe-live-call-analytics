@@ -1403,10 +1403,10 @@ Resources:
 
   PCAIntegrationFunction:
     Type: AWS::Serverless::Function
+    Condition: ShouldInstallPcaIntegration
     Properties:
       Description: >-
         AWS Lambda Function that will be triggered Transcribe Call Analytics completes after end of streaming session
-      Condition: ShouldInstallPcaIntegration
       Handler: index.handler
       Layers:
         # periodically update the Lambda Insights Layer
@@ -1434,8 +1434,8 @@ Resources:
 
   PCAIntegrationFunctionRole:
     Type: AWS::IAM::Role
+    Condition: ShouldInstallPcaIntegration
     Properties:
-      Condition: ShouldInstallPcaIntegration
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -1502,8 +1502,8 @@ Resources:
 
   AllowEventBridgeToCallPCAIntegrationFunction:
     Type: "AWS::Lambda::Permission"
+    Condition: ShouldInstallPcaIntegration
     Properties:
-      Condition: ShouldInstallPcaIntegration
       FunctionName: !Ref PCAIntegrationFunction
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
@@ -1512,9 +1512,9 @@ Resources:
 
   EventBridgeRuleToTriggerPCAIntegrationFunction:
     Type: AWS::Events::Rule
+    Condition: ShouldInstallPcaIntegration
     Properties:
       Description: "This rule is triggered when TCA post call output job completes"
-      Condition: ShouldInstallPcaIntegration
       EventPattern:
         detail-type:
           - "Call Analytics Post Call Job State Change"
