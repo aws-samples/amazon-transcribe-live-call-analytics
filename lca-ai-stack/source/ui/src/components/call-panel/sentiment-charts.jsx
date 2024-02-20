@@ -1,7 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
-import { Box, LineChart } from '@awsui/components-react';
+import Box from '@cloudscape-design/components/box';
+import LineChart from '@cloudscape-design/components/line-chart';
 import { Logger } from 'aws-amplify';
 
 import { getWeightedSentimentLabel } from '../common/sentiment';

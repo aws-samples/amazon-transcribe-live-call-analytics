@@ -10,8 +10,6 @@ import useSettingsContext from '../../contexts/settings';
 import mapCallsAttributes from '../common/map-call-attributes';
 import { IN_PROGRESS_STATUS } from '../common/get-recording-status';
 
-import '@awsui/global-styles/index.css';
-
 import CallPanel from '../call-panel';
 
 const logger = new Logger('CallDetails');
@@ -57,7 +55,7 @@ const CallDetails = () => {
     };
   }, [callId]);
 
-  useEffect(async () => {
+  useEffect(() => {
     if (!callId || !call || !calls?.length) {
       return;
     }

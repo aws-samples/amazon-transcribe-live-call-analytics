@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
-import { HelpPanel } from '@awsui/components-react';
+import HelpPanel from '@cloudscape-design/components/help-panel';
 
 const header = <h2>Calls</h2>;
 const content = (

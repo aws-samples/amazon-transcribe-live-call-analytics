@@ -2,18 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
-import {
-  Form,
-  FormField,
-  SpaceBetween,
-  Container,
-  Button,
-  Input,
-  Header,
-  ColumnLayout,
-  Select,
-} from '@awsui/components-react';
-import '@awsui/global-styles/index.css';
+import Form from '@cloudscape-design/components/form';
+import FormField from '@cloudscape-design/components/form-field';
+import SpaceBetween from '@cloudscape-design/components/space-between';
+import Container from '@cloudscape-design/components/container';
+import Button from '@cloudscape-design/components/button';
+import Input from '@cloudscape-design/components/input';
+import Header from '@cloudscape-design/components/header';
+import ColumnLayout from '@cloudscape-design/components/column-layout';
+import Select from '@cloudscape-design/components/select';
+
 import useWebSocket from 'react-use-websocket';
 
 import useAppContext from '../../contexts/app';

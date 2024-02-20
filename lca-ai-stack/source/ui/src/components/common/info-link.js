@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
-import { Link } from '@awsui/components-react';
+import Link from '@cloudscape-design/components/link';
 
 /* eslint-disable react/prop-types, jsx-a11y/anchor-is-valid */
 export const InfoLink = ({ id, onFollow }) => (

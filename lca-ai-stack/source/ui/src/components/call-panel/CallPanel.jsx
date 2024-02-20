@@ -1,22 +1,22 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Badge,
-  Box,
-  Button,
-  ColumnLayout,
-  Container,
-  Grid,
-  Header,
-  Link,
-  Popover,
-  SpaceBetween,
-  StatusIndicator,
-  Tabs,
-  TextContent,
-  Toggle,
-} from '@awsui/components-react';
+
+import Badge from '@cloudscape-design/components/badge';
+import Box from '@cloudscape-design/components/box';
+import Button from '@cloudscape-design/components/button';
+import ColumnLayout from '@cloudscape-design/components/column-layout';
+import Container from '@cloudscape-design/components/container';
+import Grid from '@cloudscape-design/components/grid';
+import Header from '@cloudscape-design/components/header';
+import Link from '@cloudscape-design/components/link';
+import Popover from '@cloudscape-design/components/popover';
+import SpaceBetween from '@cloudscape-design/components/space-between';
+import StatusIndicator from '@cloudscape-design/components/status-indicator';
+import Tabs from '@cloudscape-design/components/tabs';
+import TextContent from '@cloudscape-design/components/text-content';
+import Toggle from '@cloudscape-design/components/toggle';
+
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
 import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
@@ -152,7 +152,7 @@ const CallAttributes = ({ item, setToolsOpen }) => (
       </Header>
     }
   >
-    <ColumnLayout columns={6} variant="text-grid">
+    <ColumnLayout columns={6} borders="vertical">
       <SpaceBetween size="xs">
         <div>
           <Box margin={{ bottom: 'xxxs' }} color="text-label">
@@ -631,60 +631,62 @@ const CallInProgressTranscript = ({
   }, [targetLanguage, agentTranscript, translateOn, item.recordingStatusLabel]);
 
   // Translate real-time segments when the call is in progress.
-  useEffect(async () => {
-    const c = getSegments();
-    // prettier-ignore
-    if (
-      translateOn
-      && targetLanguage !== ''
-      && c.length > 0
-      && item.recordingStatusLabel === IN_PROGRESS_STATUS
-    ) {
-      const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
-      const n = {};
-      if (c[c.length - 1].isPartial === false && cacheSeen[k] === undefined) {
-        n[k] = { seen: true };
-        setCacheSeen((state) => ({
-          ...state,
-          ...n,
-        }));
+  useEffect(() => {
+    (async () => {
+      const c = getSegments();
+      // prettier-ignore
+      if (
+        translateOn
+        && targetLanguage !== ''
+        && c.length > 0
+        && item.recordingStatusLabel === IN_PROGRESS_STATUS
+      ) {
+        const k = c[c.length - 1].segmentId.concat('-', targetLanguage);
+        const n = {};
+        if (c[c.length - 1].isPartial === false && cacheSeen[k] === undefined) {
+          n[k] = { seen: true };
+          setCacheSeen((state) => ({
+            ...state,
+            ...n,
+          }));
 
-        // prettier-ignore
-        if (translateCache[k] === undefined) {
-          // Now call translate API
-          const params = {
-            Text: c[c.length - 1].transcript,
-            SourceLanguageCode: 'auto',
-            TargetLanguageCode: targetLanguage,
-          };
-          const command = new TranslateTextCommand(params);
-
-          logger.debug('Translate API being invoked for:', c[c.length - 1].transcript, targetLanguage);
-
-          try {
-            const data = await translateClient.send(command);
-            const o = {};
-            logger.debug('Translate API response:', c[c.length - 1].transcript, data.TranslatedText);
-            o[k] = {
-              cacheId: k,
-              transcript: c[c.length - 1].transcript,
-              translated: data.TranslatedText,
+          // prettier-ignore
+          if (translateCache[k] === undefined) {
+            // Now call translate API
+            const params = {
+              Text: c[c.length - 1].transcript,
+              SourceLanguageCode: 'auto',
+              TargetLanguageCode: targetLanguage,
             };
-            setTranslateCache((state) => ({
-              ...state,
-              ...o,
-            }));
-          } catch (error) {
-            logger.debug('Error from translate:', error);
+            const command = new TranslateTextCommand(params);
+
+            logger.debug('Translate API being invoked for:', c[c.length - 1].transcript, targetLanguage);
+
+            try {
+              const data = await translateClient.send(command);
+              const o = {};
+              logger.debug('Translate API response:', c[c.length - 1].transcript, data.TranslatedText);
+              o[k] = {
+                cacheId: k,
+                transcript: c[c.length - 1].transcript,
+                translated: data.TranslatedText,
+              };
+              setTranslateCache((state) => ({
+                ...state,
+                ...o,
+              }));
+            } catch (error) {
+              logger.debug('Error from translate:', error);
+            }
           }
         }
+        if (Date.now() - lastUpdated > 500) {
+          setUpdateFlag((state) => !state);
+          logger.debug('Updating turn by turn with latest cache');
+        }
       }
-      if (Date.now() - lastUpdated > 500) {
-        setUpdateFlag((state) => !state);
-        logger.debug('Updating turn by turn with latest cache');
-      }
-    }
-    setLastUpdated(Date.now());
+      setLastUpdated(Date.now());
+    })();
   }, [callTranscriptPerCallId]);
 
   const getTurnByTurnSegments = () => {
@@ -982,36 +984,36 @@ const CallStatsContainer = ({
   collapseSentiment,
   setCollapseSentiment,
 }) => (
-  <>
-    <Container
-      disableContentPaddings={collapseSentiment ? '' : 'true'}
-      header={
-        <Header
-          variant="h4"
-          info={
-            <Link
-              variant="info"
-              target="_blank"
-              href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
-            >
-              Info
-            </Link>
-          }
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button
-                variant="inline-icon"
-                iconName={collapseSentiment ? 'angle-up' : 'angle-down'}
-                onClick={() => setCollapseSentiment(!collapseSentiment)}
-              />
-            </SpaceBetween>
-          }
-        >
-          Call Sentiment Analysis
-        </Header>
-      }
-    >
-      {collapseSentiment ? (
+  <Container
+    disableContentPaddings={collapseSentiment ? '' : 'true'}
+    header={
+      <Header
+        variant="h4"
+        info={
+          <Link
+            variant="info"
+            target="_blank"
+            href="https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-insights.html#call-analytics-insights-sentiment"
+          >
+            Info
+          </Link>
+        }
+        actions={
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button
+              variant="inline-icon"
+              iconName={collapseSentiment ? 'angle-up' : 'angle-down'}
+              onClick={() => setCollapseSentiment(!collapseSentiment)}
+            />
+          </SpaceBetween>
+        }
+      >
+        Call Sentiment Analysis
+      </Header>
+    }
+  >
+    {collapseSentiment ? (
+      <>
         <Grid gridDefinition={[{ colspan: 6 }, { colspan: 6 }]}>
           <SentimentFluctuationChart
             item={item}
@@ -1019,10 +1021,6 @@ const CallStatsContainer = ({
           />
           <SentimentPerQuarterChart item={item} callTranscriptPerCallId={callTranscriptPerCallId} />
         </Grid>
-      ) : null}
-    </Container>
-    {collapseSentiment ? (
-      <Container style={{ display: collapseSentiment ? 'block' : 'none' }}>
         <ColumnLayout columns={4} variant="text-grid">
           <SpaceBetween size="xs">
             <div>
@@ -1073,9 +1071,9 @@ const CallStatsContainer = ({
             </div>
           </SpaceBetween>
         </ColumnLayout>
-      </Container>
+      </>
     ) : null}
-  </>
+  </Container>
 );
 
 export const CallPanel = ({ item, callTranscriptPerCallId, setToolsOpen }) => {

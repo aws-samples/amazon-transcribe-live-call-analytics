@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
 import { Route, Switch } from 'react-router-dom';
-import { SideNavigation } from '@awsui/components-react';
+import SideNavigation from '@cloudscape-design/components/side-navigation';
 
 import { CALLS_PATH, DEFAULT_PATH, STREAM_AUDIO_PATH } from '../../routes/constants';
 
@@ -30,10 +30,10 @@ export const callsNavItems = [
   },
 ];
 
-const defaultOnFollowHandler = (ev) => {
+const defaultOnFollowHandler = () => {
   // XXX keep the locked href for our demo pages
   // ev.preventDefault();
-  console.log(ev);
+  // console.log(ev);
 };
 
 /* eslint-disable react/prop-types */

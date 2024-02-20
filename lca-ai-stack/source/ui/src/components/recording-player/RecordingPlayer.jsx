@@ -14,18 +14,20 @@ export const RecordingPlayer = ({ recordingUrl }) => {
   const [preSignedUrl, setPreSignedUrl] = useState();
   const { setErrorMessage, currentCredentials } = useAppContext();
 
-  useEffect(async () => {
+  useEffect(() => {
     if (recordingUrl) {
-      let url;
-      logger.debug('recording url to presign', recordingUrl);
-      try {
-        url = await generateS3PresignedUrl(recordingUrl, currentCredentials);
-        logger.debug('recording presigned url', url);
-        setPreSignedUrl(url);
-      } catch (error) {
-        setErrorMessage('failed to get recording url - please try again later');
-        logger.error('failed generate recording s3 url', error);
-      }
+      (async () => {
+        let url;
+        logger.debug('recording url to presign', recordingUrl);
+        try {
+          url = await generateS3PresignedUrl(recordingUrl, currentCredentials);
+          logger.debug('recording presigned url', url);
+          setPreSignedUrl(url);
+        } catch (error) {
+          setErrorMessage('failed to get recording url - please try again later');
+          logger.error('failed generate recording s3 url', error);
+        }
+      })();
     }
   }, [recordingUrl, currentCredentials]);
 

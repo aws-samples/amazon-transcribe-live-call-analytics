@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import React, { useState } from 'react';
 import { Switch, Route, useRouteMatch } from 'react-router-dom';
-import { AppLayout, Flashbar } from '@awsui/components-react';
+import AppLayout from '@cloudscape-design/components/app-layout';
+import Flashbar from '@cloudscape-design/components/flashbar';
 
 import { Logger } from 'aws-amplify';
 
