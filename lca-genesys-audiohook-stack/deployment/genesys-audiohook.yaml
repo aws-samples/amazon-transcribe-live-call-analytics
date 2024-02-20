@@ -589,6 +589,9 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: LCAAudiohook/VPC
 
   TranscribingVPCIGW:
     Type: AWS::EC2::InternetGateway
@@ -600,58 +603,6 @@ Resources:
         Ref: TranscribingVPC
       InternetGatewayId:
         Ref: TranscribingVPCIGW
-
-  VPCFlowLogsLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      RetentionInDays: 3653
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W84
-            reason: >-
-              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
-              server-side encryption keys (AWS Managed Keys).
-  VPCFlowLogsRole:
-    Type: AWS::IAM::Role
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W11
-            reason: >-
-              "Allow Resource * for CloudWatch Logs API since the resources are customer defined."
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - vpc-flow-logs.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: LogRolePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                  - logs:PutLogEvents
-                Resource: "*"
-  VPCFlowLog:
-    Type: AWS::EC2::FlowLog
-    Properties:
-      DeliverLogsPermissionArn: !GetAtt "VPCFlowLogsRole.Arn"
-      LogGroupName: !Ref "VPCFlowLogsLogGroup"
-      ResourceId: !Ref "TranscribingVPC"
-      ResourceType: VPC
-      TrafficType: ALL
 
   TranscribingVPCPublicSubnet1Subnet:
     Type: AWS::EC2::Subnet
@@ -1447,6 +1398,7 @@ Resources:
 
   PCAIntegrationFunction:
     Type: AWS::Serverless::Function
+    Condition: ShouldInstallPcaIntegration
     Properties:
       Description: >-
         AWS Lambda Function that will be triggered Transcribe Call Analytics completes after end of streaming session
@@ -1477,6 +1429,7 @@ Resources:
 
   PCAIntegrationFunctionRole:
     Type: AWS::IAM::Role
+    Condition: ShouldInstallPcaIntegration
     Properties:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -1544,6 +1497,7 @@ Resources:
 
   AllowEventBridgeToCallPCAIntegrationFunction:
     Type: "AWS::Lambda::Permission"
+    Condition: ShouldInstallPcaIntegration
     Properties:
       FunctionName: !Ref PCAIntegrationFunction
       Action: "lambda:InvokeFunction"
@@ -1553,6 +1507,7 @@ Resources:
 
   EventBridgeRuleToTriggerPCAIntegrationFunction:
     Type: AWS::Events::Rule
+    Condition: ShouldInstallPcaIntegration
     Properties:
       Description: "This rule is triggered when TCA post call output job completes"
       EventPattern:
