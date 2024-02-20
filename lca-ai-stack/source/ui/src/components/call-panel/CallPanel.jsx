@@ -968,7 +968,7 @@ const VoiceToneContainer = ({
           </SpaceBetween>
         }
       >
-        Voice Tone Analysis (30sec rolling window)
+        Voice Tone Analysis
       </Header>
     }
   >
@@ -985,6 +985,7 @@ const CallStatsContainer = ({
   setCollapseSentiment,
 }) => (
   <Container
+    fitHeight="true"
     disableContentPaddings={collapseSentiment ? '' : 'true'}
     header={
       <Header
