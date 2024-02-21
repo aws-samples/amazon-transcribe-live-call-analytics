@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
 
-import { BreadcrumbGroup } from '@awsui/components-react';
+import BreadcrumbGroup from '@cloudscape-design/components/breadcrumb-group';
 
 import { CALLS_PATH, DEFAULT_PATH } from '../../routes/constants';
 

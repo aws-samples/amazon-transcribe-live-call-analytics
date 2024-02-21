@@ -1,7 +1,11 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React, { useState } from 'react';
-import { Box, Button, Modal, SpaceBetween, TopNavigation } from '@awsui/components-react';
+import Box from '@cloudscape-design/components/box';
+import Button from '@cloudscape-design/components/button';
+import Modal from '@cloudscape-design/components/modal';
+import SpaceBetween from '@cloudscape-design/components/space-between';
+import TopNavigation from '@cloudscape-design/components/top-navigation';
 import { Auth, Logger } from 'aws-amplify';
 
 import useAppContext from '../../contexts/app';
