@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.10] - 2024-02-21
+## [0.8.11] - 2024-02-21
 ### Fixed
 - Added custom resource in the lca-websocket-stack that sets the ECS cluster's desired service count to zero, then deletes the service, before deleting the cluster. This will prevent errors in deleting the stack when disabling websockets or deleting LCA.
 - Updated NodeJS version to 18
 - Removed VPC flow logs from being enabled
-- Fixed CloudFormaton condition that incorrectly deployed PCA integration functions
+- Fixed CloudFormation condition that incorrectly deployed PCA integration functions
 - Fixed issue with call event processor not correctly parsing ChimeSDK Voice Connector metadata updates
 ### Added
 - New [Cloudscape](https://cloudscape.design/) user interface
