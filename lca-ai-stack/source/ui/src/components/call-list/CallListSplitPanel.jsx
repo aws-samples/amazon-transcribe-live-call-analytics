@@ -1,15 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React, { useEffect } from 'react';
-import { SplitPanel } from '@awsui/components-react';
+import SplitPanel from '@cloudscape-design/components/split-panel';
+
 import { Logger } from 'aws-amplify';
 
 import useCallsContext from '../../contexts/calls';
 
 import { getPanelContent, SPLIT_PANEL_I18NSTRINGS } from './calls-split-panel-config';
 import { IN_PROGRESS_STATUS } from '../common/get-recording-status';
-
-import '@awsui/global-styles/index.css';
 
 const logger = new Logger('CallListSplitPanel');
 

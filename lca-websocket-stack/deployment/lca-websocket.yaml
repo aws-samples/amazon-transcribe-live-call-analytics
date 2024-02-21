@@ -593,6 +593,9 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: LCAWebsocket/VPC
 
   TranscribingVPCIGW:
     Type: AWS::EC2::InternetGateway
@@ -604,58 +607,6 @@ Resources:
         Ref: TranscribingVPC
       InternetGatewayId:
         Ref: TranscribingVPCIGW
-
-  VPCFlowLogsLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      RetentionInDays: 3653
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W84
-            reason: >-
-              By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
-              server-side encryption keys (AWS Managed Keys).
-  VPCFlowLogsRole:
-    Type: AWS::IAM::Role
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W11
-            reason: >-
-              "Allow Resource * for CloudWatch Logs API since the resources are customer defined."
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - vpc-flow-logs.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: LogRolePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                  - logs:PutLogEvents
-                Resource: "*"
-  VPCFlowLog:
-    Type: AWS::EC2::FlowLog
-    Properties:
-      DeliverLogsPermissionArn: !GetAtt "VPCFlowLogsRole.Arn"
-      LogGroupName: !Ref "VPCFlowLogsLogGroup"
-      ResourceId: !Ref "TranscribingVPC"
-      ResourceType: VPC
-      TrafficType: ALL
 
   TranscribingVPCPublicSubnet1Subnet:
     Type: AWS::EC2::Subnet
@@ -973,10 +924,121 @@ Resources:
       ListenerArn:
         Ref: TranscribingWebsocketLoadBalancerListener
       Priority: 200
-   
+  
+  ECSCleanupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../source/lambda_functions/ecs_cleanup
+      Handler: ecs_cleanup.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt ECSCleanupLambdaRole.Arn
+      Timeout: 120 # Adjust as needed
+
+  ECSCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: LambdaECSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DeleteService
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                Resource: '*'
+
+  ECSCleanupCustomResource:
+    Type: Custom::ECSCleanup
+    Properties:
+      ServiceToken: !GetAtt ECSCleanupLambda.Arn
+      ClusterName: !Ref TranscribingCluster
+
   ##########################################################################
   # ECS
   #########################################################################
+
+  ECSCleanupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.11
+      Role: !GetAtt ECSCleanupLambdaRole.Arn
+      Timeout: 720
+      InlineCode: |
+        import json
+        import boto3
+        import cfnresponse
+
+        def handler(event, context):
+            print(json.dumps(event))
+            ecs = boto3.client('ecs')
+            response_data = {}
+            try:
+                if event['RequestType'] == 'Delete':
+                    cluster_name = event['ResourceProperties']['ClusterName']
+                    
+                    # List services in the cluster
+                    services = ecs.list_services(cluster=cluster_name)['serviceArns']
+                    if services:
+                        # Update services to desired count 0
+                        for service in services:
+                            ecs.update_service(cluster=cluster_name, service=service, desiredCount=0)                        
+                        # Wait for running tasks to stop
+                        waiter = ecs.get_waiter('services_stable')
+                        waiter.wait(cluster=cluster_name, services=services)                        
+                        # Delete services
+                        for service in services:
+                            ecs.delete_service(cluster=cluster_name, service=service)
+                    response_data['Message'] = "ECS services stopped and deleted successfully"
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+            except Exception as e:
+                print(e)
+                response_data['Message'] = str(e)
+                cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+
+  ECSCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: LambdaECSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DeleteService
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                Resource:
+                 - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${TranscribingCluster}/*'
+
+  ECSCleanupCustomResource:
+    Type: Custom::ECSCleanup
+    Properties:
+      ServiceToken: !GetAtt ECSCleanupLambda.Arn
+      ClusterName: !Ref TranscribingCluster
 
   TranscriberWebsocketTaskDefTaskRole:
     Type: AWS::IAM::Role
@@ -1267,7 +1329,6 @@ Resources:
       TaskDefinition:
         Ref: TranscriberWebsocketTaskDef
     DependsOn:
-      - TranscribingWebsocketLoadBalancerListenerTargetGroup
       - TranscribingWebsocketLoadBalancerListenerRule1
       - TranscribingWebsocketLoadBalancerListenerRule2
       - TranscribingWebsocketLoadBalancerListener
@@ -1281,7 +1342,6 @@ Resources:
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       VpcId: !Ref TranscribingVPC
-
 
   TranscriberWebsocketFargateServiceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -1451,7 +1511,9 @@ Resources:
     DeletionPolicy: Delete
 
   PCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::Serverless::Function
+    Condition: ShouldInstallPcaIntegration
     Properties:
       Description: >-
         AWS Lambda Function that will be triggered Transcribe Call Analytics completes after end of streaming session
@@ -1461,7 +1523,7 @@ Resources:
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:38"
       Role: !GetAtt PCAIntegrationFunctionRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active
@@ -1481,7 +1543,9 @@ Resources:
       CodeUri: ../source/lambda_functions/pca_integration
 
   PCAIntegrationFunctionRole:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::IAM::Role
+    Condition: ShouldInstallPcaIntegration
     Properties:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -1548,7 +1612,9 @@ Resources:
                     - bucket: !Ref PcaS3BucketName
 
   AllowEventBridgeToCallPCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: "AWS::Lambda::Permission"
+    Condition: ShouldInstallPcaIntegration
     Properties:
       FunctionName: !Ref PCAIntegrationFunction
       Action: "lambda:InvokeFunction"
@@ -1557,7 +1623,9 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
 
   EventBridgeRuleToTriggerPCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::Events::Rule
+    Condition: ShouldInstallPcaIntegration
     Properties:
       Description: "This rule is triggered when TCA post call output job completes"
       EventPattern:

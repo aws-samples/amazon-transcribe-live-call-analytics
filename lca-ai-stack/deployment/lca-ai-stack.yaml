@@ -36,7 +36,7 @@ Parameters:
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
-
+      - Amazon Connect Kinesis Video Streams
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, a
       Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
@@ -285,7 +285,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.8.10
+    Default: 0.8.1111
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket

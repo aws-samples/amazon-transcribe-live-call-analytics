@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.10] - 2024-02-21
+### Fixed
+- Added custom resource in the lca-websocket-stack that sets the ECS cluster's desired service count to zero, then deletes the service, before deleting the cluster. This will prevent errors in deleting the stack when disabling websockets or deleting LCA.
+- Updated NodeJS version to 18
+- Removed VPC flow logs from being enabled
+- Fixed CloudFormaton condition that incorrectly deployed PCA integration functions
+- Fixed issue with call event processor not correctly parsing ChimeSDK Voice Connector metadata updates
+### Added
+- New [Cloudscape](https://cloudscape.design/) user interface
+- Support for Amazon Connect Kinesis Video Streams as an audio ingestion source. See [Amazon Connect KVS README](./lca-connect-kvs-stack/README.md) for more details.
+- Added names to VPCs for ease of locating them
+
+
 ## [0.8.10] - 2023-11-25
 ### Added
 - New! Websocket audio ingestion server (optional). Use it to enable audio streaming from a custom desktop client application, from the sample streaming app (below), or from the new LCA Web UI audio streaming client. See [Websocket server](./lca-websocket-stack/README.md).
@@ -343,7 +356,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.11...develop
+[0.8.11]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...v0.8.11
 [0.8.10]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...v0.8.10
 [0.8.9]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.8...v0.8.9
 [0.8.8]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.8

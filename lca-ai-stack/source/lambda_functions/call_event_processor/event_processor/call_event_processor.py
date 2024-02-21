@@ -1570,9 +1570,9 @@ async def execute_process_event_api_mutation(
             return_value["successes"].append(response)
     elif event_type == "CALL_ANALYTICS_METADATA":
         meta = json.loads(message['Metadata'])
-        LOGGER.debug("S3 URL from metadata %s", meta['oneTimeMetadata']['s3RecordingUrl'])
-
-        session_id = re.search(r"(?i)\/(.+\/)*(.+)\.(wav)$", meta['oneTimeMetadata']['s3RecordingUrl']).group(2)
+        oneTimeMetadata = json.loads(meta['oneTimeMetadata'])
+        LOGGER.debug("S3 URL from metadata %s", oneTimeMetadata['s3RecordingUrl'])
+        session_id = re.search(r"(?i)\/(.+\/)*(.+)\.(wav)$", oneTimeMetadata['s3RecordingUrl']).group(2)
         send_call_session_mapping_event(meta['callId'], session_id)
 
     else:

@@ -12,6 +12,7 @@ import useCurrentSessionCreds from './hooks/use-current-session-creds';
 
 import Routes from './routes/Routes';
 
+import '@cloudscape-design/global-styles/index.css';
 import './App.css';
 
 Amplify.Logger.LOG_LEVEL = process.env.NODE_ENV === 'development' ? 'DEBUG' : 'WARNING';

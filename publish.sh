@@ -109,6 +109,12 @@ pushd $dir
 ./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
 popd
 
+dir=lca-connect-kvs-stack
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-connect-kvs-stack $REGION || exit 1
+popd
+
 dir=lca-genesys-audiohook-stack
 echo "PACKAGING $dir"
 pushd $dir/deployment
