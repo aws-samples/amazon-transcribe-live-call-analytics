@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.8.10] - 2024-02-21
 ### Fixed
 - Added custom resource in the lca-websocket-stack that sets the ECS cluster's desired service count to zero, then deletes the service, before deleting the cluster. This will prevent errors in deleting the stack when disabling websockets or deleting LCA.
 - Updated NodeJS version to 18
@@ -354,7 +356,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.11...develop
+[0.8.11]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...v0.8.11
 [0.8.10]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...v0.8.10
 [0.8.9]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.8...v0.8.9
 [0.8.8]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.7...v0.8.8
