@@ -18,7 +18,6 @@ One possible soft client that can be used is [Zoiper](https://www.zoiper.com/) Z
 
 The PhoneNumber and IPAddress to be used are part of the output and should be copied exactly. The top box will look like: `+12125551234@192.0.2.23` The password to be used is the Instance ID of the Asterisk server. This will be provided in the Cloudformation Output or in the EC2 console.
 
-<img width="913" alt="ZoiperSIP" src="https://github.com/dmartinezrubio/amazon-transcribe-live-call-analytics/assets/44804322/6eaf81e4-ea53-4527-bd26-bdaf1a816bda">
 
 
 The next screen will confirm the hostname of the server to connect to. This is the IPAddress and should be filled in already. Skip the Authentication and Outbound Proxy.
