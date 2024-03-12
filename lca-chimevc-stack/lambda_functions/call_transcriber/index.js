@@ -80,7 +80,8 @@ const EVENT_TYPE = {
   FAILED: 'ERROR',
   CONTINUE: 'CONTINUE',
 };
-const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
+const LAMBDA_INVOKE_TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
+const CHECK_CALL_STATUS_INTERVAL_MILLISECONDS = parseInt(process.env.CHECK_CALL_STATUS_INTERVAL_MILLISECONDS, 10) || 5000;
 
 let s3Client;
 let lambdaClient;
@@ -89,6 +90,7 @@ let dynamoClient;
 let kinesisClient;
 
 let timeToStop = false;
+let isCallEnded = false;
 let stopTimer;
 let keepAliveTimer;
 const keepAliveChunk = Buffer.alloc(2, 0);
@@ -183,6 +185,7 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
   const callData = {
     callId: callEvent.detail.callId,
     originalCallId: callEvent.detail.callId,
+    callStreamingStatus: 'STARTED',
     callStreamingStartTime: now,
     callProcessingStartTime: now,
     callStreamingEndTime: '',
@@ -346,6 +349,29 @@ const writeCallDataToDdb = async function writeCallDataToDdb(callData) {
   }
 };
 
+const writeCallDataIdMappingToDdb = async function writeCallDataIdMappingToDdb(originalCallId, callId) {
+  console.log(`Write callData mapping: ${originalCallId} => ${callId} to DDB`);
+  const expiration = getExpiration(1);
+  const now = new Date().toISOString();
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `cm#${originalCallId}` },
+      SK: { S: 'CALL_ID_MAPPING' },
+      CallId: { S: callId },
+      CreatedAt: { S: now },
+      ExpiresAfter: { N: expiration.toString() },
+    },
+  };
+  console.log(putParams);
+  const putCmd = new PutItemCommand(putParams);
+  try {
+    await dynamoClient.send(putCmd);
+  } catch (error) {
+    console.error(`Error writing callData mapping: ${originalCallId} => ${callId} to DDB`, error);
+  }
+};
+
 const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) {
   console.log('Write sessionData to DDB');
   const expiration = getExpiration(1);
@@ -367,6 +393,42 @@ const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) 
   } catch (error) {
     console.error('Error writing Session Data to Ddb', error);
   }
+};
+
+const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOriginalCallIdFromDdb(originalCallId) {
+  // Set the parameters
+  const params = {
+    Key: {
+      PK: {
+        S: `cm#${originalCallId}`,
+      },
+      SK: {
+        S: 'CALL_ID_MAPPING',
+      },
+    },
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+  };
+  console.log('GetItem params: ', JSON.stringify(params));
+  const command = new GetItemCommand(params);
+  let callData = undefined;
+  try {
+    const data = await dynamoClient.send(command);
+    console.log('GetItem result: ', JSON.stringify(data));
+    callData = getCallDataFromDdb(data.Item.CallId.S);
+  } catch (error) {
+    console.log('Error retrieving callData - Possibly invalid callId?: ', error);
+  }
+
+  // LCA stack may be updating while calls are in progress. Use originalCallId to retrieve the call data without the mapping
+  if (callData === undefined) {
+    try {
+      callData = getCallDataFromDdb(originalCallId);
+    } catch (error) {
+      console.log('Error retrieving callData using originalCallId - Possibly invalid callId?: ', error);
+    }
+  }
+
+  return callData;
 };
 
 
@@ -398,7 +460,8 @@ const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
 
 const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent(scpevent) {
   const { callId } = scpevent;
-  const callData = await getCallDataFromDdb(callId);
+  // START_CALL_PROCESSING event uses the original callId. Use originalCallId to get the callData.
+  const callData = await getCallDataWithOriginalCallIdFromDdb(callId);
   if (!callData) {
     console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
     return undefined;
@@ -467,6 +530,8 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
     if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
       // this is the end of a segment. Lets forcefully stop if needed.
       if (timeToStop) actuallyStop = true;
+      if (isCallEnded) actuallyStop = true;
+      // TODO add some logging above so we can see why we're closing the stream
     }
     if (!timeToStop) {
       if (chunk.id === EbmlTagId.SimpleTag) {
@@ -718,7 +783,7 @@ const go = async function go(callData) {
   timeToStop = false;
   stopTimer = setTimeout(() => {
     timeToStop = true;
-  }, TIMEOUT);
+  }, LAMBDA_INVOKE_TIMEOUT);
 
   keepAliveTimer = setInterval(() => {
     if (timeToStop === true) {
@@ -728,6 +793,18 @@ const go = async function go(callData) {
       callerBlock.write(keepAliveChunk);
     }
   }, KEEP_ALIVE);
+
+
+  isCallEnded = false;
+  console.log(`Start timer to check for call ENDED status every ${CHECK_CALL_STATUS_INTERVAL_MILLISECONDS} milliseconds`)
+  const intervalId = setInterval(() => {
+    const latestCallData = getCallDataWithOriginalCallIdFromDdb(callId);
+    if (latestCallData.callStreamingStatus === 'ENDED') {
+      console.log(`CallData has been updated to set callStreamingStatus to ENDED. Stop call processing for ${callId}`)
+      isCallEnded = true;
+      clearInterval(intervalId); // Stop the interval
+    }
+  }, CHECK_CALL_STATUS_INTERVAL_MILLISECONDS); 
 
   const transcribePromise = readTranscripts(tsStream, callId, sessionId);
 
@@ -846,6 +923,7 @@ const handler = async function handler(event, context) {
 
       console.log('Saving callData to DynamoDB');
       await writeCallDataToDdb(callData);
+      await writeCallDataIdMappingToDdb(callData.originalCallId, callData.callId);
 
       if (callData.shouldProcessCall === false) {
         console.log('CallData shouldProcessCall is false, exiting.');
@@ -853,6 +931,19 @@ const handler = async function handler(event, context) {
       }
       console.log('Ready to start processing call');
       await writeCallStartEventToKds(kinesisClient, callData);
+    } else if (event.detail.streamingStatus === 'ENDED') {
+      console.log('AWS Chime stream ENDED event received. Update CallData status in DDB - this will terminate lambda processing for this call');
+      // VC streaming ENDED uses the original callId. Use originalCallId to get the callData.
+      const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(event.detail.callId);
+      callDataFromDdb.callStreamingStatus = 'ENDED';
+      callDataFromDdb.callStreamingEndTime = new Date().toISOString();
+      await writeCallDataToDdb(callDataFromDdb);
+
+      if (callDataFromDdb.mediaPipelineId) {
+        // wait 2 seconds to allow media pipeline to process the remaining audio stream
+        await sleep(2000);
+        await StopChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callDataFromDdb.mediaPipelineId);
+      }
     } else {
       console.log(
         `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
@@ -890,6 +981,7 @@ const handler = async function handler(event, context) {
     } else {
       // Call has ended
       await writeCallEndEventToKds(kinesisClient, callData.callId);
+      callData.callStreamingStatus = 'ENDED';
       callData.callStreamingEndTime = new Date().toISOString();
       await writeCallDataToDdb(callData);
     }
