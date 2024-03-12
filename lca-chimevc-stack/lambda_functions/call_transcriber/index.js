@@ -93,6 +93,7 @@ let timeToStop = false;
 let isCallEnded = false;
 let stopTimer;
 let keepAliveTimer;
+let callStatusCheckTimer;
 const keepAliveChunk = Buffer.alloc(2, 0);
 const kvsProducerTimestamp = {};
 const kvsServerTimestamp = {};
@@ -529,9 +530,14 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
     lastMessageTime = Date().now;
     if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
       // this is the end of a segment. Lets forcefully stop if needed.
-      if (timeToStop) actuallyStop = true;
-      if (isCallEnded) actuallyStop = true;
-      // TODO add some logging above so we can see why we're closing the stream
+      if (timeToStop) {
+        console.log(`detected lambda timeout, stopping KVS read from ${streamName}`);
+        actuallyStop = true;
+      }
+      if (isCallEnded) {
+        console.log(`Detected call end, stopping KVS read from ${streamName}`);
+        actuallyStop = true;
+      }
     }
     if (!timeToStop) {
       if (chunk.id === EbmlTagId.SimpleTag) {
@@ -592,6 +598,10 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
       clearInterval(timeout);
       streamReader.destroy();
     }
+    if (isCallEnded) {
+      console.log(`Call has ended but ${streamName} is still running, destroying reader.`);
+      streamReader.destroy();
+    }
   }, 10000);
 
   let firstKvsChunk = true;
@@ -603,7 +613,9 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
       }
       totalSize += chunk.length;
       decoder.write(chunk);
-      if (actuallyStop) break;
+      if (actuallyStop) {
+        break;
+      }
     }
   } catch (error) {
     console.error('error writing to decoder', error);
@@ -797,12 +809,13 @@ const go = async function go(callData) {
 
   isCallEnded = false;
   console.log(`Start timer to check for call ENDED status every ${CHECK_CALL_STATUS_INTERVAL_MILLISECONDS} milliseconds`)
-  const intervalId = setInterval(() => {
-    const latestCallData = getCallDataWithOriginalCallIdFromDdb(callId);
+  callStatusCheckTimer = setInterval(async () => {
+    console.log('Checking if call ended');
+    const latestCallData = await getCallDataWithOriginalCallIdFromDdb(callId);
     if (latestCallData.callStreamingStatus === 'ENDED') {
       console.log(`CallData has been updated to set callStreamingStatus to ENDED. Stop call processing for ${callId}`)
       isCallEnded = true;
-      clearInterval(intervalId); // Stop the interval
+      clearInterval(callStatusCheckTimer); // Stop the interval
     }
   }, CHECK_CALL_STATUS_INTERVAL_MILLISECONDS); 
 
