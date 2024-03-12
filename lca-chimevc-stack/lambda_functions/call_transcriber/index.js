@@ -91,6 +91,8 @@ let kinesisClient;
 
 let timeToStop = false;
 let isCallEnded = false;
+let isAgentPaused = false;
+let isCallerPaused = false;
 let stopTimer;
 let keepAliveTimer;
 let callStatusCheckTimer;
@@ -513,8 +515,38 @@ function timestampDeltaCheck(n) {
   );
 }
 
+const checkIfCallEnded = async (callId) => {
+  console.log('Checking if call has ended.');
+  const latestCallData = await getCallDataWithOriginalCallIdFromDdb(callId);
+  if (latestCallData.callStreamingStatus === 'ENDED') {
+    console.log(`CallData has been updated to set callStreamingStatus to ENDED. Stop call processing for ${callId}`)
+    isCallEnded = true;
+    return true;
+  }
+  return false;
+}
+
+const getKVSstreamReader = async (streamArn, lastFragment) => {
+  const kvClient = new KinesisVideoClient({ REGION });
+  const getDataCmd = new GetDataEndpointCommand({ APIName: 'GET_MEDIA', StreamARN: streamArn });
+  const response = await kvClient.send(getDataCmd);
+  const mediaClient = new KinesisVideoMedia({ REGION, endpoint: response.DataEndpoint });
+  let fragmentSelector = { StreamARN: streamArn, StartSelector: { StartSelectorType: 'NOW' } };
+  if (lastFragment && lastFragment.length > 0) {
+    fragmentSelector = {
+      StreamARN: streamArn,
+      StartSelector: {
+        StartSelectorType: 'FRAGMENT_NUMBER',
+        AfterFragmentNumber: lastFragment,
+      },
+    };
+  }
+  const result = await mediaClient.getMedia(fragmentSelector);
+  const streamReader = result.Payload;
+  return streamReader;
+}
+
 const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
-  let actuallyStop = false;
   let firstDecodeEbml = true;
   let totalSize = 0;
   let lastMessageTime;
@@ -531,12 +563,10 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
     if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
       // this is the end of a segment. Lets forcefully stop if needed.
       if (timeToStop) {
-        console.log(`detected lambda timeout, stopping KVS read from ${streamName}`);
-        actuallyStop = true;
+        console.log(`Detected lambda timeout, stopping KVS read from ${streamName}`);
       }
       if (isCallEnded) {
         console.log(`Detected call end, stopping KVS read from ${streamName}`);
-        actuallyStop = true;
       }
     }
     if (!timeToStop) {
@@ -562,7 +592,10 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
           timestampDeltaCheck(1);
         }
         try {
-          streamPipe.write(chunk.payload);
+          if (!isAgentPaused && !isCallerPaused) {
+            // this will only write audio to the interleaver if both KVS streams are running.
+            streamPipe.write(chunk.payload);
+          }
         } catch (error) {
           console.error('Error posting payload chunk', error);
         }
@@ -575,22 +608,8 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
     console.log(`Last fragment for ${streamName} ${lastFragment} total size: ${totalSize}`);
   });
   console.log(`Starting stream ${streamName}`);
-  const kvClient = new KinesisVideoClient({ REGION });
-  const getDataCmd = new GetDataEndpointCommand({ APIName: 'GET_MEDIA', StreamARN: streamArn });
-  const response = await kvClient.send(getDataCmd);
-  const mediaClient = new KinesisVideoMedia({ REGION, endpoint: response.DataEndpoint });
-  let fragmentSelector = { StreamARN: streamArn, StartSelector: { StartSelectorType: 'NOW' } };
-  if (lastFragment && lastFragment.length > 0) {
-    fragmentSelector = {
-      StreamARN: streamArn,
-      StartSelector: {
-        StartSelectorType: 'FRAGMENT_NUMBER',
-        AfterFragmentNumber: lastFragment,
-      },
-    };
-  }
-  const result = await mediaClient.getMedia(fragmentSelector);
-  const streamReader = result.Payload;
+
+  const streamReader = await getKVSstreamReader(streamArn, lastFragment);
 
   const timeout = setTimeout(() => {
     // Check every 10 seconds if 5 minutes have passed
@@ -599,21 +618,42 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
       streamReader.destroy();
     }
     if (isCallEnded) {
-      console.log(`Call has ended but ${streamName} is still running, destroying reader.`);
+      console.log(`Call has ended but ${streamName} is still reading from KVS, destroying reader.`);
       streamReader.destroy();
     }
   }, 10000);
 
   let firstKvsChunk = true;
   try {
-    for await (const chunk of streamReader) {
-      if (firstKvsChunk) {
-        firstKvsChunk = false;
-        console.log(`${streamName} received chunk size: ${chunk.length}`);
+    while (true) {
+      for await (const chunk of streamReader) {
+        if (streamName === 'Agent' && isAgentPaused === true) {
+          console.log('Successfully restarted Agent stream.');
+          isAgentPaused = false;
+        }
+        if (streamName === 'Caller' && isCallerPaused === true) {
+          console.log('Successfully restarted Caller stream.');
+          isCallerPaused = false;
+        }
+        if (firstKvsChunk) {
+          firstKvsChunk = false;
+          console.log(`${streamName} received chunk size: ${chunk.length}`);
+        }
+        totalSize += chunk.length;
+        decoder.write(chunk);
+        if (isCallEnded || timeToStop) {
+          break;
+        }
       }
-      totalSize += chunk.length;
-      decoder.write(chunk);
-      if (actuallyStop) {
+      if (streamName === 'Agent') isAgentPaused = true;
+      if (streamName === 'Caller') isCallerPaused = true;
+      
+      if (!isCallEnded && !timeToStop) {
+        lastFragment = '';
+        console.log(`Reading from ${streamName} ended, attempting to restart.`)
+        await sleep(1000);
+        streamReader = await getKVSstreamReader(streamArn, lastFragment);
+      } else {
         break;
       }
     }
@@ -806,15 +846,11 @@ const go = async function go(callData) {
     }
   }, KEEP_ALIVE);
 
-
   isCallEnded = false;
   console.log(`Start timer to check for call ENDED status every ${CHECK_CALL_STATUS_INTERVAL_MILLISECONDS} milliseconds`)
   callStatusCheckTimer = setInterval(async () => {
-    console.log('Checking if call ended');
-    const latestCallData = await getCallDataWithOriginalCallIdFromDdb(callId);
-    if (latestCallData.callStreamingStatus === 'ENDED') {
-      console.log(`CallData has been updated to set callStreamingStatus to ENDED. Stop call processing for ${callId}`)
-      isCallEnded = true;
+    const callEnded = await checkIfCallEnded(callId);
+    if (callEnded) {
       clearInterval(callStatusCheckTimer); // Stop the interval
     }
   }, CHECK_CALL_STATUS_INTERVAL_MILLISECONDS); 
