@@ -417,7 +417,7 @@ const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOrigi
   try {
     const data = await dynamoClient.send(command);
     console.log('GetItem result: ', JSON.stringify(data));
-    callData = getCallDataFromDdb(data.Item.CallId.S);
+    callData = getCallDataFromDdb(data.Item.CallId.S);  #TODO Invalid key if mapping not found..
   } catch (error) {
     console.log('Error retrieving callData - Possibly invalid callId?: ', error);
   }
@@ -463,8 +463,7 @@ const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
 
 const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent(scpevent) {
   const { callId } = scpevent;
-  // START_CALL_PROCESSING event uses the original callId. Use originalCallId to get the callData.
-  const callData = await getCallDataWithOriginalCallIdFromDdb(callId);
+  const callData = await getCallDataFromDdb(callId);
   if (!callData) {
     console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
     return undefined;
@@ -517,7 +516,7 @@ function timestampDeltaCheck(n) {
 
 const checkIfCallEnded = async (callId) => {
   console.log('Checking if call has ended.');
-  const latestCallData = await getCallDataWithOriginalCallIdFromDdb(callId);
+  const latestCallData = await getCallDataFromDdb(callId);
   if (latestCallData.callStreamingStatus === 'ENDED') {
     console.log(`CallData has been updated to set callStreamingStatus to ENDED. Stop call processing for ${callId}`)
     isCallEnded = true;
