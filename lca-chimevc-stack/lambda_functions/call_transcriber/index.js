@@ -670,7 +670,12 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe, original
         await sleep(1000);
         streamReader = await getKVSstreamReader(streamArn, lastFragment);
       } else {
-        console.log(`${streamName} detected call ended, exiting KVS stream reading.`);
+        if (isCallEnded) {
+          console.log(`${streamName} detected call ended, exiting KVS stream reading.`);
+        }
+        if (timeToStop) {
+          console.log(`${streamName} detected time to invoke new lambda, exiting KVS stream reading.`);
+        }
         break;
       }
     }
