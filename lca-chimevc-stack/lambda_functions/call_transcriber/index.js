@@ -411,26 +411,30 @@ const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOrigi
     },
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-  console.log('GetItem params (getCallDataWithOriginalCallIdFromDdb): ', JSON.stringify(params));
+  console.log('GetItem CALL_ID_MAPPING params: ', JSON.stringify(params));
   const command = new GetItemCommand(params);
-  let callData = undefined;
+  let mappedCallId = undefined;
   try {
-    const data = await dynamoClient.send(command);
-    console.log('GetItem result (getCallDataWithOriginalCallIdFromDdb): ', JSON.stringify(data));
-    callData = await getCallDataFromDdb(data.Item.CallId.S);
+    const mappingData = await dynamoClient.send(command);
+    console.log('GetItem CALL_ID_MAPPING result: ', JSON.stringify(mappingData));
+    if (mappingData) {
+      mappedCallId = mappingData?.Item?.CallId?.S;
+    }
   } catch (error) {
-    console.log('Error retrieving callData (getCallDataWithOriginalCallIdFromDdb) - Possibly invalid callId?: ', error);
+    console.error('Error retrieving CALL_ID_MAPPING record (getCallDataWithOriginalCallIdFromDdb): ', error);
   }
-
+  if (mappedCallId === undefined) {
+    console.log(`No CALL_ID_MAPPING record found for originalCallId: ${originalCallId}`);
+  }
+  let callData = undefined;
+  if (mappedCallId) {
+    callData = await getCallDataFromDdb(mappedCallId);
+  }
   // LCA stack may be updating while calls are in progress. Use originalCallId to retrieve the call data without the mapping
   if (callData === undefined) {
-    try {
-      callData = await getCallDataFromDdb(originalCallId);
-    } catch (error) {
-      console.log('Error retrieving callData using originalCallId - Possibly invalid callId?: ', error);
-    }
+    console.log(`Try to find CallData using original callId ${originalCallId}`);
+    callData = await getCallDataFromDdb(originalCallId);
   }
-
   return callData;
 };
 
@@ -517,7 +521,7 @@ const checkIfCallEnded = async (callId) => {
   console.log('Checking if call has ended.');
   const latestCallData = await getCallDataFromDdb(callId);
   if (latestCallData.callStreamingStatus === 'ENDED') {
-    console.log(`CallData has been updated to set callStreamingStatus to ENDED. Stop call processing for ${callId}`)
+    console.log(`CallData shows callStreamingStatus ENDED. Stop call processing for ${callId}`)
     isCallEnded = true;
     return true;
   }
@@ -587,6 +591,8 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe, original
             
             (async () => {
               // write is call ended. Since these are async, calling them from within an anonymous promise
+              console.log(`Mismatched CallId indicates that KVS stream has been recycled. We must end this call.`);
+              console.log(`Update callData record in DDB to set callStreamingStatus to ENDED`);
               const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(originalCallId);
               callDataFromDdb.callStreamingStatus = 'ENDED';
               callDataFromDdb.callStreamingEndTime = new Date().toISOString();
@@ -1012,9 +1018,8 @@ const handler = async function handler(event, context) {
         callDataFromDdb.callStreamingStatus = 'ENDED';
         callDataFromDdb.callStreamingEndTime = new Date().toISOString();
         await writeCallDataToDdb(callDataFromDdb);
-        await writeCallEndEventToKds(kinesisClient, callDataFromDdb.callId);
       } else {
-        console.log('Error: We received a call end event from Chime for a callId that is unknown to us!')
+        console.error('Error: We received a call ENDED event from Chime for a callId that is unknown to us!')
       }
       return;
     } else {
