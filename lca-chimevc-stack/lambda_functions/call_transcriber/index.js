@@ -548,7 +548,7 @@ const getKVSstreamReader = async (streamArn, lastFragment) => {
   return streamReader;
 }
 
-const readKVS = async (streamName, streamArn, lastFragment, streamPipe, originalCallId, callData) => {
+const readKVS = async (streamName, streamArn, lastFragment, streamPipe, callData) => {
   let firstDecodeEbml = true;
   let totalSize = 0;
   let lastMessageTime;
@@ -586,7 +586,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe, original
         if (chunk.Children[0].data === 'CallId') {
           fragmentCallId = chunk.Children[1].data;
 
-          if (originalCallId !== fragmentCallId) {
+          if (callData.originalCallId !== fragmentCallId) {
             console.log(`Error: ${streamName}'s MKV data has a CallId of ${fragmentCallId}, expecting ${originalCallId} `);
             
             (async () => {
@@ -857,8 +857,8 @@ const go = async function go(callData) {
   });
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
-  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock, originalCallId, callData);
-  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock, originalCallId, callData);
+  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock, callData);
+  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock, callData);
   console.log('done starting workers');
 
   timeToStop = false;
@@ -1035,7 +1035,17 @@ const handler = async function handler(event, context) {
   }
 
   console.log('CallData: ', JSON.stringify(callData));
-  const result = await go(callData);
+  let result;  
+  try {
+    result = await go(callData);
+  } catch (error) {
+    console.log(`An unhandled exception occurred inside of the go(). Ending the call.`, error)
+    // Call has ended
+    await writeCallEndEventToKds(kinesisClient, callData.callId);
+    callData.callStreamingStatus = 'ENDED';
+    callData.callStreamingEndTime = new Date().toISOString();
+    await writeCallDataToDdb(callData);
+  }
   if (result) {
     if (timeToStop) {
       console.log(
