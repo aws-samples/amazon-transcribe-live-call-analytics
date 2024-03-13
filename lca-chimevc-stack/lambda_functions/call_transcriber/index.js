@@ -417,7 +417,7 @@ const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOrigi
   try {
     const data = await dynamoClient.send(command);
     console.log('GetItem result: ', JSON.stringify(data));
-    callData = getCallDataFromDdb(data.Item.CallId.S);  #TODO Invalid key if mapping not found..
+    callData = getCallDataFromDdb(data.Item.CallId.S);
   } catch (error) {
     console.log('Error retrieving callData - Possibly invalid callId?: ', error);
   }
