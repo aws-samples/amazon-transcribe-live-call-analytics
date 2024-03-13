@@ -546,7 +546,7 @@ const getKVSstreamReader = async (streamArn, lastFragment) => {
   return streamReader;
 }
 
-const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
+const readKVS = async (streamName, streamArn, lastFragment, streamPipe, originalCallId) => {
   let firstDecodeEbml = true;
   let totalSize = 0;
   let lastMessageTime;
@@ -581,6 +581,22 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
         if (chunk.Children[0].data === 'AWS_KINESISVIDEO_PRODUCER_TIMESTAMP') {
           kvsProducerTimestamp[streamName] = chunk.Children[1].data;
         }
+        if (chunk.Children[0].data === 'CallId') {
+          fragmentCallId = chunk.Children[1].data;
+
+          if (originalCallId !== fragmentCallId) {
+            console.log(`Error: ${streamName}'s MKV data has a CallId of ${fragmentCallId}, expecting ${originalCallId} `);
+            
+            (async () => {
+              // write is call ended. Since these are async, calling them from within an anonymous promise
+              const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(originalCallId);
+              callDataFromDdb.callStreamingStatus = 'ENDED';
+              callDataFromDdb.callStreamingEndTime = new Date().toISOString();
+              await writeCallDataToDdb(callDataFromDdb);
+              isCallEnded = true;
+            })();
+          }
+        }
       }
       if (chunk.id === EbmlTagId.SimpleBlock) {
         if (firstDecodeEbml) {
@@ -596,6 +612,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
             // this will only write audio to the interleaver if both KVS streams are running.
             streamPipe.write(chunk.payload);
           }
+          // alternate solution here is to write blank audio to the second stream in the same chunk size as this chunk.
         } catch (error) {
           console.error('Error posting payload chunk', error);
         }
@@ -609,7 +626,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   });
   console.log(`Starting stream ${streamName}`);
 
-  const streamReader = await getKVSstreamReader(streamArn, lastFragment);
+  let streamReader = await getKVSstreamReader(streamArn, lastFragment);
 
   const timeout = setTimeout(() => {
     // Check every 10 seconds if 5 minutes have passed
@@ -617,10 +634,10 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
       clearInterval(timeout);
       streamReader.destroy();
     }
-    if (isCallEnded) {
-      console.log(`Call has ended but ${streamName} is still reading from KVS, destroying reader.`);
-      streamReader.destroy();
-    }
+    // if (isCallEnded) {
+    //   console.log(`Call has ended but ${streamName} is still reading from KVS, destroying reader.`);
+    //   streamReader.destroy();
+    // }
   }, 10000);
 
   let firstKvsChunk = true;
@@ -647,13 +664,14 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
       }
       if (streamName === 'Agent') isAgentPaused = true;
       if (streamName === 'Caller') isCallerPaused = true;
-      
+
       if (!isCallEnded && !timeToStop) {
         lastFragment = '';
-        console.log(`Reading from ${streamName} ended, attempting to restart.`)
+        console.log(`Reading KVS from ${streamName} ended, attempting to restart.`);
         await sleep(1000);
         streamReader = await getKVSstreamReader(streamArn, lastFragment);
       } else {
+        console.log(`${streamName} detected call ended, exiting KVS stream reading.`);
         break;
       }
     }
@@ -697,6 +715,7 @@ const go = async function go(callData) {
     lastCallerFragment,
     tcaOutputLocation,
     lambdaCount,
+    originalCallId
   } = callData;
   let sessionId = callData.sessionId;
   let firstChunkToTranscribe = true;
@@ -828,8 +847,8 @@ const go = async function go(callData) {
   });
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
-  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
-  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
+  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock, originalCallId);
+  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock, originalCallId);
   console.log('done starting workers');
 
   timeToStop = false;
