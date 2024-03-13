@@ -154,7 +154,7 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
     },
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-  console.log('GetItem params: ', JSON.stringify(params));
+  console.log('GetItem params (getChannelStreamFromDynamo): ', JSON.stringify(params));
   const command = new GetItemCommand(params);
   let agentStreamArn;
   let loopCount = 0;
@@ -162,7 +162,7 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
   // eslint-disable-next-line no-plusplus
   while (agentStreamArn === undefined && loopCount++ < retries) {
     const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
+    console.log('GetItem result (getChannelStreamFromDynamo): ', JSON.stringify(data));
     if (data.Item) {
       if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
     } else {
@@ -411,21 +411,21 @@ const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOrigi
     },
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-  console.log('GetItem params: ', JSON.stringify(params));
+  console.log('GetItem params (getCallDataWithOriginalCallIdFromDdb): ', JSON.stringify(params));
   const command = new GetItemCommand(params);
   let callData = undefined;
   try {
     const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
-    callData = getCallDataFromDdb(data.Item.CallId.S);
+    console.log('GetItem result (getCallDataWithOriginalCallIdFromDdb): ', JSON.stringify(data));
+    callData = await getCallDataFromDdb(data.Item.CallId.S);
   } catch (error) {
-    console.log('Error retrieving callData - Possibly invalid callId?: ', error);
+    console.log('Error retrieving callData (getCallDataWithOriginalCallIdFromDdb) - Possibly invalid callId?: ', error);
   }
 
   // LCA stack may be updating while calls are in progress. Use originalCallId to retrieve the call data without the mapping
   if (callData === undefined) {
     try {
-      callData = getCallDataFromDdb(originalCallId);
+      callData = await getCallDataFromDdb(originalCallId);
     } catch (error) {
       console.log('Error retrieving callData using originalCallId - Possibly invalid callId?: ', error);
     }
@@ -433,7 +433,6 @@ const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOrigi
 
   return callData;
 };
-
 
 const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
   // Set the parameters
@@ -448,12 +447,12 @@ const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
     },
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-  console.log('GetItem params: ', JSON.stringify(params));
+  console.log('GetItem params (getCallDataFromDdb): ', JSON.stringify(params));
   const command = new GetItemCommand(params);
   let callData;
   try {
     const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
+    console.log('GetItem result (getCallDataFromDdb): ', JSON.stringify(data));
     callData = JSON.parse(data.Item.CallData.S);
   } catch (error) {
     console.log('Error retrieving callData - Possibly invalid callId?: ', error);
@@ -704,6 +703,8 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
     }
   } catch (error) {
     console.error('Error processing transcribe stream. SessionId: ', sessionId, error);
+  } finally {
+    console.log('Transcribe stream has finished.')
   }
 };
 
@@ -861,7 +862,7 @@ const go = async function go(callData) {
   }, LAMBDA_INVOKE_TIMEOUT);
 
   keepAliveTimer = setInterval(() => {
-    if (timeToStop === true) {
+    if (timeToStop === true || isCallEnded) {
       clearInterval(keepAliveTimer);
     } else {
       agentBlock.write(keepAliveChunk);
@@ -1007,9 +1008,15 @@ const handler = async function handler(event, context) {
       console.log('AWS Chime stream ENDED event received. Update CallData status in DDB - this will terminate lambda processing for this call');
       // VC streaming ENDED uses the original callId. Use originalCallId to get the callData.
       const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(event.detail.callId);
-      callDataFromDdb.callStreamingStatus = 'ENDED';
-      callDataFromDdb.callStreamingEndTime = new Date().toISOString();
-      await writeCallDataToDdb(callDataFromDdb);
+      if (callDataFromDdb) {
+        callDataFromDdb.callStreamingStatus = 'ENDED';
+        callDataFromDdb.callStreamingEndTime = new Date().toISOString();
+        await writeCallDataToDdb(callDataFromDdb);
+        await writeCallEndEventToKds(kinesisClient, callDataFromDdb.callId);
+      } else {
+        console.log('Error: We received a call end event from Chime for a callId that is unknown to us!')
+      }
+      return;
     } else {
       console.log(
         `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
