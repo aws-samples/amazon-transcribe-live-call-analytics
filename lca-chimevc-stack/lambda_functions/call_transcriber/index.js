@@ -1010,12 +1010,6 @@ const handler = async function handler(event, context) {
       callDataFromDdb.callStreamingStatus = 'ENDED';
       callDataFromDdb.callStreamingEndTime = new Date().toISOString();
       await writeCallDataToDdb(callDataFromDdb);
-
-      if (callDataFromDdb.mediaPipelineId) {
-        // wait 2 seconds to allow media pipeline to process the remaining audio stream
-        await sleep(2000);
-        await StopChimeCallAnalyticsMediaPipeline(chimeMediaPipelinesClient, callDataFromDdb.mediaPipelineId);
-      }
     } else {
       console.log(
         `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
