@@ -548,7 +548,7 @@ const getKVSstreamReader = async (streamArn, lastFragment) => {
   return streamReader;
 }
 
-const readKVS = async (streamName, streamArn, lastFragment, streamPipe, originalCallId) => {
+const readKVS = async (streamName, streamArn, lastFragment, streamPipe, originalCallId, callData) => {
   let firstDecodeEbml = true;
   let totalSize = 0;
   let lastMessageTime;
@@ -593,11 +593,10 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe, original
               // write is call ended. Since these are async, calling them from within an anonymous promise
               console.log(`Mismatched CallId indicates that KVS stream has been recycled. We must end this call.`);
               console.log(`Update callData record in DDB to set callStreamingStatus to ENDED`);
-              const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(originalCallId);
-              callDataFromDdb.callStreamingStatus = 'ENDED';
-              callDataFromDdb.callStreamingEndTime = new Date().toISOString();
-              await writeCallDataToDdb(callDataFromDdb);
               isCallEnded = true;
+              callData.callStreamingStatus = 'ENDED';
+              callData.callStreamingEndTime = new Date().toISOString();
+              await writeCallDataToDdb(callData);
             })();
           }
         }
@@ -858,8 +857,8 @@ const go = async function go(callData) {
   });
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
   console.log('starting workers');
-  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock, originalCallId);
-  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock, originalCallId);
+  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock, originalCallId, callData);
+  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock, originalCallId, callData);
   console.log('done starting workers');
 
   timeToStop = false;
