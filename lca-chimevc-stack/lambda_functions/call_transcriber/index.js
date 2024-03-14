@@ -943,6 +943,7 @@ const handler = async function handler(event, context) {
   if (callStatusCheckTimer) {
     console.log('Clearing previous callStatusCheckTimer');
     clearInterval(callStatusCheckTimer); 
+    callStatusCheckTimer = undefined;
   }
 
   /*
