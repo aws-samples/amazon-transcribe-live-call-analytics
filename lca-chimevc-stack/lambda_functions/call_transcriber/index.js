@@ -587,7 +587,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe, callData
           fragmentCallId = chunk.Children[1].data;
 
           if (callData.originalCallId !== fragmentCallId) {
-            console.log(`Error: ${streamName}'s MKV data has a CallId of ${fragmentCallId}, expecting ${originalCallId} `);
+            console.log(`Error: ${streamName}'s MKV data has a CallId of ${fragmentCallId}, expecting ${callData.originalCallId} `);
             
             (async () => {
               // write is call ended. Since these are async, calling them from within an anonymous promise
