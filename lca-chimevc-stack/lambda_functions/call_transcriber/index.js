@@ -864,14 +864,18 @@ const go = async function go(callData) {
   console.log(`setting timer for LAMBDA_INVOKE_TIMEOUT to ${LAMBDA_INVOKE_TIMEOUT} msec. (CallId: ${callId})`);
   timeToStop = false;
   stopTimer = setTimeout(() => {
+    console.log(`LAMBDA_INVOKE_TIMEOUT occurred. Time to stop = true (CallId: ${callId})`);
     timeToStop = true;
+    clearTimeout(stopTimer);
+    stopTimer = undefined;
   }, LAMBDA_INVOKE_TIMEOUT);
 
   console.log(`setting interval for KEEP_ALIVE to ${KEEP_ALIVE} msec. (CallId: ${callId})`);
   keepAliveTimer = setInterval(() => {
     if (timeToStop === true || isCallEnded) {
-      console.log(`clearing KEEP_ALIVE interval. (CallId: ${callId})`);
+      console.log(`clearing KEEP_ALIVE interval from within interval. (CallId: ${callId})`);
       clearInterval(keepAliveTimer);
+      keepAliveTimer = undefined;
     } else {
       agentBlock.write(keepAliveChunk);
       callerBlock.write(keepAliveChunk);
@@ -903,9 +907,10 @@ const go = async function go(callData) {
   console.log(`Last Agent Fragment: `, returnVals[1], ` (CallId: ${callId})`);
 
   // stop the timer so when we finish and upload to s3 this doesnt kick in
-  if (timeToStop === false) {
+  if (stopTimer) {
+    console.log(`clearing LAMBDA_INVOKE_TIMEOUT interval. (CallId: ${callId})`);
     clearTimeout(stopTimer);
-    timeToStop = false;
+    stopTimer = undefined;
   }
 
   // ensure call status timer is cleared since we're ending this processing loop.
@@ -913,6 +918,12 @@ const go = async function go(callData) {
     console.log(`clearing CHECK_CALL_STATUS interval. (CallId: ${callId})`);
     clearInterval(callStatusCheckTimer); // Stop the previous interval
     callStatusCheckTimer = undefined;
+  }
+
+  if (keepAliveTimer) {
+    console.log(`clearing KEEP_ALIVE_TIMER interval. (CallId: ${callId})`);
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = undefined;
   }
 
   writeRecordingStream.end();
@@ -944,6 +955,13 @@ const handler = async function handler(event, context) {
     console.log('Clearing previous callStatusCheckTimer');
     clearInterval(callStatusCheckTimer); 
     callStatusCheckTimer = undefined;
+  }
+
+  // make sure we've not inherited a running keepAliveTimer from a previously aborted lambda invocation
+  if (keepAliveTimer) {
+    console.log('Clearing previous keepAliveTimer');
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = undefined;
   }
 
   /*
