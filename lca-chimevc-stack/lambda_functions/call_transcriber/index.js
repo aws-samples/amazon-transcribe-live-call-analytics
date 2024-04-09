@@ -648,7 +648,11 @@ const go = async function go(callData) {
   if (sessionId !== undefined) {
     tsParams.SessionId = sessionId;
   }
-  if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
+  if (IS_CONTENT_REDACTION_ENABLED && (
+    TRANSCRIBE_LANGUAGE_CODE === 'en-US' ||
+    TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
+    TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
+    TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
     tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
     if (PII_ENTITY_TYPES) tsParams.PiiEntityTypes = PII_ENTITY_TYPES;
   }

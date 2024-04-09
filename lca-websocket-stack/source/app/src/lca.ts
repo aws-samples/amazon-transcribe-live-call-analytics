@@ -294,7 +294,11 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         AudioStream: transcribeInput()
     };
     
-    if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
+    if (IS_CONTENT_REDACTION_ENABLED && (
+        TRANSCRIBE_LANGUAGE_CODE === 'en-US' ||
+        TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
+        TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
+        TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
         tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as ContentRedactionType;
         if (TRANSCRIBE_PII_ENTITY_TYPES) {
             tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
