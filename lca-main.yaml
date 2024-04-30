@@ -25,6 +25,7 @@ Parameters:
       - Demo Asterisk PBX Server
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
+      - Talkdesk Voice Stream Websocket
       - Amazon Connect Contact Lens
       - Amazon Connect Kinesis Video Streams
     Description: >
@@ -784,6 +785,8 @@ Conditions:
     !Equals [!Ref CallAudioSource, 'Amazon Connect Kinesis Video Streams']
   ShouldInstallGenesysAudiohookStack:
     !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
+  ShouldInstallTalkdeskStack:
+    !Equals [!Ref CallAudioSource, 'Talkdesk Voice Stream Websocket']
   ShouldInstallWebSocketStack:
     !Equals [!Ref WebSocketAudioInput, 'Enabled']
   ShouldInstallConnectIntegrationStack:
@@ -1351,6 +1354,35 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+
+  TALKDESKSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallTalkdeskStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-talkdesk-voicestream-stack/<VERSION_TOKEN>/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        AudioFilePrefix: !Ref AudioFilePrefix
+        UserPoolId: !GetAtt AISTACK.Outputs.UserPoolId
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        TranscribeApiMode: !Ref TranscribeApiMode
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
 
   WEBSOCKETSTACK:
     Type: AWS::CloudFormation::Stack
