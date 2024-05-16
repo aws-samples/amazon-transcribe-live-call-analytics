@@ -1,6 +1,10 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import stream from 'stream';
+import { WriteStream } from 'fs';
+
+import { CallMetaData } from './lca';
 import { 
     TranscriptEvent,
     UtteranceEvent,
@@ -54,3 +58,12 @@ export type AddTranscriptSegmentEvent = CallEventBase<'ADD_TRANSCRIPT_SEGMENT'> 
 export type AddCallCategoryEvent = CallEventBase<'ADD_CALL_CATEGORY'> & {
     CategoryEvent: CategoryEvent,
 };
+
+export type SocketCallData = {
+    callMetadata: CallMetaData,
+    audioInputStream?: stream.PassThrough,
+    writeRecordingStream?: WriteStream,
+    recordingFileSize?: number
+    startStreamTime: Date,
+    ended: boolean
+}

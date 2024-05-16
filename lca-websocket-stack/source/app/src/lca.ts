@@ -255,7 +255,7 @@ export const writeCallEndEvent = async (callMetaData: CallMetaData): Promise<voi
     await writeCallEvent(callEndEvent);  
 };
 
-export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough) => {
+export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough, socketCallMap: SocketCallData) => {
 
     const transcribeInput = async function* () {
         if (isTCAEnabled) {
@@ -359,3 +359,4 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         writeCallEndEvent(callMetaData);
     }
 };
+
