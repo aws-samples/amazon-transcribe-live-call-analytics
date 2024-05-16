@@ -31,7 +31,8 @@ import {
     CallRecordingEvent,
     AddTranscriptSegmentEvent,
     AddCallCategoryEvent,
-    Uuid
+    Uuid,
+    SocketCallData
 } from './entities-lca';
 
 import stream from 'stream';
@@ -142,9 +143,8 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
-                // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-                // console.info(JSON.stringify(kdsObject));
-                // console.info(kdsObject.Transcript);
+                console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
+                console.info(JSON.stringify(kdsObject));
             } catch (error) {
                 console.error('Error writing transcription segment (TRANSCRIBE) to KDS', error);
                 console.debug(JSON.stringify(kdsObject));
@@ -326,7 +326,8 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         );
         outputTranscriptStream = response.TranscriptResultStream;
     }
-    
+    socketCallMap.startStreamTime = new Date();
+
     if (outputCallAnalyticsStream) {
         tsStream = stream.Readable.from(outputCallAnalyticsStream);
     } else if (outputTranscriptStream) {
@@ -356,7 +357,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         console.log('Error processing Transcribe results stream', error);
         
     } finally {
-        writeCallEndEvent(callMetaData);
+        // writeCallEndEvent(callMetaData);
     }
 };
 

@@ -4,7 +4,6 @@
 import fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket from 'ws'; // type structure for the websocket object used by fastify/websocket
-import stream from 'stream';
 import os from 'os';
 import path from 'path';
 import { 
@@ -23,15 +22,21 @@ import {
     writeCallEndEvent,
     writeCallEvent,
 } from './lca';
-import { CallRecordingEvent, SocketCallData } from './entities-lca';
 
-import { jwtVerifier } from './jwt-verifier';
+import {
+    CallRecordingEvent,
+    SocketCallData,
+} from './entities-lca';
 
+import {
+    createWavHeader,
+    posixifyFilename,
+    deleteTempFile,
+} from './utils';
 
-let tempRecordingFilename: string;
-let wavFileName: string;
-let recordingFileSize = 0;
-let writeRecordingStream: fs.WriteStream;
+import {
+    jwtVerifier,
+} from './jwt-verifier';
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefined;
@@ -102,7 +107,7 @@ server.listen(
 
 // Setup handlers for websocket events - 'message', 'close', 'error'
 const registerHandlers = (ws: WebSocket): void => {
-    ws.on('message', (data, isBinary): void => {
+    ws.on('message', async (data, isBinary): Promise<void> => {
         try {
             if (isBinary) {
                 const audioinput = Buffer.from(data as Uint8Array);
@@ -128,13 +133,6 @@ const registerHandlers = (ws: WebSocket): void => {
         server.log.error('Websocket error, forcing close: ', error);
         ws.close();
     });
-};
-const posixifyFilename = function (filename: string) {
-    // Replace all invalid characters with underscores.
-    const regex = /[^a-zA-Z0-9_.]/g;
-    const posixFilename = filename.replace(regex, '_');
-    // Remove leading and trailing underscores.
-    return posixFilename.replace(/^_+/g, '').replace(/_+$/g, '');
 };
 
 const getTempRecordingFileName = (callMetaData: CallMetaData): string => {
@@ -227,7 +225,7 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
         await writeCallEndEvent(callMetaData);
         if (socketData.writeRecordingStream && socketData.recordingFileSize) {
             socketData.writeRecordingStream.end();
-            const header = createHeader(callMetaData, socketData.recordingFileSize);
+            const header = createWavHeader(callMetaData.samplingRate, socketData.recordingFileSize);
             const tempRecordingFilename = getTempRecordingFileName(callMetaData);
             const wavRecordingFilename = getWavRecordingFileName(callMetaData);
             const readStream = fs.createReadStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
@@ -288,45 +286,4 @@ const writeToS3 = async (tempFileName:string) => {
         fileStream.destroy();
     }
     return data;
-};
-
-const deleteTempFile = async(sourceFile:string) => {
-    try {
-        console.log('deleting tmp file');
-        await fs.promises.unlink(sourceFile);
-    } catch (err) {
-        console.error('error deleting: ', err);
-    }
-};
-
-const createHeader = function createHeader(callMetaData:CallMetaData, length:number) {
-    const buffer = Buffer.alloc(44);
-  
-    // RIFF identifier 'RIFF'
-    buffer.writeUInt32BE(1380533830, 0);
-    // file length minus RIFF identifier length and file description length
-    buffer.writeUInt32LE(36 + length, 4);
-    // RIFF type 'WAVE'
-    buffer.writeUInt32BE(1463899717, 8);
-    // format chunk identifier 'fmt '
-    buffer.writeUInt32BE(1718449184, 12);
-    // format chunk length
-    buffer.writeUInt32LE(16, 16);
-    // sample format (raw)
-    buffer.writeUInt16LE(1, 20);
-    // channel count
-    buffer.writeUInt16LE(2, 22);
-    // sample rate
-    buffer.writeUInt32LE(callMetaData.samplingRate, 24);
-    // byte rate (sample rate * block align)
-    buffer.writeUInt32LE(callMetaData.samplingRate * 2 * 2, 28);
-    // block align (channel count * bytes per sample)
-    buffer.writeUInt16LE(2 * 2, 32);
-    // bits per sample
-    buffer.writeUInt16LE(16, 34);
-    // data chunk identifier 'data'
-    buffer.writeUInt32BE(1684108385, 36);
-    buffer.writeUInt32LE(length, 40);
-  
-    return buffer;
 };
