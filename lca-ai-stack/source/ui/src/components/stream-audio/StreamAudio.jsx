@@ -50,14 +50,21 @@ const StreamAudio = () => {
       authorization: `Bearer ${JWT_TOKEN}`,
     },
     onOpen: (event) => {
-      console.log(event);
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Websocket onOpen Event: ${JSON.stringify(event)}
+      `);
     },
     onClose: (event) => {
-      console.log(event);
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Websocket onClose Event: ${JSON.stringify(event)}
+      `);
     },
     onError: (event) => {
-      console.log(event);
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Websocket onError Event: ${JSON.stringify(event)}
+      `);
     },
+    shouldReconnect: () => true,
   });
 
   const handleCallIdChange = (e) => {
