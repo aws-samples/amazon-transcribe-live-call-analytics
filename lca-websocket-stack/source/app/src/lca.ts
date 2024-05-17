@@ -102,10 +102,9 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
-        console.debug(`Written Call Event to KDS: ${JSON.stringify(callEvent)}`);
+        console.debug(`CALL ID: ${callEvent.CallId} - Written Call Event to KDS: ${JSON.stringify(callEvent)}`);
     } catch (error) {
-        console.error(`Error writing Call Event to KDS : ${normalizeErrorForLogging(error)}`);
-        console.debug(JSON.stringify(callEvent));
+        console.error(`CALL ID: ${callEvent.CallId} - Error writing Call Event to KDS : ${normalizeErrorForLogging(error)} Event: ${JSON.stringify(callEvent)}`);
     }
 };
 
@@ -146,10 +145,9 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
-                console.info(`Written ADD_TRANSCRIPT_SEGMENT event to KDS: ${JSON.stringify(kdsObject)}`);
+                console.debug(`CALL ID: ${callId} - Written ADD_TRANSCRIPT_SEGMENT event to KDS: ${JSON.stringify(kdsObject)}`);
             } catch (error) {
-                console.error(`Error writing transcription segment (TRANSCRIBE) to KDS : ${normalizeErrorForLogging(error)}`);
-                console.debug(JSON.stringify(kdsObject));
+                console.error(`CALL ID: ${callId} - Error writing transcription segment (TRANSCRIBE) to KDS : ${normalizeErrorForLogging(error)} KDS object: ${JSON.stringify(kdsObject)}`);
             }
         } 
     } 
@@ -196,10 +194,9 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
-        console.info(`Written ADD_TRANSCRIPT_SEGMENT event to KDS: ${JSON.stringify(kdsObject)}`);
+        console.debug(`CALL ID: ${callId} - Written ADD_TRANSCRIPT_SEGMENT event to KDS: ${JSON.stringify(kdsObject)}`);
     } catch (error) {
-        console.error(`Error writing transcription segment to KDS : ${normalizeErrorForLogging(error)}`);
-        console.debug(JSON.stringify(kdsObject));
+        console.error(`CALL ID: ${callId} - Error writing transcription segment to KDS : ${normalizeErrorForLogging(error)} KDS object: ${JSON.stringify(kdsObject)}`);
     }
 };
 
@@ -224,11 +221,10 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
         const putCmd = new PutRecordCommand(putParams);
         try {
             await kinesisClient.send(putCmd);
-            console.info(`Written ADD_CALL_CATEGORY event to KDS: ${JSON.stringify(kdsObject)}`);
+            console.debug(`CALL ID: ${callId} - Written ADD_CALL_CATEGORY event to KDS: ${JSON.stringify(kdsObject)}`);
             
         } catch (error) {
-            console.error(`Error writing ADD_CALL_CATEGORY event to KDS : ${normalizeErrorForLogging(error)}`);
-            console.debug(JSON.stringify(kdsObject));
+            console.error(`CALL ID: ${callId} - Error writing ADD_CALL_CATEGORY event to KDS : ${normalizeErrorForLogging(error)} KDS object: ${JSON.stringify(kdsObject)}`);
         }
 
     }
@@ -311,13 +307,11 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             const response = await transcribeClient.send(
                 new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
             );
-            console.log(
-                `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
-            );
+            console.debug(`CALL ID: ${callMetaData.callId} === Received Initial response from TCA. Session Id: ${response.SessionId} ===`);
+
             outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
         } catch (err) {
-            console.error('Error in StartCallAnalyticsStreamTranscriptionCommand: ');
-            console.error(normalizeErrorForLogging(err));
+            console.error(`CALL ID: ${callMetaData.callId} - Error in StartCallAnalyticsStreamTranscriptionCommand: ${normalizeErrorForLogging(err)}`);
             return;
         }
     } else {
@@ -327,13 +321,11 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             const response = await transcribeClient.send(
                 new StartStreamTranscriptionCommand(tsParams)
             );
-            console.log(
-                `=== Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`
-            );
+            console.debug(`CALL ID: ${callMetaData.callId} === Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`);
+
             outputTranscriptStream = response.TranscriptResultStream;
         } catch (err) {
-            console.error('Error in StartStreamTranscription: ');
-            console.error(normalizeErrorForLogging(err));
+            console.error(`CALL ID: ${callMetaData.callId} - Error in StartStreamTranscription: ${normalizeErrorForLogging(err)}`);
             return;            
         }
     }
@@ -361,10 +353,10 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             }
 
         } else {
-            console.log('Transcribe stream is empty');
+            console.error(`CALL ID: ${callMetaData.callId} - Transcribe stream is empty`);
         }
     } catch (error) {
-        console.log(`Error processing Transcribe results stream ${normalizeErrorForLogging(error)}`);
+        console.error(`CALL ID: ${callMetaData.callId} - Error processing Transcribe results stream ${normalizeErrorForLogging(error)}`);
         
     } finally {
         // writeCallEndEvent(callMetaData);

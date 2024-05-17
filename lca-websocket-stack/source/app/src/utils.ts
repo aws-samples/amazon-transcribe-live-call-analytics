@@ -10,15 +10,6 @@ export const posixifyFilename = function (filename: string) {
     return posixFilename.replace(/^_+/g, '').replace(/_+$/g, '');
 };
 
-export const deleteTempFile = async(sourceFile:string) => {
-    try {
-        console.log('deleting tmp file');
-        await fs.promises.unlink(sourceFile);
-    } catch (err) {
-        console.error('error deleting: ', err);
-    }
-};
-
 export const isError = (arg: unknown): arg is Error => (
     arg instanceof Error
 );
