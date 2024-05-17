@@ -25,7 +25,7 @@ export const isError = (arg: unknown): arg is Error => (
 
 export const normalizeErrorForLogging = (arg: unknown): string => {
     if (isError(arg)) {
-        return JSON.stringify(arg, Object.getOwnPropertyNames(arg))
+        return JSON.stringify(arg, Object.getOwnPropertyNames(arg));
     } else if (typeof arg === 'string') {
         return arg;
     } else {

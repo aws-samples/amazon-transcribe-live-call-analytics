@@ -18,8 +18,6 @@ import {
     ContentRedactionOutput,
     LanguageCode,
     ContentRedactionType,
-    BadRequestException,
-    ConflictException
 } from '@aws-sdk/client-transcribe-streaming';
 
 import { 
@@ -318,7 +316,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             );
             outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
         } catch (err) {
-            console.error('Error in StartCallAnalyticsStreamTranscriptionCommand: ')
+            console.error('Error in StartCallAnalyticsStreamTranscriptionCommand: ');
             console.error(normalizeErrorForLogging(err));
             return;
         }
@@ -334,7 +332,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             );
             outputTranscriptStream = response.TranscriptResultStream;
         } catch (err) {
-            console.error('Error in StartStreamTranscription: ')
+            console.error('Error in StartStreamTranscription: ');
             console.error(normalizeErrorForLogging(err));
             return;            
         }
