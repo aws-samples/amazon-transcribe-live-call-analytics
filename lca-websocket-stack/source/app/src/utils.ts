@@ -1,6 +1,5 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import fs from 'fs';
 
 export const posixifyFilename = function (filename: string) {
     // Replace all invalid characters with underscores.
