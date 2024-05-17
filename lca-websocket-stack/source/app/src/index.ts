@@ -305,7 +305,7 @@ const writeToS3 = async (callMetaData: CallMetaData, tempFileName:string) => {
         data = await s3Client.send(new PutObjectCommand(uploadParams));
         server.log.debug(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Uploaded ${sourceFile} to S3 complete: ${JSON.stringify(data)}`);
     } catch (err) {
-        console.error(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Error uploading ${sourceFile} to S3: ${normalizeErrorForLogging(err)}`);
+        server.log.error(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Error uploading ${sourceFile} to S3: ${normalizeErrorForLogging(err)}`);
     } finally {
         fileStream.destroy();
     }
@@ -315,8 +315,8 @@ const writeToS3 = async (callMetaData: CallMetaData, tempFileName:string) => {
 export const deleteTempFile = async(callMetaData: CallMetaData, sourceFile:string) => {
     try {
         await fs.promises.unlink(sourceFile);
-        console.debug(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Deleted tmp file ${sourceFile}`);
+        server.log.debug(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Deleted tmp file ${sourceFile}`);
     } catch (err) {
-        console.error(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Error deleting tmp file ${sourceFile} : ${normalizeErrorForLogging(err)}`);
+        server.log.error(`[${callMetaData.callEvent}]: [${callMetaData.callId}] - Error deleting tmp file ${sourceFile} : ${normalizeErrorForLogging(err)}`);
     }
 };
