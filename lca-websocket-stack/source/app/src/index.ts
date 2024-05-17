@@ -214,7 +214,7 @@ const onTextMessage = async (ws: WebSocket, data: string): Promise<void> => {
         server.log.debug(`Received call start event from client, writing it to KDS:  ${JSON.stringify(callMetaData)}`);
 
         await writeCallStartEvent(callMetaData);
-        const tempRecordingFilename = `${callMetaData.callId}.raw`;
+        const tempRecordingFilename = getTempRecordingFileName(callMetaData);
         const writeRecordingStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
         const recordingFileSize = 0;
         const highWaterMarkSize = (callMetaData.samplingRate / 10) * 2 * 2;
