@@ -36,10 +36,12 @@ const StreamAudio = () => {
   const [micInputOption, setMicInputOption] = useState({ label: 'AGENT', value: 'agent' });
 
   const getSocketUrl = useCallback(() => {
-    console.log('Trying to resolve websocket url...');
+    console.log(`DEBUG - [${new Date().toISOString()}]: Trying to resolve websocket url...`);
     return new Promise((resolve) => {
       if (settings.WSEndpoint) {
-        console.log(`Resolved Websocket URL to ${settings.WSEndpoint}`);
+        console.log(`
+          DEBUG - [${new Date().toISOString()}]: Resolved Websocket URL to ${settings.WSEndpoint}
+        `);
         resolve(settings.WSEndpoint);
       }
     });
@@ -117,6 +119,8 @@ const StreamAudio = () => {
   };
 
   const stopRecording = async () => {
+    console.log(`DEBUG - [${new Date().toISOString()}]: Stopping recording...`);
+
     if (audioProcessor.current) {
       audioProcessor.current.port.postMessage({
         message: 'UPDATE_RECORDING_STATE',
@@ -137,11 +141,17 @@ const StreamAudio = () => {
         console.log('AudioContext closed.');
       });
     } else {
-      console.log('no media recorder available to stop');
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Error trying to stop recording. AudioWorklet Processor node is not active.
+      `);
       setRecording(false);
     }
     if (streamingStarted && !recording) {
       callMetaData.callEvent = 'END';
+      // eslint-disable-next-line prettier/prettier
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Send Call END msg: ${JSON.stringify(callMetaData)}
+      `);
       sendMessage(JSON.stringify(callMetaData));
       setStreamingStarted(false);
       setCallMetaData({
@@ -152,6 +162,10 @@ const StreamAudio = () => {
   };
 
   const startRecording = async () => {
+    console.log(`
+      DEBUG - [${new Date().toISOString()}]: Start Recording and Streaming Audio to Websocket server.
+    `);
+
     try {
       audioContext.current = new window.AudioContext();
       displayStream.current = await window.navigator.mediaDevices.getDisplayMedia({
@@ -169,6 +183,10 @@ const StreamAudio = () => {
       callMetaData.samplingRate = SOURCE_SAMPLING_RATE;
 
       callMetaData.callEvent = 'START';
+      // eslint-disable-next-line prettier/prettier
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Send Call START msg: ${JSON.stringify(callMetaData)}
+      `);
       sendMessage(JSON.stringify(callMetaData));
       setStreamingStarted(true);
 
@@ -184,15 +202,23 @@ const StreamAudio = () => {
       monoMicSource.connect(channelMerger.current, 0, 0);
       monoDisplaySource.connect(channelMerger.current, 0, 1);
 
+      console.log(`
+        DEBUG - [${new Date().toISOString()}]: Registering and adding AudioWorklet processor to capture audio
+      `);
+
       try {
         await audioContext.current.audioWorklet.addModule('./worklets/recording-processor.js');
       } catch (error) {
-        console.log(`Add module error ${error}`);
+        console.log(`
+          DEBUG - [${new Date().toISOString()}]: Error registering AudioWorklet processor: ${error}
+        `);
       }
 
       audioProcessor.current = new AudioWorkletNode(audioContext.current, 'recording-processor');
       audioProcessor.current.port.onmessageerror = (error) => {
-        console.log(`Error receving message from worklet ${error}`);
+        console.log(`
+          DEBUG - [${new Date().toISOString()}]: Error receving message from worklet ${error}
+        `);
       };
       audioProcessor.current.port.onmessage = (event) => {
         // this is pcm audio

@@ -23,13 +23,13 @@ export const isError = (arg: unknown): arg is Error => (
     arg instanceof Error
 );
 
-export const normalizeError = (arg: unknown): Error => {
-    if(arg instanceof Error) {
+export const normalizeErrorForLogging = (arg: unknown): string => {
+    if (isError(arg)) {
+        return JSON.stringify(arg, Object.getOwnPropertyNames(arg))
+    } else if (typeof arg === 'string') {
         return arg;
-    } else if(typeof arg === 'string') {
-        return new Error(`String raised as error: "${arg.substring(0, 2048)}"`);
     } else {
-        return new Error(`Object not extending Error raised. Type: ${typeof arg}`);
+        return `Object not extending Error raised. Type: ${typeof arg}`;
     }
 };
 

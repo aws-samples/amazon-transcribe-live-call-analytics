@@ -32,6 +32,7 @@ import {
     createWavHeader,
     posixifyFilename,
     deleteTempFile,
+    normalizeErrorForLogging,
 } from './utils';
 
 import {
@@ -43,51 +44,85 @@ const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefine
 const RECORDING_FILE_PREFIX = process.env['RECORDING_FILE_PREFIX'] || 'lca-audio-wav/';
 const CPU_HEALTH_THRESHOLD = parseInt(process.env['CPU_HEALTH_THRESHOLD'] || '50', 10);
 const LOCAL_TEMP_DIR = process.env['LOCAL_TEMP_DIR'] || '/tmp/';
+const WS_LOG_LEVEL = process.env['WS_LOG_LEVEL'] || 'debug';
+const WS_LOG_INTERVAL = parseInt(process.env['WS_LOG_INTERVAL'] || '120', 10);
 
 const s3Client = new S3Client({ region: AWS_REGION });
-const socketMap = new Map<WebSocket, SocketCallData>();
 
-const isDev = process.env['NODE_ENV'] !== 'PROD';
+const socketMap = new Map<WebSocket, SocketCallData>();
 
 // create fastify server (with logging enabled for non-PROD environments)
 const server = fastify({
     logger: {
-        prettyPrint: isDev ? {
+        level: WS_LOG_LEVEL,
+        prettyPrint: {
+            ignore: 'pid,hostname',
             translateTime: 'SYS:HH:MM:ss.l',
-            colorize: true,
-            ignore: 'pid,hostname'
-        } : false,
+            colorize: false,
+            levelFirst: true,
+        },
     },
+    disableRequestLogging: true,
 });
+
 // register the @fastify/websocket plugin with the fastify server
 server.register(websocket);
 
 // Setup preHandler hook to authenticate 
 server.addHook('preHandler', async (request, reply) => {
-    // console.log(request);
-    if (!request.url.includes('health/check')) { 
+    if (!request.url.includes('health')) { 
+        server.log.debug('Received preHandler hook for authentication. Calling jwtVerifier to authenticate.');
+        server.log.debug(`Websocket Request - URI: <${request.url}>, SocketRemoteAddr: ${request.socket.remoteAddress}, Headers: ${JSON.stringify(request.headers)}`);
+    
         await jwtVerifier(request, reply);
     }
 });
 
 // Setup Route for websocket connection
 server.get('/api/v1/ws', { websocket: true, logLevel: 'debug' }, (connection, request) => {
-    server.log.info(`Websocket Request - URI: <${request.url}>, SocketRemoteAddr: ${request.socket.remoteAddress}, Headers: ${JSON.stringify(request.headers, null, 1)}`);
+    server.log.debug('Received Connection request.');
+    server.log.debug(`Websocket Request - URI: <${request.url}>, SocketRemoteAddr: ${request.socket.remoteAddress}, Headers: ${JSON.stringify(request.headers)}`);
 
     registerHandlers(connection.socket); // setup the handler functions for websocket events
 });
 
+type HealthCheckRemoteInfo = {
+    addr: string;
+    tsFirst: number;
+    tsLast: number;
+    count: number;
+};
+const healthCheckStats = new Map<string, HealthCheckRemoteInfo>();
+
 // Setup Route for health check 
 server.get('/health/check', { logLevel: 'warn' }, (request, response) => {
-    const cpuUsage = os.loadavg()[0] / os.cpus().length * 100;
 
+    const now = Date.now();
+    const cpuUsage = os.loadavg()[0] / os.cpus().length * 100;
     const isHealthy = cpuUsage > CPU_HEALTH_THRESHOLD ? false : true;
     const status = isHealthy ? 200 : 503;
+    
+    const remoteIp = request.socket.remoteAddress || 'unknown';
+    const item = healthCheckStats.get(remoteIp);
+    if (!item) {
+        server.log.info(`First health check from new source. RemoteAddr: ${remoteIp}, URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+        server.log.info(` ==> Health Check status - CPU Usage%: ${cpuUsage}, IsHealthy: ${isHealthy}, Status: ${status}`);
+        healthCheckStats.set(remoteIp, { addr: remoteIp, tsFirst: now, tsLast: now, count: 1 });
+    } else {
+        item.tsLast = now;
+        ++item.count;
+        const elapsed_seconds = (item.tsLast - item.tsFirst) / 1000;
+        if ((elapsed_seconds % WS_LOG_INTERVAL) == 0) {
+            server.log.info(`Health check # ${item.count} from source - RemoteAddr: ${remoteIp}, URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+            server.log.info(` ==> Health Check status - CPU Usage%: ${cpuUsage}, IsHealthy: ${isHealthy}, Status: ${status}`);
+        }
+    }
 
     response
         .code(status)
         .header('Cache-Control', 'max-age=0, no-cache, no-store, must-revalidate, proxy-revalidate')
         .send({ 'Http-Status': status, 'Healthy': isHealthy });
+    
 });
 
 // Start the websocket server on default port 3000 if no port supplied in environment variables
@@ -98,9 +133,10 @@ server.listen(
     },
     (err) => {
         if (err) {
-            server.log.error('Error starting websocket server: ',err);
+            server.log.error(`Error starting websocket server: ${normalizeErrorForLogging(err)}`);
             process.exit(1);
         }
+        server.log.debug('Websocket server is ready and listening.');
         server.log.info(`Routes: \n${server.printRoutes()}`);
     }
 );
@@ -116,7 +152,7 @@ const registerHandlers = (ws: WebSocket): void => {
                 await onTextMessage(ws, Buffer.from(data as Uint8Array).toString('utf8'));
             }
         } catch (err) {
-            server.log.error(`Error processing message: ${err}`);
+            server.log.error(`Error processing message: ${normalizeErrorForLogging(err)}`);
             process.exit(1);
         }
     });
@@ -125,12 +161,12 @@ const registerHandlers = (ws: WebSocket): void => {
         try {
             onWsClose(ws, code);
         } catch (err) {
-            server.log.error('Error in WS close handler: ', err);
+            server.log.error(`Error in WS close handler: ${normalizeErrorForLogging(err)}`);
         }
     });
 
     ws.on('error', (error: Error) => {
-        server.log.error('Websocket error, forcing close: ', error);
+        server.log.error(`Websocket error, forcing close: ${normalizeErrorForLogging(error)}`);
         ws.close();
     });
 };
@@ -153,7 +189,7 @@ const onBinaryMessage = async (ws: WebSocket, data: Uint8Array): Promise<void> =
         socketData.writeRecordingStream.write(data);
         socketData.recordingFileSize += data.length;
     } else {
-        server.log.error('Error: received audio data before metadata');
+        server.log.error('Error: received audio data before metadata. Check logs for errors in START event.');
     }
 };
 
@@ -164,7 +200,7 @@ const onTextMessage = async (ws: WebSocket, data: string): Promise<void> => {
     try {
         server.log.info(`Call Metadata received from client :  ${data}`);
     } catch (error) {
-        server.log.error('Error parsing call metadata: ', data);
+        server.log.error(`Error parsing call metadata: ${data} ${normalizeErrorForLogging(error)}`);
         callMetaData.callId = randomUUID();
     }
     
@@ -174,6 +210,8 @@ const onTextMessage = async (ws: WebSocket, data: string): Promise<void> => {
         callMetaData.toNumber = callMetaData.toNumber || 'System Phone';
         callMetaData.shouldRecordCall = callMetaData.shouldRecordCall || false;
         callMetaData.agentId = callMetaData.agentId || randomUUID();  
+
+        server.log.debug(`Received call start event from client, writing it to KDS:  ${JSON.stringify(callMetaData)}`);
 
         await writeCallStartEvent(callMetaData);
         const tempRecordingFilename = `${callMetaData.callId}.raw`;
@@ -261,7 +299,7 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
             socketMap.delete(ws);
         }
     } else {
-        server.log.info(`Already received the end call event: ${JSON.stringify(callMetaData)}`);
+        server.log.info(`Duplicate End call event. Already received the end call event: ${JSON.stringify(callMetaData)}`);
 
     }
 };
@@ -269,7 +307,7 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
 const writeToS3 = async (tempFileName:string) => {
     const sourceFile = path.join(LOCAL_TEMP_DIR, tempFileName);
 
-    console.log('Uploading audio to S3');
+    server.log.debug(`Uploading audio to S3: ${sourceFile}`);
     let data;
     const fileStream = fs.createReadStream(sourceFile);
     const uploadParams = {
@@ -279,9 +317,9 @@ const writeToS3 = async (tempFileName:string) => {
     };
     try {
         data = await s3Client.send(new PutObjectCommand(uploadParams));
-        console.log('Uploading to S3 complete: ', data);
+        server.log.debug(`Uploading to S3 complete: ${JSON.stringify(data)}`);
     } catch (err) {
-        console.error('S3 upload error: ', err);
+        console.error(`S3 upload error: ${normalizeErrorForLogging(err)}}`);
     } finally {
         fileStream.destroy();
     }
