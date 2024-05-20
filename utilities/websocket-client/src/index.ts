@@ -34,13 +34,16 @@ new Command()
 
         const uri = options.uri ?? serveruri;
         if (uri) {
-            const jwtToken = process.env['LCA_JWT_TOKEN'] || undefined;
-
-            const ws = new WebSocket(uri, {
-                headers: {
-                    authorization: `Bearer ${jwtToken}`
-                }
-            });
+            const jwtToken = process.env['LCA_JWT_TOKEN'] || '';
+            const wss_url = new URL(uri+'?authorization=Bearer '+jwtToken);
+            // wss_url.searchParams.append('authorization', 'Bearer'+' '+jwtToken);
+            console.log(wss_url.toJSON());
+            const ws = new WebSocket(wss_url);
+            // const ws = new WebSocket(wss_url, {
+            //     headers: {
+            //         authorization: `Bearer ${jwtToken}`
+            //     }
+            // });
 
             ws.on('open', () => {
                 console.log('Connected to server');
@@ -110,36 +113,36 @@ new Command()
     })
     .parseAsync(process.argv);
 
-emitKeypressEvents(process.stdin);
-process.stdin.setRawMode(true);
+// emitKeypressEvents(process.stdin);
+// process.stdin.setRawMode(true);
     
-let ctrlcHit = false;
-process.stdin.on('keypress', (str, key) => {
-    if(key.ctrl && (key.name === 'c' || key.name === 'd')) {
-        if(!ctrlcHit) {
-            closer();
-            ctrlcHit = true;
-        } else {
-            console.log('Terminating now!');
-            process.exit(1);    // If hit twice, exit immediately
-        }
-    } else {
-        console.log(`You pressed the ${JSON.stringify(str)} key: ${JSON.stringify(key)}`);
-    }
-});
+// let ctrlcHit = false;
+// process.stdin.on('keypress', (str, key) => {
+//     if(key.ctrl && (key.name === 'c' || key.name === 'd')) {
+//         if(!ctrlcHit) {
+//             closer();
+//             ctrlcHit = true;
+//         } else {
+//             console.log('Terminating now!');
+//             process.exit(1);    // If hit twice, exit immediately
+//         }
+//     } else {
+//         console.log(`You pressed the ${JSON.stringify(str)} key: ${JSON.stringify(key)}`);
+//     }
+// });
     
-process.once('SIGTERM', () => {
-    console.log('SIGTERM!');
-    closer();
-});
+// process.once('SIGTERM', () => {
+//     console.log('SIGTERM!');
+//     closer();
+// });
 
-process.once('SIGINT', () => {
-    console.log('SIGINT!');
-    closer();
-});
+// process.once('SIGINT', () => {
+//     console.log('SIGINT!');
+//     closer();
+// });
 
 
-const closer = () => {
-    console.log('Closing...');
-    process.exit(1);
-};
+// const closer = () => {
+//     console.log('Closing...');
+//     process.exit(1);
+// };
