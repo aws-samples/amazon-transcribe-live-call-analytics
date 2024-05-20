@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.12] - 2024-05-20
 ### Fixed
+- Expanded redaction support to include all languages (and dialects) on the Amazon Transcribe supported languages page.
 - Call Transcriber Lambda
    - Refactor call end handling, to explicitly process ENDED messages from VoiceConnector, rather than imputing call end from stream data ending - adds robustness when stream can end (temporarily) for other reasons (such as call hold, etc.)
    - Identified a situation where if a call chained across multiple lambda invocations (lasted longer than 12 minutes), the new timer we introduced that checks if the call ends would leak into the next lambda invocation. This would have no effect for a single long running call other than duplicate checks to DynamoDB—however—if the call ends and a NEW call uses that warm Lambda, the new call would inherit the timers and within 5 seconds mark the call as ended. To fix this, we made modifications by adding proper clean-up of timers when the call ends, and also double checking when the next call begins that the new Lambda did not inherit any calls.
