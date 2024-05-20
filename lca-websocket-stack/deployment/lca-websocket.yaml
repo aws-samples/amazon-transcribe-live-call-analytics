@@ -164,6 +164,13 @@ Parameters:
     Type: String
     Description: LCA settings SSM Parameter store 
 
+  # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
+  # if the values are changed (and the LCASettings param was recreated in the ai-stack)
+  CategoryAlertRegEx:
+    Type: String
+  EnableVoiceToneAnalysis:
+    Type: String
+
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
     Type: String
@@ -1511,6 +1518,9 @@ Resources:
                       - - 'wss://'
                         - !GetAtt WebSocketCloudFrontDistribution.DomainName
                         - '/api/v1/ws'
+      # Also force param update to replace WSEndpoint if any of these params (which reset the Param) are changed
+      CategoryAlertRegex: !Ref CategoryAlertRegEx
+      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
