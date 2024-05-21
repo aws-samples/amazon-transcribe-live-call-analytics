@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 /* eslint-disable no-param-reassign */
 
 const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-const { S3Client, PutObjectCommand, CopyObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { KinesisClient } = require('@aws-sdk/client-kinesis');
 
 /* Transcribe and Streaming Libraries */
@@ -80,7 +80,8 @@ const EVENT_TYPE = {
   FAILED: 'ERROR',
   CONTINUE: 'CONTINUE',
 };
-const TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
+const LAMBDA_INVOKE_TIMEOUT = parseInt(process.env.LAMBDA_INVOKE_TIMEOUT, 10) || 720000;
+const CHECK_CALL_STATUS_INTERVAL_MILLISECONDS = parseInt(process.env.CHECK_CALL_STATUS_INTERVAL_MILLISECONDS, 10) || 5000;
 
 let s3Client;
 let lambdaClient;
@@ -89,8 +90,12 @@ let dynamoClient;
 let kinesisClient;
 
 let timeToStop = false;
+let isCallEnded = false;
+let isAgentPaused = false;
+let isCallerPaused = false;
 let stopTimer;
 let keepAliveTimer;
+let callStatusCheckTimer;
 const keepAliveChunk = Buffer.alloc(2, 0);
 const kvsProducerTimestamp = {};
 const kvsServerTimestamp = {};
@@ -149,7 +154,7 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
     },
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-  console.log('GetItem params: ', JSON.stringify(params));
+  console.log('GetItem params (getChannelStreamFromDynamo): ', JSON.stringify(params));
   const command = new GetItemCommand(params);
   let agentStreamArn;
   let loopCount = 0;
@@ -157,7 +162,7 @@ const getChannelStreamFromDynamo = async function getChannelStreamFromDynamo(cal
   // eslint-disable-next-line no-plusplus
   while (agentStreamArn === undefined && loopCount++ < retries) {
     const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
+    console.log('GetItem result (getChannelStreamFromDynamo): ', JSON.stringify(data));
     if (data.Item) {
       if (data.Item.StreamArn) agentStreamArn = data.Item.StreamArn.S;
     } else {
@@ -183,6 +188,7 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
   const callData = {
     callId: callEvent.detail.callId,
     originalCallId: callEvent.detail.callId,
+    callStreamingStatus: 'STARTED',
     callStreamingStartTime: now,
     callProcessingStartTime: now,
     callStreamingEndTime: '',
@@ -346,6 +352,29 @@ const writeCallDataToDdb = async function writeCallDataToDdb(callData) {
   }
 };
 
+const writeCallDataIdMappingToDdb = async function writeCallDataIdMappingToDdb(originalCallId, callId) {
+  console.log(`Write callData mapping: ${originalCallId} => ${callId} to DDB`);
+  const expiration = getExpiration(1);
+  const now = new Date().toISOString();
+  const putParams = {
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+    Item: {
+      PK: { S: `cm#${originalCallId}` },
+      SK: { S: 'CALL_ID_MAPPING' },
+      CallId: { S: callId },
+      CreatedAt: { S: now },
+      ExpiresAfter: { N: expiration.toString() },
+    },
+  };
+  console.log(putParams);
+  const putCmd = new PutItemCommand(putParams);
+  try {
+    await dynamoClient.send(putCmd);
+  } catch (error) {
+    console.error(`Error writing callData mapping: ${originalCallId} => ${callId} to DDB`, error);
+  }
+};
+
 const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) {
   console.log('Write sessionData to DDB');
   const expiration = getExpiration(1);
@@ -369,6 +398,45 @@ const writeSessionDataToDdb = async function writeSessionDataToDdb(sessionData) 
   }
 };
 
+const getCallDataWithOriginalCallIdFromDdb = async function getCallDataWithOriginalCallIdFromDdb(originalCallId) {
+  // Set the parameters
+  const params = {
+    Key: {
+      PK: {
+        S: `cm#${originalCallId}`,
+      },
+      SK: {
+        S: 'CALL_ID_MAPPING',
+      },
+    },
+    TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
+  };
+  console.log('GetItem CALL_ID_MAPPING params: ', JSON.stringify(params));
+  const command = new GetItemCommand(params);
+  let mappedCallId = undefined;
+  try {
+    const mappingData = await dynamoClient.send(command);
+    console.log('GetItem CALL_ID_MAPPING result: ', JSON.stringify(mappingData));
+    if (mappingData) {
+      mappedCallId = mappingData?.Item?.CallId?.S;
+    }
+  } catch (error) {
+    console.error('Error retrieving CALL_ID_MAPPING record (getCallDataWithOriginalCallIdFromDdb): ', error);
+  }
+  if (mappedCallId === undefined) {
+    console.log(`No CALL_ID_MAPPING record found for originalCallId: ${originalCallId}`);
+  }
+  let callData = undefined;
+  if (mappedCallId) {
+    callData = await getCallDataFromDdb(mappedCallId);
+  }
+  // LCA stack may be updating while calls are in progress. Use originalCallId to retrieve the call data without the mapping
+  if (callData === undefined) {
+    console.log(`Try to find CallData using original callId ${originalCallId}`);
+    callData = await getCallDataFromDdb(originalCallId);
+  }
+  return callData;
+};
 
 const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
   // Set the parameters
@@ -383,12 +451,12 @@ const getCallDataFromDdb = async function getCallDataFromDdb(callId) {
     },
     TableName: TRANSCRIBER_CALL_EVENT_TABLE_NAME,
   };
-  console.log('GetItem params: ', JSON.stringify(params));
+  console.log('GetItem params (getCallDataFromDdb): ', JSON.stringify(params));
   const command = new GetItemCommand(params);
   let callData;
   try {
     const data = await dynamoClient.send(command);
-    console.log('GetItem result: ', JSON.stringify(data));
+    console.log('GetItem result (getCallDataFromDdb): ', JSON.stringify(data));
     callData = JSON.parse(data.Item.CallData.S);
   } catch (error) {
     console.log('Error retrieving callData - Possibly invalid callId?: ', error);
@@ -400,7 +468,7 @@ const getCallDataForStartCallEvent = async function getCallDataForStartCallEvent
   const { callId } = scpevent;
   const callData = await getCallDataFromDdb(callId);
   if (!callData) {
-    console.log(`ERROR: No callData stored for callId: ${callId} - exiting.`);
+    console.log(`ERROR: No callData stored for  CallId: ${callId} - exiting.`);
     return undefined;
   }
   if (callData.callProcessingStartTime) {
@@ -449,61 +517,18 @@ function timestampDeltaCheck(n) {
   );
 }
 
-const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
-  let actuallyStop = false;
-  let firstDecodeEbml = true;
-  let totalSize = 0;
-  let lastMessageTime;
+const checkIfCallEnded = async (callId) => {
+  console.log(`Checking if call has ended. (CallId: ${callId})`);
+  const latestCallData = await getCallDataFromDdb(callId);
+  if (latestCallData.callStreamingStatus === 'ENDED') {
+    console.log(`CallData callStreamingStatus ENDED. Stop call processing for ${callId}`);
+    isCallEnded = true;
+    return true;
+  }
+  return false;
+};
 
-  console.log('inside readKVS worker', REGION, streamName, streamArn);
-  const decoder = new EbmlStreamDecoder({
-    bufferTagIds: [EbmlTagId.SimpleTag, EbmlTagId.SimpleBlock],
-  });
-  decoder.on('error', (error) => {
-    console.log('Decoder Error:', JSON.stringify(error));
-  });
-  decoder.on('data', (chunk) => {
-    lastMessageTime = Date().now;
-    if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
-      // this is the end of a segment. Lets forcefully stop if needed.
-      if (timeToStop) actuallyStop = true;
-    }
-    if (!timeToStop) {
-      if (chunk.id === EbmlTagId.SimpleTag) {
-        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_FRAGMENT_NUMBER') {
-          lastFragment = chunk.Children[1].data;
-        }
-        // capture latest audio timestamps for stream in global variable
-        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_SERVER_TIMESTAMP') {
-          kvsServerTimestamp[streamName] = chunk.Children[1].data;
-        }
-        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_PRODUCER_TIMESTAMP') {
-          kvsProducerTimestamp[streamName] = chunk.Children[1].data;
-        }
-      }
-      if (chunk.id === EbmlTagId.SimpleBlock) {
-        if (firstDecodeEbml) {
-          firstDecodeEbml = false;
-          console.log(`decoded ebml, simpleblock size:${chunk.size} stream: ${streamName}`);
-          console.log(
-            `${streamName} stream - producer timestamp: ${kvsProducerTimestamp[streamName]}, server timestamp: ${kvsServerTimestamp[streamName]}`,
-          );
-          timestampDeltaCheck(1);
-        }
-        try {
-          streamPipe.write(chunk.payload);
-        } catch (error) {
-          console.error('Error posting payload chunk', error);
-        }
-      }
-    }
-  }); // use this to find last fragment tag we received
-  decoder.on('end', () => {
-    // close stdio
-    console.log(streamName, 'Finished');
-    console.log(`Last fragment for ${streamName} ${lastFragment} total size: ${totalSize}`);
-  });
-  console.log(`Starting stream ${streamName}`);
+const getKVSstreamReader = async (streamArn, lastFragment) => {
   const kvClient = new KinesisVideoClient({ REGION });
   const getDataCmd = new GetDataEndpointCommand({ APIName: 'GET_MEDIA', StreamARN: streamArn });
   const response = await kvClient.send(getDataCmd);
@@ -520,6 +545,91 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
   }
   const result = await mediaClient.getMedia(fragmentSelector);
   const streamReader = result.Payload;
+  return streamReader;
+};
+
+const readKVS = async (streamName, streamArn, lastFragment, streamPipe, callData) => {
+  let firstDecodeEbml = true;
+  let totalSize = 0;
+  let lastMessageTime;
+
+  console.log(`inside readKVS worker`, REGION, streamName, streamArn, ` (CallId: ${callData.callId})`);
+  const decoder = new EbmlStreamDecoder({
+    bufferTagIds: [EbmlTagId.SimpleTag, EbmlTagId.SimpleBlock],
+  });
+  decoder.on('error', (error) => {
+    console.log(`Decoder Error:`, JSON.stringify(error), ` (CallId: ${callData.callId})`);
+  });
+  decoder.on('data', (chunk) => {
+    lastMessageTime = Date().now;
+    if (chunk.id === EbmlTagId.Segment && chunk.position === EbmlTagPosition.End) {
+      // this is the end of a segment. Lets forcefully stop if needed.
+      if (timeToStop) {
+        console.log(`Detected lambda timeout, stopping KVS read from ${streamName}. (CallId: ${callData.callId})`);
+      }
+      if (isCallEnded) {
+        console.log(`Detected call end, stopping KVS read from ${streamName}. (CallId: ${callData.callId})`);
+      }
+    }
+    if (!timeToStop) {
+      if (chunk.id === EbmlTagId.SimpleTag) {
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_FRAGMENT_NUMBER') {
+          lastFragment = chunk.Children[1].data;
+        }
+        // capture latest audio timestamps for stream in global variable
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_SERVER_TIMESTAMP') {
+          kvsServerTimestamp[streamName] = chunk.Children[1].data;
+        }
+        if (chunk.Children[0].data === 'AWS_KINESISVIDEO_PRODUCER_TIMESTAMP') {
+          kvsProducerTimestamp[streamName] = chunk.Children[1].data;
+        }
+        if (chunk.Children[0].data === 'CallId') {
+          let fragmentCallId = chunk.Children[1].data;
+
+          if (callData.originalCallId !== fragmentCallId) {
+            console.log(`Error: ${streamName}'s MKV data has a Chime CallId of ${fragmentCallId}, expecting ${callData.originalCallId}. (CallId: ${callData.callId})`);
+            
+            (async () => {
+              // write is call ended. Since these are async, calling them from within an anonymous promise
+              console.log(`Mismatched CallId indicates that KVS stream has been recycled. We must end this call. (CallId: ${callData.callId})`);
+              console.log(`Update callData record in DDB to set callStreamingStatus to ENDED. (CallId: ${callData.callId})`);
+              isCallEnded = true;
+              callData.callStreamingStatus = 'ENDED';
+              callData.callStreamingEndTime = new Date().toISOString();
+              await writeCallDataToDdb(callData);
+            })();
+          }
+        }
+      }
+      if (chunk.id === EbmlTagId.SimpleBlock) {
+        if (firstDecodeEbml) {
+          firstDecodeEbml = false;
+          console.log(`decoded ebml, simpleblock size:${chunk.size} stream: ${streamName}. (CallId: ${callData.callId})`);
+          console.log(
+            `${streamName} stream - producer timestamp: ${kvsProducerTimestamp[streamName]}, server timestamp: ${kvsServerTimestamp[streamName]}. (CallId: ${callData.callId})`,
+          );
+          timestampDeltaCheck(1);
+        }
+        try {
+          if (!isAgentPaused && !isCallerPaused) {
+            // this will only write audio to the interleaver if both KVS streams are running.
+            streamPipe.write(chunk.payload);
+          }
+          // alternate solution here is to write blank audio to the second stream in the same chunk size as this chunk.
+        } catch (error) {
+          console.error(`Error posting payload chunk`, error, ` (CallId: ${callData.callId})`);
+        }
+      }
+    }
+  }); // use this to find last fragment tag we received
+  decoder.on('end', () => {
+    // close stdio
+    console.log(`${streamName} Finished. (CallId: ${callData.callId})`);
+    console.log(`Last fragment for ${streamName} ${lastFragment} total size: ${totalSize}. (CallId: ${callData.callId})`);
+  });
+  console.log(`Starting stream ${streamName}. (CallId: ${callData.callId})`);
+
+  let streamReader = await getKVSstreamReader(streamArn, lastFragment);
 
   const timeout = setTimeout(() => {
     // Check every 10 seconds if 5 minutes have passed
@@ -527,23 +637,56 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe) => {
       clearInterval(timeout);
       streamReader.destroy();
     }
+    // if (isCallEnded) {
+    //   console.log(`Call has ended but ${streamName} is still reading from KVS, destroying reader.`);
+    //   streamReader.destroy();
+    // }
   }, 10000);
 
   let firstKvsChunk = true;
   try {
-    for await (const chunk of streamReader) {
-      if (firstKvsChunk) {
-        firstKvsChunk = false;
-        console.log(`${streamName} received chunk size: ${chunk.length}`);
+    while (true) {
+      for await (const chunk of streamReader) {
+        if (streamName === 'Agent' && isAgentPaused === true) {
+          console.log(`Successfully restarted Agent stream. (CallId: ${callData.callId})`);
+          isAgentPaused = false;
+        }
+        if (streamName === 'Caller' && isCallerPaused === true) {
+          console.log(`Successfully restarted Caller stream. (CallId: ${callData.callId})`);
+          isCallerPaused = false;
+        }
+        if (firstKvsChunk) {
+          firstKvsChunk = false;
+          console.log(`${streamName} received chunk size: ${chunk.length}. (CallId: ${callData.callId})`);
+        }
+        totalSize += chunk.length;
+        decoder.write(chunk);
+        if (isCallEnded || timeToStop) {
+          break;
+        }
       }
-      totalSize += chunk.length;
-      decoder.write(chunk);
-      if (actuallyStop) break;
+      if (streamName === 'Agent') isAgentPaused = true;
+      if (streamName === 'Caller') isCallerPaused = true;
+
+      if (!isCallEnded && !timeToStop) {
+        lastFragment = '';
+        console.log(`Reading KVS from ${streamName} ended, attempting to restart. (CallId: ${callData.callId})`);
+        await sleep(1000);
+        streamReader = await getKVSstreamReader(streamArn, lastFragment);
+      } else {
+        if (isCallEnded) {
+          console.log(`${streamName} detected call ended, exiting KVS stream reading. (CallId: ${callData.callId})`);
+        }
+        if (timeToStop) {
+          console.log(`${streamName} detected time to invoke new lambda, exiting KVS stream reading. (CallId: ${callData.callId})`);
+        }
+        break;
+      }
     }
   } catch (error) {
-    console.error('error writing to decoder', error);
+    console.error(`error writing to decoder`, error, ` (CallId: ${callData.callId})`);
   } finally {
-    console.log(`Closing buffers ${streamName}`);
+    console.log(`Closing buffers ${streamName}. (CallId: ${callData.callId})`);
     decoder.end();
   }
 
@@ -564,7 +707,9 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
       }
     }
   } catch (error) {
-    console.error('Error processing transcribe stream. SessionId: ', sessionId, error);
+    console.error(`Error processing transcribe stream. SessionId: `, sessionId, error, ` (CallId: ${callId})`);
+  } finally {
+    console.log(`Transcribe stream has finished. (CallId: ${callId})`);
   }
 };
 
@@ -580,6 +725,7 @@ const go = async function go(callData) {
     lastCallerFragment,
     tcaOutputLocation,
     lambdaCount,
+    originalCallId
   } = callData;
   let sessionId = callData.sessionId;
   let firstChunkToTranscribe = true;
@@ -604,19 +750,19 @@ const go = async function go(callData) {
             configurationEvent.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
           }
         }
-        console.log('Sending TCA configuration event');
+        console.log(`Sending TCA configuration event. (CallId: ${callId})`);
         console.log(JSON.stringify(configurationEvent));
         yield { ConfigurationEvent: configurationEvent };
       }
       for await (const payloadChunk of passthroughStream) {
         if (firstChunkToTranscribe) {
           firstChunkToTranscribe = false;
-          console.log('Sending first chunk to transcribe: ', payloadChunk.length);
+          console.log(`Sending first chunk to transcribe: `, payloadChunk.length, ` (CallId: ${callId})`);
         }
         yield { AudioEvent: { AudioChunk: payloadChunk } };
       }
     } catch (error) {
-      console.log('Error reading passthrough stream or yielding audio chunk. SessionId: ', sessionId, error);
+      console.log(`Error reading passthrough stream or yielding audio chunk. SessionId: `, sessionId, error, ` (CallId: ${callId})`);
     }
   };
 
@@ -625,10 +771,10 @@ const go = async function go(callData) {
 
   let tsClientArgs = { region: REGION };
   if (TRANSCRIBE_ENDPOINT) {
-    console.log("Using custom Transcribe endpoint:", TRANSCRIBE_ENDPOINT);
+    console.log(`Using custom Transcribe endpoint:`, TRANSCRIBE_ENDPOINT, ` (CallId: ${callId})`);
     tsClientArgs.endpoint = TRANSCRIBE_ENDPOINT;
   }
-  console.log("Transcribe client args:", tsClientArgs);
+  console.log(`Transcribe client args:`, tsClientArgs, ` (CallId: ${callId})`);
   const tsClient = new TranscribeStreamingClient(tsClientArgs);
   let tsStream;
   const tsParams = {
@@ -648,7 +794,11 @@ const go = async function go(callData) {
   if (sessionId !== undefined) {
     tsParams.SessionId = sessionId;
   }
-  if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
+  if (IS_CONTENT_REDACTION_ENABLED && (
+    TRANSCRIBE_LANGUAGE_CODE === 'en-US' ||
+    TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
+    TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
+    TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
     tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
     if (PII_ENTITY_TYPES) tsParams.PiiEntityTypes = PII_ENTITY_TYPES;
   }
@@ -665,24 +815,24 @@ const go = async function go(callData) {
   while (true) {
     try {
       if (isTCAEnabled) {
-        console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
+        console.log(`Transcribe StartCallAnalyticsStreamTranscriptionCommand args:`, tsParams, ` (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
       } else {
-        console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
+        console.log(`Transcribe StartStreamTranscriptionCommand args:`, tsParams, ` (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
       }
       break;
     } catch (e) {
-      console.log(`StartStream threw exception on attempt ${retryCount} of ${START_STREAM_MAX_RETRIES}: `, e);
+      console.log(`StartStream threw exception on attempt ${retryCount} of ${START_STREAM_MAX_RETRIES}: `, e, ` (CallId: ${callId})`);
       if (++retryCount > START_STREAM_MAX_RETRIES) throw e;
       sleep(START_STREAM_RETRY_WAIT_MS);
     }
   }
 
   sessionId = tsResponse.SessionId;
-  console.log('Transcribe SessionId: ', sessionId);
+  console.log(`Transcribe SessionId: `, sessionId, ` (CallId: ${callId})`);
 
   /* cache session data in DDB - use to process post call output if/when needed */
   if (lambdaCount == 0) {
@@ -698,8 +848,8 @@ const go = async function go(callData) {
     await writeSessionDataToDdb(sessionData);
   }
 
-  console.log('creating readable from transcript stream');
-  console.log('creating interleave streams');
+  console.log(`creating readable from transcript stream. (CallId: ${callId})`);
+  console.log(`creating interleave streams. (CallId: ${callId})`);
   const agentBlock = new BlockStream(2);
   const callerBlock = new BlockStream(2);
   const combinedStream = new PassThrough();
@@ -710,24 +860,42 @@ const go = async function go(callData) {
     writeRecordingStream.write(chunk);
   });
   interleave([agentBlock, callerBlock]).pipe(combinedStream);
-  console.log('starting workers');
-  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock);
-  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock);
-  console.log('done starting workers');
+  console.log(`starting workers. (CallId: ${callId})`);
+  const callerWorker = readKVS('Caller', callerStreamArn, lastCallerFragment, callerBlock, callData);
+  const agentWorker = readKVS('Agent', agentStreamArn, lastAgentFragment, agentBlock, callData);
+  console.log(`done starting workers. (CallId: ${callId})`);
 
+  console.log(`setting timer for LAMBDA_INVOKE_TIMEOUT to ${LAMBDA_INVOKE_TIMEOUT} msec. (CallId: ${callId})`);
   timeToStop = false;
   stopTimer = setTimeout(() => {
+    console.log(`LAMBDA_INVOKE_TIMEOUT occurred. Time to stop = true (CallId: ${callId})`);
     timeToStop = true;
-  }, TIMEOUT);
+    clearTimeout(stopTimer);
+    stopTimer = undefined;
+  }, LAMBDA_INVOKE_TIMEOUT);
 
+  console.log(`setting interval for KEEP_ALIVE to ${KEEP_ALIVE} msec. (CallId: ${callId})`);
   keepAliveTimer = setInterval(() => {
-    if (timeToStop === true) {
+    if (timeToStop === true || isCallEnded) {
+      console.log(`clearing KEEP_ALIVE interval from within interval. (CallId: ${callId})`);
       clearInterval(keepAliveTimer);
+      keepAliveTimer = undefined;
     } else {
       agentBlock.write(keepAliveChunk);
       callerBlock.write(keepAliveChunk);
     }
   }, KEEP_ALIVE);
+
+  isCallEnded = false;
+  console.log(`setting interval for CHECK_CALL_STATUS to ${CHECK_CALL_STATUS_INTERVAL_MILLISECONDS} msec. (CallId: ${callId})`);
+  callStatusCheckTimer = setInterval(async () => {
+    const callEnded = await checkIfCallEnded(callId);
+    if (callEnded) {
+      console.log(`clearing CHECK_CALL_STATUS interval. (CallId: ${callId})`);
+      clearInterval(callStatusCheckTimer); 
+      callStatusCheckTimer = undefined;
+    }
+  }, CHECK_CALL_STATUS_INTERVAL_MILLISECONDS); 
 
   const transcribePromise = readTranscripts(tsStream, callId, sessionId);
 
@@ -738,14 +906,28 @@ const go = async function go(callData) {
 
   await transcribePromise;
 
-  console.log('Done with all 3 streams');
-  console.log('Last Caller Fragment: ', returnVals[0]);
-  console.log('Last Agent Fragment: ', returnVals[1]);
+  console.log(`Done with all 3 streams. (CallId: ${callId})`);
+  console.log(`Last Caller Fragment: `, returnVals[0], ` (CallId: ${callId})`);
+  console.log(`Last Agent Fragment: `, returnVals[1], ` (CallId: ${callId})`);
 
   // stop the timer so when we finish and upload to s3 this doesnt kick in
-  if (timeToStop === false) {
+  if (stopTimer) {
+    console.log(`clearing LAMBDA_INVOKE_TIMEOUT interval. (CallId: ${callId})`);
     clearTimeout(stopTimer);
-    timeToStop = false;
+    stopTimer = undefined;
+  }
+
+  // ensure call status timer is cleared since we're ending this processing loop.
+  if (callStatusCheckTimer) {
+    console.log(`clearing CHECK_CALL_STATUS interval. (CallId: ${callId})`);
+    clearInterval(callStatusCheckTimer); // Stop the previous interval
+    callStatusCheckTimer = undefined;
+  }
+
+  if (keepAliveTimer) {
+    console.log(`clearing KEEP_ALIVE_TIMER interval. (CallId: ${callId})`);
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = undefined;
   }
 
   writeRecordingStream.end();
@@ -772,6 +954,20 @@ const handler = async function handler(event, context) {
   dynamoClient = new DynamoDBClient({ region: REGION });
   kinesisClient = new KinesisClient({ region: REGION });
 
+  // make sure we've not inherited a running callStatusCheckTimer from a previously aborted lambda invocation
+  if (callStatusCheckTimer) {
+    console.log('Clearing previous callStatusCheckTimer');
+    clearInterval(callStatusCheckTimer); 
+    callStatusCheckTimer = undefined;
+  }
+
+  // make sure we've not inherited a running keepAliveTimer from a previously aborted lambda invocation
+  if (keepAliveTimer) {
+    console.log('Clearing previous keepAliveTimer');
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = undefined;
+  }
+
   /*
   Create a callData object for incoming event:
   A LAMBDA_CONTINUE event contains callData object ready to use
@@ -795,6 +991,7 @@ const handler = async function handler(event, context) {
       '--- CONTINUING FROM PREVIOUS LAMBDA. LAMBDA SEQUENCE COUNT: ',
       callData.lambdaCount,
       '---',
+      ` (CallId: ${callData.callId}) `,
     );
     if (callData.lambdaCount > 30) {
       console.log('Stopping due to runaway recursive Lambda.');
@@ -808,7 +1005,7 @@ const handler = async function handler(event, context) {
       return;
     }
     await writeCallDataToDdb(callData);
-    console.log('Ready to start processing call');
+    console.log(`Ready to start processing call. (CallId: ${callData.callId})`);
     await writeCallStartEventToKds(kinesisClient, callData);
   } else if (event.source === 'aws.chime') {
     if (event.detail.streamingStatus === 'STARTED') {
@@ -844,15 +1041,28 @@ const handler = async function handler(event, context) {
       );
       callData = await getCallDataFromChimeEvents(event);
 
-      console.log('Saving callData to DynamoDB');
+      console.log(`Saving callData to DynamoDB. (CallId: ${callData.callId})`);
       await writeCallDataToDdb(callData);
+      await writeCallDataIdMappingToDdb(callData.originalCallId, callData.callId);
 
       if (callData.shouldProcessCall === false) {
-        console.log('CallData shouldProcessCall is false, exiting.');
+        console.log(`CallData shouldProcessCall is false, exiting. (CallId: ${callData.callId})`);
         return;
       }
-      console.log('Ready to start processing call');
+      console.log(`Ready to start processing call. (CallId: ${callData.callId})`);
       await writeCallStartEventToKds(kinesisClient, callData);
+    } else if (event.detail.streamingStatus === 'ENDED') {
+      console.log('AWS Chime stream ENDED event received. Update CallData status in DDB - this will terminate lambda processing for this call');
+      // VC streaming ENDED uses the original callId. Use originalCallId to get the callData.
+      const callDataFromDdb = await getCallDataWithOriginalCallIdFromDdb(event.detail.callId);
+      if (callDataFromDdb) {
+        callDataFromDdb.callStreamingStatus = 'ENDED';
+        callDataFromDdb.callStreamingEndTime = new Date().toISOString();
+        await writeCallDataToDdb(callDataFromDdb);
+      } else {
+        console.error('Error: We received a call ENDED event from Chime for a callId that is unknown to us!');
+      }
+      return;
     } else {
       console.log(
         `AWS Chime stream status ${event.detail.streamingStatus}: Nothing to do - exiting`,
@@ -866,12 +1076,22 @@ const handler = async function handler(event, context) {
     return;
   }
 
-  console.log('CallData: ', JSON.stringify(callData));
-  const result = await go(callData);
+  console.log(`CallData: `, JSON.stringify(callData));
+  let result;  
+  try {
+    result = await go(callData);
+  } catch (error) {
+    console.log(`An unhandled exception occurred inside of the go(). Ending the call. (CallId: ${callData.callId})`, error);
+    // Call has ended
+    await writeCallEndEventToKds(kinesisClient, callData.callId);
+    callData.callStreamingStatus = 'ENDED';
+    callData.callStreamingEndTime = new Date().toISOString();
+    await writeCallDataToDdb(callData);
+  }
   if (result) {
     if (timeToStop) {
       console.log(
-        'Lambda approaching max execution time. Starting a new Lambda to continue processing the call.',
+        `Lambda approaching max execution time. Starting a new Lambda to continue processing the call. (CallId: ${callData.callId})`,
       );
       const newEvent = {};
       newEvent.action = 'LAMBDA_CONTINUE';
@@ -880,16 +1100,19 @@ const handler = async function handler(event, context) {
       newEvent.callData.lastCallerFragment = result.lastCallerFragment;
       newEvent.callData.sessionId = result.sessionId;
       newEvent.callData.lambdaCount = callData.lambdaCount + 1;
-      console.log('Launching new Lambda with event: ', JSON.stringify(newEvent));
+      console.log(`Launching new Lambda with event: `, JSON.stringify(newEvent), ` (CallId: ${callData.callId})`);
       const invokeCmd = new InvokeCommand({
         FunctionName: context.invokedFunctionArn,
         InvocationType: 'Event',
         Payload: JSON.stringify(newEvent),
       });
-      await lambdaClient.send(invokeCmd);
+      const res = await lambdaClient.send(invokeCmd);
+      const newLambdaRequestId = res['$metadata'].requestId;
+      console.log(`Launched new Lambda with RequestId: ${newLambdaRequestId}. (CallId: ${callData.callId})`);
     } else {
       // Call has ended
       await writeCallEndEventToKds(kinesisClient, callData.callId);
+      callData.callStreamingStatus = 'ENDED';
       callData.callStreamingEndTime = new Date().toISOString();
       await writeCallDataToDdb(callData);
     }
@@ -908,7 +1131,7 @@ const handler = async function handler(event, context) {
             lambdaCount: callData.lambdaCount,
           });
         } catch (error) {
-          console.log('Error merging S3 recording files:', error);
+          console.log(`Error merging S3 recording files:`, error, `( (CallId: ${callData.callId}))`);
         }
         await writeS3UrlToKds(kinesisClient, callData.callId);
       }

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.12] - 2024-05-20
+### Fixed
+- Expanded redaction support to include all languages (and dialects) on the Amazon Transcribe supported languages page.
+- Call Transcriber Lambda
+   - Refactor call end handling, to explicitly process ENDED messages from VoiceConnector, rather than imputing call end from stream data ending - adds robustness when stream can end (temporarily) for other reasons (such as call hold, etc.)
+   - Identified a situation where if a call chained across multiple lambda invocations (lasted longer than 12 minutes), the new timer we introduced that checks if the call ends would leak into the next lambda invocation. This would have no effect for a single long running call other than duplicate checks to DynamoDB—however—if the call ends and a NEW call uses that warm Lambda, the new call would inherit the timers and within 5 seconds mark the call as ended. To fix this, we made modifications by adding proper clean-up of timers when the call ends, and also double checking when the next call begins that the new Lambda did not inherit any calls.
+   - Added the callId to the log output, so that it is easier to trace calls.
+   - Added the request id of the next Lambda invocation in the output of the log, so that it makes it easier to trace sequential lambda invocations (chaining).
+
+- Websocket server and Stream Audio client
+   - Fix state management in Websocket server - add connection specific state variables to a global dictionary to maintain state for active connections
+   - Fix reconnection logic in Stream Audio websocket client - i.e. retrofit the fix from LMA.
+   - Clean up and streamline log formats in Websocket Server and Stream Audio client
+   - Reduce the amount of logs due to health checks. Health check is done every 10 seconds, logging status for each health check which creates huge amounts of log records in cloudwatch. To fix this - Log first health check message from each new source and then log every 2 minutes (interval controlled by a new environment variable which is not exposed in cloudformation, but can be directly updated in the ECS configuration by developers).
+   - Fix authentication code in Websocket client utility (utilites/webosocket-client)
+
 ## [0.8.11] - 2024-02-21
 ### Fixed
 - Added custom resource in the lca-websocket-stack that sets the ECS cluster's desired service count to zero, then deletes the service, before deleting the cluster. This will prevent errors in deleting the stack when disabling websockets or deleting LCA.
@@ -356,7 +372,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.11...develop
+[Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-meeting-assistant/compare/main...develop
+[0.8.12]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.11...v0.8.12
 [0.8.11]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...v0.8.11
 [0.8.10]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...v0.8.10
 [0.8.9]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.8...v0.8.9

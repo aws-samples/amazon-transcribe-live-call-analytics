@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import dotenv from 'dotenv';
+import { normalizeErrorForLogging } from './utils';
 dotenv.config();
 
 const USERPOOL_ID = process.env['USERPOOL_ID'] || '';
@@ -22,13 +23,15 @@ export const jwtVerifier = async (request: FastifyRequest, reply: FastifyReply) 
     const auth = query.authorization || headers.authorization;
 
     if (!auth) {
-        request.log.error('No authorization query string or header found');
+        request.log.error(`[AUTH]: [${request.socket.remoteAddress}] - No authorization query string or header found. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+
         return reply.status(401).send();
     }
 
     const match = auth?.match(/^Bearer (.+)$/);
     if (!match) {
-        request.log.error('No Bearer token found in header or query string');
+        request.log.error(`[AUTH]: [${request.socket.remoteAddress}] - No Bearer token found in header or query string. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+
         return reply.status(401).send();
     }
 
@@ -36,13 +39,16 @@ export const jwtVerifier = async (request: FastifyRequest, reply: FastifyReply) 
     try {
         const payload = await cognitoJwtVerifier.verify(accessToken, { clientId: null, tokenUse: 'access' });      
         if (!payload) {
-            request.log.error('Connection not authorized. Returning 401');
+            request.log.error(`[AUTH]: [${request.socket.remoteAddress}] - Connection not authorized. Returning 401. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+
             return reply.status(401).send();
         }
-        request.log.info(`Connection request authorized at ${payload.auth_time}`);
+        request.log.info(`[AUTH]: [${request.socket.remoteAddress}] - Connection request authorized. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+
         return;
     } catch (err) {
-        request.log.error(`Error Authorizing client connection ${err}`);
+        request.log.error(`[AUTH]: [${request.socket.remoteAddress}] - Error Authorizing client connection. ${normalizeErrorForLogging(err)} URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
+
         return reply.status(401).send();
     }
 };

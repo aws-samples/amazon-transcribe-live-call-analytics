@@ -128,7 +128,7 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
        **Amazon Transcribe Configuration**
    22. `Enable Partial Transcripts` - Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn.
    23. `Transcribe API mode` - Set the default API mode for Transcribe. Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support call categories and alerts, call summarization, and PCA integration.
-   24. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
+   24. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using English (en-US, en-GB, en-AU) or Spanish (es-US). This parameter is ignored when not using other languages.
    25. `Language for Transcription` - Language code to be used for Amazon Transcribe
    26. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
    27. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. _DO NOT ADD CUSTOM VALUES HERE_.
