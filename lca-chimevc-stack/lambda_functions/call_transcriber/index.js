@@ -853,7 +853,7 @@ const go = async function go(callData) {
   const agentBlock = new BlockStream(2);
   const callerBlock = new BlockStream(2);
   const combinedStream = new PassThrough();
-  const combinedStreamBlock = new BlockStream(3200);
+  const combinedStreamBlock = new BlockStream(4);
   combinedStream.pipe(combinedStreamBlock);
   combinedStreamBlock.on('data', (chunk) => {
     passthroughStream.write(chunk);
