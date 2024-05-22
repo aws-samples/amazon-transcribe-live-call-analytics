@@ -196,7 +196,7 @@ Resources:
       Environment:
         Variables:
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
-          BUFFER_SIZE: '128'
+          BUFFER_SIZE: '3200'
           LAMBDA_INVOKE_TIMEOUT: '720000'
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
