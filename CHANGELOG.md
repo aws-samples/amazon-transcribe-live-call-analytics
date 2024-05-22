@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.13] - 2024-05-22
+### Fixed
+- #138: Very delayed transcripts when using CallTranscriberLambda
+- #140: Very delayed transcripts when using Connect-KVS audio ingestion
+
 ## [0.8.12] - 2024-05-20
 ### Fixed
 - Expanded redaction support to include all languages (and dialects) on the Amazon Transcribe supported languages page.
@@ -373,6 +378,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 
 [Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-meeting-assistant/compare/main...develop
+[0.8.13]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.12...v0.8.13
 [0.8.12]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.11...v0.8.12
 [0.8.11]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...v0.8.11
 [0.8.10]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.9...v0.8.10

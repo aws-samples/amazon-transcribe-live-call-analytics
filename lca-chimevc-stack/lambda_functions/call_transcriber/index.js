@@ -588,7 +588,7 @@ const readKVS = async (streamName, streamArn, lastFragment, streamPipe, callData
 
           if (callData.originalCallId !== fragmentCallId) {
             console.log(`Error: ${streamName}'s MKV data has a Chime CallId of ${fragmentCallId}, expecting ${callData.originalCallId}. (CallId: ${callData.callId})`);
-            
+
             (async () => {
               // write is call ended. Since these are async, calling them from within an anonymous promise
               console.log(`Mismatched CallId indicates that KVS stream has been recycled. We must end this call. (CallId: ${callData.callId})`);
@@ -892,10 +892,10 @@ const go = async function go(callData) {
     const callEnded = await checkIfCallEnded(callId);
     if (callEnded) {
       console.log(`clearing CHECK_CALL_STATUS interval. (CallId: ${callId})`);
-      clearInterval(callStatusCheckTimer); 
+      clearInterval(callStatusCheckTimer);
       callStatusCheckTimer = undefined;
     }
-  }, CHECK_CALL_STATUS_INTERVAL_MILLISECONDS); 
+  }, CHECK_CALL_STATUS_INTERVAL_MILLISECONDS);
 
   const transcribePromise = readTranscripts(tsStream, callId, sessionId);
 
@@ -957,7 +957,7 @@ const handler = async function handler(event, context) {
   // make sure we've not inherited a running callStatusCheckTimer from a previously aborted lambda invocation
   if (callStatusCheckTimer) {
     console.log('Clearing previous callStatusCheckTimer');
-    clearInterval(callStatusCheckTimer); 
+    clearInterval(callStatusCheckTimer);
     callStatusCheckTimer = undefined;
   }
 
@@ -1077,7 +1077,7 @@ const handler = async function handler(event, context) {
   }
 
   console.log(`CallData: `, JSON.stringify(callData));
-  let result;  
+  let result;
   try {
     result = await go(callData);
   } catch (error) {
