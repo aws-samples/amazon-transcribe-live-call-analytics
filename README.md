@@ -25,7 +25,7 @@ Our sample solution, Live Call Analytics with Agent Assist (LCA), does most of t
 
 The demo Asterisk server is configured to use Amazon Voice Connector, which provides the phone number and SIP trunking needed to route inbound and outbound calls. When you configure LCA to integrate with your contact center using the Amazon Chime SDK Voice Connector (SIPREC) option, instead of the demo Asterisk server, Voice Connector is configured to integrate instead with your existing contact center using SIP-based media recording (SIPREC) or network-based recording (NBR). In both cases, Voice Connector streams audio to Kinesis Video Streams using two streams per call, one for the caller and one for the agent.
 
-LCA also now also supports three additional input sources, using different architectures for ingestion:
+LCA also now also supports additional input sources, using different architectures for ingestion:
 
 - The Genesys Cloud AudioHook integration option - see [Genesys AudioHook Integration README](/lca-genesys-audiohook-stack/README.md) for details.
 - The new Connect Contact Lens integration option - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) for details.
@@ -128,7 +128,7 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
        **Amazon Transcribe Configuration**
    22. `Enable Partial Transcripts` - Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn.
    23. `Transcribe API mode` - Set the default API mode for Transcribe. Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support call categories and alerts, call summarization, and PCA integration.
-   24. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
+   24. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using English (en-US, en-GB, en-AU) or Spanish (es-US). This parameter is ignored when not using other languages.
    25. `Language for Transcription` - Language code to be used for Amazon Transcribe
    26. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
    27. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. _DO NOT ADD CUSTOM VALUES HERE_.

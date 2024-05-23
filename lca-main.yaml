@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (0.8.11) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.13) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -279,7 +279,7 @@ Parameters:
     Default: 'false'
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
-      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
+      the 'en-US', 'en-AU', 'en-GB' or 'es-US' languages are selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - 'true'
       - 'false'
@@ -1412,6 +1412,14 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
+        # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
+        # if the values are changed (and the LCASettings param was recreated in the ai-stack)
+        CategoryAlertRegEx: !Ref CategoryAlertRegEx
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - 'true'
+          - 'false'
+        
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
