@@ -1,13 +1,16 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import stream from 'stream';
+import { WriteStream } from 'fs';
+
 import { 
     TranscriptEvent,
     UtteranceEvent,
     CategoryEvent,
 } from '@aws-sdk/client-transcribe-streaming';
 
-export type Uuid = string | undefined;             // UUID as defined by RFC#4122
+export type Uuid = string;             // UUID as defined by RFC#4122
 
 export type EventType = 
     | 'START' // required
@@ -64,3 +67,16 @@ export type CallMetaData = {
     samplingRate: number,
     callEvent: string,
 };
+
+export type SocketCallData = {
+    callMetadata: CallMetaData,
+    audioInputStream?: stream.PassThrough,
+    writeRecordingStream?: WriteStream,
+    recordingFileSize?: number
+    startStreamTime: Date,
+    inboundPayloads: Uint8Array[],
+    outboundPayloads: Uint8Array[],
+    inboundTimestamps: number[],
+    outboundTimestamps: number[],
+    ended: boolean,
+}

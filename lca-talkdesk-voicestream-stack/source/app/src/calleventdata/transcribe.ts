@@ -33,9 +33,15 @@ import {
     AddCallCategoryEvent,
     Uuid,
     CallMetaData,
+    SocketCallData,
 } from './types';
 
+import {
+    normalizeErrorForLogging
+} from '../utils';
+
 import stream from 'stream';
+import { FastifyInstance } from 'fastify';
 
 const formatPath = function(path:string) {
     let pathOut = path;
@@ -79,7 +85,7 @@ type transcriptionCommandInput<TCAEnabled> = TCAEnabled extends true
 const kinesisClient = new KinesisClient({ region: AWS_REGION });
 const transcribeClient = new TranscribeStreamingClient({ region: AWS_REGION });
 
-export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent ) => {
+export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent, server: FastifyInstance) => {
     
     const putParams = {
         StreamName: kdsStreamName,
@@ -90,15 +96,159 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
-        console.debug('Written Call Event to KDS');
-        console.debug(callEvent);
+        server.log.debug(`[${callEvent.EventType} LCA EVENT]: ${callEvent.CallId} - Written Call ${callEvent.EventType} Event to KDS: ${JSON.stringify(callEvent)}`);
     } catch (error) {
-        console.error('Error writing Call Event to KDS', error);
-        console.debug(callEvent);
+        server.log.debug(`[${callEvent.EventType}]: ${callEvent.CallId} - Error writing ${callEvent.EventType} Call Event to KDS : ${normalizeErrorForLogging(error)} Event: ${JSON.stringify(callEvent)}`);
     }
 };
 
-export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid) {
+export const writeCallStartEvent = async (callMetaData: CallMetaData, server: FastifyInstance): Promise<void> => {
+    const callStartEvent: CallStartEvent = {
+        EventType: 'START',
+        CallId: callMetaData.callId,
+        CustomerPhoneNumber: callMetaData.fromNumber || 'Customer Phone',
+        SystemPhoneNumber: callMetaData.toNumber || 'System Phone',
+        AgentId: callMetaData.agentId,
+        CreatedAt: new Date().toISOString()
+    };
+    await writeCallEvent(callStartEvent, server);  
+};
+
+export const writeCallEndEvent = async (callMetaData: CallMetaData, server: FastifyInstance): Promise<void> => {
+    const callEndEvent: CallEndEvent = {
+        EventType: 'END',
+        CallId: callMetaData.callId,
+        CustomerPhoneNumber: callMetaData.fromNumber || 'Customer Phone',
+        SystemPhoneNumber: callMetaData.toNumber || 'System Phone',
+    };
+    await writeCallEvent(callEndEvent, server);  
+};
+
+export const writeCallRecordingEvent = async (callMetaData: CallMetaData, recordingUrl: string, server: FastifyInstance): Promise<void> => {
+    const callRecordingEvent: CallRecordingEvent = {
+        EventType: 'ADD_S3_RECORDING_URL',
+        CallId: callMetaData.callId,
+        RecordingUrl: recordingUrl
+    };
+    await writeCallEvent(callRecordingEvent, server);  
+};
+
+export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough, socketCallMap: SocketCallData, server: FastifyInstance) => {
+
+    const transcribeInput = async function* () {
+        if (isTCAEnabled) {
+            const channel0: ChannelDefinition = { ChannelId:0, ParticipantRole: ParticipantRole.CUSTOMER };
+            const channel1: ChannelDefinition = { ChannelId:1, ParticipantRole: ParticipantRole.AGENT };
+            const channel_definitions: ChannelDefinition [] = [];
+            channel_definitions.push(channel0);
+            channel_definitions.push(channel1);
+            const configuration_event: ConfigurationEvent = { ChannelDefinitions: channel_definitions };
+            if (IS_TCA_POST_CALL_ANALYTICS_ENABLED) {
+                configuration_event.PostCallAnalyticsSettings = {
+                    OutputLocation: tcaOutputLocation,
+                    DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
+                };
+                if (IS_CONTENT_REDACTION_ENABLED) {
+                    configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT as ContentRedactionOutput;
+                }
+            }
+            yield { ConfigurationEvent: configuration_event };
+        }
+        for await (const chunk of audioInputStream ) {
+            yield { AudioEvent: { AudioChunk: chunk } };
+        }
+        // yield { AudioEvent: { AudioChunk:Uint8Array.from(new Array(2).fill([0x00, 0x00]).flat()), EndOfStream: true } };
+    };
+
+    let tsStream;
+    let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
+    let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
+    
+    const tsParams:transcriptionCommandInput<typeof isTCAEnabled> = {
+        LanguageCode: TRANSCRIBE_LANGUAGE_CODE as LanguageCode,
+        MediaSampleRateHertz: callMetaData.samplingRate,
+        MediaEncoding: 'pcm',
+        AudioStream: transcribeInput()
+    };
+    
+    if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
+        tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as ContentRedactionType;
+        if (TRANSCRIBE_PII_ENTITY_TYPES) {
+            tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
+        }
+    }
+    if (CUSTOM_VOCABULARY_NAME) {
+        tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
+    }
+    if (CUSTOM_LANGUAGE_MODEL_NAME) {
+        tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
+    }
+
+    if (isTCAEnabled) {
+        try {
+            const response = await transcribeClient.send(
+                new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
+            );
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from TCA. Session Id: ${response.SessionId} ===`);
+
+            outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
+        } catch (err) {
+            server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Error in StartCallAnalyticsStreamTranscriptionCommand: ${normalizeErrorForLogging(err)}`);
+            return;
+        }
+    } else {
+        (tsParams as StartStreamTranscriptionCommandInput).EnableChannelIdentification = true;
+        (tsParams as StartStreamTranscriptionCommandInput).NumberOfChannels = 2;
+        try {
+            const response = await transcribeClient.send(
+                new StartStreamTranscriptionCommand(tsParams)
+            );
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`);
+
+            outputTranscriptStream = response.TranscriptResultStream;
+        } catch (err) {
+            server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Error in StartStreamTranscription: ${normalizeErrorForLogging(err)}`);
+            return;            
+        }
+    }
+    
+    socketCallMap.startStreamTime = new Date();
+
+    if (outputCallAnalyticsStream) {
+        tsStream = stream.Readable.from(outputCallAnalyticsStream);
+    } else if (outputTranscriptStream) {
+        tsStream = stream.Readable.from(outputTranscriptStream);
+    }
+
+    try {
+        if (tsStream) {
+            for await (const event of tsStream) {
+                // console.log('Event ', event);
+                if (event.TranscriptEvent) {
+                    const message: TranscriptEvent = event.TranscriptEvent;
+                    await writeTranscriptionSegment(message, callMetaData.callId, server);
+                }
+                if (event.CategoryEvent && event.CategoryEvent.MatchedCategories) {
+                    await writeAddCallCategoryEvent(event.CategoryEvent, callMetaData.callId, server);
+                }
+                if (event.UtteranceEvent && event.UtteranceEvent.UtteranceId) {
+                    await writeAddTranscriptSegmentEvent(event.UtteranceEvent, undefined, callMetaData.callId, server);
+                }
+            }
+
+        } else {
+            server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Transcribe stream is empty`);
+        }
+    } catch (error) {
+        server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Error processing Transcribe results stream ${normalizeErrorForLogging(error)}`);
+        
+    } finally {
+        // writeCallEndEvent(callMetaData);
+    }
+};
+
+
+export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid, server: FastifyInstance) {
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
         if (transcribeMessageJson.Transcript?.Results[0].Alternatives && transcribeMessageJson.Transcript?.Results[0].Alternatives?.length > 0) {
 
@@ -135,19 +285,16 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const putCmd = new PutRecordCommand(putParams);
             try {
                 await kinesisClient.send(putCmd);
-                // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-                // console.info(JSON.stringify(kdsObject));
-                // console.info(kdsObject.Transcript);
+                server.log.debug(`[${kdsObject.EventType}]: [${callId}] - Written ${kdsObject.EventType} event to KDS: ${JSON.stringify(kdsObject)}`);
             } catch (error) {
-                console.error('Error writing transcription segment (TRANSCRIBE) to KDS', error);
-                console.debug(JSON.stringify(kdsObject));
+                server.log.error(`[${kdsObject.EventType}]: [${callId}] - Error writing ${kdsObject.EventType} to KDS : ${normalizeErrorForLogging(error)} KDS object: ${JSON.stringify(kdsObject)}`);
             }
         } 
     } 
 };
 
 export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:UtteranceEvent | undefined , 
-    transcriptEvent:TranscriptEvent | undefined,  callId: Uuid) {
+    transcriptEvent:TranscriptEvent | undefined,  callId: Uuid, server: FastifyInstance) {
     
     if (transcriptEvent) {
         if (transcriptEvent.Transcript?.Results && transcriptEvent.Transcript?.Results.length > 0) {
@@ -187,15 +334,13 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     const putCmd = new PutRecordCommand(putParams);
     try {
         await kinesisClient.send(putCmd);
-        // console.info('Written ADD_TRANSCRIPT_SEGMENT event to KDS');
-        // console.info(JSON.stringify(kdsObject));
+        server.log.debug(`[${kdsObject.EventType}]: [${callId}] - Written ${kdsObject.EventType} event to KDS: ${JSON.stringify(kdsObject)}`);
     } catch (error) {
-        console.error('Error writing transcription segment to KDS', error);
-        console.debug(JSON.stringify(kdsObject));
+        server.log.error(`[${kdsObject.EventType}]: [${callId}] - Error writing ${kdsObject.EventType} to KDS : ${normalizeErrorForLogging(error)} KDS object: ${JSON.stringify(kdsObject)}`);
     }
 };
 
-export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEvent, callId: Uuid) {
+export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEvent, callId: Uuid, server: FastifyInstance) {
 
     if (categoryEvent) {
         const now = new Date().toISOString();
@@ -216,139 +361,11 @@ export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEv
         const putCmd = new PutRecordCommand(putParams);
         try {
             await kinesisClient.send(putCmd);
-            // console.debug('Written ADD_CALL_CATEGORY to KDS');
-            // console.debug(JSON.stringify(kdsObject));
+            server.log.debug(`[${kdsObject.EventType}]: [${callId}] - Written ${kdsObject.EventType} event to KDS: ${JSON.stringify(kdsObject)}`);
+            
         } catch (error) {
-            console.error('Error writing ADD_CALL_CATEGORY to KDS', error);
-            console.debug(JSON.stringify(kdsObject));
+            server.log.error(`[${kdsObject.EventType}]: [${callId}] - Error writing ${kdsObject.EventType} to KDS : ${normalizeErrorForLogging(error)} KDS object: ${JSON.stringify(kdsObject)}`);
         }
 
-    }
-};
-
-export const writeCallStartEvent = async (callMetaData: CallMetaData): Promise<void> => {
-    const callStartEvent: CallStartEvent = {
-        EventType: 'START',
-        CallId: callMetaData.callId,
-        CustomerPhoneNumber: callMetaData.fromNumber || 'Customer Phone',
-        SystemPhoneNumber: callMetaData.toNumber || 'System Phone',
-        AgentId: callMetaData.agentId,
-        CreatedAt: new Date().toISOString()
-    };
-    await writeCallEvent(callStartEvent);  
-};
-
-export const writeCallEndEvent = async (callMetaData: CallMetaData): Promise<void> => {
-    const callEndEvent: CallEndEvent = {
-        EventType: 'END',
-        CallId: callMetaData.callId,
-        CustomerPhoneNumber: callMetaData.fromNumber || 'Customer Phone',
-        SystemPhoneNumber: callMetaData.toNumber || 'System Phone',
-    };
-    await writeCallEvent(callEndEvent);  
-};
-
-export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough) => {
-
-    const transcribeInput = async function* () {
-        if (isTCAEnabled) {
-            const channel0: ChannelDefinition = { ChannelId:0, ParticipantRole: ParticipantRole.CUSTOMER };
-            const channel1: ChannelDefinition = { ChannelId:1, ParticipantRole: ParticipantRole.AGENT };
-            const channel_definitions: ChannelDefinition [] = [];
-            channel_definitions.push(channel0);
-            channel_definitions.push(channel1);
-            const configuration_event: ConfigurationEvent = { ChannelDefinitions: channel_definitions };
-            if (IS_TCA_POST_CALL_ANALYTICS_ENABLED) {
-                configuration_event.PostCallAnalyticsSettings = {
-                    OutputLocation: tcaOutputLocation,
-                    DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
-                };
-                if (IS_CONTENT_REDACTION_ENABLED) {
-                    configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT as ContentRedactionOutput;
-                }
-            }
-            yield { ConfigurationEvent: configuration_event };
-        }
-        for await (const chunk of audioInputStream ) {
-            yield { AudioEvent: { AudioChunk: chunk } };
-        }
-        // yield { AudioEvent: { AudioChunk:Uint8Array.from(new Array(2).fill([0x00, 0x00]).flat()), EndOfStream: true } };
-
-    };
-
-    let tsStream;
-    let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
-    let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
-    
-    const tsParams:transcriptionCommandInput<typeof isTCAEnabled> = {
-        LanguageCode: TRANSCRIBE_LANGUAGE_CODE as LanguageCode,
-        MediaSampleRateHertz: callMetaData.samplingRate,
-        MediaEncoding: 'pcm',
-        AudioStream: transcribeInput()
-    };
-    
-    if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
-        tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as ContentRedactionType;
-        if (TRANSCRIBE_PII_ENTITY_TYPES) {
-            tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
-        }
-    }
-    if (CUSTOM_VOCABULARY_NAME) {
-        tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
-    }
-    if (CUSTOM_LANGUAGE_MODEL_NAME) {
-        tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
-    }
-
-    if (isTCAEnabled) {
-        const response = await transcribeClient.send(
-            new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
-        );
-        console.log(
-            `=== Received Initial response from TCA. Session Id: ${response.SessionId} ===`
-        );
-        outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
-    } else {
-        (tsParams as StartStreamTranscriptionCommandInput).EnableChannelIdentification = true;
-        (tsParams as StartStreamTranscriptionCommandInput).NumberOfChannels = 2;
-        const response = await transcribeClient.send(
-            new StartStreamTranscriptionCommand(tsParams)
-        );
-        console.log(
-            `=== Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`
-        );
-        outputTranscriptStream = response.TranscriptResultStream;
-    }
-    
-    if (outputCallAnalyticsStream) {
-        tsStream = stream.Readable.from(outputCallAnalyticsStream);
-    } else if (outputTranscriptStream) {
-        tsStream = stream.Readable.from(outputTranscriptStream);
-    }
-
-    try {
-        if (tsStream) {
-            for await (const event of tsStream) {
-                // console.log('Event ', event);
-                if (event.TranscriptEvent) {
-                    const message: TranscriptEvent = event.TranscriptEvent;
-                    await writeTranscriptionSegment(message, callMetaData.callId);
-                }
-                if (event.CategoryEvent && event.CategoryEvent.MatchedCategories) {
-                    await writeAddCallCategoryEvent(event.CategoryEvent, callMetaData.callId);
-                }
-                if (event.UtteranceEvent && event.UtteranceEvent.UtteranceId) {
-                    await writeAddTranscriptSegmentEvent(event.UtteranceEvent, undefined, callMetaData.callId);
-                }
-            }
-
-        } else {
-            console.log('Transcribe stream is empty');
-        }
-    } catch (error) {
-        console.log('Error processing Transcribe results stream', error);
-        
-    } finally {
-        writeCallEndEvent(callMetaData);
     }
 };

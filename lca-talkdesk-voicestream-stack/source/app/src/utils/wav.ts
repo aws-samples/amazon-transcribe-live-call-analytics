@@ -31,12 +31,3 @@ export const createWavHeader = function createHeader(length:number, samplingRate
 
     return buffer;
 };
-
-export const deleteTempFile = async(sourceFile:string) => {
-    try {
-        console.log('deleting tmp file');
-        await fs.promises.unlink(sourceFile);
-    } catch (err) {
-        console.error('error deleting: ', err);
-    }
-};
