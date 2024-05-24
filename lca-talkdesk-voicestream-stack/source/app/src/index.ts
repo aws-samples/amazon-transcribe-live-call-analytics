@@ -4,7 +4,6 @@
 import fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket from 'ws'; // type structure for the websocket object used by fastify/websocket
-import stream from 'stream';
 import BlockStream from 'block-stream2';
 import os from 'os';
 import fs from 'fs';
@@ -30,8 +29,6 @@ import {
     startTranscribe, 
     writeCallStartEvent,
     writeCallEndEvent,
-    writeCallEvent,
-    CallRecordingEvent,
     SocketCallData,
     writeCallRecordingEvent,
 } from './calleventdata';
@@ -44,7 +41,6 @@ import {
     posixifyFilename,
     normalizeErrorForLogging,
 } from './utils';
-import { config } from 'dotenv';
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefined;
@@ -84,7 +80,7 @@ const server = fastify({
 server.register(websocket);
 
 // Setup preHandler hook to authenticate 
-server.addHook('preHandler', async (request, reply) => {
+server.addHook('preHandler', async (request, ) => {
     if (!request.url.includes('health')) { 
         const clientIP = getClientIP(request.headers);
         server.log.debug(`[AUTH]: [${clientIP}] - Received preHandler hook for authentication. Calling jwtVerifier to authenticate. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);

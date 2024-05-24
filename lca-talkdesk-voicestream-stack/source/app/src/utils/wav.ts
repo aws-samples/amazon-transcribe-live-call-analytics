@@ -1,4 +1,3 @@
-import fs from 'fs';
 
 export const createWavHeader = function createHeader(length:number, samplingRate:number) {
     const buffer = Buffer.alloc(44);
