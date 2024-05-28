@@ -150,7 +150,7 @@ const registerHandlers = (clientIP: string, ws: WebSocket): void => {
                 await onStop(clientIP, ws, message as MediaStreamStopMessage);
             } else {
                 server.log.error(`[ON MESSAGE]: [${clientIP}] - Error processing message: Invalid Event Type ${JSON.stringify(message)}`);
-                process.exit(1);
+                // process.exit(1);
             }
 
         } catch (error) {
@@ -308,7 +308,7 @@ const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMe
             socketData.outboundTimestamps = [];
         }
     } else {
-        server.log.error(`[ON MEDIA]: [${clientIP}][${data.streamSid}] - Error: received audio data before metadata. Check logs for errors in START event.`);
+        server.log.error(`[ON MEDIA]: [${clientIP}][${data.streamSid}] - Error: received 'media' event before receiving 'start' event. Check logs for errors related to 'start' event.`);
     }
 };
 
