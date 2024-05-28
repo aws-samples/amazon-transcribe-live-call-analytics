@@ -186,7 +186,7 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
         ws.close(401);
         return;
     }
-    
+
     const callMetaData: CallMetaData = {
         callEvent: 'START',
         callId: data.start.callSid,
@@ -196,7 +196,6 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
         samplingRate: SAMPLE_RATE,
         agentId: randomUUID(),
     };
-    await writeCallStartEvent(callMetaData, server);
 
     const tempRecordingFilename = getTempRecordingFileName(callMetaData);
     const writeRecordingStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
@@ -217,6 +216,7 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
     };
     socketMap.set(ws, socketCallMap);
 
+    await writeCallStartEvent(callMetaData, server);
     startTranscribe(callMetaData, audioInputStream, socketCallMap, server);
 };
 
@@ -281,7 +281,7 @@ function syncTracksAndInterleave(inboundPayloads: Uint8Array[], outboundPayloads
 }
 
 const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMessage): Promise<void> => {
-    server.log.info(`[ON MEDIA]: [${clientIP}][${data.streamSid}] - Received Start event from client. ${JSON.stringify(data)}`);
+    server.log.info(`[ON MEDIA]: [${clientIP}][${data.streamSid}] - Received Media event from client. ${JSON.stringify(data)}`);
 
     const socketData = socketMap.get(ws);
     if (socketData !== undefined && socketData.audioInputStream !== undefined &&
