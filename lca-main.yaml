@@ -115,6 +115,14 @@ Parameters:
       Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled, or 
       Media Streams must be enabled.
 
+  TalkdeskAccountId:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) The Account identifier that created the Talkdesk stream. Used only when CallAudioSource is 
+      set to 'Talkdesk Voice Stream Websocket'. Provide the unique account identifier assigned to your 
+      Talkdesk account.  
+
   AgentAssistOption:
     Type: String
     Default: QnABot on AWS with new Kendra Index (Developer Edition)
@@ -574,6 +582,7 @@ Metadata:
           - SiprecAllowedCidrList
           - SiprecLambdaHookFunctionArn
           - ConnectInstanceArn
+          - TalkdeskAccountId
       - Label:
           default: Agent Assist Options
         Parameters:
@@ -680,6 +689,8 @@ Metadata:
         default: Lambda Hook Function ARN for SIPREC Call Initialization (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
+      TalkdeskAccountId: 
+        default: Talkdesk Account Identifier for "Talkdesk Voice Stream Websocket" Call Audio Source 
       AgentAssistOption:
         default: Enable Agent Assist
       AgentAssistExistingKendraIndexId:
@@ -1383,6 +1394,7 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
+        TalkdeskAccountId: !Ref TalkdeskAccountId
 
   WEBSOCKETSTACK:
     Type: AWS::CloudFormation::Stack

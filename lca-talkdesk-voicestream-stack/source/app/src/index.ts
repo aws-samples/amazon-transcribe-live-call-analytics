@@ -50,6 +50,7 @@ const LOCAL_TEMP_DIR = process.env['LOCAL_TEMP_DIR'] || '/tmp/';
 const WS_LOG_LEVEL = process.env['WS_LOG_LEVEL'] || 'debug';
 const WS_LOG_INTERVAL = parseInt(process.env['WS_LOG_INTERVAL'] || '120', 10);
 const SHOULD_RECORD_CALL = process.env['SHOULD_RECORD_CALL'] || 'false';
+const TALKDESK_ACCOUNT_ID = process.env['TALKDESK_ACCOUNT_ID'] || '';
 
 // Source specific audio parameters
 const CHUNK_SIZE_IN_MS = parseInt(process.env['CHUNK_SIZE_IN_MS'] || '200', 10);
@@ -83,11 +84,7 @@ server.register(websocket);
 server.addHook('preHandler', async (request, ) => {
     if (!request.url.includes('health')) { 
         const clientIP = getClientIP(request.headers);
-        server.log.debug(`[AUTH]: [${clientIP}] - Received preHandler hook for authentication. Calling jwtVerifier to authenticate. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
-    
-        // const accountSID = request.headers[]
-        // if accountSID === config.lca.accountSID(TAP customer specific)
-            
+        server.log.debug(`[AUTH]: [${clientIP}] - Received preHandler hook for authentication. URI: <${request.url}>, Headers: ${JSON.stringify(request.headers)}`);
         server.log.debug('[AUTH]: Authentication TO BE IMPLEMENTED');
     }
 });
@@ -183,6 +180,13 @@ const onConnected = async (clientIP: string, ws: WebSocket, data: MediaStreamCon
 const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMessage): Promise<void> => {
     server.log.info(`[ON START]: [${clientIP}][${data.start.callSid}] - Received Start event from client. ${JSON.stringify(data)}`);
 
+    if (data.start.accountSid !== TALKDESK_ACCOUNT_ID) {
+        server.log.error(`[ON START]: [${clientIP}][${data.start.callSid}] - Error: Account ID received from Talkdesk does not match the account ID configured in LCA.${JSON.stringify(data)}`);
+        server.log.error(`[ON START]: [${clientIP}][${data.start.callSid}] - Closing the websocket connection`);
+        ws.close(401);
+        return;
+    }
+    
     const callMetaData: CallMetaData = {
         callEvent: 'START',
         callId: data.start.callSid,

@@ -52,6 +52,14 @@ Parameters:
     Description: >-
       The Arn of Kinesis Data Stream to write the call data to.
 
+  TalkdeskAccountId:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) The Account identifier that created the Talkdesk stream. Used only when CallAudioSource is 
+      set to 'Talkdesk Voice Stream Websocket'. Provide the unique account identifier assigned to your 
+      Talkdesk account.  
+
   CloudFrontPriceClass:
     Type: String
     Default: PriceClass_100
@@ -229,7 +237,7 @@ Outputs:
     Value: !Ref S3BucketName
 
   WebSocketEndpoint:
-    Description: Websocket endpoint for Websocket integration
+    Description: Websocket endpoint for Talkdesk Websocket integration
     Value: !Join
               - ''
               - - 'wss://'
@@ -1114,6 +1122,8 @@ Resources:
               Value: '50'
             - Name: USERPOOL_ID
               Value: !Ref UserPoolId
+            - Name: TALKDESK_ACCOUNT_ID
+              Value: !Ref TalkdeskAccountId
             - Name: RECORDINGS_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX
