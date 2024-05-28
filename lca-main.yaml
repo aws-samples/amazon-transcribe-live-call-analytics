@@ -1501,6 +1501,13 @@ Outputs:
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
+  TalkdeskWebsocketEndpoint:
+    Description: Websocket endpoint for Talkdesk websocket integration
+    Value: !If
+      - ShouldInstallTalkdeskStack  
+      - !GetAtt TALKDESKSTACK.Outputs.WebSocketEndpoint
+      - ' Talkdesk WebSocket source not enabled'
+
   LCAWebsocketEndpoint:
     Description: Websocket endpoint for websocket integration
     Value: !If
