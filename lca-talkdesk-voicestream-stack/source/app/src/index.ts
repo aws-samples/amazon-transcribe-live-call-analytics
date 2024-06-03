@@ -281,9 +281,14 @@ function syncTracksAndInterleave(inboundPayloads: Uint8Array[], outboundPayloads
 }
 
 const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMessage): Promise<void> => {
-    server.log.info(`[ON MEDIA]: [${clientIP}][${data.streamSid}] - Received Media event from client. ${JSON.stringify(data)}`);
-
     const socketData = socketMap.get(ws);
+
+    let callid = `Stream ID-${data.streamSid}`;
+    if (socketData && socketData.callMetadata) {
+        callid = socketData.callMetadata.callId;
+    }
+    server.log.info(`[ON MEDIA]: [${clientIP}][${callid}] - Received Media event from client. ${JSON.stringify(data)}`);
+
     if (socketData !== undefined && socketData.audioInputStream !== undefined &&
         socketData.writeRecordingStream !== undefined && socketData.recordingFileSize !== undefined) {
         
@@ -308,7 +313,7 @@ const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMe
             socketData.outboundTimestamps = [];
         }
     } else {
-        server.log.error(`[ON MEDIA]: [${clientIP}][${data.streamSid}] - Error: received 'media' event before receiving 'start' event. Check logs for errors related to 'start' event.`);
+        server.log.error(`[ON MEDIA]: [${clientIP}][${callid}] - Error: received 'media' event before receiving 'start' event. Check logs for errors related to 'start' event.`);
     }
 };
 
