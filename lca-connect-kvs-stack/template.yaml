@@ -1,0 +1,588 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Connect KVS Call Transcriber Lambda
+
+Parameters:
+  ConnectInstanceArn:
+    Type: String
+    Description: Amazon Connect instance ARN 
+
+  AudioFilePrefix:
+    Type: String
+    Default: lca-audio-recordings/
+    Description: >-
+      The Amazon S3 prefix where the merged output audio files will be saved (must end in "/")
+
+  CallAnalyticsPrefix:
+    Type: String
+    Default: lca-call-analytics/
+    Description: The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
+  KinesisDataStreamName:
+    Type: String
+    Description: >-
+      Name of Kinesis Data Stream to publish events to
+
+  KinesisDataStreamArn:
+    Type: String
+    Description: >-
+      Arn of Kinesis Data Stream to publish events to
+
+  EventSourcingTableName:
+    Type: String
+    Description: >-
+      DynamoDB Event Table name
+
+  EventSourcingTableArn:
+    Type: String
+    Description: >-
+      DynamoDB Event Table Arn 
+
+  S3BucketName:
+    Type: String
+    Description: >-
+      S3 Bucket name for recordings
+
+  TranscribeApiMode:
+    Type: String
+    Default: analytics
+    AllowedValues:
+      - standard
+      - analytics
+    Description: Set the default operational mode for Transcribe
+
+  IsPartialTranscriptEnabled:
+    Type: String
+    Default: 'true'
+    Description: >-
+      Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn. Set to false to process only the
+      final version of each conversation turn.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  IsContentRedactionEnabled:
+    Type: String
+    Default: 'false'
+    Description: >-
+      Enable content redaction from Amazon Transcribe transcription output. This is only used when
+      the 'en-US', 'en-AU', 'en-GB' or 'es-US' languages are selected in the TranscribeLanguageCode parameter.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  TranscribeContentRedactionType:
+    Type: String
+    Default: PII
+    Description: >-
+      Type of content redaction from Amazon Transcribe transcription output
+    AllowedValues:
+      - PII
+
+  TranscribeLanguageCode:
+    Type: String
+    Description: >-
+      Language code to be used for Amazon Transcribe
+    Default: en-US
+    AllowedValues:
+      - en-US
+      - es-US
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
+
+  TranscribePiiEntityTypes:
+    Type: String
+    # yamllint disable rule:line-length
+    Default: BANK_ACCOUNT_NUMBER,BANK_ROUTING,CREDIT_DEBIT_NUMBER,CREDIT_DEBIT_CVV,CREDIT_DEBIT_EXPIRY,PIN,EMAIL,ADDRESS,NAME,PHONE,SSN
+    # yamllint enable rule:line-length
+    Description: >-
+      Select the PII entity types you want to identify or redact. Remove the values that you don't
+      want to redact from the default.  DO NOT ADD CUSTOM VALUES HERE.
+
+  CustomVocabularyName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the vocabulary to use when processing the transcription job. Leave blank if no
+      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+
+  CustomLanguageModelName:
+    Type: String
+    Default: ''
+    Description: >-
+      The name of the custom language model to use when processing the transcription job. Leave blank if no
+      custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
+      match the Language Code selected above, and use the 'Narrow Band' base model.
+
+Resources:
+  ##########################################################################
+  # Connect Contact Event / Agent Update
+  ##########################################################################
+
+  ContactEventProcessorFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Role: !GetAtt ContactEventProcessorFunctionRole.Arn
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: 20
+      Description: >-
+        AWS Lambda Function triggered when 'CONNECTED_TO_AGENT' event is received from Connect. 
+      Environment:
+        Variables:
+          KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
+          EVENT_SOURCING_TABLE_NAME: !Ref EventSourcingTableName
+          WAIT_FOR_CALL_SECS: 15
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+          import time
+          connect = boto3.client('connect')
+          dynamodb = boto3.client('dynamodb')
+          kinesis = boto3.client('kinesis')
+
+          # Input event is 'CONNECTED_TO_AGENT' event from EventBridge / Connect.
+          # Function sends UPDATE_AGENT message to KDS only if/when the call has started transcribing - i.e.
+          # the CallId is found in the DynamoDB event souring table within WAIT_FOR_CALL_SECS.
+
+          def is_known_call(callId, tablename, timeout):
+            timeout_time = time.time() + int(timeout)
+            while time.time() < timeout_time:
+              response = dynamodb.get_item(
+                TableName=tablename,
+                Key={
+                  "PK": {"S": f"c#{callId}"},
+                  "SK": {"S": f"c#{callId}"}
+                },
+                ProjectionExpression="PK"
+              )
+              if "Item" in response:
+                return True
+              else:
+                print(f"Call not found in DynamoDB - wait 1 sec and try again: {callId}")
+                time.sleep(1)
+            print(f"Call not found in DynamoDB after timeout period {timeout} seconds: {callId}")
+            return False
+
+          def get_agentId(instanceArn, agentArn):
+            if agentArn:
+              response = connect.describe_user(
+                UserId=agentArn,
+                InstanceId=instanceArn
+              )
+              username = response["User"].get("Username")
+              firstname = response["User"].get("IdentityInfo",{}).get("FirstName")
+              lastname = response["User"].get("IdentityInfo",{}).get("LastName")
+              agentId = f"{firstname} {lastname} ({username})"
+              return agentId
+
+          def send_update_agent_message(streamName, callId, agentId):
+            msg = {
+              "CallId": callId,
+              "AgentId": agentId,
+              "EventType": "UPDATE_AGENT",
+            }
+            print(f"Writing UPDATE_AGENT message to KDS: {msg}")
+            kinesis.put_record(
+              StreamName=streamName,
+              Data=json.dumps(msg).encode('utf-8'),
+              PartitionKey=callId
+            )
+
+          def handler(event, context):
+            print(json.dumps(event))
+            callId = event["detail"].get("contactId")
+            if is_known_call(
+              callId, 
+              os.environ["EVENT_SOURCING_TABLE_NAME"], 
+              os.environ["WAIT_FOR_CALL_SECS"]
+              ):
+              instanceArn = event["detail"].get("instanceArn")
+              agentArn = event["detail"].get("agentInfo",{}).get("agentArn")
+              agentId = get_agentId(instanceArn, agentArn)
+              send_update_agent_message(os.environ["KINESIS_STREAM_NAME"], callId, agentId)
+            else:
+              print("Call not transcribing. Skipping.")
+            return "Done"
+  
+  ContactEventProcessorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                Resource:
+                  - !Ref EventSourcingTableArn
+              - Action:
+                  - connect:DescribeUser
+                Effect: Allow
+                Resource:  
+                  - !Sub "${ConnectInstanceArn}/agent/*"
+              - Action:
+                  - kinesis:PutRecord
+                Effect: Allow
+                Resource:  
+                  - !Ref KinesisDataStreamArn
+
+  AllowEventBridgeToCallContactEventFunction:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref ContactEventProcessorFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRuleToTriggerContactEventFunction.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  EventBridgeRuleToTriggerContactEventFunction:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This rule is triggered by CONNECTED_TO_AGENT Connect Contact events"
+      EventPattern:
+        detail-type:
+          - "Amazon Connect Contact Event"
+        source:
+          - aws.connect
+        detail:
+          instanceArn:
+            - !Ref ConnectInstanceArn
+          channel:
+            - VOICE
+          eventType:
+            - CONNECTED_TO_AGENT
+      Targets:
+        - Id: ContactEventProcessorFunction
+          Arn: !GetAtt ContactEventProcessorFunction.Arn
+      State: "ENABLED"
+
+  ##########################################################################
+  # NodeJS Transcriber Lambda Layer
+  ##########################################################################
+  TranscriberLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs14.x
+        - nodejs16.x
+        - nodejs18.x
+      Description: >
+        This is a layer with shared nodejs libraries for the LCA call transcriber 
+        and call analytics initialization Lambdas.
+      ContentUri: ../lca-chimevc-stack/lambda_layers/node_transcriber_layer/transcriber-layer.zip
+
+  ##########################################################################
+  # Call Transcriber
+  ##########################################################################
+
+  TranscriberCallEventTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AttributeDefinitions:
+        # primary key attributes
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ExpiresAfter
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  CallTranscriberFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Architectures:
+        - arm64
+      Description: >-
+        AWS Lambda Function that will be triggered when a new call starts. This will
+        read from the KVS streams, stitch the channels together, send audio to
+        transcribe, and store the transcriptions in DynamoDB
+      Handler: index.handler
+      Layers:
+        # periodically update the Lambda Insights Layer
+        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
+        - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2'
+        - !Ref TranscriberLambdaLayer
+      Role: !GetAtt CallTranscriberFunctionRole.Arn
+      Runtime: nodejs18.x
+      MemorySize: 768
+      Timeout: 900
+      Tracing: Active
+      Environment:
+        Variables:
+          CONNECT_INSTANCE_ARN: !Ref ConnectInstanceArn
+          TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
+          BUFFER_SIZE: '3200'
+          LAMBDA_INVOKE_TIMEOUT: '720000'
+          KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
+          TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
+          REGION: !Ref AWS::Region
+          OUTPUT_BUCKET: !Ref S3BucketName
+          RAW_FILE_PREFIX: 'lca-audio-raw/'
+          RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
+          CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
+          TCA_DATA_ACCESS_ROLE_ARN: !GetAtt TcaDataAccessRole.Arn
+          POST_CALL_CONTENT_REDACTION_OUTPUT: 'redacted'
+          TEMP_FILE_PATH: '/tmp/'
+          SAVE_PARTIAL_TRANSCRIPTS: !Ref IsPartialTranscriptEnabled
+          IS_CONTENT_REDACTION_ENABLED: !If
+            - ShouldEnableContentRedaction
+            - 'true'
+            - 'false'
+          TRANSCRIBE_LANGUAGE_CODE: !Ref TranscribeLanguageCode
+          CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
+          PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
+          CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
+          CUSTOM_LANGUAGE_MODEL_NAME: !Ref CustomLanguageModelName
+      CodeUri: ./lambda_functions/connect_kvs_consumer
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+
+  CallTranscriberFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        # CloudWatch Insights Managed Policy
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt TcaDataAccessRole.Arn
+              - Effect: Allow
+                Action:
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:GetVocabulary
+                  - transcribe:ListTranscriptionJobs
+                  - transcribe:ListVocabularies
+                  - transcribe:StartStreamTranscription
+                  - transcribe:StartCallAnalyticsStreamTranscription
+                  - transcribe:StartTranscriptionJob
+                Resource: '*'
+              - Action:
+                  - 'kinesisvideo:Describe*'
+                  - 'kinesisvideo:Get*'
+                  - 'kinesisvideo:List*'
+                Effect: 'Allow'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:\
+                    ${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt TranscriberCallEventTable.Arn
+              - Action:
+                  - kinesis:PutRecord
+                Effect: Allow
+                Resource:
+                  - !Ref KinesisDataStreamArn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - 'arn:aws:s3:::${bucket}'
+                    - bucket: !Ref S3BucketName
+                  - !Sub
+                    - 'arn:aws:s3:::${bucket}/*'
+                    - bucket: !Ref S3BucketName
+  
+  StartLCAFunction:
+    DependsOn: CallTranscriberFunction
+    Type: AWS::Serverless::Function
+    Properties:
+        Handler: handler.lambda_handler
+        Runtime: python3.8
+        CodeUri: ./lambda_functions/start_lca
+        MemorySize: 128
+        Timeout: 10
+        Environment:
+          Variables:
+            CONNECT_KVS_CONSUMER_ARN: !GetAtt CallTranscriberFunction.Arn
+            CONNECT_INSTANCE_ARN: !Ref ConnectInstanceArn
+        Policies:
+          - LambdaInvokePolicy:
+              FunctionName: !Ref CallTranscriberFunction
+
+  TcaDataAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - transcribe.streaming.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: tca-post-call-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub
+                    - 'arn:aws:s3:::${bucket}'
+                    - bucket: !Ref S3BucketName
+                  - !Sub
+                    - 'arn:aws:s3:::${bucket}/*'
+                    - bucket: !Ref S3BucketName
+
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: >-
+              Transcribe does not support resource-level permissions and KVS streams are dynamic
+
+  # Permission for Call Transcriber to invoke itself
+  CallTranscriberPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CallTranscriberFunction
+      Principal: !GetAtt CallTranscriberFunctionRole.Arn
+
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Amazon S3 Configuration
+        Parameters:
+          - S3BucketName
+          - AudioFilePrefix
+          - MonoAudioFilePrefix
+    ParameterLabels:
+      S3BucketName:
+        default: Call Audio Bucket Name
+      AudioFilePrefix:
+        default: Audio File Prefix
+      IsContentRedactionEnabled:
+        default: Enable Content Redaction
+      TranscribeContentRedactionType:
+        default: Type of Content Redaction
+      TranscribeLanguageCode:
+        default: Transcription Language Code
+      TranscribePiiEntityTypes:
+        default: Transcription PII Redaction Entity Types
+      CustomVocabularyName:
+        default: Transcription Custom Vocabulary Name
+
+Conditions:
+  ShouldEnableContentRedaction: !And
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Or 
+      - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+      - !Equals [!Ref TranscribeLanguageCode, 'en-AU']
+      - !Equals [!Ref TranscribeLanguageCode, 'en-GB']
+      - !Equals [!Ref TranscribeLanguageCode, 'es-US']
+
+Outputs:
+
+  StartLCAFunctionName:
+    Value: !Ref StartLCAFunction
+
+  CallTranscriberEventTableName:
+    Value: !Ref TranscriberCallEventTable
+
+  CallTranscriberEventTableArn:
+    Value: !GetAtt TranscriberCallEventTable.Arn
+
+  IsContentRedactionEnabled:
+    Value: !If
+      - ShouldEnableContentRedaction
+      - 'true'
+      - 'false'

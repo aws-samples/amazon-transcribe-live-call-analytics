@@ -1,16 +1,15 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
-import {
-  Button,
-  ButtonDropdown,
-  CollectionPreferences,
-  Icon,
-  Link,
-  SpaceBetween,
-  StatusIndicator,
-  Popover,
-} from '@awsui/components-react';
+
+import Button from '@cloudscape-design/components/button';
+import ButtonDropdown from '@cloudscape-design/components/button-dropdown';
+import CollectionPreferences from '@cloudscape-design/components/collection-preferences';
+import Icon from '@cloudscape-design/components/icon';
+import Link from '@cloudscape-design/components/link';
+import SpaceBetween from '@cloudscape-design/components/space-between';
+import StatusIndicator from '@cloudscape-design/components/status-indicator';
+import Popover from '@cloudscape-design/components/popover';
 
 import rehypeRaw from 'rehype-raw';
 import ReactMarkdown from 'react-markdown';
@@ -173,10 +172,10 @@ const VISIBLE_CONTENT_OPTIONS = [
       { id: 'callId', label: 'Call ID', editable: false },
       { id: 'alerts', label: 'Alerts' },
       { id: 'agentId', label: 'Agent' },
-      { id: 'summary', label: 'Summary' },
       { id: 'initiationTimeStamp', label: 'Initiation Timestamp' },
       { id: 'callerPhoneNumber', label: 'Caller Phone Number' },
       { id: 'recordingStatus', label: 'Status' },
+      { id: 'summary', label: 'Summary' },
       { id: 'callerSentiment', label: 'Caller Sentiment' },
       { id: 'callerSentimentTrend', label: 'Caller Sentiment Trend' },
       { id: 'agentSentiment', label: 'Agent Sentiment' },
@@ -194,6 +193,7 @@ const VISIBLE_CONTENT = [
   'initiationTimeStamp',
   'callerPhoneNumber',
   'recordingStatus',
+  'summary',
   'callerSentiment',
   'callerSentimentTrend',
   'conversationDuration',

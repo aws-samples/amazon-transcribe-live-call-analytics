@@ -31,20 +31,32 @@ if ! [ -x "$(command -v sam)" ]; then
   echo 'Install: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html' >&2
   exit 1
 fi
+sam_version=$(sam --version | awk '{print $4}')
+min_sam_version="1.99.0"
+if [[ $(echo -e "$min_sam_version\n$sam_version" | sort -V | tail -n1) == $min_sam_version && $min_sam_version != $sam_version ]]; then
+    echo "Error: sam version >= $min_sam_version is not installed and required. (Installed version is $sam_version)" >&2
+    echo 'Install: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/manage-sam-cli-versions.html' >&2
+    exit 1
+fi
 if ! [ -x "$(command -v zip)" ]; then
   echo 'Error: zip is not installed and required.' >&2
   exit 1
 fi
-if ! [ -x "$(command -v pip)" ]; then
-  echo 'Error: pip is not installed and required.' >&2
+if ! [ -x "$(command -v pip3)" ]; then
+  echo 'Error: pip3 is not installed and required.' >&2
+  exit 1
+fi
+if ! python3 -c "import virtualenv"; then
+  echo 'Error: virtualenv python package is not installed and required.' >&2
+  echo 'Run "pip3 install virtualenv"' >&2
   exit 1
 fi
 if ! [ -x "$(command -v npm)" ]; then
   echo 'Error: npm is not installed and required.' >&2
   exit 1
 fi
-if ! node -v | grep -qF "v16."; then
-    echo 'Node.js version 16.x is not installed and required.' >&2
+if ! node -v | grep -qF "v18."; then
+    echo 'Error: Node.js version 18.x is not installed and required.' >&2
     exit 1
 fi
 
@@ -97,12 +109,26 @@ pushd $dir
 ./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
 popd
 
+dir=lca-connect-kvs-stack
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-connect-kvs-stack $REGION || exit 1
+popd
+
 dir=lca-genesys-audiohook-stack
 echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
 chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-genesys-audiohook-stack $VERSION $REGION || exit 1
+popd
+
+dir=lca-websocket-stack
+echo "PACKAGING $dir"
+pushd $dir/deployment
+rm -rf ../out
+chmod +x ./build-s3-dist.sh
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-websocket-stack $VERSION $REGION || exit 1
 popd
 
 dir=lca-connect-integration-stack
@@ -146,11 +172,17 @@ echo "PACKAGING $dir"
 git submodule init
 git submodule update
 echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
+# LCA customizations
 cp -v ./patches/qnabot/lambda_schema_qna.js $dir/lambda/schema/qna.js
 cp -v ./patches/qnabot/website_js_admin.vue $dir/website/js/admin.vue
 cp -v ./patches/qnabot/Makefile $dir/Makefile
 echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
-sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+# Detection of differences. sed varies betwen GNU sed and BSD sed
+if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
+  sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+else # BSD like sed
+  sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+fi
 pushd $dir
 rm -fr ./ml_model/llm-qa-summarize # remove deleted folder if left over from previous build.
 mkdir -p build/templates/dev

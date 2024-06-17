@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -31,6 +31,7 @@ else:
 
 BOTO3_SESSION: Boto3Session = boto3.Session()
 CLIENT_CONFIG = BotoCoreConfig(
+    read_timeout= int(getenv("BOTO_READ_TIMEOUT", '60')),
     retries={"mode": "adaptive", "max_attempts": 3},
 )
 

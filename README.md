@@ -4,8 +4,6 @@ _Companion AWS blog post: [Live call analytics and agent assist for your contact
 
 ## Overview
 
-_Update September 2023 (v0.8.5) - This release provides (experimental) Generative AI support for both transcript summarization and Agent Assist with [Amazon Bedrock](https://aws.amazon.com/bedrock/) (preview) and Anthropic 3rd party APIs. Also provides (experimental) support for [Amazon Chime SDK Call Analytics](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html) as a call source in conjunction with [Voice Tone Analysis](https://docs.aws.amazon.com/chime-sdk/latest/dg/call-analytics.html). Lastly, it includes [Salesforce/CRM plug-in integration](./plugins/salesforce-integration/README.md)._
-
 _See [CHANGELOG](./CHANGELOG.md) for latest features and fixes._
 
 Your contact center connects your business to your community, enabling customers to order products, callers to request support, clients to make appointments, and much more. When calls go well, callers retain a positive image of your brand, and are likely to return and recommend you to others. And the converse, of course, is also true.
@@ -27,17 +25,18 @@ Our sample solution, Live Call Analytics with Agent Assist (LCA), does most of t
 
 The demo Asterisk server is configured to use Amazon Voice Connector, which provides the phone number and SIP trunking needed to route inbound and outbound calls. When you configure LCA to integrate with your contact center using the Amazon Chime SDK Voice Connector (SIPREC) option, instead of the demo Asterisk server, Voice Connector is configured to integrate instead with your existing contact center using SIP-based media recording (SIPREC) or network-based recording (NBR). In both cases, Voice Connector streams audio to Kinesis Video Streams using two streams per call, one for the caller and one for the agent.
 
-LCA also now also supports three additional input sources, using different architectures for ingestion:
+LCA also now also supports additional input sources, using different architectures for ingestion:
 
 - The Genesys Cloud AudioHook integration option - see [Genesys AudioHook Integration README](/lca-genesys-audiohook-stack/README.md) for details.
 - The new Connect Contact Lens integration option - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md) for details.
+- Amazon Connect Kinesis Video Streams integration option - see [Amazon Connect Kinesis Video Streams README](./lca-connect-kvs-stack/README.md)
 - Amazon Chime SDK Call Analytics and voice tone analysis - see [Amazon Chime SDK Call Analytics README](./lca-chimevc-stack/ChimeCallAnalytics.md)
 
 When a new caller or agent Kinesis Video stream is initiated, an event is fired using EventBridge. This event triggers the Call Transcriber Lambda function. When both the caller and agent streams have been established, your custom call initialization Lambda hook function, if specified, is invoked for you - see [LambdaHookFunction](./lca-chimevc-stack/LambdaHookFunction.md). Then the Call Transcriber function starts consuming real time audio fragments from both input streams and combines them to create a new stereo audio stream. The stereo audio is streamed to an Amazon Transcribe Real-time Call Analytics or standard Amazon Transcribe session (depending on stack parameter value), and the transcription results are written in real time to Kinesis Data Streams.
 
 Each call processing session runs until the call ends. Any session that lasts longer than the maximum duration of an AWS Lambda function invocation (15 minutes) is automatically and seamlessly transitioned to a new ‘chained’ invocation of the same function, while maintaining a continuous transcription session with Amazon Transcribe. This function chaining repeats as needed until the call ends. At the end of the call the function creates a stereo recording file in Amazon S3.
 
-Another Lambda function, the Call Event Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Call Event Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics).The Call Event Processor also invokes the (optional) Transcript Summarization lambda when the call ends, to generate a summary of the call from the full transcript.
+Another Lambda function, the Call Event Processor, fed by Kinesis Data Streams, processes and enriches call metadata and transcription segments. The Call Event Processor integrates with the (optional) Agent Assist services. By default, LCA agent assist is powered by Amazon Lex and Amazon Kendra using the open source QnABot on AWS solution, though other options are available as discussed in the [blog post](http://www.amazon.com/live-call-analytics). The Call Event Processor also invokes the (optional) Transcript Summarization lambda when the call ends, to generate a summary of the call from the full transcript.
 
 The Call Event Processor function interfaces with AWS AppSync to persist changes (mutations) in DynamoDB and to send real-time updates to logged in web clients.
 
@@ -102,57 +101,74 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
    2. `Admin Email Address` - Enter the email address of the admin user to be used to log into the web UI. An initial temporary password will be automatically sent via email. This email also includes the link to the web UI
    3. `Authorized Account Email Domain` - (Optional) Enter the email domain that is allowed to signup and signin using the web UI. Leave blank to disable signups via the web UI (users must be created using Cognito). If you configure a domain, **only** email addresses from that domain will be allowed to signup and signin via the web UI  
       **Telephony Ingestion Options**
-   4. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testingAmazon Chime SDK Voice Connector streaming
+   4. `Call Audio Source` - Choose `Demo Asterisk PBX Server` to automatically install a demo Asterisk server for testing Amazon Chime SDK Voice Connector streaming
    5. `Call Audio Processor` - Choose `Amazon Chime SDK Call Analytics` to use the new Amazon Chime SDK Call Analytics service features instead of the LCA Call transcriber Lambda. See [ChimeCallAnalytics](./lca-chimevc-stack/ChimeCallAnalytics.md).
-   6. `Chime Voice Tone Analysis` - Choose only when Amazon Chime SDK Call Analytics is used as the call processor. Enables you to analyze caller voices for a positive, negative, or neutral tone. This is different than sentiment analysis, as it analyzes the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice analytics without the caller's consent. Please read https://docs.aws.amazon.com/chime-sdk/latest/dg/va-opt-out.html for more information. See [ChimeCallAnalytics](./lca-chimevc-stack/ChimeCallAnalytics.md).
-   7. `Allowed CIDR Block for Demo Softphone` - Ignored if `Call Audio Source` is not set to `Demo Asterisk PBX Server`. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24'
-   8. `Allowed CIDR List for SIPREC Integration` - Ignored if `Call Audio Source ` is not set to `Demo Asterisk PBX Server`. Comma delimited list of CIDR blocks allowed byAmazon Chime SDK Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24'
-   9. `Lambda Hook Function ARN for SIPREC Call Initialization (existing)` - Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or 'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively choose calls to process or to suspend, toggle agent/caller streams, assign AgentId, and/or modify values for CallId and displayed phone numbers. See [LambdaHookFunction.md](./lca-chimevc-stack/LambdaHookFunction.md).
-   10. `Amazon Connect instance ARN (existing)` - Ignored if `Call Audio Source ` is not set to `Amazon Connect Contact Lens`. Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md).  
+   6. `WebSocketAudioInput` - Enable this option to ingest and analyze audio from the web and microphone. 
+   7. `Chime Voice Tone Analysis` - Choose only when Amazon Chime SDK Call Analytics is used as the call processor. Enables you to analyze caller voices for a positive, negative, or neutral tone. This is different than sentiment analysis, as it analyzes the audio versus text. --NOTE-- In some jurisdictions, it may not be legal to use voice analytics without the caller's consent. Please read https://docs.aws.amazon.com/chime-sdk/latest/dg/va-opt-out.html for more information. See [ChimeCallAnalytics](./lca-chimevc-stack/ChimeCallAnalytics.md).
+   8. `Allowed CIDR Block for Demo Softphone` - Ignored if `Call Audio Source` is not set to `Demo Asterisk PBX Server`. CIDR block allowed by demo Asterisk server for soft phone registration. Example: '10.1.1.0/24'
+   9. `Allowed CIDR List for SIPREC Integration` - Ignored if `Call Audio Source ` is not set to `Demo Asterisk PBX Server`. Comma delimited list of CIDR blocks allowed byAmazon Chime SDK Voice Connector for SIPREC source hosts. Example: '10.1.1.0/24, 10.1.2.0/24'
+   10. `Lambda Hook Function ARN for SIPREC Call Initialization (existing)` - Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)' or 'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively choose calls to process or to suspend, toggle agent/caller streams, assign AgentId, and/or modify values for CallId and displayed phone numbers. See [LambdaHookFunction.md](./lca-chimevc-stack/LambdaHookFunction.md).
+   11. `Amazon Connect instance ARN (existing)` - Ignored if `Call Audio Source ` is not set to `Amazon Connect Contact Lens`. Amazon Connect instance ARN of working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled - see [Amazon Connect Integration README](/lca-connect-integration-stack/README.md).  
+   
        **Agent Assist Options**
-   11. `Enable Agent Assist` - Choose `QnABot on AWS with new Kendra Index (Developer Edition)` to automatically install all the components and demo configuration needed to experiment with the new Agent Assist capabilities of LCA. See [Agent Assist README](/lca-agentassist-setup-stack/README.md). If you want to integrate LCA with your own agent assist bots or knowledge bases using either Amazon Lex or your own custom implementations, choose `Bring your own LexV2 bot` or `Bring your own AWS Lambda function`. Or choose `Disable` if you do not want any agent assistant capabilities.
-   12. `Agent Assist Kendra IndexId (existing)`, `Agent Assist LexV2 BotId (existing)`, `Agent Assist LexV2 Bot AliasId (existing)`, and `Agent Assist Lambda Function ARN (existing)` - empty by default, but must be populated as described depending on the option chosen for `Enable Agent Assist`.
-   13. `Agent Assist QnABot Item Matching Api` - Use Kendra for FAQ matching, or choose to use the new QnAbot Embeddings feature - see [QnaBot Embeddings](https://github.com/aws-solutions/qnabot-on-aws/blob/main/docs/semantic_matching_using_LLM_embeddings/README.md) for more information.
-   14. `Agent Assist QnABot LLM API` - Use QnABot's (prerelease) LLM integration capabilities to use exiting new generative AI capabilities to handle conversational followup questions and to generate concise answers from your knowledge base documents. See [LLM Query Disambiguation and Generative Question Answering](https://github.com/aws-solutions/qnabot-on-aws/blob/feature/llm-summarize/docs/LLM_Retrieval_and_generative_question_answering/README.md)
+   12. `Enable Agent Assist` - Choose `QnABot on AWS with new Kendra Index (Developer Edition)` to automatically install all the components and demo configuration needed to experiment with the new Agent Assist capabilities of LCA. See [Agent Assist README](/lca-agentassist-setup-stack/README.md). If you want to integrate LCA with your own agent assist bots or knowledge bases using either Amazon Lex or your own custom implementations, choose `Bring your own LexV2 bot` or `Bring your own AWS Lambda function`. Or choose `Disable` if you do not want any agent assistant capabilities.
+   13. `Agent Assist Kendra IndexId (existing)`, `Agent Assist LexV2 BotId (existing)`, `Agent Assist LexV2 Bot AliasId (existing)`, and `Agent Assist Lambda Function ARN (existing)` - empty by default, but must be populated as described depending on the option chosen for `Enable Agent Assist`.
+   14. `Agent Assist QnABot Item Matching Api` - Use Kendra for FAQ matching, or choose to use the new QnAbot Embeddings feature - see [QnaBot Embeddings](https://github.com/aws-solutions/qnabot-on-aws/blob/main/docs/semantic_matching_using_LLM_embeddings/README.md) for more information.
+   15. `Agent Assist QnABot LLM API` - Use QnABot's (experimental) LLM integration capabilities to use exiting new generative AI capabilities to handle conversational followup questions and to generate concise answers from your knowledge base documents. See [LLM Query Disambiguation and Generative Question Answering](https://github.com/aws-solutions/qnabot-on-aws/blob/develop/docs/LLM_Retrieval_and_generative_question_answering/README.md)
+   16. `Agent Assist QnABot Bedrock ModelId` - If `BEDROCK` is chosen for the `Agent ASsist QnABot LLM API`, this is the Bedrock Model ID to use. You must [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for the model selected.
+   17. `Agent Assist QnABot LLM Lambda Function ARN (existing)` -  If LLMApi is `LAMBDA`, provide ARN for a Lambda function that takes JSON {"prompt":"string", "settings":{key:value,..}}, and returns JSON {"generated_text":"string"}
+   18. `Agent Assist QnABot LLM Third Party API Key` - If LLMApi is ANTHROPIC, enter your Anthropic API Key. ** Data will leave your AWS account **
+
+
        **Amazon S3 Configuration**
-   15. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
-   16. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
-   17. `Call Analytics Output File Prefix` - The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")  
+   19. `Call Audio Recordings Bucket Name` - (Optional) Existing bucket where call recording files will be stored. Leave blank to automatically create new bucket
+   20. `Audio File Prefix` - The Amazon S3 prefix where the audio files will be saved (must end in "/")
+   21. `Call Analytics Output File Prefix` - The Amazon S3 prefix where the post-call analytics files will be saved, when using analytics api mode (must end in "/")
+
        **Amazon Transcribe Configuration**
-   18. `Enable Partial Transcripts` - Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn.
-   19. `Transcribe API mode` - Set the default API mode for Transcribe. Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support call categories and alerts, call summarization, and PCA integration.
-   20. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using the English language (en-US). This parameter is ignored when not using the English language
-   21. `Language for Transcription` - Language code to be used for Amazon Transcribe
-   22. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
-   23. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. _DO NOT ADD CUSTOM VALUES HERE_.
-   24. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
-   25. `Transcription Custom Language Model Name` - The name of the custom language model to use when processing the transcription job. Leave blank if no custom language model is to be used. If specified, the custom language model must pre-exist in your account, match the Language Code selected above, and use the 'Narrow Band' base model.  
+   22. `Enable Partial Transcripts` - Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn.
+   23. `Transcribe API mode` - Set the default API mode for Transcribe. Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support call categories and alerts, call summarization, and PCA integration.
+   24. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using English (en-US, en-GB, en-AU) or Spanish (es-US). This parameter is ignored when not using other languages.
+   25. `Language for Transcription` - Language code to be used for Amazon Transcribe
+   26. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
+   27. `Transcription PII Redaction Entity Types` - Select the PII entity types you want to identify or redact. Remove the values that you don't want to redact from the default. _DO NOT ADD CUSTOM VALUES HERE_.
+   28. `Transcription Custom Vocabulary Name` - The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+   29. `Transcription Custom Language Model Name` - The name of the custom language model to use when processing the transcription job. Leave blank if no custom language model is to be used. If specified, the custom language model must pre-exist in your account, match the Language Code selected above, and use the 'Narrow Band' base model.
+   
        **Transcript Event Processing Configuration**
-   26. `Enable Sentiment Analysis` - Enable or disable display of sentiment analysis.
-   27. `Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)` - If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each
+   30. `Enable Sentiment Analysis` - Enable or disable display of sentiment analysis.
+   31. `Sentiment Negative Score Threshold` - Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+   32. `Sentiment Positive Score Threshold` - Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1. Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+   33. `Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)` - If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each
        transcript segment. See [TranscriptLambdaHookFunction.md](./lca-ai-stack/TranscriptLambdaHookFunction.md).
-   28. `Lambda Hook Function Mode Non-Partial only` - Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for both Partial and Non-Partial transcript segments (false).
-   29. `End of Call Transcript Summary` - Choose SAGEMAKER to automatically deploy a state of the art summarization model. Choose `ANTHROPIC` to use the Third Party Anthropic Claude model with your own API key (soon to be part of Amazon Bedrock service). Alternatively, choose LAMBDA to use your own Lambda function to generate summaries using other models, or choose DISABLED if you are not interested in exploring the new Transcript Summarization feature.
-   30. `Initial Instance Count for Summarization SageMaker Endpoint` - When SAGEMAKER option is chosen (above) enter 0 for a SageMaker Serverless Inference endpoint, or 1 or greater for a provisioned endpoint with the specified number of instances. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
-   31. `End of Call Summarization LLM Third Party API Key` - Provide your API key if you choose ANTHROPIC above. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
-   32. `Lambda Hook Function ARN for Custom End of Call Processing (existing)` - When LAMBDA option is chosen (above) enter the ARN for your custom summarization Lambda function. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+   34. `Lambda Hook Function Mode Non-Partial only` - Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for both Partial and Non-Partial transcript segments (false).
+   35. `End of Call Transcript Summary` - `BEDROCK` option (default) requires you to choose one of the supported model IDs from the provided list (BedrockModelId). Choose `SAGEMAKER` to automatically deploy a summarization model. Choose `ANTHROPIC` to use the Third Party Anthropic Claude model with your own API key. Alternatively, choose LAMBDA to use your own Lambda function to generate summaries using other models, or choose DISABLED if you are not interested in exploring the new Transcript Summarization feature. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more information.
+   36. `BedrockModelId` - If `EndOfCallTranscriptSummary` is `BEDROCK`, then choose a model ID from the list of supported models. Defaults to `anthropic.claude-instant-v1`
+   37. `Initial Instance Count for Summarization SageMaker Endpoint` - When `SAGEMAKER` option is chosen (above) enter 0 for a SageMaker Serverless Inference endpoint, or 1 or greater for a provisioned endpoint with the specified number of instances. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+   38. `End of Call Summarization LLM Third Party API Key` - Provide your API key if you choose ANTHROPIC above. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+   39. `Lambda Hook Function ARN for Custom End of Call Processing (existing)` - When LAMBDA option is chosen (above) enter the ARN for your custom summarization Lambda function. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+
        **Download locations**
-   33. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
-   34. `Demo Asterisk Agent Audio URL` - (Optional)
+   40. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
+   41. `Demo Asterisk Agent Audio URL` - (Optional)
        URL for audio (agent.wav) file download for demo Asterisk server. Audio file is automatically played when an agent is not connected with a softphone  
+
        **Amazon CloudFront Configuration**
-   35. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
-   36. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).  
+   42. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
+   43. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).  
+
        **Record retention**
-   37. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.  
+   44. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.  
+
        **User Experience**
-   38. `Category Alert Regular Expression` - If using the 'analytics' Transcribe API Mode, this regular expression will be used to show an alert in red in the web user interface if it matches a call category. This defaults to matching all categories.  
+   45. `Category Alert Regular Expression` - If using the 'analytics' Transcribe API Mode, this regular expression will be used to show an alert in red in the web user interface if it matches a call category. This defaults to matching all categories.
+     
        **Post Call Analytics (PCA) Integration**
-   39. `PCA InputBucket` - (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
-   40. `PCA InputBucket Transcript prefix` - Value of PCA stack "InputBucketTranscriptPrefix".
-   41. `PCA InputBucket Playback AudioFile prefix` - Value of PCA stack "InputBucketPlaybackAudioPrefix".
-   42. `PcaWebAppURL` - (Optional) Value of PCA stack "WebAppURL" - allows PCA UI to be launched from LCA UI.
-   43. `PCA Web App Call Path Prefix` - PCA path prefix for call detail pages.
+   46. `PCA InputBucket` - (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+   47. `PCA InputBucket Transcript prefix` - Value of PCA stack "InputBucketTranscriptPrefix".
+   48. `PCA InputBucket Playback AudioFile prefix` - Value of PCA stack "InputBucketPlaybackAudioPrefix".
+   49. `PcaWebAppURL` - (Optional) Value of PCA stack "WebAppURL" - allows PCA UI to be launched from LCA UI.
+   50. `PCA Web App Call Path Prefix` - PCA path prefix for call detail pages.
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**. This will take ~15 minutes to complete.
 7. Once the CloudFormation deployment is complete,
@@ -190,7 +206,7 @@ LCA publishes a notification for each matched category to a topic in the Amazon 
 
 You can test this solution if you installed the demo asterisk server during deployment. To test, perform the following steps:
 
-1. Configure a Zoiper client as described in this [README](lca-chimevc-stack/README.md). This will allow you to receive phone calls from an external phone number to the Zoiper client on your computer.
+1. Configure a Zoiper client as described in this [README](lca-chimevc-stack/Asterisk.md#optional-client-configuration). This will allow you to receive phone calls from an external phone number to the Zoiper client on your computer.
 2. Once installed, log in to the web app created in the [deploy](#deploy) section by opening the Cloudfront URL provided in you CloudFormation outputs (`CloudfrontEndpoint`)
 3. Once logged in, place a phone call using an external phone to the number provided in the CloudFormation outputs (`DemoPBXPhoneNumber`)
 4. You will see the phone call show up on the LCA web page as follows ![CallList](./images/call-list-with-categories-and-alerts.png)
@@ -209,6 +225,7 @@ For automated testing, see
 - [Customize transcript processing](./lca-ai-stack/TranscriptLambdaHookFunction.md)
 - [Customize transcript summarization](./lca-ai-stack/TranscriptSummarization.md)
 - [Amazon Chime SDK Call Analytics & voice tone analysis](./lca-chimevc-stack/ChimeCallAnalytics.md)
+- [Amazon Connect Kinesis Video Streams](./lca-connect-kvs-stack/README.md)
 
 ## Post Call Analytics: Companion solution
 

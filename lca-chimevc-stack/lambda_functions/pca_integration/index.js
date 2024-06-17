@@ -50,7 +50,6 @@ function mkTcaFilename(sessionData) {
   return f;
 }
 
-// TODO - Refactor to use new TCA Post Call event - now includes Transcript file and Media File Uris.
 function getAnalyticsOutputUri(sessionId, suffix) {
   const analyticsfolder = (IS_CONTENT_REDACTION_ENABLED) ? "redacted-analytics/" : "analytics/";
   const uri = `/${LCA_BUCKET_NAME}/${CALL_ANALYTICS_FILE_PREFIX}${analyticsfolder}${sessionId}${suffix}`;
@@ -109,36 +108,71 @@ const writePcaUrlToKds = async function writePcaUrlToKds(kinesisClient, sessionD
   }
 }
 
-const copyAudioRecordingToPca = async function copyAudioRecordingToPca(s3Client, sessionData) {
+const getS3PathFromUri = function getS3SourceUri(s3Uri) {
+  const s3UriMatch = s3Uri.match(/s3:\/\/(.*)/);
+  return s3UriMatch[1];
+};
+
+const copyAudioRecordingToPca = async function copyAudioRecordingToPca(s3Client, event, sessionData) {
+  let s3SourcePath = undefined;
+  if (IS_CONTENT_REDACTION_ENABLED) {
+    if (event.detail.Media && event.detail.Media.RedactedMediaFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Media.RedactedMediaFileUri));
+    }
+  } else {
+    if (event.detail.Media && event.detail.Media.MediaFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Media.MediaFileUri));
+    }
+  }
+
+  if (s3SourcePath === undefined) {
+    s3SourcePath = encodeURI(getAnalyticsOutputUri(sessionData.sessionId, '.wav'));
+  }
+
   const copyParms = {
     Bucket: PCA_S3_BUCKET_NAME,
-    CopySource: encodeURI(getAnalyticsOutputUri(sessionData.sessionId, '.wav')),
+    CopySource: s3SourcePath,
     Key: PCA_AUDIO_PLAYBACK_FILE_PREFIX + mkTcaFilename(sessionData) + ".wav",
   }
   console.log("Copying post call analytics Recording to PCA: ", copyParms);
   try {
-    data = await s3Client.send(new CopyObjectCommand(copyParms));
+    await s3Client.send(new CopyObjectCommand(copyParms));
     console.log("Done copying recording.");
   } catch (err) {
     console.error('S3 copy error: ', JSON.stringify(err));
   }
-}
+};
 
-const copyPostCallAnalyticsToPca = async function copyPostCallAnalyticsToPca(s3Client, sessionData) {
+const copyPostCallAnalyticsToPca = async function copyPostCallAnalyticsToPca(s3Client, event, sessionData) {
+  let s3SourcePath = undefined;
+  if (IS_CONTENT_REDACTION_ENABLED) {
+    if (event.detail.Transcript && event.detail.Transcript.RedactedTranscriptFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Transcript.RedactedTranscriptFileUri));
+    }
+  } else {
+    if (event.detail.Transcript && event.detail.Transcript.TranscriptFileUri) {
+      s3SourcePath = encodeURI(getS3PathFromUri(event.detail.Transcript.TranscriptFileUri));
+    }
+  }
+
+  if (s3SourcePath === undefined) {
+    s3SourcePath = encodeURI(getAnalyticsOutputUri(sessionData.sessionId, '.json'));
+  }
+
   const filename = mkTcaFilename(sessionData);
   const copyParms = {
     Bucket: PCA_S3_BUCKET_NAME,
-    CopySource: encodeURI(getAnalyticsOutputUri(sessionData.sessionId, '.json')),
+    CopySource: s3SourcePath,
     Key: PCA_TRANSCRIPTS_PREFIX + filename + ".json",
   }
   console.log("Copying post call analytics Transcript to PCA: ", copyParms);
   try {
-    data = await s3Client.send(new CopyObjectCommand(copyParms));
+    await s3Client.send(new CopyObjectCommand(copyParms));
     console.log("Done copying transcript.");
   } catch (err) {
     console.error('S3 copy error: ', JSON.stringify(err));
   }
-}
+};
 
 const handler = async function handler(event, context) {
   console.log("Event: ", JSON.stringify(event));
@@ -156,8 +190,8 @@ const handler = async function handler(event, context) {
     console.log("ERROR: Can't continue - transcribe post call job failed.");
   }
   if (sessionData && job_completed) {
-    await copyAudioRecordingToPca(s3Client, sessionData);
-    await copyPostCallAnalyticsToPca(s3Client, sessionData);
+    await copyAudioRecordingToPca(s3Client, event, sessionData);
+    await copyPostCallAnalyticsToPca(s3Client, event, sessionData);
     await writePcaUrlToKds(kinesisClient, sessionData);
   }
   return;

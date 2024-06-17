@@ -28,6 +28,7 @@ def recognize_text_lex(
     bot_alias_id: str,
     locale_id: str,
     max_retries: int = 3,
+    call_id: str = None,
 ) -> RecognizeTextResponseTypeDef:
     """Runs Lex Recognize Text in the Async Event Loop"""
     # pylint: disable=too-many-arguments
@@ -36,12 +37,15 @@ def recognize_text_lex(
     bot_response: RecognizeTextResponseTypeDef
     while not bot_responded and retry_count < max_retries:
         try:
+            # we do not set sessionAttributes here, since client is stateless and we want to 
+            # preserve Lex sessionAttribute state. Use requestAttributes for callId.
             bot_response = lex_client.recognize_text(
                     text=text,
                     sessionId=session_id,
                     botId=bot_id,
                     botAliasId=bot_alias_id,
                     localeId=locale_id,
+                    requestAttributes={'callId':call_id}
                 )
             bot_responded = True
         except lex_client.exceptions.ConflictException as error:

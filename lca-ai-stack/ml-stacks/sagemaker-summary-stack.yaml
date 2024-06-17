@@ -107,7 +107,7 @@ Resources:
     Properties:
       Description: This function summarizes a string from the events object called 'inputs'
       Handler: index.lambda_handler
-      Runtime: python3.8
+      Runtime: python3.11
       Role: !GetAtt 'LambdaRole.Arn'
       Timeout: 240
       Environment:

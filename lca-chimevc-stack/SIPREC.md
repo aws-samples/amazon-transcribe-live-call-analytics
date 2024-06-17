@@ -11,3 +11,6 @@ SIPREC connectivity to Amazon Chime SDK Voice Connector offers a way to leverage
 - [CUBE](CUBE_Config.md) Configuration Example
 
 - NOTE - Configure the SBC to use the [RFC 7865](https://www.rfc-editor.org/rfc/rfc7865.html) standard for SipRec Recording Metadata. (Failure to do so can result in missing or erroneous caller channel identification).
+
+- NOTE: If using Audiocodes, be sure to set `BrokenConnectionMode` to `ignore` to avoid premature call ending due to Mute or Hold.
+  ![Audiocodes](images/audiocodes-broken-connection-mode.png)

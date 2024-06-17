@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.6) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.8.13) (SO9072)
 
 Parameters:
   CallAudioSource:
@@ -26,11 +26,12 @@ Parameters:
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
       - Amazon Connect Contact Lens
+      - Amazon Connect Kinesis Video Streams
     Description: >
       Choose whether to automatically install a demo Asterisk PBX server for easy standalone testing, an
       Amazon Chime SDK Voice Connector to use for standards based SIPREC/NBR integration with your contact center,
       a Web Socket interface to use for Audiohook integration with your Genesys Cloud CX contact center, 
-      or integrate with Amazon Connect Contact Lens.
+      integrate with Amazon Connect Contact Lens, or integrate with Amazon Connect Kinesis Video Streams.
 
   CallAudioProcessor:
     Type: String
@@ -43,6 +44,24 @@ Parameters:
       Amazon Chime SDK Call Analytics ingest the audio and send it to Transcribe, or use the example LCA Call 
       Processor Lambda. Enabling Amazon Chime SDK Call Analytics also allows you to also use Voice Analytics, 
       such as Voice Tone Analysis and Speaker Search.
+
+  WebSocketAudioInput:
+    Type: String
+    Default: Disabled
+    AllowedValues:
+      - Enabled
+      - Disabled
+    Description: >
+      Enable or Disable Websocket interface for streaming audio input from microphone and browser tabs.
+
+  CustomVoiceConnectorId:
+    Type: String
+    Default: ''
+    MaxLength: 50
+    Description: >
+      (Optional) The Voice Connector ID (not Name) of an existing Amazon Chime SDK Voice Connector. This Voice Connector will be used as the call audio source.
+      Used only when a call audio source with Amazon Chime SDK Voice Connector or Demo Asterisk PBX Server is selected.
+      Leave blank to automatically create new Amazon Chime SDK Voice Connector.
 
   ChimeVoiceToneAnalysis:
     Type: String
@@ -91,8 +110,9 @@ Parameters:
     Type: String
     AllowedPattern: '^(|arn:aws:connect:.*)$'
     Description: >
-      Required when CallAudioSource is set to 'Amazon Connect Contact Lens'.
-      Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled.
+      Required when CallAudioSource is set to 'Amazon Connect Contact Lens' or 'Amazon Connect Kinesis Video Streams'.
+      Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled, or 
+      Media Streams must be enabled.
 
   AgentAssistOption:
     Type: String
@@ -142,19 +162,30 @@ Parameters:
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
       Provide the function ARN of an existing Lambda function to be used for Agent Assist."
 
+  AgentAssistQnABotKendraWebCrawlURLs:
+    Type: String
+    Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
+    Description: >-
+      Comma separated list of public web sites to crawl automatically - for Agent Assist Kendra knowledge store
+
+  AgentAssistQnABotKendraWebCrawlDepth:
+    Type: String
+    Default: 0
+    Description: >-
+      Number of levels from the above URLs that Amazon Kendra should crawl - restricted to same host domain
+
   # Options for QnABot Embeddings
   AgentAssistQnABotItemMatchingApi:
     Type: String
     Description: >
       Method used by QnABot for semantic matching of caller utterances to stored agent assist configuration 
-      items and FAQs. Choose 'EMBEDDINGS BEDROCK' only if your account has been allow-listed for 
-      Amazon Bedrock preview access (see https://aws.amazon.com/bedrock).
+      items and FAQs. 
     AllowedValues:
       - KENDRA FAQ
       - EMBEDDINGS SAGEMAKER
       - EMBEDDINGS BEDROCK
       - EMBEDDINGS LAMBDA
-    Default: KENDRA FAQ
+    Default: EMBEDDINGS BEDROCK
   AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
     Type: Number
     MinValue: 0
@@ -170,19 +201,18 @@ Parameters:
       'Optional: If Item Matching Api is LAMBDA, provide ARN for a Lambda function
       that takes JSON {"inputtext":"string"}, and returns JSON {"embedding":[...]}'
     Default: ''
-  AgentAssistQnABotEmbeddingsLambdaDimensions:
+  AgentAssistQnABotEmbeddingsLambdaDimensions2:
     Type: Number
     MinValue: 1
     Description:
       'Optional: If Item Matching Api is LAMBDA, provide number of dimensions
       for embeddings returned by the EmbeddingsLambda function specified above.'
-    Default: 4096
+    Default: 1536
   AgentAssistQnABotLLMApi:
     Type: String
     Description:
       Optionally enable (experimental) QnABot question disambiguation and
-      generative question answering using an LLM. Choose BEDROCK only if your account has been allow-listed for 
-      Amazon Bedrock preview access (see https://aws.amazon.com/bedrock).
+      generative question answering using an LLM.
       To use a custom LAMBDA function, provide additional
       parameters below. To use ANTHROPIC third party service, enter the API key below. 
     AllowedValues:
@@ -190,14 +220,14 @@ Parameters:
       - BEDROCK
       - LAMBDA
       - ANTHROPIC
-    Default: DISABLED
+    Default: BEDROCK
   AgentAssistQnABotLLMBedrockModelId:
     Type: String
     Default: anthropic.claude-instant-v1
     AllowedValues:
-      - amazon.titan-tg1-large
-      - ai21.j2-grande-instruct
-      - ai21.j2-jumbo-instruct
+      - amazon.titan-text-express-v1
+      - ai21.j2-ultra-v1
+      - ai21.j2-mid-v1
       - anthropic.claude-v1
       - anthropic.claude-instant-v1
       - anthropic.claude-v2
@@ -248,7 +278,7 @@ Parameters:
     Default: 'false'
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
-      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
+      the 'en-US', 'en-AU', 'en-GB' or 'es-US' languages are selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - 'true'
       - 'false'
@@ -367,7 +397,7 @@ Parameters:
       both Partial and Non-Partial transcript segments (false).
 
   EndOfCallTranscriptSummary:
-    Default: 'DISABLED'
+    Default: 'BEDROCK'
     Type: String
     AllowedValues:
       - 'DISABLED'
@@ -380,15 +410,14 @@ Parameters:
       Set to enable call summarization by a Large Language Model. The SAGEMAKER option uses a SageMaker endpoint with
       the pretrained bart-large-cnn-samsum model with a ml.m5.xlarge instance type.  The LAMBDA option requires you 
       to provide a function ARN below. The ANTHROPIC option is a third party service, and you must enter your Anthropic API key below.
-      BEDROCK option requires preview access to Amazon Bedrock API and requires you to choose one of the supported model IDs from the 
+      BEDROCK option requires you to choose one of the supported model IDs from the 
       provided list (BedrockModelId).
 
   BedrockModelId:
-    Default: 'amazon.titan-tg1-large'
+    Default: 'anthropic.claude-instant-v1'
     Type: String
     AllowedValues: 
-      - 'amazon.titan-tg1-large'
-      - 'amazon.titan-e1t-medium'
+      - 'amazon.titan-text-express-v1'
       - 'ai21.j2-grande-instruct'
       - 'ai21.j2-jumbo-instruct'
       - 'anthropic.claude-instant-v1'
@@ -397,7 +426,7 @@ Parameters:
 
     Description: >
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
-      Defaults to 'amazon.titan-tg1-large'
+      Defaults to 'anthropic.claude-instant-v1'
    
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -536,6 +565,8 @@ Metadata:
         Parameters:
           - CallAudioSource
           - CallAudioProcessor
+          - WebSocketAudioInput
+          - CustomVoiceConnectorId
           - ChimeVoiceToneAnalysis
           # - ChimeSpeakerSearch
           - DemoSoftphoneAllowedCidr
@@ -550,10 +581,12 @@ Metadata:
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
+          - AgentAssistQnABotKendraWebCrawlURLs
+          - AgentAssistQnABotKendraWebCrawlDepth
           - AgentAssistQnABotItemMatchingApi
           - AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount
           - AgentAssistQnABotEmbeddingsLambdaArn
-          - AgentAssistQnABotEmbeddingsLambdaDimensions
+          - AgentAssistQnABotEmbeddingsLambdaDimensions2
           - AgentAssistQnABotLLMApi
           - AgentAssistQnABotLLMBedrockModelId
           - AgentAssistQnABotLLMLambdaArn
@@ -628,12 +661,16 @@ Metadata:
         default: Audio File Prefix
       CallAnalyticsPrefix:
         default: Call Analytics Output File Prefix
+      CustomVoiceConnectorId:
+        default: Amazon Chime SDK Voice Connector ID (existing)
       AdminEmail:
         default: Admin Email Address
       AllowedSignUpEmailDomain:
         default: Authorized Account Email Domain(s)
       CallAudioSource:
         default: Call Audio Source
+      WebSocketAudioInput:
+        default: Web Socket streaming audio input
       DemoSoftphoneAllowedCidr:
         default: Allowed CIDR Block for Demo Softphone
       SiprecAllowedCidrList:
@@ -652,13 +689,17 @@ Metadata:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
+      AgentAssistQnABotKendraWebCrawlURLs:
+        default: Agent Assist QnABot Kendra Web Crawl URLs
+      AgentAssistQnABotKendraWebCrawlDepth:
+        default: Agent Assist QnABot Kendra Web Crawl Depth
       AgentAssistQnABotItemMatchingApi:
         default: Agent Assist QnABot Item Matching Api
       AgentAssistQnABotEmbeddingsSagemakerInitialInstanceCount:
         default: Agent Assist QnABot Embeddings SageMaker Instance Count
       AgentAssistQnABotEmbeddingsLambdaArn:
         default: Agent Assist QnABot Embeddings Lambda Function ARN (existing)
-      AgentAssistQnABotEmbeddingsLambdaDimensions:
+      AgentAssistQnABotEmbeddingsLambdaDimensions2:
         default: Agent Assist QnABot Lambda Function Embeddings Dimension Count
       AgentAssistQnABotLLMApi:
         default: Agent Assist QnABot LLM API
@@ -739,8 +780,12 @@ Conditions:
       !Condition ShouldInstallDemoAsteriskServer,
       !Condition ShouldInstallChimeVCsiprec,
     ]
+  ShouldInstallConnectKVSStack:
+    !Equals [!Ref CallAudioSource, 'Amazon Connect Kinesis Video Streams']
   ShouldInstallGenesysAudiohookStack:
     !Equals [!Ref CallAudioSource, 'Genesys Cloud Audiohook Web Socket']
+  ShouldInstallWebSocketStack:
+    !Equals [!Ref WebSocketAudioInput, 'Enabled']
   ShouldInstallConnectIntegrationStack:
     !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
   ShouldUseChimeCallAnalytics:
@@ -861,10 +906,10 @@ Mappings:
 
 Rules:
   ConnectInstanceArn:
-    RuleCondition: !Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens']
+    RuleCondition: !Or [!Equals [!Ref CallAudioSource, 'Amazon Connect Contact Lens'], !Equals [!Ref CallAudioSource, 'Amazon Connect Kinesis Video Streams']]
     Assertions:
       - Assert: !Not [!Equals [!Ref ConnectInstanceArn, '']]
-        AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens'
+        AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens' or 'Amazon Connect Kinesis Video Streams'
 
   AgentAssistExistingKendraIndexId:
     RuleCondition:
@@ -904,7 +949,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       InlineCode: |
         import cfnresponse
         import time
@@ -934,7 +979,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       InlineCode: |
         import cfnresponse
         import json
@@ -990,7 +1035,7 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/bedrock-embeddings-and-llm.yaml
       # yamllint enable rule:line-length
       Parameters:
-        EmbeddingsModelId: 'amazon.titan-e1t-medium'
+        EmbeddingsModelId: 'amazon.titan-embed-text-v1'
         LLMModelId: !Ref AgentAssistQnABotLLMBedrockModelId
 
   QNABOT:
@@ -1024,7 +1069,7 @@ Resources:
           - QnABotEmbeddingsApiBedrock
           - !GetAtt QNABOTPLUGINBEDROCK.Outputs.EmbeddingsLambdaArn
           - !Ref AgentAssistQnABotEmbeddingsLambdaArn
-        EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions
+        EmbeddingsLambdaDimensions: !Ref AgentAssistQnABotEmbeddingsLambdaDimensions2
         LLMApi: !If
           - QnABotLLMPluginAnthropic
           - 'LAMBDA'
@@ -1121,13 +1166,6 @@ Resources:
         - QnABotLLMPluginBedrock
         - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryModelParams
         - ''
-      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: !If
-      - QnABotLLMPluginAnthropic
-      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingGenerateQueryPromptTemplate
-      - !If 
-        - QnABotLLMPluginBedrock
-        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingGenerateQueryPromptTemplate
-        - ''
       LLM_QA_MODEL_PARAMS: !If
         - QnABotLLMPluginAnthropic
         - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAModelParams
@@ -1135,13 +1173,9 @@ Resources:
           - QnABotLLMPluginBedrock
           - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAModelParams
           - ''
-      LLM_QA_PROMPT_TEMPLATE: !If
-      - QnABotLLMPluginAnthropic
-      - !GetAtt QNABOTPLUGINANTHROPIC.Outputs.QnABotSettingQAPromptTemplate
-      - !If 
-        - QnABotLLMPluginBedrock
-        - !GetAtt QNABOTPLUGINBEDROCK.Outputs.QnABotSettingQAPromptTemplate
-        - ''
+      LLM_GENERATE_QUERY_PROMPT_TEMPLATE: "<br><br>Human: Let's think carefully step by step. Here is the transcript of an ongoing phone call between a caller (Human) and an agent (AI) in <transcript> tags:<br><transcript>{history}</transcript><br>And here is a follow up question or statement from the caller in <followUpMessage> tags:<br> <followUpMessage>{input}</followUpMessage><br>Rephrase the caller's follow up question or statement as a standalone question or statement that contains all the context and makes sense on its own without reading the transcript. If the caller is just engaging in small talk or saying thanks, respond with \"small talk\".<br><br>Assistant: Here is the rephrased follow up question or statement, or small talk: "
+      LLM_QA_PROMPT_TEMPLATE: "<br><br>Human: Let's think carefully step by step. You are a call center assistant. Your job is to advise a call center agent how best to respond to a caller query, based on the reference passages provided inside <references></reference> XML tags. The caller's query is below, inside <query></query> XML tags.<br><references><br>{context}<br></references><br><br><query><br>{query}<br></query><br><br>If the references contain the information needed to answer the query, then write a confident response in under 50 words, quoting the relevant references.<br>If you can make an informed guess on how to answer the query based on the reference passages, then write a tentative response in under 50 words, stating your assumptions.<br>If the reference passages do not have any information that you can use to answer the query, then respond saying \"Sorry, I don't know\".<br>If the query contains \"small talk\" then respond saying \"Sorry, I cannot respond to small talk\".<br>Think carefully, step by step.<br><br>Assistant:"
+      EMPTYMESSAGE: "No response from agent assist QnAbot"
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -1199,6 +1233,8 @@ Resources:
             - QnABotEmbeddingsApiSageMaker
             - 'SAGEMAKER'
             - 'LAMBDA'
+        AgentAssistQnABotKendraWebCrawlURLs: !Ref AgentAssistQnABotKendraWebCrawlURLs
+        AgentAssistQnABotKendraWebCrawlDepth: !Ref AgentAssistQnABotKendraWebCrawlDepth
         AgentAssistQnABotLLMApi: !Ref AgentAssistQnABotLLMApi
         AgentAssistQnABotLLMLambdaArn: !Ref AgentAssistQnABotLLMLambdaArn
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
@@ -1213,9 +1249,11 @@ Resources:
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         LexAgentAssistIdentityPoolId: !GetAtt AISTACK.Outputs.LexAgentAssistIdentityPoolId
         CloudFrontDomainName: !GetAtt AISTACK.Outputs.CloudFrontDomainName
+        FetchTranscriptFunctionArn: !GetAtt AISTACK.Outputs.FetchTranscriptArn
         TranscriptSummaryFunctionArn: !GetAtt AISTACK.Outputs.TranscriptSummaryFunctionArn
         # QnaBotSettings - JSON param with new settings values based on options selected
         QnaBotSettings: !GetAtt SettingsJSON.Output
+        Version: v0.8.8
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
@@ -1260,6 +1298,32 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        Version: <VERSION_TOKEN>
+
+  CONNECTKVSSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallConnectKVSStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-kvs-stack/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        ConnectInstanceArn: !Ref ConnectInstanceArn
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
+        TranscribeApiMode: !Ref TranscribeApiMode
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+        EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
+        EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
 
   GENESYSAUDIOHOOKSTACK:
     Type: AWS::CloudFormation::Stack
@@ -1287,6 +1351,43 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+
+  WEBSOCKETSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallWebSocketStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-stack/<VERSION_TOKEN>/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        AudioFilePrefix: !Ref AudioFilePrefix
+        UserPoolId: !GetAtt AISTACK.Outputs.UserPoolId
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        TranscribeApiMode: !Ref TranscribeApiMode
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
+        # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
+        # if the values are changed (and the LCASettings param was recreated in the ai-stack)
+        CategoryAlertRegEx: !Ref CategoryAlertRegEx
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - 'true'
+          - 'false'
+        
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
@@ -1337,25 +1438,32 @@ Outputs:
       - !GetAtt CHIMEVCSTACK.Outputs.DemoPBXPhoneNumber
       - 'Demo Asterisk PBX not enabled'
 
-  WebSocketEndpoint:
+  GenesysAudiohookWebSocketEndpoint:
     Description: Websocket endpoint for Genesys Cloud Audiohook integration
     Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
-  WebSocketAPIKey:
+  GenesysAudiohookWebSocketAPIKey:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIKey
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
-  WebSocketAPIClientSecret:
+  GenesysAudiohookWebSocketAPIClientSecret:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
       - 'Genesys Cloud Audiohook Web Socket not enabled'
 
+  LCAWebsocketEndpoint:
+    Description: Websocket endpoint for websocket integration
+    Value: !If
+      - ShouldInstallWebSocketStack  
+      - !GetAtt WEBSOCKETSTACK.Outputs.WebSocketEndpoint
+      - ' Web Socket not enabled'
+      
   QnaBotContentDesigner:
     Description: Agent Assist Content Designer URL (QnABot on AWS)
     Value: !If
@@ -1378,3 +1486,11 @@ Outputs:
   LLMPromptSummaryTemplateParameter:
     Description: The LLM summary prompt template in SSM Parameter Store - open to customise call summary prompts.
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/parameters/${SSMSTACK.Outputs.LLMPromptSummaryTemplateParameter}"
+
+
+  ConnectStartLCAFunctionName:
+    Description: Amazon Connect Lambda function for contact flow integration when Amazon Connect KVS is selected as an audio source.
+    Value: !If
+      - ShouldInstallConnectKVSStack
+      - !GetAtt CONNECTKVSSTACK.Outputs.StartLCAFunctionName
+      - 'Amazon Connect KVS audio source not enabled'

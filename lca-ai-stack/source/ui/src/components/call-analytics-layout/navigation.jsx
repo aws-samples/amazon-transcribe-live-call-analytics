@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import React from 'react';
 import { Route, Switch } from 'react-router-dom';
-import { SideNavigation } from '@awsui/components-react';
+import SideNavigation from '@cloudscape-design/components/side-navigation';
 
-import { CALLS_PATH, DEFAULT_PATH } from '../../routes/constants';
+import { CALLS_PATH, STREAM_AUDIO_PATH, DEFAULT_PATH } from '../../routes/constants';
 
 export const callsNavHeader = { text: 'Call Analytics', href: `#${DEFAULT_PATH}` };
 export const callsNavItems = [
   { type: 'link', text: 'Calls', href: `#${CALLS_PATH}` },
+  { type: 'link', text: 'Stream Audio', href: `#${STREAM_AUDIO_PATH}` },
   {
     type: 'section',
     text: 'Resources',
@@ -29,9 +30,10 @@ export const callsNavItems = [
   },
 ];
 
-const defaultOnFollowHandler = (ev) => {
+const defaultOnFollowHandler = () => {
   // XXX keep the locked href for our demo pages
-  ev.preventDefault();
+  // ev.preventDefault();
+  // console.log(ev);
 };
 
 /* eslint-disable react/prop-types */
@@ -44,8 +46,8 @@ const Navigation = ({
   <Switch>
     <Route path={CALLS_PATH}>
       <SideNavigation
-        items={items || callsNavHeader}
-        header={header || callsNavItems}
+        items={items || callsNavItems}
+        header={header || callsNavHeader}
         activeHref={activeHref || `#${CALLS_PATH}`}
         onFollow={onFollowHandler}
       />

@@ -15,6 +15,7 @@ runtime= boto3.client('runtime.sagemaker')
 logger = logging.getLogger(__name__)
 ddb = boto3.resource('dynamodb')
 
+issue_remover = re.compile('<span class=\'issue-pill\'>Issue Detected</span>')
 html_remover = re.compile('<[^>]*>')
 filler_remover = re.compile('(^| )([Uu]m|[Uu]h|[Ll]ike|[Mm]hm)[,]?')
 
@@ -47,6 +48,7 @@ def preprocess_transcripts(transcripts, condense ):
         if condense == True:
           if row['Channel'] == 'AGENT_ASSISTANT':
               continue
+          transcript = remove_issues(transcript)
           transcript = remove_html(transcript)
           transcript = remove_filler_words(transcript).strip()
 
@@ -61,6 +63,9 @@ def preprocess_transcripts(transcripts, condense ):
         data.append(transcript)
     
     return data
+
+def remove_issues(transcript_string):
+    return re.sub(issue_remover, '', transcript_string)
 
 def remove_html(transcript_string):
     return re.sub(html_remover, '', transcript_string)
@@ -104,5 +109,6 @@ if __name__ == '__main__':
     lambda_handler( {
         "CallId": "2359fb61-f612-4fe9-bce2-839061c328f9",
         "TokenCount": 0,
-        "ProcessTranscript": False
+        "ProcessTranscript": False,
+        "LastNTurns": 20
     }, {})

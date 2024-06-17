@@ -53,7 +53,7 @@ Parameters:
     Default: 'false'
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
-      the 'en-US' language is selected in the TranscribeLanguageCode parameter.
+      the 'en-US', 'en-AU', 'en-GB' or 'es-US' languages are selected in the TranscribeLanguageCode parameter.
     AllowedValues:
       - 'true'
       - 'false'
@@ -189,14 +189,14 @@ Resources:
         - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2'
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallTranscriberFunctionRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active
       Environment:
         Variables:
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
-          BUFFER_SIZE: '128'
+          BUFFER_SIZE: '3200'
           LAMBDA_INVOKE_TIMEOUT: '720000'
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
@@ -437,7 +437,11 @@ Metadata:
 Conditions:
   ShouldEnableContentRedaction: !And
     - !Equals [!Ref IsContentRedactionEnabled, 'true']
-    - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+    - !Or 
+      - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+      - !Equals [!Ref TranscribeLanguageCode, 'en-AU']
+      - !Equals [!Ref TranscribeLanguageCode, 'en-GB']
+      - !Equals [!Ref TranscribeLanguageCode, 'es-US']
   ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
 
 Outputs:

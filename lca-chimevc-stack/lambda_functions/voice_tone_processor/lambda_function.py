@@ -65,8 +65,9 @@ def lambda_handler(event, context):
         callStartTime = datetime.strptime(callStartTimeStr,'%Y-%m-%dT%H:%M:%S.%fZ')
         
         timestampStr = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        participant = 'CALLER_VOICETONE' if detail['isCaller'] != True else 'AGENT_VOICETONE'
+
+        # agentStreamArn is the caller's stream
+        participant = 'CALLER_VOICETONE' if detail['streamArn'] == callData['agentStreamArn'] else 'AGENT_VOICETONE'
         sentiment = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneLabel'].upper()
         sentimentWeighted = detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['positive'] * 1 + detail['voiceToneAnalysisDetails']['currentAverageVoiceTone']['voiceToneScore']['negative'] * -1
 

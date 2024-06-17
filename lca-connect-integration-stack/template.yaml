@@ -91,7 +91,7 @@ Resources:
     Properties:
       Role: !GetAtt LambdaRole.Arn
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       Timeout: 900
       Code:
         ZipFile: |
@@ -179,7 +179,7 @@ Resources:
     Properties:
       Role: !GetAtt ContactEventProcessorFunctionRole.Arn
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.11
       Timeout: 20
       Description: >-
         AWS Lambda Function triggered when 'CONNECTED_TO_AGENT' event is received from Connect. 

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import React, { useState } from 'react';
 import { Switch, Route, useRouteMatch } from 'react-router-dom';
-import { AppLayout, Flashbar } from '@awsui/components-react';
+import AppLayout from '@cloudscape-design/components/app-layout';
+import Flashbar from '@cloudscape-design/components/flashbar';
 
 import { Logger } from 'aws-amplify';
 
@@ -26,16 +27,18 @@ import {
   PERIODS_TO_LOAD_STORAGE_KEY,
 } from '../call-list/calls-table-config';
 
+import useAppContext from '../../contexts/app';
+
 const logger = new Logger('CallAnalyticsLayout');
 
 const CallAnalyticsLayout = () => {
+  const { navigationOpen, setNavigationOpen } = useAppContext();
+
   const { path } = useRouteMatch();
   logger.debug('path', path);
 
   const notifications = useNotifications();
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [navigationOpen, setNavigationOpen] = useState(false);
-
   const [selectedItems, setSelectedItems] = useState([]);
 
   const getInitialPeriodsToLoad = () => {
