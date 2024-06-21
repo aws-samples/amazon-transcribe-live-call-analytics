@@ -91,6 +91,7 @@ Resources:
       Timeout: 300
       Code:
         ZipFile: |
+          from os import getenv
           import json
           import uuid
           import os
@@ -110,7 +111,7 @@ Resources:
               response = chime.create_voice_connector(
                   Name = stack_name + '-SIPREC-Trunk',
                   AwsRegion=os.environ['AWS_REGION'],
-                  RequireEncryption=False
+                  RequireEncryption = getenv('VoiceConnectorsRequireEncryption', False)
               )
               logger.info(response)
               voice_connector_id = response['VoiceConnector']['VoiceConnectorId']

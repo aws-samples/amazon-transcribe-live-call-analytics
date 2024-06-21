@@ -552,6 +552,12 @@ Parameters:
     Description: 'Number of days after which bucket objects will be deleted from the Recordings bucket.'
     Default: 30
 
+  VoiceConnectorsRequireEncryption:
+    Type: String
+    Default: False
+    Description: Configures Encryption to Voice Connector.
+    AllowedValues: [True, False]
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -1300,6 +1306,7 @@ Resources:
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
         Version: <VERSION_TOKEN>
+        VoiceConnectorsRequireEncryption: !Ref VoiceConnectorsRequireEncryption
 
   CONNECTKVSSTACK:
     Type: AWS::CloudFormation::Stack
