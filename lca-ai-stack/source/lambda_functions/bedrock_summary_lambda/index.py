@@ -16,16 +16,20 @@ logger.setLevel(logging.ERROR)
 BEDROCK_MODEL_ID = os.environ["BEDROCK_MODEL_ID"]
 FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
-TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0')) # default 0 - do not truncate.
+# default 0 - do not truncate.
+TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0'))
 SUMMARY_PROMPT_SSM_PARAMETER = os.environ["SUMMARY_PROMPT_SSM_PARAMETER"]
 
 # Optional environment variables allow region / endpoint override for bedrock Boto3
 BEDROCK_REGION = os.environ["BEDROCK_REGION_OVERRIDE"] if "BEDROCK_REGION_OVERRIDE" in os.environ else os.environ["AWS_REGION"]
-BEDROCK_ENDPOINT_URL = os.environ.get("BEDROCK_ENDPOINT_URL", f'https://bedrock-runtime.{BEDROCK_REGION}.amazonaws.com')
+BEDROCK_ENDPOINT_URL = os.environ.get(
+    "BEDROCK_ENDPOINT_URL", f'https://bedrock-runtime.{BEDROCK_REGION}.amazonaws.com')
 
 lambda_client = boto3.client('lambda')
 ssmClient = boto3.client("ssm")
-bedrock = boto3.client(service_name='bedrock-runtime', region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL) 
+bedrock = boto3.client(service_name='bedrock-runtime',
+                       region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL)
+
 
 def get_templates_from_ssm(prompt_override):
     templates = []
@@ -34,13 +38,14 @@ def get_templates_from_ssm(prompt_override):
         prompt_template_str = prompt_override
 
     if prompt_template_str is None:
-        prompt_template_str = ssmClient.get_parameter(Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
+        prompt_template_str = ssmClient.get_parameter(
+            Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
 
     try:
         prompt_templates = json.loads(prompt_template_str)
         for k, v in prompt_templates.items():
             prompt = v.replace("<br>", "\n")
-            templates.append({ k:prompt })
+            templates.append({k: prompt})
     except:
         prompt = prompt_template_str.replace("<br>", "\n")
         templates.append({
@@ -48,11 +53,12 @@ def get_templates_from_ssm(prompt_override):
         })
     return templates
 
+
 def get_transcripts(callId):
     payload = {
-        'CallId': callId, 
-        'ProcessTranscript': PROCESS_TRANSCRIPT, 
-        'TokenCount': TOKEN_COUNT 
+        'CallId': callId,
+        'ProcessTranscript': PROCESS_TRANSCRIPT,
+        'TokenCount': TOKEN_COUNT
     }
     print("Invoking lambda", payload)
     response = lambda_client.invoke(
@@ -63,33 +69,58 @@ def get_transcripts(callId):
     print("Lambda response:", response)
     return response
 
+
+def get_request_body(modelId, prompt, max_tokens, temperature):
+    provider = modelId.split(".")[0]
+    request_body = None
+    if provider == "anthropic":
+        # claude-3 models use new messages format
+        if modelId.startswith("anthropic.claude-3"):
+            request_body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "messages": [{"role": "user", "content": [{'type': 'text', 'text': prompt}]}],
+                "max_tokens": max_tokens,
+                "temperature": temperature
+            }
+        else:
+            request_body = {
+                "prompt": prompt,
+                "max_tokens_to_sample": max_tokens,
+                "temperature": temperature
+            }
+    else:
+        raise Exception("Unsupported provider: ", provider)
+    return request_body
+
+
+def get_generated_text(modelId, response):
+    provider = modelId.split(".")[0]
+    generated_text = None
+    response_body = json.loads(response.get("body").read())
+    print("Response body: ", json.dumps(response_body))
+    if provider == "anthropic":
+        # claude-3 models use new messages format
+        if modelId.startswith("anthropic.claude-3"):
+            generated_text = response_body.get("content")[0].get("text")
+        else:
+            generated_text = response_body.get("completion")
+    else:
+        raise Exception("Unsupported provider: ", provider)
+    return generated_text
+
+
 def call_bedrock(prompt_data):
     modelId = BEDROCK_MODEL_ID
     accept = 'application/json'
     contentType = 'application/json'
-
-    summary_text = "Unsupported Bedrock model ID "+modelId+". Unable to generate call summary"
-    provider = modelId.split(".")[0]
-
-    if provider == "amazon":
-        body = json.dumps({"inputText": prompt_data, "temperature":0 }) 
-        response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
-        response_body = json.loads(response.get('body').read())
-        summary_text = response_body.get('results')[0].get('outputText')
-
-    elif provider == "ai21":
-        body = json.dumps({"prompt": prompt_data, "temperature":0 })
-        response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
-        response_body = json.loads(response.get('body').read())
-        summary_text = response_body.get('completions')[0].get('data').get('text')
-
-    elif provider == "anthropic":
-        body = json.dumps({"prompt": prompt_data, "max_tokens_to_sample": 512, "temperature":0 })
-        response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
-        response_body = json.loads(response.get('body').read())
-        summary_text = response_body.get('completion')
-
-    return summary_text
+    body = get_request_body(modelId, prompt_data,
+                            max_tokens=512, temperature=0)
+    print("Bedrock request - ModelId", modelId, "-  Body: ", body)
+    response = bedrock.invoke_model(body=json.dumps(
+        body), modelId=modelId, accept=accept, contentType=contentType)
+    generated_text = get_generated_text(modelId, response)
+    print("Bedrock response: ", json.dumps(generated_text))
+    return generated_text
 
 
 def generate_summary(transcript, prompt_override):
@@ -109,6 +140,7 @@ def generate_summary(transcript, prompt_override):
         # this may contain json or a string.
         return result[list(result.keys())[0]]
     return json.dumps(result)
+
 
 def handler(event, context):
     print("Received event: ", json.dumps(event))
@@ -132,7 +164,8 @@ def handler(event, context):
 
     print("Summary: ", summary)
     return {"summary": summary}
-    
+
+
 # for testing on terminal
 if __name__ == "__main__":
     event = {
