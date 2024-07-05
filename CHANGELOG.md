@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stack deployment now fails fast if required Bedrock models are not available or enabled in the account/region
 ### Added
 - Support for Bedrock anthropic-claude-3-haiku and anthropic-claude-3-sonnet models (removed support for older models)
+- Added option for single language auto-detection - using Amazon Transcribe's 'Identify Language' feature with optional list of possible language codes.
+- Added option for multiple language auto-detection - using Amazon Transcribe's 'Identify Multiple Languages' feature with optional list of possible language codes. 
 
 
 

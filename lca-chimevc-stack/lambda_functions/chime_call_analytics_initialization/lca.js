@@ -12,7 +12,7 @@ const { PutRecordCommand } = require('@aws-sdk/client-kinesis');
 const { CopyObjectCommand } = require('@aws-sdk/client-s3');
 
 // Add a '/' to S3 or HTML paths if needed
-const formatPath = function(path) {
+const formatPath = function (path) {
   let pathOut = path;
   if (path.length > 0 && path.charAt(path.length - 1) != "/") {
     pathOut += "/";
@@ -58,7 +58,7 @@ const writeTranscriptionSegmentToKds = async function writeTranscriptionSegmentT
   const putObj = {
     Channel: channel,
     CallId: callId,
-    SegmentId: result.ResultId,
+    SegmentId: `${result.ChannelId}-${result.StartTime}`,
     StartTime: result.StartTime.toString(),
     EndTime: result.EndTime.toString(),
     Transcript: result.Alternatives[0].Transcript,

@@ -1,20 +1,20 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { 
-    TranscriptEvent, 
+import {
+    TranscriptEvent,
     UtteranceEvent,
     CategoryEvent,
 } from '@aws-sdk/client-transcribe-streaming';
 
-import { 
-    KinesisClient, 
-    PutRecordCommand 
+import {
+    KinesisClient,
+    PutRecordCommand
 } from '@aws-sdk/client-kinesis';
 
-import { 
+import {
     CallStartEvent,
-    CallEndEvent, 
+    CallEndEvent,
     CallRecordingEvent,
     AddTranscriptSegmentEvent,
     AddCallCategoryEvent,
@@ -24,14 +24,14 @@ import {
 import dotenv from 'dotenv';
 dotenv.config();
 
-const awsRegion:string = process.env['AWS_REGION'] || 'us-east-1';
+const awsRegion: string = process.env['AWS_REGION'] || 'us-east-1';
 const savePartial = (process.env['SAVE_PARTIAL_TRANSCRIPTS'] || 'true') === 'true';
 const kdsStreamName = process.env['KINESIS_STREAM_NAME'] || '';
 
 const kinesisClient = new KinesisClient({ region: awsRegion });
 
-export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent ) => {
-    
+export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent) => {
+
     const putParams = {
         StreamName: kdsStreamName,
         PartitionKey: callEvent.CallId,
@@ -51,11 +51,11 @@ export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | 
 
 // BabuS: TODO - writeTranscriptionSegment should be changed to support CustomCallTranscriptEvent 
 
-export const writeTranscriptionSegment = async function(transcribeMessageJson:TranscriptEvent, callId: Uuid) {
+export const writeTranscriptionSegment = async function (transcribeMessageJson: TranscriptEvent, callId: Uuid) {
 
     if (transcribeMessageJson.Transcript?.Results && transcribeMessageJson.Transcript?.Results.length > 0) {
         if (transcribeMessageJson.Transcript?.Results[0].Alternatives && transcribeMessageJson.Transcript?.Results[0].Alternatives?.length > 0) {
-           
+
             const result = transcribeMessageJson.Transcript?.Results[0];
 
             if (result.IsPartial == undefined || (result.IsPartial == true && !savePartial)) {
@@ -64,11 +64,11 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
             const { Transcript: transcript } = transcribeMessageJson.Transcript.Results[0].Alternatives[0];
             const now = new Date().toISOString();
 
-            const kdsObject:AddTranscriptSegmentEvent = {
+            const kdsObject: AddTranscriptSegmentEvent = {
                 EventType: 'ADD_TRANSCRIPT_SEGMENT',
                 CallId: callId,
-                Channel: (result.ChannelId ==='ch_0' ? 'CALLER' : 'AGENT'),
-                SegmentId: result.ResultId || '',
+                Channel: (result.ChannelId === 'ch_0' ? 'CALLER' : 'AGENT'),
+                SegmentId: `${result.ChannelId}-${result.StartTime}`,
                 StartTime: result.StartTime || 0,
                 EndTime: result.EndTime || 0,
                 Transcript: transcript || '',
@@ -99,13 +99,13 @@ export const writeTranscriptionSegment = async function(transcribeMessageJson:Tr
     }
 };
 
-export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:UtteranceEvent | undefined , 
-    transcriptEvent:TranscriptEvent | undefined,  callId: Uuid) {
-    
+export const writeAddTranscriptSegmentEvent = async function (utteranceEvent: UtteranceEvent | undefined,
+    transcriptEvent: TranscriptEvent | undefined, callId: Uuid) {
+
     if (transcriptEvent) {
         if (transcriptEvent.Transcript?.Results && transcriptEvent.Transcript?.Results.length > 0) {
             if (transcriptEvent.Transcript?.Results[0].Alternatives && transcriptEvent.Transcript?.Results[0].Alternatives?.length > 0) {
-            
+
                 const result = transcriptEvent.Transcript?.Results[0];
                 if (result.IsPartial == undefined || (result.IsPartial == true && !savePartial)) {
                     return;
@@ -113,16 +113,16 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
             }
         }
     }
-                
+
     if (utteranceEvent) {
         if (utteranceEvent.IsPartial == undefined || (utteranceEvent.IsPartial == true && !savePartial)) {
             return;
         }
     }
-   
+
     const now = new Date().toISOString();
 
-    const kdsObject:AddTranscriptSegmentEvent = {
+    const kdsObject: AddTranscriptSegmentEvent = {
         EventType: 'ADD_TRANSCRIPT_SEGMENT',
         CallId: callId,
         TranscriptEvent: transcriptEvent,
@@ -148,12 +148,12 @@ export const writeAddTranscriptSegmentEvent = async function(utteranceEvent:Utte
     }
 };
 
-export const writeAddCallCategoryEvent = async function(categoryEvent:CategoryEvent, callId: Uuid) {
+export const writeAddCallCategoryEvent = async function (categoryEvent: CategoryEvent, callId: Uuid) {
 
     if (categoryEvent) {
         const now = new Date().toISOString();
-    
-        const kdsObject:AddCallCategoryEvent = {
+
+        const kdsObject: AddCallCategoryEvent = {
             EventType: 'ADD_CALL_CATEGORY',
             CallId: callId,
             CategoryEvent: categoryEvent,
