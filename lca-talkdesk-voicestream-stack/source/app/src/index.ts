@@ -140,22 +140,23 @@ const registerHandlers = (clientIP: string, ws: WebSocket): void => {
         try {
             const message: MediaStreamMessage = JSON.parse(Buffer.from(data as Uint8Array).toString('utf8'));
 
-            if (isConnectedEvent(message.event)) {
-                await onConnected(clientIP, ws, message as MediaStreamConnectedMessage);
-            } else if (isStartEvent(message.event)) {
-                await onStart(clientIP, ws, message as MediaStreamStartMessage);
-            } else if (isMediaEvent(message.event)) {
-                await onMedia(clientIP, ws, message as MediaStreamMediaMessage);
-            } else if (isStopEvent(message.event)) {
-                await onStop(clientIP, ws, message as MediaStreamStopMessage);
+            if (typeof (message.event) === 'undefined') {
+                server.log.error(`[ON MESSAGE]: [${clientIP}] - Undefined Event Type in the event message received from Talkdesk. Ignoring the event. ${JSON.stringify(message)}`);
             } else {
-                server.log.error(`[ON MESSAGE]: [${clientIP}] - Error processing message: Invalid Event Type ${JSON.stringify(message)}`);
-                // process.exit(1);
+                if (isConnectedEvent(message.event)) {
+                    await onConnected(clientIP, ws, message as MediaStreamConnectedMessage);
+                } else if (isStartEvent(message.event)) {
+                    await onStart(clientIP, ws, message as MediaStreamStartMessage);
+                } else if (isMediaEvent(message.event)) {
+                    await onMedia(clientIP, ws, message as MediaStreamMediaMessage);
+                } else if (isStopEvent(message.event)) {
+                    await onStop(clientIP, ws, message as MediaStreamStopMessage);
+                } else {
+                    server.log.error(`[ON MESSAGE]: [${clientIP}] - Invalid Event Type Event Type in the event message received from Talkdesk. Ignoring the event. ${JSON.stringify(message)}`);
+                }
             }
-
         } catch (error) {
-            server.log.error(`[ON MESSAGE]: [${clientIP}] - Error processing message: ${normalizeErrorForLogging(error)}`);
-            process.exit(1);
+            server.log.error(`[ON MESSAGE]: [${clientIP}] - Error parsing event message from Talkdesk. Possible syntax error in the json payload.: ${normalizeErrorForLogging(error)}`);
         }
     });
 
