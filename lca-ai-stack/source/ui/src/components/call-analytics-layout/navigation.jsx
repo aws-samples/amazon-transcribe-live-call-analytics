@@ -6,10 +6,10 @@ import SideNavigation from '@cloudscape-design/components/side-navigation';
 
 import { CALLS_PATH, STREAM_AUDIO_PATH, DEFAULT_PATH } from '../../routes/constants';
 
-export const callsNavHeader = { text: 'Call Analytics', href: `#${DEFAULT_PATH}`, external: true };
+export const callsNavHeader = { text: 'Call Analytics', href: `#${DEFAULT_PATH}` };
 export const callsNavItems = [
   { type: 'link', text: 'Calls', href: `#${CALLS_PATH}` },
-  { type: 'link', text: 'Stream Audio', href: `#${STREAM_AUDIO_PATH}` },
+  { type: 'link', text: 'Stream Audio', href: `#${STREAM_AUDIO_PATH}`, external: true },
   {
     type: 'section',
     text: 'Resources',
