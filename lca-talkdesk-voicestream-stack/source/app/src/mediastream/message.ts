@@ -52,9 +52,6 @@ export type MediaStreamStartMessage = MediaStreamBase<StartEvent> & {
             sampleRate: number;
             channels: number
         };
-        customParameters: {
-            participant: string;
-        };
     }
 }
 

@@ -1,3 +1,5 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 /**
  * Lookup table to convert u-Law bytes to their Linear-16 sample values
@@ -37,6 +39,73 @@ const ulawToL16Lut = new Int16Array([
     56, 48, 40, 32, 24, 16, 8, 0
 ]);
 
+/**
+ * Lookup table to determine u-Law exponent from clamped absolute sample value.
+ */
+const ulawExpLut = new Uint8Array([
+    0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
+]);
+
+/**
+ * Encodes a sample of Linear16 encoded audio samples in range [-32768, 32767] to u-Law
+ *
+ * Values outside range of signed 16-bit [-32768, 32767] are clamped/saturated.
+ * 
+ * @param sample Sample to encode, valid range [-32768, 32767]
+ * @returns U-law encoded sample 
+ */
+export const ulawFromL16Sample = (sample: number): number => {
+    let x: number;
+    let ulaw: number;
+    if (sample < 0) {
+        x = ((sample <= -32635) ? 32635 : -sample) + 132;     // Negate sample, clamp, and add bias (4*33)
+        ulaw = 0x7f;
+    } else {
+        x = ((sample >= 32635) ? 32635 : sample) + 132;     // Clamp sample and add bias (4*33)
+        ulaw = 0xff;
+    }
+    const exp = ulawExpLut[x >> 8];
+    return ulaw - ((exp << 4) | ((x >> (exp + 3)) & 0x0f));
+};
+
+/**
+ * Decodes a u-law encoded sample to Linear16.
+ * 
+ * Input is expected to be in range 0...255 (8bit unsigned).
+ * 
+ * @param sample Byte value representing sample encoded in u-law
+ * @returns Linear16 sample value [-32768, 32767]
+ */
+export const ulawToL16Sample = (sample: number): number => {
+    return ulawToL16Lut[sample] ?? 0;
+};
+
+
+const encodeFromArray = (data: Int16Array | number[]): Uint8Array => {
+    const size = data.length;
+    const res = new Uint8Array(size);
+    for (let i = 0; i < size; ++i) {
+        res[i] = ulawFromL16Sample(data[i]);
+    }
+    return res;
+};
+
+const encodeFromDataView = (dataview: DataView): Uint8Array => {
+    const size = dataview.byteLength / 2;
+    const res = new Uint8Array(size);
+    let s = 0;
+    for (let i = 0; i < size; ++i, s += 2) {
+        res[i] = ulawFromL16Sample(dataview.getInt16(s, true));
+    }
+    return res;
+};
 
 /**
  * Decodes an array of audio samples encoded with u-Law to Linear16
@@ -52,6 +121,29 @@ export const ulawToL16 = (ulawBuf: Uint8Array): Int16Array => {
     }
     return res;
 };
+
+/**
+ * Encodes an array of Linear16 encoded audio samples in range [-32768, 32767] to u-Law
+ * 
+ * Values outside range of signed 16-bit [-32768, 32767] are clamped/saturated.
+ * 
+ * @param src Typed array of Linear16 audio samples in range [-32768, 32767]. If the argument is a Uint8Array or DataView, 
+ *            it is assumed to contain the audio as little-endian 16-bit samples.
+ *              
+ * @returns Array of samples encoded in u-Law
+ */
+export const ulawFromL16 = (src: Int16Array | number[] | Uint8Array | DataView): Uint8Array => {
+    if (src instanceof Int16Array) {
+        return encodeFromArray(src);
+    } else if (src instanceof DataView) {
+        return encodeFromDataView(src);
+    } else if (src instanceof Uint8Array) {
+        return encodeFromDataView(new DataView(src.buffer, src.byteOffset, src.byteLength));
+    } else {
+        return encodeFromArray(src);
+    }
+};
+
 
 export const msToBytes = (ms: number, samplerate: number, samplebytes: number): number => {
     return samplerate * (ms / 1000) * samplebytes;

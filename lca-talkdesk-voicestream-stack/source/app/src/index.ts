@@ -191,7 +191,7 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
     const callMetaData: CallMetaData = {
         callEvent: 'START',
         callId: data.start.callSid,
-        fromNumber: data.start.customParameters.participant || 'Customer Phone',
+        fromNumber: 'Customer Phone',
         toNumber: 'System Phone',
         shouldRecordCall: SHOULD_RECORD_CALL === 'true' ? true : false,
         samplingRate: SAMPLE_RATE,
