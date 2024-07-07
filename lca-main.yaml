@@ -318,21 +318,65 @@ Parameters:
   TranscribeLanguageCode:
     Type: String
     Description: >-
-      Language code to be used for Amazon Transcribe
+      Language code or language identification setting for Amazon Transcribe. NOTE:
+      Language identification must be used with TranscribeApiMode 'standard', and can't  be combined with custom language models, redaction.
     Default: en-US
     AllowedValues:
-      - en-US
-      - es-US
-      - en-GB
-      - fr-CA
-      - fr-FR
-      - en-AU
-      - it-IT
-      - de-DE
-      - pt-BR
-      - ja-JP
-      - ko-KR
-      - zh-CN
+    - identify-language
+    - identify-multiple-languages
+    - en-US
+    - es-US
+    - en-GB
+    - fr-CA
+    - fr-FR
+    - en-AU
+    - it-IT
+    - de-DE
+    - pt-BR
+    - ja-JP
+    - ko-KR
+    - zh-CN
+    - hi-IN
+    - th-TH
+
+  TranscribeLanguageOptions:
+    Type: String
+    Default: 'en-US, es-US'
+    AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
+    ConstraintDescription: >-
+      Unsupported language code or invalid syntax. Allowed values are: en-US, es-US,
+      en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE, pt-BR, ja-JP, ko-KR, zh-CN, hi-IN,
+      th-TH
+    Description: >-
+      When using language identification, specify two or more language codes, e.g.
+      "en-US, es-US" that represent the languages that may be  used in your meeting.
+      Including more than five is not recommended.  Enter only one language dialect
+      per language - e.g. 'en-US, en-AU' is not allowed.
+      Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE,
+      pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
+
+  TranscribePreferredLanguage:
+    Type: String
+    Description: >-
+      Optionally select a preferred language when using language identification -
+      must be one of the languages entered for TranscribeLanguageOptions.
+    Default: None
+    AllowedValues:
+    - None
+    - en-US
+    - es-US
+    - en-GB
+    - fr-CA
+    - fr-FR
+    - en-AU
+    - it-IT
+    - de-DE
+    - pt-BR
+    - ja-JP
+    - ko-KR
+    - zh-CN
+    - hi-IN
+    - th-TH
 
   TranscribePiiEntityTypes:
     Type: String
@@ -606,6 +650,8 @@ Metadata:
           - TranscribeApiMode
           - IsContentRedactionEnabled
           - TranscribeLanguageCode
+          - TranscribeLanguageOptions
+          - TranscribePreferredLanguage
           - TranscribeContentRedactionType
           - TranscribePiiEntityTypes
           - CustomVocabularyName
@@ -721,6 +767,10 @@ Metadata:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
         default: Language for Transcription
+      TranscribeLanguageOptions:
+        default: Transcribe Language Options
+      TranscribePreferredLanguage:
+        default: Transcribe Preferred Language
       TranscribeContentRedactionType:
         default: Content Redaction Type for Transcription
       TranscribePiiEntityTypes:
@@ -859,6 +909,10 @@ Conditions:
 
 Mappings:
   TranscribeToComprehendLanguage:
+    identify-language:
+      Value: en
+    identify-multiple-languages:
+      Value: en
     en-US:
       Value: en
     es-US:
@@ -883,8 +937,16 @@ Mappings:
       Value: ko
     zh-CN:
       Value: zh
+    hi-IN:
+      Value: hi
+    th-TH:
+      Value: en  # th not supported in comprehend
 
   TranscribeToLexLocaleId:
+    identify-language:
+      Value: en_US
+    identify-multiple-languages:
+      Value: en_US
     en-US:
       Value: en_US
     es-US:
@@ -909,6 +971,10 @@ Mappings:
       Value: ko_KR
     zh-CN:
       Value: zh_CH
+    hi-IN:
+      Value: hi_IN
+    th-TH:
+      Value: th_TH
 
 Rules:
   ConnectInstanceArn:
@@ -1042,11 +1108,26 @@ Resources:
             reason = f"Parameters Validated"
             if event['RequestType'] != "Delete":
               # Validate Transcribe Language options
+              transcribeApiMode = event['ResourceProperties'].get('TranscribeApiMode', '')
               transcribeLanguageCode = event['ResourceProperties'].get('TranscribeLanguageCode', '')
               transcribeLanguageOptions = event['ResourceProperties'].get('TranscribeLanguageOptions', '')
               transcribePreferredLanguage = event['ResourceProperties'].get('TranscribePreferredLanguage', '')
+              customVocabularyName = event['ResourceProperties'].get('CustomVocabularyName', '')
+              customLanguageModelName = event['ResourceProperties'].get('CustomLanguageModelName', '')
+              # Check language code and options are valid for Transcribe analytics
+              if transcribeApiMode == 'analytics':
+                allowedTCALanguages = ['en-US', 'en-GB', 'es-US', 'fr-CA', 'fr-FR', 'en-AU',  'it-IT', 'de-DE', 'pt-BR']
+                if transcribeLanguageCode not in allowedTCALanguages:
+                  status = cfnresponse.FAILED
+                  reason = f"Selected Transcribe Language '{transcribeLanguageCode}' is not supported by Transcribe Call Analytics - must be one of: {allowedTCALanguages}. Please choose a supported language or set Transcribe API mode to 'standard'"
               if transcribeLanguageCode in ['identify-language', 'identify-multiple-languages']:
-                if transcribeLanguageOptions == '':
+                if customVocabularyName:
+                  status = cfnresponse.FAILED
+                  reason = f"CustomVocabularyName cannot be set when TranscribeLanguageCode is '{transcribeLanguageCode}'"
+                elif customLanguageModelName:
+                  status = cfnresponse.FAILED
+                  reason = f"CustomLanguageModelName cannot be set when TranscribeLanguageCode is '{transcribeLanguageCode}'"
+                elif transcribeLanguageOptions == '':
                   status = cfnresponse.FAILED
                   reason = f"At least two languages must be provided for TranscribeLanguageOptions when using language identification"
                 else:
@@ -1098,7 +1179,12 @@ Resources:
     Type: Custom::ValidateParameters
     Properties:
       ServiceToken: !GetAtt ValidateParametersFunction.Arn
+      TranscribeApiMode: !Ref TranscribeApiMode
       TranscribeLanguageCode: !Ref TranscribeLanguageCode
+      TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+      TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
+      CustomVocabularyName: !Ref CustomVocabularyName
+      CustomLanguageModelName: !Ref CustomLanguageModelName
       BedrockModelIds:
       - !Ref SummaryBedrockModelId  # Call summarization
       - !Ref AgentAssistLLMBedrockModelId  # Agent assistant
@@ -1131,7 +1217,9 @@ Resources:
   KENDRA:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldCreateKendraIndex
-    DependsOn: IsStacknameLengthOK
+    DependsOn: 
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-kendra-stack/template.yaml
@@ -1146,7 +1234,9 @@ Resources:
   QNABOTPLUGINANTHROPIC:
     Type: AWS::CloudFormation::Stack
     Condition: QnABotShouldDeloyPluginAnthropic
-    DependsOn: IsStacknameLengthOK
+    DependsOn: 
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/anthropic-llm.yaml
@@ -1158,7 +1248,9 @@ Resources:
   QNABOTPLUGINBEDROCK:
     Type: AWS::CloudFormation::Stack
     Condition: QnABotShouldDeloyPluginBedrock
-    DependsOn: IsStacknameLengthOK
+    DependsOn: 
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/bedrock-embeddings-and-llm.yaml
@@ -1170,7 +1262,9 @@ Resources:
   QNABOT:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallAWSQnaBot
-    DependsOn: IsStacknameLengthOK
+    DependsOn: 
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot/templates/master.json
@@ -1223,7 +1317,9 @@ Resources:
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
-    DependsOn: IsStacknameLengthOK
+    DependsOn: 
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ai-stack/<VERSION_TOKEN>/template.yaml
@@ -1418,6 +1514,8 @@ Resources:
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
@@ -1448,6 +1546,8 @@ Resources:
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
@@ -1472,6 +1572,8 @@ Resources:
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
@@ -1530,6 +1632,8 @@ Resources:
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName

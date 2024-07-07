@@ -103,6 +103,7 @@ tmpdir=/tmp/lca
 mkdir -p $tmpdir
 pwd
 
+
 dir=lca-chimevc-stack
 echo "PACKAGING $dir"
 pushd $dir
@@ -213,6 +214,7 @@ pushd $dir
 aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-agentassist-setup-stack/template.yaml
 aws s3 cp ./qna-aa-demo.jsonl s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-agentassist-setup-stack/qna-aa-demo.jsonl
 popd
+
 
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
