@@ -42,7 +42,7 @@ export interface WavReader {
     readonly channels: number;
     close(): Promise<void>;
     readNext(samples: number): Promise<Uint8Array | Int16Array | null>;
-};
+}
 
 class WavFileReader implements WavReader {
     private file: FileHandle;
@@ -105,7 +105,7 @@ class WavFileReader implements WavReader {
         }
         return buf;
     }
-};
+}
 
 export type WavFileReaderOptions = {
     allowedRates?: readonly SampleRate[];
