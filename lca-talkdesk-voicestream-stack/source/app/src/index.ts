@@ -53,9 +53,9 @@ const SHOULD_RECORD_CALL = process.env['SHOULD_RECORD_CALL'] || 'false';
 const TALKDESK_ACCOUNT_ID = process.env['TALKDESK_ACCOUNT_ID'] || '';
 
 // Source specific audio parameters
-const CHUNK_SIZE_IN_MS = parseInt(process.env['CHUNK_SIZE_IN_MS'] || '200', 10);
+const CHUNK_SIZE_IN_MS = parseInt(process.env['CHUNK_SIZE_IN_MS'] || '20', 10);
 const SAMPLE_RATE = parseInt(process.env['SAMPLE_RATE'] || '8000', 10);
-const MULAW_BYTES_PER_SAMPLE = parseInt(process.env['MULAW_BYTES_PER_SAMPLE'] || '1', 10);
+// const MULAW_BYTES_PER_SAMPLE = parseInt(process.env['MULAW_BYTES_PER_SAMPLE'] || '4', 10);
 
 const s3Client = new S3Client({ region: AWS_REGION });
 
@@ -201,8 +201,8 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
     const tempRecordingFilename = getTempRecordingFileName(callMetaData);
     const writeRecordingStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
     const recordingFileSize = 0;
-    const highWaterMarkSize = (callMetaData.samplingRate / 10) * 2 * 2;
-    const audioInputStream = new BlockStream({ size: highWaterMarkSize });
+    // const highWaterMarkSize = (callMetaData.samplingRate / 10) * 2 * 2;
+    const audioInputStream = new BlockStream({ size: 1600 });
     const socketCallMap:SocketCallData = {
         callMetadata: callMetaData,
         audioInputStream: audioInputStream,
@@ -246,16 +246,16 @@ function syncTracksAndInterleave(inboundPayloads: Uint8Array[], outboundPayloads
     // [0] will always be min, [-1] will always be max. No need to use min/max math functions
     if (inboundTimestamps.length > 0) {
         startInboundTS = inboundTimestamps[0];
-        endInboundTS = inboundTimestamps[inboundTimestamps.length - 1] + CHUNK_SIZE_IN_MS;
+        endInboundTS = inboundTimestamps[inboundTimestamps.length - 1] + CHUNK_SIZE_IN_MS - 1;
     }
     if (outboundTimestamps.length > 0) {
         startOutboundTS = outboundTimestamps[0];
-        endOutboundTS = outboundTimestamps[outboundTimestamps.length - 1] + CHUNK_SIZE_IN_MS;
+        endOutboundTS = outboundTimestamps[outboundTimestamps.length - 1] + CHUNK_SIZE_IN_MS - 1;
     }
     const bufferStartTS = Math.min(startInboundTS, startOutboundTS);
     const bufferEndTS = Math.max(endInboundTS, endOutboundTS);
-    const bufferLength = msToBytes((bufferEndTS - bufferStartTS + 1), SAMPLE_RATE, MULAW_BYTES_PER_SAMPLE);
-    // server.log.info(`Buffer Start TS: ${bufferStartTS} End TS : ${bufferEndTS} Length Bytes: ${bufferLength}`);
+    const bufferLength = msToBytes((bufferEndTS - bufferStartTS + 1), SAMPLE_RATE, 2);
+    server.log.info(`Buffer Start TS: ${bufferStartTS} End TS : ${bufferEndTS} Length Bytes: ${bufferLength}`);
     
     const inboundBuffer = new Uint8Array(bufferLength).fill(0);
     const outboundBuffer = new Uint8Array(bufferLength).fill(0); 
@@ -263,15 +263,15 @@ function syncTracksAndInterleave(inboundPayloads: Uint8Array[], outboundPayloads
     if (inboundPayloads.length > 0) {
         const inboundPayload = Buffer.concat(inboundPayloads);
         const offsetTS = startInboundTS - bufferStartTS;
-        const byteOffset = msToBytes(offsetTS, SAMPLE_RATE, MULAW_BYTES_PER_SAMPLE);
-        // server.log.info(`inbound offset: TS ${offsetTS} Byte: ${byteOffset}`);
+        const byteOffset = msToBytes(offsetTS, SAMPLE_RATE, 2);
+        server.log.info(`inbound offset: TS ${offsetTS} Byte: ${byteOffset}`);
         inboundBuffer.set(inboundPayload, byteOffset);
     }
     if (outboundPayloads.length > 0 ) {
         const outboundPayload = Buffer.concat(outboundPayloads);
         const offsetTS = startOutboundTS - bufferStartTS;
-        const byteOffset = msToBytes(offsetTS, SAMPLE_RATE, MULAW_BYTES_PER_SAMPLE);
-        // server.log.info(`outbound offset: TS ${offsetTS} Byte: ${byteOffset}`);
+        const byteOffset = msToBytes(offsetTS, SAMPLE_RATE, 2);
+        server.log.info(`outbound offset: TS ${offsetTS} Byte: ${byteOffset}`);
         outboundBuffer.set(outboundPayload, byteOffset);
     }
     
@@ -302,7 +302,7 @@ const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMe
             socketData.outboundTimestamps.push(parseInt(data.media.timestamp));
         }
         
-        if (parseInt(data.sequenceNumber) % 20 === 0) {
+        if (parseInt(data.sequenceNumber) % 5 === 0) {
             const interleaved = syncTracksAndInterleave(socketData.inboundPayloads, socketData.outboundPayloads, socketData.inboundTimestamps, socketData.outboundTimestamps);
             socketData.audioInputStream.write(interleaved);
             socketData.writeRecordingStream.write(interleaved);

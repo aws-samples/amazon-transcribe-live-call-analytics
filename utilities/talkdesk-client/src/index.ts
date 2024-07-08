@@ -48,6 +48,9 @@ const talkdesk_client = async (serveruri: string | undefined, options: CmdOption
         command.error('Websocket server URI is required');
     }
 
+    console.log(`Starting streaming session with ${uri}`);
+    console.log(`Call ID : ${CALL_SID}`);
+    
     const wss_url = new URL(uri);
     const ws = new WebSocket(wss_url);
 
@@ -121,6 +124,7 @@ const talkdesk_client = async (serveruri: string | undefined, options: CmdOption
             } else if (wavreader.format === 'PCMU') {
                 payload = buf as Uint8Array;
             }
+
             let channel0: Uint8Array = new Uint8Array(payload.length / 2);
             let channel1: Uint8Array = new Uint8Array(payload.length / 2);
             let c = 0;
@@ -137,11 +141,12 @@ const talkdesk_client = async (serveruri: string | undefined, options: CmdOption
                     track: 'inbound',
                     chunk: chunk.toString(),
                     timestamp: ts.toString(),
-                    payload: Buffer.from(channel0).toString('base64'),
+                    payload: Buffer.from(channel1).toString('base64'),
                 },
                 streamSid: STREAM_SID
             };
             ws.send(JSON.stringify(inbound_mediaMesage));
+            await timer(CHUNK_SIZE_IN_MS);
 
 
             SEQUENCE_NUMBER++;
@@ -152,14 +157,17 @@ const talkdesk_client = async (serveruri: string | undefined, options: CmdOption
                     track: 'outbound',
                     chunk: chunk.toString(),
                     timestamp: ts.toString(),
-                    payload: Buffer.from(channel1).toString('base64'),
+                    payload: Buffer.from(channel0).toString('base64'),
                 },
                 streamSid: STREAM_SID
             };
             ws.send(JSON.stringify(outbound_mediaMesage));
+            await timer(CHUNK_SIZE_IN_MS);
             if (chunk % 1000 == 0) {
                 console.log(`Inbound Media ${JSON.stringify(inbound_mediaMesage)}`);
                 console.log(`Outbound Media ${JSON.stringify(outbound_mediaMesage)}`);
+                console.log(`Payload Length : ${payload.length}`);
+                console.log(`Payload Bytes: ${payload.byteLength}`);
             }
             buf = await wavreader.readNext(CHUNK_SIZE);
             chunk++;

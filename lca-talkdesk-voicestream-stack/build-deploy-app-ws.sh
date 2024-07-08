@@ -31,4 +31,5 @@ popd
 
 repo_arn=arn:aws:s3:::${BUCKET}/${PREFIX_AND_VERSION}/${dir}/${VERSION}/lca-talkdesk-ws.zip
 
+echo $repo_arn
 # aws codebuild start-build --project-name TranscriberCodeBuildProject-wbRLHS1k1QPo --source-location-override $repo_arn
