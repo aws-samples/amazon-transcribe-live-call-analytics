@@ -1,7 +1,7 @@
 import json
 import os
-import uuid
 import boto3
+import re
 
 FETCH_TRANSCRIPT_FUNCTION_ARN = os.environ['FETCH_TRANSCRIPT_FUNCTION_ARN']
 
@@ -60,35 +60,43 @@ def get_call_transcript(callId, userInput, maxMessages):
 
 
 def get_kb_response(generatePromptTemplate, transcript, query):
-    promptTemplate = generatePromptTemplate or "You are an AI assistant helping a human during a call. I will provide you with a transcript of the ongoing meeting, and a set of search results. Your job is to respond to the user's request using only information from the search results. If search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.<br>Here is the JSON transcript of the call so far:<br>{transcript}<br>Here are the search results in numbered order:<br>$search_results$<br>$output_format_instructions$"
-    promptTemplate = promptTemplate.format(transcript=json.dumps(
-        transcript))  # Fix user input - cross check with LMA!!
-    input = {
-        "input": {
-            'text': query
-        },
-        "retrieveAndGenerateConfiguration": {
-            'knowledgeBaseConfiguration': {
-                "generationConfiguration": {
-                    "promptTemplate": {
-                        "textPromptTemplate": promptTemplate
-                    }
-                },
-                'knowledgeBaseId': KB_ID,
-                'modelArn': MODEL_ARN
-            },
-            'type': 'KNOWLEDGE_BASE'
-        }
-    }
-    print("Amazon Bedrock KB Request: ", input)
-    try:
-        resp = KB_CLIENT.retrieve_and_generate(**input)
-    except Exception as e:
-        print("Amazon Bedrock KB Exception: ", e)
+    # if the query has already been labeled "small talk", we can skip
+    # ensure the reponse matches the default ASSISTANT_NO_HITS_REGEX value ("Sorry,")
+    if query == "small talk":
         resp = {
-            "systemMessage": "Amazon Bedrock KB Error: " + str(e)
+            "systemMessage": "Sorry, I cannot respond to small talk"
         }
-    print("Amazon Bedrock KB Response: ", json.dumps(resp))
+        print("Small talk response: ", json.dumps(resp))
+    else:
+        promptTemplate = generatePromptTemplate
+        promptTemplate = promptTemplate.format(transcript=json.dumps(
+            transcript))
+        input = {
+            "input": {
+                'text': query
+            },
+            "retrieveAndGenerateConfiguration": {
+                'knowledgeBaseConfiguration': {
+                    "generationConfiguration": {
+                        "promptTemplate": {
+                            "textPromptTemplate": promptTemplate
+                        }
+                    },
+                    'knowledgeBaseId': KB_ID,
+                    'modelArn': MODEL_ARN
+                },
+                'type': 'KNOWLEDGE_BASE'
+            }
+        }
+        print("Amazon Bedrock KB Request: ", input)
+        try:
+            resp = KB_CLIENT.retrieve_and_generate(**input)
+        except Exception as e:
+            print("Amazon Bedrock KB Exception: ", e)
+            resp = {
+                "systemMessage": "Amazon Bedrock KB Error: " + str(e)
+            }
+        print("Amazon Bedrock KB Response: ", json.dumps(resp))
     return resp
 
 
@@ -193,7 +201,7 @@ def format_response(event, kb_response, query):
     showContextText = lambdahook_settings.get("ShowContextText", True)
     showSourceLinks = lambdahook_settings.get("ShowSourceLinks", True)
     queryprefix = lambdahook_settings.get("QueryPrefix")
-    message = kb_response.get("output").get("text") or kb_response.get(
+    message = kb_response.get("output", {}).get("text", {}) or kb_response.get(
         "systemMessage") or "No answer found"
     # set plaintext, markdown, & ssml response
     if answerprefix in ["None", "N/A", "Empty"]:
@@ -241,10 +249,15 @@ def format_response(event, kb_response, query):
             "ssml": ssml
         }
     }
-    # TODO - can we determine when Bedrock KB has a good answer or not?
-    # For now, always assume it's a good answer.
-    # QnAbot sets session attribute qnabot_gotanswer True when got_hits > 0
-    event["res"]["got_hits"] = 1
+    # Check plaintext answer for match using ASSISTANT_NO_HITS_REGEX
+    pattern = re.compile(event["req"]["_settings"].get(
+        "ASSISTANT_NO_HITS_REGEX", "Sorry,"))
+    match = re.search(pattern, plainttext)
+    if match:
+        print("No hits found in response.. setting got_hits to 0")
+        event["res"]["got_hits"] = 0
+    else:
+        event["res"]["got_hits"] = 1
     return event
 
 

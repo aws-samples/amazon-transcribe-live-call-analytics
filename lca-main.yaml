@@ -1212,11 +1212,15 @@ Resources:
       EMBEDDINGS_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreThreshold
       EMBEDDINGS_SCORE_ANSWER_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreAnswerThreshold
       EMBEDDINGS_TEXT_PASSAGE_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsTextPassageScoreThreshold
+      LLM_QA_USE_KENDRA_RETRIEVAL_API: "FALSE"
       LLM_GENERATE_QUERY_ENABLE: "FALSE"
       LLM_GENERATE_QUERY_PROMPT_TEMPLATE: ""
-      EMPTYMESSAGE: "No response from meeting assist QnAbot"
+      LLM_QA_ENABLE: "FALSE"
+      LLM_QA_PROMPT_TEMPLATE: ""
+      EMPTYMESSAGE: "No response from agent assist QnAbot"
       BEDROCK_KB_RETRIEVE_PROMPT_TEMPLATE: "deprecated"
       BEDROCK_KB_GENERATE_PROMPT_TEMPLATE: "deprecated"
+      ASSISTANT_NO_HITS_REGEX: "Sorry,"
       ASSISTANT_QUERY_PROMPT_TEMPLATE:
         'Let''''s think carefully step by step. Here is
         the JSON transcript of an ongoing call: {transcript}<br>And here is a follow
