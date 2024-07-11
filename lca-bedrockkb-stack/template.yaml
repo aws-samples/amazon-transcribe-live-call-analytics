@@ -1,0 +1,576 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Create a Bedrock Knowledge Base, an OpenSearch Serverless collection, and an S3 bucket and optional Web Crawler for content
+
+Parameters:
+  pKBName:
+    Description: Knowledge base name - used to name resources
+    Type: String
+
+  pKnowledgeBaseBucketName:
+    Description: Input the bucket name (not the ARN or URL). This template will create the bucket.
+    Type: String
+
+  pInputDocumentUploadFolderPrefix:
+    Type: String
+
+  pWebCrawlURLs:
+    Type: String
+    Default: ""
+    Description: >-
+      Comma separated list of public web sites to crawl automatically
+
+  pWebCrawlSyncScope:
+    Type: String
+    AllowedValues:
+      - "DEFAULT"
+      - "HOST_ONLY"
+      - "SUBDOMAINS"
+    Description: >-
+      The scope of what is crawled for your URLs.
+      Choose DEFAULT to limit to web pages that have the same host and the same initial path as the source URLs.
+      Choose HOST_ONLY to limit to web pages that have the same host as the source URLs.
+      Choose SUBDOMAINS to to include sub domains in addition to the host or primary domain.
+    Default: DEFAULT
+
+  pEmbedModel:
+    Type: String
+    Description: Embedding models available on Amazon Bedrock
+    AllowedValues:
+      - amazon.titan-embed-text-v1
+      - cohere.embed-english-v3
+      - cohere.embed-multilingual-v3
+    Default: amazon.titan-embed-text-v1
+
+  pChunkingStrategy:
+    Type: String
+    Description: Chunking breaks down the text into smaller segments before embedding. The chunking strategy can't be modified after you create the Knowledge Base
+    AllowedValues:
+      - Default chunking
+      - Fixed-size chunking
+      - No chunking
+    Default: Fixed-size chunking
+
+  pMaxTokens:
+    Type: Number
+    Description: Maximum number of tokens per chunk (between 20 and 8192 tokens)
+    Default: 300
+
+  pOverlapPercentage:
+    Type: Number
+    Description: Approximate percentage of overlapped tokens between two consecutive chunks (typical overlap is around 10% - 20%)
+    Default: 15
+
+  pIndexName:
+    Type: String
+    MinLength: 1
+    MaxLength: 63
+    Default: bedrock-knowledge-base-default-index
+    AllowedPattern: ^[a-z0-9](-*[a-z0-9])*
+    ConstraintDescription: Must be lowercase or numbers with a length of 1-63 characters
+
+  pVectorFieldName:
+    Type: String
+    Default: bedrock-knowledge-base-default-vector
+
+  pMetaDataFieldName:
+    Type: String
+    Default: AMAZON_BEDROCK_METADATA
+
+  pTextFieldName:
+    Type: String
+    Default: AMAZON_BEDROCK_TEXT_CHUNK
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Knowledge Base Name
+        Parameters:
+          - pKBName
+      - Label:
+          default: Knowledge Base Data Location
+        Parameters:
+          - pKnowledgeBaseBucketName
+          - pInputDocumentUploadFolderPrefix
+      - Label:
+          default: Embedding Model
+        Parameters:
+          - pEmbedModel
+      - Label:
+          default: Document Chunking
+        Parameters:
+          - pChunkingStrategy
+          - pMaxTokens
+          - pOverlapPercentage
+      - Label:
+          default: Index Details
+        Parameters:
+          - pIndexName
+          - pVectorFieldName
+          - pMetaDataFieldName
+          - pTextFieldName
+
+    ParameterLabels:
+      pKBName:
+        default: Knowledge base name
+      pKnowledgeBaseBucketName:
+        default: New S3 bucket where you will store your content
+      pInputDocumentUploadFolderPrefix:
+        default: S3 prefix for your content (optional)
+      pEmbedModel:
+        default: Choose an embedding model
+      pChunkingStrategy:
+        default: Choose a chunking strategy (default, fixed-size, or none)
+      pMaxTokens:
+        default: For fixed-size chunking, choose a maximum number of tokens per chunk
+      pOverlapPercentage:
+        default: For fixed-size chunking, choose an overlap percentage between chunks
+      pIndexName:
+        default: Index name to be created in the vector store
+      pVectorFieldName:
+        default: Vector field name
+      pMetaDataFieldName:
+        default: Metadata field name
+      pTextFieldName:
+        default: Text field name
+
+Conditions:
+  HasInputDocumentUploadFolderPrefix:
+    Fn::Not:
+      - Fn::Equals:
+          - ""
+          - Ref: pInputDocumentUploadFolderPrefix
+  IsChunkingStrategyFixed:
+    Fn::Equals:
+      - Ref: pChunkingStrategy
+      - Fixed-size chunking
+  IsChunkingStrategyDefault:
+    Fn::Equals:
+      - Ref: pChunkingStrategy
+      - Default chunking
+  IsChunkingStrategyNoChunking:
+    Fn::Equals:
+      - Ref: pChunkingStrategy
+      - No chunking
+  IsChunkingStrategyFixedOrDefault:
+    Fn::Or:
+      - Condition: IsChunkingStrategyFixed
+      - Condition: IsChunkingStrategyDefault
+
+Resources:
+  # Custom resource to transform input to lowercase.
+  GetLowercaseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: 30
+      InlineCode: |
+        import cfnresponse
+        import time
+        def handler(event, context):                                                    
+            output = event['ResourceProperties'].get('InputString', '').lower()
+            responseData = {'OutputString': output}                                            
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+
+  LowercaseKBName:
+    Type: Custom::GetLowercase
+    Properties:
+      ServiceToken: !GetAtt GetLowercaseFunction.Arn
+      InputString: !Ref pKBName
+
+  #
+  # S3 bucket for S3 sourced knowledge base content
+  #
+  KnowledgeBaseBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref pKnowledgeBaseBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  OSSCollection:
+    Type: "AWS::OpenSearchServerless::Collection"
+    Properties:
+      Name: !Sub "${LowercaseKBName.OutputString}"
+      Type: VECTORSEARCH
+      Description: Bedrock Knowledge Base collection
+    DependsOn: OSSEncryptionPolicy
+
+  #
+  # OpenSearch Serverless resources
+  #
+  OSSEncryptionPolicy:
+    Type: "AWS::OpenSearchServerless::SecurityPolicy"
+    Properties:
+      Name: !Sub "${LowercaseKBName.OutputString}"
+      Type: encryption
+      Description: Encryption policy for Bedrock Knowledge Base collection
+      Policy: !Sub
+        - '{"Rules":[{"ResourceType":"collection","Resource":["collection/${CollName}"]}],"AWSOwnedKey":true}'
+        - CollName: !Sub "${LowercaseKBName.OutputString}"
+
+  OSSNetworkPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    DependsOn:
+      - OSSEncryptionPolicy
+    Properties:
+      Name: !Sub "${LowercaseKBName.OutputString}"
+      Type: network
+      Policy: !Sub
+        - '[{"Description": "Public access for Bedrock Knowledge Base collection",
+          "Rules": [{"ResourceType": "dashboard", "Resource": ["collection/${CollName}"]},
+          {"ResourceType": "collection", "Resource": ["collection/${CollName}"]}],
+          "AllowFromPublic": true}]'
+        - CollName: !Sub "${LowercaseKBName.OutputString}"
+
+  OSSDataAccessPolicy:
+    Type: AWS::OpenSearchServerless::AccessPolicy
+    DependsOn:
+      - OSSNetworkPolicy
+    Properties:
+      Name: !Sub "${LowercaseKBName.OutputString}"
+      Type: data
+      Policy: !Sub
+        - '[{"Rules": [{"Resource": ["collection/${CollName}"], "Permission":
+          ["aoss:CreateCollectionItems", "aoss:UpdateCollectionItems", "aoss:DescribeCollectionItems"],
+          "ResourceType": "collection"}, {"ResourceType": "index", "Resource": ["index/${CollName}/*"],
+          "Permission": ["aoss:CreateIndex", "aoss:DescribeIndex", "aoss:ReadDocument",
+          "aoss:WriteDocument", "aoss:UpdateIndex", "aoss:DeleteIndex"]}],
+          "Principal": ["arn:aws:iam::${AWS::AccountId}:role/${KnowledgeBaseServiceRole}"]}]'
+        - CollName: !Sub "${LowercaseKBName.OutputString}"
+
+  #
+  # Custom resource code to initialize OpenSearch Serverless index
+  #
+  OpenSearchPyLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.11
+      Content: ./opensearchpy_layer
+      Description: opensearchpy layer including requests, requests-aws4auth, and boto3-1.34.82
+      LicenseInfo: Apache-2.0
+
+  OpenSearchLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - OpenSearchPyLayer
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: OSSLambdaRoleDefaultPolicy # Reference: https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsx-ray.html
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTelemetryRecords
+                  - xray:PutTraceSegments
+                Resource: "*"
+        - PolicyName: AllowLambdaLogs # Reference: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazoncloudwatchlogs.html
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+        - PolicyName: AllowS3 # Reference: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject*
+                  - s3:GetObject*
+                  - s3:DeleteObject*
+                Resource:
+                  Fn::Sub: arn:aws:s3:::*
+        - PolicyName: AOSSPermissionsPart1 # References: https://docs.aws.amazon.com/opensearch-service/latest/developerguide/security-iam-serverless.html, https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonopensearchserverless.html
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - aoss:BatchGetCollection
+                  - aoss:CreateSecurityPolicy
+                  - aoss:CreateAccessPolicy
+                  - aoss:UpdateAccessPolicy
+                  - aoss:ListCollections
+                  - aoss:GetAccessPolicy
+                  - aoss:ListCollections
+                  - aoss:CreateCollection
+                Resource: "*"
+        - PolicyName: AOSSPermissionsPart2
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - aoss:DeleteCollection
+                  - aoss:UpdateCollection
+                  - aoss:APIAccessAll
+                Resource: !GetAtt OSSCollection.Arn
+
+  OSSSetupLambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - OpenSearchLambdaExecutionRole
+    Properties:
+      Handler: oss_handler.lambda_handler
+      MemorySize: 1024
+      Role:
+        Fn::GetAtt:
+          - OpenSearchLambdaExecutionRole
+          - Arn
+      Runtime: python3.11
+      Timeout: 840
+      Code: ./src/oss_setup
+      Layers:
+        - Ref: OpenSearchPyLayer
+        - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:68
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: InfraSetupLambda
+          POWERTOOLS_METRICS_NAMESPACE: InfraSetupLambda-NameSpace
+          POWERTOOLS_LOG_LEVEL: INFO
+
+  OSSProviderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonTextractFullAccess
+      Policies:
+        - PolicyName: OSSProviderRoleDefaultPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - Fn::GetAtt:
+                      - OSSSetupLambdaFunction
+                      - Arn
+                  - Fn::Join:
+                      - ""
+                      - - Fn::GetAtt:
+                            - OSSSetupLambdaFunction
+                            - Arn
+                        - :*
+
+  OSSIndexCustomResourceFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - OSSProviderRole
+    Properties:
+      Handler: framework.onEvent
+      MemorySize: 1024
+      Role:
+        Fn::GetAtt:
+          - OSSProviderRole
+          - Arn
+      Runtime: nodejs18.x
+      Timeout: 900
+      Code: ./src/oss_custom_resource
+      Environment:
+        Variables:
+          USER_ON_EVENT_FUNCTION_ARN:
+            Fn::GetAtt:
+              - OSSSetupLambdaFunction
+              - Arn
+
+  OSSIndexCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - OSSIndexCustomResourceFunction
+      - OSSDataAccessPolicy
+    Properties:
+      ServiceToken: !GetAtt OSSIndexCustomResourceFunction.Arn
+      collection_endpoint: !GetAtt OSSCollection.CollectionEndpoint
+      data_access_policy_name: !Sub "${LowercaseKBName.OutputString}"
+      index_name:
+        Ref: pIndexName
+      embedding_model_id:
+        Ref: pEmbedModel
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+
+  #
+  # IAM Role used by the Bedrock service to access S3, OpenSearch, and embedding models
+  #
+  KnowledgeBaseServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - bedrock.amazonaws.com
+            Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Sub ${AWS::AccountId}
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+      Policies:
+        - PolicyName: bedrock-invoke-model
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BedrockInvokeModel
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/*
+        - PolicyName: oss-api-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: OpenSearchServerlessAPIAccessAll
+                Effect: Allow
+                Action:
+                  - aoss:APIAccessAll
+                Resource: !GetAtt OSSCollection.Arn
+        - PolicyName: s3-read-objects
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3ListBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: arn:aws:s3:::*
+              - Sid: S3GetObject
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${KnowledgeBaseBucket}/*
+
+  #
+  # Bedrock Knowedge Base resources
+  #
+  KnowledgeBase:
+    Type: AWS::Bedrock::KnowledgeBase
+    DependsOn:
+      - OSSIndexCustomResource
+    Properties:
+      Description: Bedrock Knowledge Base
+      KnowledgeBaseConfiguration:
+        Type: VECTOR
+        VectorKnowledgeBaseConfiguration:
+          EmbeddingModelArn:
+            Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/${pEmbedModel}
+      Name: !Sub "${pKBName}"
+      RoleArn: !GetAtt KnowledgeBaseServiceRole.Arn
+      StorageConfiguration:
+        OpensearchServerlessConfiguration:
+          CollectionArn: !GetAtt OSSCollection.Arn
+          FieldMapping:
+            MetadataField:
+              Ref: pMetaDataFieldName
+            TextField:
+              Ref: pTextFieldName
+            VectorField:
+              Ref: pVectorFieldName
+          VectorIndexName:
+            Ref: pIndexName
+        Type: OPENSEARCH_SERVERLESS
+
+  KnowledgeBaseDataSource:
+    Type: AWS::Bedrock::DataSource
+    DependsOn:
+      - KnowledgeBase
+      - OSSIndexCustomResource
+    Properties:
+      DataSourceConfiguration:
+        Type: S3
+        S3Configuration:
+          BucketArn:
+            Fn::Sub: arn:aws:s3:::${pKnowledgeBaseBucketName}
+          InclusionPrefixes:
+            Fn::If:
+              - HasInputDocumentUploadFolderPrefix
+              - Ref: pInputDocumentUploadFolderPrefix
+              - Ref: AWS::NoValue
+      Description: KnowKnowledge Base Data Source
+      KnowledgeBaseId:
+        Ref: KnowledgeBase
+      Name: !Sub "S3-${pKBName}"
+      VectorIngestionConfiguration:
+        ChunkingConfiguration:
+          ChunkingStrategy:
+            Fn::If:
+              - IsChunkingStrategyFixedOrDefault
+              - FIXED_SIZE
+              - NONE
+          FixedSizeChunkingConfiguration:
+            MaxTokens:
+              Fn::If:
+                - IsChunkingStrategyFixed
+                - Ref: pMaxTokens
+                - Fn::If:
+                    - IsChunkingStrategyDefault
+                    - 300
+                    - Ref: AWS::NoValue
+            OverlapPercentage:
+              Fn::If:
+                - IsChunkingStrategyFixed
+                - Ref: pOverlapPercentage
+                - Fn::If:
+                    - IsChunkingStrategyDefault
+                    - 20
+                    - Ref: AWS::NoValue
+
+Outputs:
+  KnowledgeBaseBucketName:
+    Value: !Ref pKnowledgeBaseBucketName
+    Description: Knowledge Base bucket name
+  KnowledgeBaseID:
+    Value: !Ref KnowledgeBase
+    Description: Knowledge Base ID
+  OpenSearchCollectionName:
+    Value: !Ref OSSCollection
+    Description: OpenSearch collection
+  OpenSearchCollectionArn:
+    Value: !GetAtt OSSCollection.Arn
+    Description: OpenSearch collection ARN
+  OpenSearchCollectionEndpoint:
+    Value: !GetAtt OSSCollection.CollectionEndpoint
+    Description: OpenSearch collection endpoint
+  OpenSearchCollectionDashboard:
+    Value: !GetAtt OSSCollection.DashboardEndpoint
+    Description: OpenSearch collection dashboard endpoint

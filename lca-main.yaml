@@ -163,13 +163,20 @@ Parameters:
     Type: String
     Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
     Description: >-
-      Comma separated list of public web sites to crawl automatically - for Agent Assist knowledge store
+      Comma separated list of public web sites to crawl automatically for Agent Assist knowledge store
 
-  AgentAssistWebCrawlDepth:
+  AgentAssistWebCrawlSyncScope:
     Type: String
-    Default: 0
+    Default: DEFAULT
+    AllowedValues:
+      - "DEFAULT"
+      - "HOST_ONLY"
+      - "SUBDOMAINS"
     Description: >-
-      Number of levels from the above URLs to crawl - restricted to same host domain
+      The scope of what is crawled for your URLs.
+      Choose DEFAULT to limit to web pages that have the same host and the same initial path as the source URLs.
+      Choose HOST_ONLY to limit to web pages that have the same host as the source URLs.
+      Choose SUBDOMAINS to to include sub domains in addition to the host or primary domain.
 
   AgentAssistLLMBedrockModelId:
     Type: String
@@ -568,7 +575,7 @@ Metadata:
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
           - AgentAssistWebCrawlURLs
-          - AgentAssistWebCrawlDepth
+          - AgentAssistWebCrawlSyncScope
           - AgentAssistLLMBedrockModelId
       - Label:
           default: Amazon S3 Configuration
@@ -672,8 +679,8 @@ Metadata:
         default: Agent Assist Lambda Function ARN (existing)
       AgentAssistWebCrawlURLs:
         default: Agent Assist QnABot Kendra Web Crawl URLs
-      AgentAssistWebCrawlDepth:
-        default: Agent Assist QnABot Kendra Web Crawl Depth
+      AgentAssistWebCrawlSyncScope:
+        default: Agent Assist QnABot Kendra Web Crawl Scope
       AgentAssistLLMBedrockModelId:
         default: Agent Assist QnABot Bedrock ModelId
       IsPartialTranscriptEnabled:
@@ -1307,7 +1314,7 @@ Resources:
         AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
         AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
         AgentAssistWebCrawlURLs: !Ref AgentAssistWebCrawlURLs
-        AgentAssistWebCrawlDepth: !Ref AgentAssistWebCrawlDepth
+        AgentAssistWebCrawlSyncScope: !Ref AgentAssistWebCrawlSyncScope
         IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
         SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
         SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
