@@ -1218,11 +1218,11 @@ Resources:
       BEDROCK_KB_RETRIEVE_PROMPT_TEMPLATE: "deprecated"
       BEDROCK_KB_GENERATE_PROMPT_TEMPLATE: "deprecated"
       ASSISTANT_QUERY_PROMPT_TEMPLATE:
-        "Let's think carefully step by step. Here is
-        the JSON transcript of an ongoing meeting: {transcript}<br>And here is a follow
+        'Let''''s think carefully step by step. Here is
+        the JSON transcript of an ongoing call: {transcript}<br>And here is a follow
         up question or statement in <followUpMessage> tags:<br> <followUpMessage>{input}</followUpMessage><br>Rephrase
         the follow up question or statement as a standalone, one sentence question.
-        Only output the rephrased question. Do not include any preamble. "
+        If the caller is just engaging in small talk or saying thanks, respond with "small talk". Do not include any preamble.'
       ASSISTANT_GENERATE_PROMPT_TEMPLATE: !If
         - ShouldUseBedrockKB
         - "You are an AI assistant helping a human call center agent during a telephone call. I will provide
@@ -1234,13 +1234,13 @@ Resources:
           sure to double check the search results to validate a user's assertion.<br>Here
           is the JSON transcript of the call so far:<br>{transcript}<br>Here are
           the search results in numbered order:<br>$search_results$<br>$output_format_instructions$"
-        - "You are an AI assistant helping a human agent during a telephone call. I will provide
-          you with a transcript of the ongoing call (which may be empty), and a user's
-          request. Your job is to respond to the caller's request using any relevant context
+        - 'You are an AI assistant helping a human agent during a telephone call. I will provide
+          you with a transcript of the ongoing call (which may be empty), and a user''s
+          request. Your job is to advise the agent on how best to respond to the caller''s request using any relevant context
           from the transcript, or from your own world knowledge. Just because the user
-          asserts a fact does not mean it is true, make sure to validate a user's assertion.<br>Here
+          asserts a fact does not mean it is true, make sure to validate a user''s assertion. <br>Here
           is the JSON transcript of the meeting so far:<br>{transcript}<br>Here is the
-          user's request:<br>{userInput}<br>"
+          user''s request:<br>{userInput}<br>Respond in under 50 words. Do not include preamble in your reponse - include only the suggested response for the agent to relay to the caller. If you cannot confidently respond to the user''s request, then respond saying "Sorry, I don''t know".<br>If the query contains "small talk" then respond saying "Sorry, I cannot respond to small talk".<br>Think carefully, step by step.'
 
   AGENTASSISTSETUP:
     Type: AWS::CloudFormation::Stack
@@ -1260,7 +1260,7 @@ Resources:
         AgentAssistLLMBedrockModelId: !Ref AgentAssistLLMBedrockModelId
         BedrockKnowledgeBaseID: !If
           - ShouldUseExistingBedrockKB
-          - AgentAssistExistingBedrockKBID
+          - !Ref AgentAssistExistingBedrockKBID
           - ""
         LexAgentAssistBotId: !If
           - ShouldInstallAWSQnaBot

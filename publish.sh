@@ -103,14 +103,13 @@ tmpdir=/tmp/lca
 mkdir -p $tmpdir
 pwd
 
+if false; then
 
 dir=lca-chimevc-stack
 echo "PACKAGING $dir"
 pushd $dir
 ./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
 popd
-
-if false; then
 
 dir=lca-connect-kvs-stack
 echo "PACKAGING $dir"

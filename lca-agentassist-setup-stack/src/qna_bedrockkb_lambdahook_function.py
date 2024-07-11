@@ -61,7 +61,8 @@ def get_call_transcript(callId, userInput, maxMessages):
 
 def get_kb_response(generatePromptTemplate, transcript, query):
     promptTemplate = generatePromptTemplate or "You are an AI assistant helping a human during a call. I will provide you with a transcript of the ongoing meeting, and a set of search results. Your job is to respond to the user's request using only information from the search results. If search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.<br>Here is the JSON transcript of the call so far:<br>{transcript}<br>Here are the search results in numbered order:<br>$search_results$<br>$output_format_instructions$"
-    promptTemplate = promptTemplate.format(transcript=json.dumps(transcript))
+    promptTemplate = promptTemplate.format(transcript=json.dumps(
+        transcript))  # Fix user input - cross check with LMA!!
     input = {
         "input": {
             'text': query
@@ -165,6 +166,25 @@ def get_args_from_lambdahook_args(event):
     return parameters
 
 
+def get_url_from_reference(reference):
+    location_keys = {
+        "S3": "s3Location",
+        "WEB": "webLocation",
+        "CONFLUENCE": "confluenceLocation",
+        "SALESFORCE": "salesforceLocation",
+        "SHAREPOINT": "sharepointLocation"
+    }
+    location = reference.get("location", {})
+    type = location.get("type")
+    url = location.get(
+        location_keys.get(type, {}), {}).get("uri")
+    if not url:
+        # try getting url from the metadata tags instead
+        url = reference.get("metadata", {}).get(
+            "x-amz-bedrock-kb-source-uri")
+    return url
+
+
 def format_response(event, kb_response, query):
     # get settings, if any, from lambda hook args
     # e.g: {"AnswerPrefix":"<custom prefix heading>", "ShowContext": False}
@@ -193,25 +213,22 @@ def format_response(event, kb_response, query):
             for reference in source.get("retrievedReferences", []):
                 snippet = reference.get("content", {}).get(
                     "text", "no reference text")
-                url = reference.get("location", {}).get(
-                    "s3Location", {}).get("uri")
-                title = os.path.basename(url)
+                url = get_url_from_reference(reference)
                 if url:
+                    title = os.path.basename(url)
                     contextText = f'{contextText}<br><a href="{url}">{title}</a>'
                 else:
-                    contextText = f'{contextText}<br><u><b>{title}</b></u>'
+                    contextText = f"{contextText}<br>{snippet}\n"
                 contextText = f"{contextText}<br>{snippet}\n"
         if contextText:
             markdown = f'{markdown}\n<details><summary>Context</summary><p style="white-space: pre-line;">{contextText}</p></details>'
     if showSourceLinks:
         sourceLinks = []
-        for citation in kb_response.get("citations", []):
-            for retrievedReference in citation.get("retrievedReferences", []):
-                # TODO - (1) convert s3 path to http. (2) support additional location types
-                url = retrievedReference.get("location", {}).get(
-                    "s3Location", {}).get("uri")
-                title = os.path.basename(url)
+        for source in kb_response.get("citations", []):
+            for reference in source.get("retrievedReferences", []):
+                url = get_url_from_reference(reference)
                 if url:
+                    title = os.path.basename(url)
                     sourceLinks.append(f'<a href="{url}">{title}</a>')
         if len(sourceLinks):
             markdown = f'{markdown}<br>Sources: ' + ", ".join(sourceLinks)
