@@ -4,63 +4,72 @@ Description: >
   Create a Bedrock Knowledge Base, an OpenSearch Serverless collection, and an S3 bucket and optional Web Crawler for content
 
 Parameters:
-  pKBName:
-    Description: Knowledge base name - used to name resources
-    Type: String
-
   pKnowledgeBaseBucketName:
-    Description: Input the bucket name (not the ARN or URL). This template will create the bucket.
-    Type: String
-
-  pInputDocumentUploadFolderPrefix:
-    Type: String
-
-  pWebCrawlURLs:
     Type: String
     Default: ""
     Description: >-
-      Comma separated list of public web sites to crawl automatically
+      Enter the bucket name of an existing bucket with documents to ingest, or leave blank if you don't need an S3 data source.
 
-  pWebCrawlSyncScope:
+  pInputDocumentUploadFolderPrefix:
+    Type: String
+    Default: ""
+    Description: >-
+      Comma separated list of S3 prefixes with path to your source documents e.g. "my/documents/here/", "prefix1/, prefix2/"
+
+  pWebCrawlerURLs:
+    Type: String
+    Default: ""
+    Description: >-
+      Comma separated list of public web sites to crawl, or leave blank if you don't need a Web data source.
+
+  pWebCrawlerScope:
     Type: String
     AllowedValues:
       - "DEFAULT"
       - "HOST_ONLY"
       - "SUBDOMAINS"
+    Default: DEFAULT
     Description: >-
       The scope of what is crawled for your URLs.
       Choose DEFAULT to limit to web pages that have the same host and the same initial path as the source URLs.
       Choose HOST_ONLY to limit to web pages that have the same host as the source URLs.
       Choose SUBDOMAINS to to include sub domains in addition to the host or primary domain.
-    Default: DEFAULT
 
   pEmbedModel:
     Type: String
-    Description: Embedding models available on Amazon Bedrock
     AllowedValues:
       - amazon.titan-embed-text-v1
       - cohere.embed-english-v3
       - cohere.embed-multilingual-v3
     Default: amazon.titan-embed-text-v1
+    Description: >-
+      Embedding models available on Amazon Bedrock
 
   pChunkingStrategy:
     Type: String
-    Description: Chunking breaks down the text into smaller segments before embedding. The chunking strategy can't be modified after you create the Knowledge Base
     AllowedValues:
       - Default chunking
       - Fixed-size chunking
       - No chunking
     Default: Fixed-size chunking
+    Description: >-
+      Chunking breaks down the text into smaller segments before embedding. The chunking strategy can't be modified after you create the Knowledge Base
 
   pMaxTokens:
     Type: Number
-    Description: Maximum number of tokens per chunk (between 20 and 8192 tokens)
+    MinValue: 20
+    MaxValue: 8192
     Default: 300
+    Description: >-
+      Maximum number of tokens per chunk (between 20 and 8192 tokens)
 
   pOverlapPercentage:
     Type: Number
-    Description: Approximate percentage of overlapped tokens between two consecutive chunks (typical overlap is around 10% - 20%)
+    MinValue: 1
+    MaxValue: 99
     Default: 15
+    Description: >-
+      Approximate percentage of overlapped tokens between two consecutive chunks (typical overlap is around 10% - 20%)
 
   pIndexName:
     Type: String
@@ -86,14 +95,12 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: Knowledge Base Name
-        Parameters:
-          - pKBName
-      - Label:
-          default: Knowledge Base Data Location
+          default: Knowledge Base Data Sources
         Parameters:
           - pKnowledgeBaseBucketName
           - pInputDocumentUploadFolderPrefix
+          - pWebCrawlerURLs
+          - pWebCrawlerScope
       - Label:
           default: Embedding Model
         Parameters:
@@ -113,12 +120,14 @@ Metadata:
           - pTextFieldName
 
     ParameterLabels:
-      pKBName:
-        default: Knowledge base name
       pKnowledgeBaseBucketName:
-        default: New S3 bucket where you will store your content
+        default: Existing S3 bucket with knowledge base source documents (optional).
       pInputDocumentUploadFolderPrefix:
-        default: S3 prefix for your content (optional)
+        default: S3 prefix(es) for your content (optional)
+      pWebCrawlerURLs:
+        default: Publicly accessible URLs for web crawling (optional)
+      pWebCrawlerScope:
+        default: Web crawl sync scope
       pEmbedModel:
         default: Choose an embedding model
       pChunkingStrategy:
@@ -137,6 +146,21 @@ Metadata:
         default: Text field name
 
 Conditions:
+  IsS3DataSource:
+    Fn::Not:
+      - Fn::Equals:
+          - ""
+          - Ref: pKnowledgeBaseBucketName
+  IsWebDataSource:
+    Fn::Not:
+      - Fn::Equals:
+          - ""
+          - Ref: pWebCrawlerURLs
+  HasWebCrawlerScope:
+    Fn::Not:
+      - Fn::Equals:
+          - DEFAULT
+          - Ref: pWebCrawlerScope
   HasInputDocumentUploadFolderPrefix:
     Fn::Not:
       - Fn::Equals:
@@ -161,7 +185,7 @@ Conditions:
 
 Resources:
   # Custom resource to transform input to lowercase.
-  GetLowercaseFunction:
+  GetAdjustedStackNameFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
@@ -170,40 +194,46 @@ Resources:
       InlineCode: |
         import cfnresponse
         import time
-        def handler(event, context):                                                    
+        def handler(event, context):
+            print(event)  
             output = event['ResourceProperties'].get('InputString', '').lower()
+            output = output[:32]
             responseData = {'OutputString': output}                                            
             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
 
-  LowercaseKBName:
+  AdjustedStackName:
     Type: Custom::GetLowercase
     Properties:
-      ServiceToken: !GetAtt GetLowercaseFunction.Arn
-      InputString: !Ref pKBName
+      ServiceToken: !GetAtt GetAdjustedStackNameFunction.Arn
+      InputString: !Ref AWS::StackName
 
-  #
-  # S3 bucket for S3 sourced knowledge base content
-  #
-  KnowledgeBaseBucket:
-    Type: "AWS::S3::Bucket"
+  # Custom resource to transform comma separated url list to an array of url objects for Web Crawler.
+  GetSeedUrlsFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      BucketName: !Ref pKnowledgeBaseBucketName
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: 30
+      InlineCode: |
+        import cfnresponse
+        import time
+        def handler(event, context):
+          print(event)
+          urls = event['ResourceProperties'].get('WebCrawlerURLs', '').split(',')
+          seedUrls = [{'url': url.strip()} for url in urls]
+          responseData = {'SeedUrls': seedUrls}
+          cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+
+  GetSeedUrls:
+    Type: Custom::GetSeedUrls
+    Properties:
+      ServiceToken: !GetAtt GetSeedUrlsFunction.Arn
+      WebCrawlerURLs: !Ref pWebCrawlerURLs
 
   OSSCollection:
     Type: "AWS::OpenSearchServerless::Collection"
     Properties:
-      Name: !Sub "${LowercaseKBName.OutputString}"
+      Name: !Sub "${AdjustedStackName.OutputString}"
       Type: VECTORSEARCH
       Description: Bedrock Knowledge Base collection
     DependsOn: OSSEncryptionPolicy
@@ -214,33 +244,33 @@ Resources:
   OSSEncryptionPolicy:
     Type: "AWS::OpenSearchServerless::SecurityPolicy"
     Properties:
-      Name: !Sub "${LowercaseKBName.OutputString}"
+      Name: !Sub "${AdjustedStackName.OutputString}"
       Type: encryption
       Description: Encryption policy for Bedrock Knowledge Base collection
       Policy: !Sub
         - '{"Rules":[{"ResourceType":"collection","Resource":["collection/${CollName}"]}],"AWSOwnedKey":true}'
-        - CollName: !Sub "${LowercaseKBName.OutputString}"
+        - CollName: !Sub "${AdjustedStackName.OutputString}"
 
   OSSNetworkPolicy:
     Type: AWS::OpenSearchServerless::SecurityPolicy
     DependsOn:
       - OSSEncryptionPolicy
     Properties:
-      Name: !Sub "${LowercaseKBName.OutputString}"
+      Name: !Sub "${AdjustedStackName.OutputString}"
       Type: network
       Policy: !Sub
         - '[{"Description": "Public access for Bedrock Knowledge Base collection",
           "Rules": [{"ResourceType": "dashboard", "Resource": ["collection/${CollName}"]},
           {"ResourceType": "collection", "Resource": ["collection/${CollName}"]}],
           "AllowFromPublic": true}]'
-        - CollName: !Sub "${LowercaseKBName.OutputString}"
+        - CollName: !Sub "${AdjustedStackName.OutputString}"
 
   OSSDataAccessPolicy:
     Type: AWS::OpenSearchServerless::AccessPolicy
     DependsOn:
       - OSSNetworkPolicy
     Properties:
-      Name: !Sub "${LowercaseKBName.OutputString}"
+      Name: !Sub "${AdjustedStackName.OutputString}"
       Type: data
       Policy: !Sub
         - '[{"Rules": [{"Resource": ["collection/${CollName}"], "Permission":
@@ -249,7 +279,7 @@ Resources:
           "Permission": ["aoss:CreateIndex", "aoss:DescribeIndex", "aoss:ReadDocument",
           "aoss:WriteDocument", "aoss:UpdateIndex", "aoss:DeleteIndex"]}],
           "Principal": ["arn:aws:iam::${AWS::AccountId}:role/${KnowledgeBaseServiceRole}"]}]'
-        - CollName: !Sub "${LowercaseKBName.OutputString}"
+        - CollName: !Sub "${AdjustedStackName.OutputString}"
 
   #
   # Custom resource code to initialize OpenSearch Serverless index
@@ -263,7 +293,7 @@ Resources:
       Description: opensearchpy layer including requests, requests-aws4auth, and boto3-1.34.82
       LicenseInfo: Apache-2.0
 
-  OpenSearchLambdaExecutionRole:
+  OSSSetupLambdaFunctionRole:
     Type: AWS::IAM::Role
     DependsOn:
       - OpenSearchPyLayer
@@ -337,13 +367,13 @@ Resources:
   OSSSetupLambdaFunction:
     Type: AWS::Lambda::Function
     DependsOn:
-      - OpenSearchLambdaExecutionRole
+      - OSSSetupLambdaFunctionRole
     Properties:
       Handler: oss_handler.lambda_handler
       MemorySize: 1024
       Role:
         Fn::GetAtt:
-          - OpenSearchLambdaExecutionRole
+          - OSSSetupLambdaFunctionRole
           - Arn
       Runtime: python3.11
       Timeout: 840
@@ -357,7 +387,7 @@ Resources:
           POWERTOOLS_METRICS_NAMESPACE: InfraSetupLambda-NameSpace
           POWERTOOLS_LOG_LEVEL: INFO
 
-  OSSProviderRole:
+  OSSIndexCustomResourceFunctionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -371,7 +401,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AmazonTextractFullAccess
       Policies:
-        - PolicyName: OSSProviderRoleDefaultPolicy
+        - PolicyName: OSSIndexCustomResourceFunctionRoleDefaultPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -391,14 +421,12 @@ Resources:
 
   OSSIndexCustomResourceFunction:
     Type: AWS::Lambda::Function
-    DependsOn:
-      - OSSProviderRole
     Properties:
       Handler: framework.onEvent
       MemorySize: 1024
       Role:
         Fn::GetAtt:
-          - OSSProviderRole
+          - OSSIndexCustomResourceFunctionRole
           - Arn
       Runtime: nodejs18.x
       Timeout: 900
@@ -418,7 +446,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt OSSIndexCustomResourceFunction.Arn
       collection_endpoint: !GetAtt OSSCollection.CollectionEndpoint
-      data_access_policy_name: !Sub "${LowercaseKBName.OutputString}"
+      data_access_policy_name: !Sub "${AdjustedStackName.OutputString}"
       index_name:
         Ref: pIndexName
       embedding_model_id:
@@ -465,20 +493,23 @@ Resources:
                 Action:
                   - aoss:APIAccessAll
                 Resource: !GetAtt OSSCollection.Arn
-        - PolicyName: s3-read-objects
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: S3ListBucket
-                Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource: arn:aws:s3:::*
-              - Sid: S3GetObject
-                Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub arn:aws:s3:::${KnowledgeBaseBucket}/*
+        - !If
+          - IsS3DataSource
+          - PolicyName: s3-read-objects
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: S3ListBucket
+                  Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                  Resource: arn:aws:s3:::*
+                - Sid: S3GetObject
+                  Effect: Allow
+                  Action:
+                    - s3:GetObject
+                  Resource: !Sub arn:aws:s3:::${pKnowledgeBaseBucketName}/*
+          - !Ref "AWS::NoValue"
 
   #
   # Bedrock Knowedge Base resources
@@ -494,7 +525,7 @@ Resources:
         VectorKnowledgeBaseConfiguration:
           EmbeddingModelArn:
             Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/${pEmbedModel}
-      Name: !Sub "${pKBName}"
+      Name: !Sub "${AWS::StackName}"
       RoleArn: !GetAtt KnowledgeBaseServiceRole.Arn
       StorageConfiguration:
         OpensearchServerlessConfiguration:
@@ -510,8 +541,9 @@ Resources:
             Ref: pIndexName
         Type: OPENSEARCH_SERVERLESS
 
-  KnowledgeBaseDataSource:
+  S3KBDataSource:
     Type: AWS::Bedrock::DataSource
+    Condition: IsS3DataSource
     DependsOn:
       - KnowledgeBase
       - OSSIndexCustomResource
@@ -524,12 +556,12 @@ Resources:
           InclusionPrefixes:
             Fn::If:
               - HasInputDocumentUploadFolderPrefix
-              - Ref: pInputDocumentUploadFolderPrefix
+              - !Split [",", Ref: pInputDocumentUploadFolderPrefix]
               - Ref: AWS::NoValue
-      Description: KnowKnowledge Base Data Source
+      Description: S3 KnowKnowledge Base Data Source
       KnowledgeBaseId:
         Ref: KnowledgeBase
-      Name: !Sub "S3-${pKBName}"
+      Name: !Sub "S3DataSource-${AWS::StackName}"
       VectorIngestionConfiguration:
         ChunkingConfiguration:
           ChunkingStrategy:
@@ -547,6 +579,97 @@ Resources:
                     - 300
                     - Ref: AWS::NoValue
             OverlapPercentage:
+              Fn::If:
+                - IsChunkingStrategyFixed
+                - Ref: pOverlapPercentage
+                - Fn::If:
+                    - IsChunkingStrategyDefault
+                    - 20
+                    - Ref: AWS::NoValue
+
+  # Custom Resource to create Web Crawler
+  # TODO replace custom resource when WebCrawler is supported by CloudFormation
+  WebCrawlerKBDataSourceFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "bedrock:CreateDataSource"
+                  - "bedrock:DeleteDataSource"
+                  - "bedrock:UpdateDataSource"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:knowledge-base/${KnowledgeBase}"
+          PolicyName: BedrockPolicy
+
+  WebCrawlerKBDataSourceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: handler.lambda_handler
+      Role: !GetAtt "WebCrawlerKBDataSourceFunctionRole.Arn"
+      Runtime: python3.11
+      Layers:
+        - !Ref OpenSearchPyLayer
+      Timeout: 600
+      MemorySize: 128
+      Code: ./src/kb_web_crawler_custom_resource
+
+  WebCrawlerKBDataSource:
+    #Type: AWS::Bedrock::DataSource
+    Type: AWS::CloudFormation::CustomResource
+    Condition: IsWebDataSource
+    DependsOn:
+      - KnowledgeBase
+      - OSSIndexCustomResource
+    Properties:
+      ServiceToken: !GetAtt WebCrawlerKBDataSourceFunction.Arn
+      dataDeletionPolicy: DELETE
+      dataSourceConfiguration:
+        type: WEB
+        webConfiguration:
+          crawlerConfiguration:
+            crawlerLimits:
+              rateLimit: 300
+            scope: !If
+              - HasWebCrawlerScope
+              - Ref: pWebCrawlerScope
+              - Ref: AWS::NoValue
+          sourceConfiguration:
+            urlConfiguration:
+              seedUrls: !GetAtt GetSeedUrls.SeedUrls
+      description: Web KnowKnowledge Base Data Source
+      knowledgeBaseId:
+        Ref: KnowledgeBase
+      name: !Sub "WebDataSource-${AWS::StackName}"
+      vectorIngestionConfiguration:
+        chunkingConfiguration:
+          chunkingStrategy:
+            Fn::If:
+              - IsChunkingStrategyFixedOrDefault
+              - FIXED_SIZE
+              - NONE
+          fixedSizeChunkingConfiguration:
+            maxTokens:
+              Fn::If:
+                - IsChunkingStrategyFixed
+                - Ref: pMaxTokens
+                - Fn::If:
+                    - IsChunkingStrategyDefault
+                    - 300
+                    - Ref: AWS::NoValue
+            overlapPercentage:
               Fn::If:
                 - IsChunkingStrategyFixed
                 - Ref: pOverlapPercentage
