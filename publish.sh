@@ -108,13 +108,13 @@ if false; then
 dir=lca-chimevc-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
+./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
 popd
 
 dir=lca-connect-kvs-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-connect-kvs-stack $REGION || exit 1
+./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
 popd
 
 dir=lca-genesys-audiohook-stack
@@ -122,7 +122,7 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-genesys-audiohook-stack $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
 dir=lca-websocket-stack
@@ -130,13 +130,13 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-websocket-stack $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
 dir=lca-connect-integration-stack
 echo "PACKAGING $dir"
 pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-connect-integration-stack/template.yaml
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
 popd
 
 dir=lca-ai-stack
@@ -144,19 +144,19 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -fr ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-ai-stack $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
 dir=lca-kendra-stack
 echo "PACKAGING $dir"
 pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-kendra-stack/template.yaml
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
 popd
 
 dir=lca-ssm-stack
 echo "PACKAGING $dir"
 pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-ssm-stack/template.yaml
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
 popd
 
 echo "Initialize and update git submodules"
@@ -201,50 +201,18 @@ npm run build || exit 1
 aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
 popd
 
+fi
+
 dir=lca-agentassist-setup-stack
 echo "PACKAGING $dir"
 pushd $dir
-echo "Packaging boto3_layer"
-pushd boto3_layer
-pip3 install --requirement ./requirements.txt --target=./python
+./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
 popd
-template=template.yaml
-s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
-https_template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
-aws cloudformation package \
---template-file ${template} \
---output-template-file ${tmpdir}/${template} \
---s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/${dir} \
---region ${REGION} || exit 1
-echo "Uploading template file to: ${s3_template}"
-aws s3 cp ${tmpdir}/${template} ${s3_template}
-echo "Validating template"
-aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
-aws s3 cp ./qna-aa-demo.jsonl s3://${BUCKET}/${PREFIX_AND_VERSION}/${dir}/qna-aa-demo.jsonl
-popd
-
-fi
 
 dir=lca-bedrockkb-stack
 echo "PACKAGING $dir"
 pushd $dir
-echo "Packaging opensearchpy_layer"
-pushd opensearchpy_layer
-pip3 install --requirement ./requirements.txt --target=./python
-popd
-template=template.yaml
-s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
-https_template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
-aws cloudformation package \
---template-file ${template} \
---output-template-file ${tmpdir}/${template} \
---s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/${dir} \
---region ${REGION} || exit 1
-echo "Uploading template file to: ${s3_template}"
-aws s3 cp ${tmpdir}/${template} ${s3_template}
-echo "Validating template"
-aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
-echo "Validated: ${https_template}"
+./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
 popd
 
 echo "PACKAGING Main Stack Cfn artifacts"
