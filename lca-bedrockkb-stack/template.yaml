@@ -680,9 +680,12 @@ Resources:
                     - Ref: AWS::NoValue
 
 Outputs:
-  KnowledgeBaseBucketName:
+  KnowledgeBaseS3BucketName:
     Value: !Ref pKnowledgeBaseBucketName
-    Description: Knowledge Base bucket name
+    Description: Knowledge Base S3 data source bucket name
+  KnowledgeBaseWebCrawlerUrls:
+    Value: !Ref pWebCrawlerURLs
+    Description: Knowledge Base Web Crawler data source urls
   KnowledgeBaseID:
     Value: !Ref KnowledgeBase
     Description: Knowledge Base ID
