@@ -6,9 +6,29 @@ from time import sleep
 from aws_lambda_powertools import Logger
 from opensearchpy import NotFoundError
 
-logger = Logger(service="amazon_bedrock_knowledge_base_infra_setup_lambda", level="INFO")
+logger = Logger(
+    service="amazon_bedrock_knowledge_base_infra_setup_lambda", level="INFO")
 
 MODEL_ID_TO_INDEX_REQUEST_MAP = {
+    "amazon.titan-embed-text-v2:0": {
+        "settings": {"index": {"knn": True, "knn.algo_param.ef_search": 512}},
+        "mappings": {
+            "properties": {
+                "bedrock-knowledge-base-default-vector": {
+                    "type": "knn_vector",
+                    "dimension": 1024,
+                    "method": {
+                        "name": "hnsw",
+                        "engine": "faiss",
+                        "parameters": {"ef_construction": 512, "m": 16},
+                        "space_type": "l2",
+                    },
+                },
+                "AMAZON_BEDROCK_METADATA": {"type": "text", "index": "false"},
+                "AMAZON_BEDROCK_TEXT_CHUNK": {"type": "text", "index": "true"},
+            }
+        },
+    },
     "amazon.titan-embed-text-v1": {
         "settings": {"index": {"knn": True, "knn.algo_param.ef_search": 512}},
         "mappings": {
@@ -70,7 +90,8 @@ MODEL_ID_TO_INDEX_REQUEST_MAP = {
 
 
 def get_access_policy(oss_client, policy_name):
-    policy_response = oss_client.get_access_policy(name=policy_name, type="data")
+    policy_response = oss_client.get_access_policy(
+        name=policy_name, type="data")
     policy_details = policy_response["accessPolicyDetail"]
     policy_version = policy_details["policyVersion"]
     return {
@@ -90,7 +111,8 @@ def update_access_policy(oss_client, updated_policy, policy_version, policy_name
         type="data",
     )
     logger.info(response)
-    logger.info("Updated data access policy, sleeping for 2 minutes for permissions to propagate")
+    logger.info(
+        "Updated data access policy, sleeping for 2 minutes for permissions to propagate")
     sleep(120)
 
 
@@ -113,7 +135,8 @@ def create_index_with_retries(oss_http_client, index_name, request_body):
             response = create_index(oss_http_client, index_name, request_body)
             logger.info(response)
             logger.info(
-                "Created index {}, sleeping for 2 minutes for index to get ready".format(index_name)
+                "Created index {}, sleeping for 2 minutes for index to get ready".format(
+                    index_name)
             )
             sleep(120)
             return response
@@ -136,7 +159,8 @@ def delete_index_if_present(oss_http_client, index_name):
     except NotFoundError:
         logger.info("Index {} not found, skipping deletion".format(index_name))
     except Exception as e:
-        logger.info("Deletion of index {} failed, reason: {}".format(index_name, e))
+        logger.info(
+            "Deletion of index {} failed, reason: {}".format(index_name, e))
 
 
 def get_host_from_collection_endpoint(collection_endpoint):

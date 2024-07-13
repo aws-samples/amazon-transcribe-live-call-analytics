@@ -38,10 +38,11 @@ Parameters:
   pEmbedModel:
     Type: String
     AllowedValues:
+      - amazon.titan-embed-text-v2:0
       - amazon.titan-embed-text-v1
       - cohere.embed-english-v3
       - cohere.embed-multilingual-v3
-    Default: amazon.titan-embed-text-v1
+    Default: amazon.titan-embed-text-v2:0
     Description: >-
       Embedding models available on Amazon Bedrock
 
