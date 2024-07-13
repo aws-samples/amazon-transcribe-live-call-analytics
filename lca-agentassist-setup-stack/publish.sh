@@ -7,10 +7,7 @@
 
 ##############################################################################################
 # Create new Cfn artifacts bucket if not already existing, and publish template and artifacts
-#
-# To deploy to non-default region, set AWS_DEFAULT_REGION to supported region
-# See: https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/ - E.g.
-# export AWS_DEFAULT_REGION=eu-west-1
+# usage: ./publish.sh <cfn_bucket> <cfn_prefix> <region> [public]
 ##############################################################################################
 # Stop the publish process on failures
 set -e
