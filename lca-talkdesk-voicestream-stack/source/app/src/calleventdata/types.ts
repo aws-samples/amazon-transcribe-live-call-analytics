@@ -73,7 +73,7 @@ export type SocketCallData = {
     callMetadata: CallMetaData,
     audioInputStream?: stream.PassThrough,
     writeRecordingStream?: WriteStream,
-    recordingFileSize?: number
+    recordingFileSize?: { filesize: number },
     startStreamTime: Date,
     agentBlock: BlockStream2,
     callerBlock: BlockStream2,

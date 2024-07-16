@@ -202,7 +202,7 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
 
     const tempRecordingFilename = getTempRecordingFileName(callMetaData);
     const writeRecordingStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
-    let recordingFileSize = 0;
+    const recordingFileSize = { filesize: 0 };
     const highWaterMarkSize = (callMetaData.samplingRate / 10) * 2 * 2;
     const audioInputStream = new PassThrough({ highWaterMark: highWaterMarkSize });
     const agentBlock = new BlockStream({ size: 2 });
@@ -234,7 +234,7 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
 
         audioInputStream.write(chunk);
         writeRecordingStream.write(chunk);
-        recordingFileSize += chunk.byteLength;
+        recordingFileSize.filesize += chunk.byteLength;
 
     });
     startTranscribe(callMetaData, audioInputStream, socketCallMap, server);
@@ -284,7 +284,7 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
             socketData.ended = true;
             await writeCallEndEvent(callMetaData, server);
             
-            const header = createWavHeader(callMetaData.samplingRate, socketData.recordingFileSize);
+            const header = createWavHeader(socketData.recordingFileSize.filesize, callMetaData.samplingRate);
             const tempRecordingFilename = getTempRecordingFileName(callMetaData);
             const wavRecordingFilename = getWavRecordingFileName(callMetaData);
             const readStream = fs.createReadStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
