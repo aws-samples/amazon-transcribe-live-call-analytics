@@ -103,8 +103,6 @@ tmpdir=/tmp/lca
 mkdir -p $tmpdir
 pwd
 
-if false; then
-
 dir=lca-chimevc-stack
 echo "PACKAGING $dir"
 pushd $dir
@@ -147,12 +145,6 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
-dir=lca-kendra-stack
-echo "PACKAGING $dir"
-pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
-popd
-
 dir=lca-ssm-stack
 echo "PACKAGING $dir"
 pushd $dir
@@ -175,8 +167,6 @@ git submodule init
 git submodule update
 echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
 # LCA customizations
-cp -v ./patches/qnabot/lambda_schema_qna.js $dir/lambda/schema/qna.js
-cp -v ./patches/qnabot/website_js_admin.vue $dir/website/js/admin.vue
 cp -v ./patches/qnabot/Makefile $dir/Makefile
 echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
 # Detection of differences. sed varies betwen GNU sed and BSD sed
@@ -193,15 +183,14 @@ cat > config.json <<_EOF
   "profile": "${AWS_PROFILE:-default}",
   "region": "${REGION}",
   "buildType": "Custom",
-  "skipCheckTemplate":true
+  "skipCheckTemplate":true,
+  "noStackOutput": true
 }
 _EOF
 npm install
 npm run build || exit 1
 aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
 popd
-
-fi
 
 dir=lca-agentassist-setup-stack
 echo "PACKAGING $dir"

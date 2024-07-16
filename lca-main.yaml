@@ -127,13 +127,48 @@ Parameters:
     Description: >
       Choose to enable optional Agent Assist capability, powered by a nested QnABot stack, your own LexV2 bot, or your own custom Lambda function.
 
-  AgentAssistExistingBedrockKBID:
+  BedrockKnowledgeBaseId:
     Type: String
     Default: ""
     AllowedPattern: "^(|[0-9a-zA-Z]{10})$"
     Description: >
-      If AgentAssistOption is 'QnABot on AWS with existing Bedrock knowledge base', provide the *id* (not name)
-      of an existing Bedrock Knowledge Base to be used for Agent Assist bot.
+      If AgentAssistOption is 'QnABot on AWS with existing Bedrock knowledge base', provide the knowledge base
+      *Id* (not name) of an *existing* Bedrock knowledge base to be used for Meeting
+      Assist bot.
+
+  BedrockKnowledgeBaseS3BucketName:
+    Type: String
+    Default: ""
+    Description: >-
+      If AgentAssistOption is 'QnABot on AWS with new Bedrock knowledge base', provide the bucket 
+      name of an existing bucket with documents to ingest, or leave blank if you don't need an S3 data source. If you provide an S3 bucket name an S3 data
+      source will be created for you automatically.
+
+  BedrockKnowledgeBaseS3DocumentUploadFolderPrefix:
+    Type: String
+    Default: ""
+    Description: >-
+      If AgentAssistOption is 'QnABot on AWS with new Bedrock knowledge base', provide comma separated list of optional S3 prefixes 
+      with the paths to your source documents e.g. "prefix1/, prefix2/". If you leave blank, all documents in your S3 bucket will be scanned.
+
+  AgentAssistWebCrawlURLs:
+    Type: String
+    Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
+    Description: >-
+      Comma separated list of public web sites to crawl automatically for Agent Assist knowledge store
+
+  AgentAssistWebCrawlSyncScope:
+    Type: String
+    Default: DEFAULT
+    AllowedValues:
+      - "DEFAULT"
+      - "HOST_ONLY"
+      - "SUBDOMAINS"
+    Description: >-
+      The scope of what is crawled for your URLs.
+      Choose DEFAULT to limit to web pages that have the same host and the same initial path as the source URLs.
+      Choose HOST_ONLY to limit to web pages that have the same host as the source URLs.
+      Choose SUBDOMAINS to to include sub domains in addition to the host or primary domain.
 
   AgentAssistExistingLexV2BotId:
     Default: ""
@@ -158,25 +193,6 @@ Parameters:
     Description: >
       Used only when AgentAssistOption is set to 'Bring your own Lambda function'.
       Provide the function ARN of an existing Lambda function to be used for Agent Assist."
-
-  AgentAssistWebCrawlURLs:
-    Type: String
-    Default: https://en.wikipedia.org/wiki/Life_insurance, https://en.wikipedia.org/wiki/Mortgage_loan
-    Description: >-
-      Comma separated list of public web sites to crawl automatically for Agent Assist knowledge store
-
-  AgentAssistWebCrawlSyncScope:
-    Type: String
-    Default: DEFAULT
-    AllowedValues:
-      - "DEFAULT"
-      - "HOST_ONLY"
-      - "SUBDOMAINS"
-    Description: >-
-      The scope of what is crawled for your URLs.
-      Choose DEFAULT to limit to web pages that have the same host and the same initial path as the source URLs.
-      Choose HOST_ONLY to limit to web pages that have the same host as the source URLs.
-      Choose SUBDOMAINS to to include sub domains in addition to the host or primary domain.
 
   AgentAssistLLMBedrockModelId:
     Type: String
@@ -570,12 +586,14 @@ Metadata:
           default: Agent Assist Options
         Parameters:
           - AgentAssistOption
-          - AgentAssistExistingBedrockKBID
+          - BedrockKnowledgeBaseId
+          - BedrockKnowledgeBaseS3BucketName
+          - BedrockKnowledgeBaseS3DocumentUploadFolderPrefix
+          - AgentAssistWebCrawlURLs
+          - AgentAssistWebCrawlSyncScope
           - AgentAssistExistingLexV2BotId
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
-          - AgentAssistWebCrawlURLs
-          - AgentAssistWebCrawlSyncScope
           - AgentAssistLLMBedrockModelId
       - Label:
           default: Amazon S3 Configuration
@@ -669,18 +687,22 @@ Metadata:
         default: Amazon Connect instance ARN (existing)
       AgentAssistOption:
         default: Enable Agent Assist
-      AgentAssistExistingBedrockKBID:
+      BedrockKnowledgeBaseId:
         default: Bedrock Knowledge Base ID (existing)
+      BedrockKnowledgeBaseS3BucketName:
+        default: S3 bucket with knowledge base source documents (optional).
+      BedrockKnowledgeBaseS3DocumentUploadFolderPrefix:
+        default: S3 prefix(es) for your content (optional)
+      AgentAssistWebCrawlURLs:
+        default: Publicly accessible URLs for web crawling (optional)
+      AgentAssistWebCrawlSyncScope:
+        default: Web crawling sync scope
       AgentAssistExistingLexV2BotId:
         default: Agent Assist LexV2 BotId (existing)
       AgentAssistExistingLexV2BotAliasId:
         default: Agent Assist LexV2 Bot AliasId (existing)
       AgentAssistExistingLambdaFunctionArn:
         default: Agent Assist Lambda Function ARN (existing)
-      AgentAssistWebCrawlURLs:
-        default: Agent Assist QnABot Kendra Web Crawl URLs
-      AgentAssistWebCrawlSyncScope:
-        default: Agent Assist QnABot Kendra Web Crawl Scope
       AgentAssistLLMBedrockModelId:
         default: Agent Assist QnABot Bedrock ModelId
       IsPartialTranscriptEnabled:
@@ -789,20 +811,20 @@ Conditions:
       !Condition ShouldEnableLexAgentAssist,
       !Not [!Condition ShouldBringYourOwnBot],
     ]
-  ShouldCreateBedrockKB:
+  ShouldCreateBedrockKnowledgeBase:
     !Equals [
       !Ref AgentAssistOption,
       "QnABot on AWS with new Bedrock knowledge base",
     ]
-  ShouldUseExistingBedrockKB:
+  ShouldUseExistingBedrockKnowledgeBase:
     !Equals [
       !Ref AgentAssistOption,
       "QnABot on AWS with existing Bedrock knowledge base",
     ]
-  ShouldUseBedrockKB:
+  ShouldUseBedrockKnowledgeBase:
     !Or [
-      !Condition ShouldCreateBedrockKB,
-      !Condition ShouldUseExistingBedrockKB,
+      !Condition ShouldCreateBedrockKnowledgeBase,
+      !Condition ShouldUseExistingBedrockKnowledgeBase,
     ]
 
 Mappings:
@@ -885,15 +907,15 @@ Rules:
       - Assert: !Not [!Equals [!Ref ConnectInstanceArn, ""]]
         AssertDescription: ConnectInstanceArn is required when CallAudioSource is 'Amazon Connect Contact Lens' or 'Amazon Connect Kinesis Video Streams'
 
-  AgentAssistExistingBedrockKBID:
+  BedrockKnowledgeBaseId:
     RuleCondition:
       !Equals [
         !Ref AgentAssistOption,
         "QnABot on AWS with existing Bedrock knowledge base",
       ]
     Assertions:
-      - Assert: !Not [!Equals [!Ref AgentAssistExistingBedrockKBID, ""]]
-        AssertDescription: AgentAssistExistingBedrockKBID is required when AgentAssistOption is 'QnABot on AWS with existing Bedrock knowledge base'
+      - Assert: !Not [!Equals [!Ref BedrockKnowledgeBaseId, ""]]
+        AssertDescription: BedrockKnowledgeBaseId is required when AgentAssistOption is 'QnABot on AWS with existing Bedrock knowledge base'
 
   AgentAssistExistingLexV2Bot:
     RuleCondition: !Equals [!Ref AgentAssistOption, "Bring your own LexV2 bot"]
@@ -1083,6 +1105,7 @@ Resources:
       BedrockModelIds:
         - !Ref SummaryBedrockModelId # Call summarization
         - !Ref AgentAssistLLMBedrockModelId # Agent assistant
+        - "amazon.titan-embed-text-v2:0" # Meeting Assistant
         - "amazon.titan-embed-text-v1" # QNABOTBR embedding model
 
   ToJSONFunction:
@@ -1211,6 +1234,20 @@ Resources:
         StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
         PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
 
+  BEDROCKKB:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldCreateBedrockKnowledgeBase
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
+    Properties:
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-bedrockkb-stack/template.yaml
+      Parameters:
+        pKnowledgeBaseBucketName: !Ref BedrockKnowledgeBaseS3BucketName
+        pInputDocumentUploadFolderPrefix: !Ref BedrockKnowledgeBaseS3DocumentUploadFolderPrefix
+        pWebCrawlerURLs: !Ref AgentAssistWebCrawlURLs
+        pWebCrawlerScope: !Ref AgentAssistWebCrawlSyncScope
+
   # Format nested JSON strings before nesting them in QnABotSettings in AGENTASSISTSETUP
   SettingsJSON:
     Type: Custom::ToJSON
@@ -1235,7 +1272,7 @@ Resources:
         the follow up question or statement as a standalone, one sentence question.
         If the caller is just engaging in small talk or saying thanks, respond with "small talk". Do not include any preamble.'
       ASSISTANT_GENERATE_PROMPT_TEMPLATE: !If
-        - ShouldUseBedrockKB
+        - ShouldUseBedrockKnowledgeBase
         - "You are an AI assistant helping a human call center agent during a telephone call. I will provide
           you with a transcript of the ongoing call, and a set of search results.
           Your job is to respond to the caller's request using only information from the
@@ -1270,9 +1307,13 @@ Resources:
           - ""
         AgentAssistLLMBedrockModelId: !Ref AgentAssistLLMBedrockModelId
         BedrockKnowledgeBaseID: !If
-          - ShouldUseExistingBedrockKB
-          - !Ref AgentAssistExistingBedrockKBID
+          - ShouldUseBedrockKnowledgeBase
+          - !If
+            - ShouldCreateBedrockKnowledgeBase
+            - !GetAtt BEDROCKKB.Outputs.KnowledgeBaseID
+            - !Ref BedrockKnowledgeBaseId
           - ""
+        BedrockKnowledgeBaseS3BucketName: !Ref BedrockKnowledgeBaseS3BucketName
         LexAgentAssistBotId: !If
           - ShouldInstallAWSQnaBot
           - !GetAtt QNABOT.Outputs.LexV2BotId

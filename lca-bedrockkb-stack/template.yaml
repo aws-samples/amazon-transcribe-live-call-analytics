@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Create a Bedrock Knowledge Base, an OpenSearch Serverless collection, and an S3 bucket and optional Web Crawler for content
+  Amazon Transcribe Live Call Analytics - Bedrock Knowledge Base setup
 
 Parameters:
   pKnowledgeBaseBucketName:
