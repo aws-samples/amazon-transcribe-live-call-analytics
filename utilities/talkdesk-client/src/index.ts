@@ -141,7 +141,7 @@ const talkdesk_client = async (serveruri: string | undefined, options: CmdOption
                     track: 'inbound',
                     chunk: chunk.toString(),
                     timestamp: ts.toString(),
-                    payload: Buffer.from(channel1).toString('base64'),
+                    payload: Buffer.from(channel0).toString('base64'),
                 },
                 streamSid: STREAM_SID
             };
@@ -157,7 +157,7 @@ const talkdesk_client = async (serveruri: string | undefined, options: CmdOption
                     track: 'outbound',
                     chunk: chunk.toString(),
                     timestamp: ts.toString(),
-                    payload: Buffer.from(channel0).toString('base64'),
+                    payload: Buffer.from(channel1).toString('base64'),
                 },
                 streamSid: STREAM_SID
             };

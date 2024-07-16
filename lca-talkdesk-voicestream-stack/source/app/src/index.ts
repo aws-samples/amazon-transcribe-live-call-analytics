@@ -257,9 +257,9 @@ const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMe
         const pcm16Buffer = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
 
 
-        if (data.media.track == 'outbound') {
+        if (data.media.track == 'inbound') {
             socketData.agentBlock.write(pcm16Buffer);
-        } else if (data.media.track == 'inbound') {
+        } else if (data.media.track == 'outbound') {
             socketData.callerBlock.write(pcm16Buffer);
         }
 
