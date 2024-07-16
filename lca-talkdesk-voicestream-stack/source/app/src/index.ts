@@ -341,11 +341,11 @@ const onStop = async (clientIP: string, ws: WebSocket, data: MediaStreamStopMess
 
 const onWsClose = async (clientIP: string, ws:WebSocket, code: number): Promise<void> => {
     ws.close(code);
-    const socketData = socketMap.get(ws);
-    if (socketData) {
-        server.log.debug(`[ON WSCLOSE]: [${clientIP}][${socketData.callMetadata.callId}] - Writing call end event due to websocket close event ${JSON.stringify(socketData.callMetadata)}`);
-        await endCall(ws, undefined, socketData);
-    }
+    // const socketData = socketMap.get(ws);
+    // if (socketData) {
+    //     server.log.debug(`[ON WSCLOSE]: [${clientIP}][${socketData.callMetadata.callId}] - Writing call end event due to websocket close event ${JSON.stringify(socketData.callMetadata)}`);
+    //     await endCall(ws, undefined, socketData);
+    // }
 };
 
 // Start the websocket server on default port 3000 if no port supplied in environment variables
