@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import stream from 'stream';
+import stream, { PassThrough } from 'stream';
 import { WriteStream } from 'fs';
 
 import { 
@@ -9,6 +9,7 @@ import {
     UtteranceEvent,
     CategoryEvent,
 } from '@aws-sdk/client-transcribe-streaming';
+import BlockStream2 from 'block-stream2';
 
 export type Uuid = string;             // UUID as defined by RFC#4122
 
@@ -74,9 +75,9 @@ export type SocketCallData = {
     writeRecordingStream?: WriteStream,
     recordingFileSize?: number
     startStreamTime: Date,
-    inboundPayloads: Uint8Array[],
-    outboundPayloads: Uint8Array[],
-    inboundTimestamps: number[],
-    outboundTimestamps: number[],
+    agentBlock: BlockStream2,
+    callerBlock: BlockStream2,
+    combinedStream: PassThrough,
+    combinedStreamBlock: BlockStream2,
     ended: boolean,
 }

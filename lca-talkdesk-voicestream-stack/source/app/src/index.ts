@@ -35,12 +35,15 @@ import {
 
 import {
     ulawToL16,
-    msToBytes,
+    // msToBytes,
     createWavHeader,
     getClientIP,
     posixifyFilename,
     normalizeErrorForLogging,
 } from './utils';
+import { PassThrough } from 'stream';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const interleave = require('interleave-stream');
 
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const RECORDINGS_BUCKET_NAME = process.env['RECORDINGS_BUCKET_NAME'] || undefined;
@@ -53,7 +56,7 @@ const SHOULD_RECORD_CALL = process.env['SHOULD_RECORD_CALL'] || 'false';
 const TALKDESK_ACCOUNT_ID = process.env['TALKDESK_ACCOUNT_ID'] || '';
 
 // Source specific audio parameters
-const CHUNK_SIZE_IN_MS = parseInt(process.env['CHUNK_SIZE_IN_MS'] || '20', 10);
+// const CHUNK_SIZE_IN_MS = parseInt(process.env['CHUNK_SIZE_IN_MS'] || '20', 10);
 const SAMPLE_RATE = parseInt(process.env['SAMPLE_RATE'] || '8000', 10);
 // const MULAW_BYTES_PER_SAMPLE = parseInt(process.env['MULAW_BYTES_PER_SAMPLE'] || '4', 10);
 
@@ -180,7 +183,6 @@ const onConnected = async (clientIP: string, ws: WebSocket, data: MediaStreamCon
 
 const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMessage): Promise<void> => {
     server.log.info(`[ON START]: [${clientIP}][${data.start.callSid}] - Received Start event from client. ${JSON.stringify(data)}`);
-
     if (data.start.accountSid !== TALKDESK_ACCOUNT_ID) {
         server.log.error(`[ON START]: [${clientIP}][${data.start.callSid}] - Error: Account ID received from Talkdesk does not match the account ID configured in LCA.${JSON.stringify(data)}`);
         server.log.error(`[ON START]: [${clientIP}][${data.start.callSid}] - Closing the websocket connection`);
@@ -200,86 +202,43 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
 
     const tempRecordingFilename = getTempRecordingFileName(callMetaData);
     const writeRecordingStream = fs.createWriteStream(path.join(LOCAL_TEMP_DIR, tempRecordingFilename));
-    const recordingFileSize = 0;
-    // const highWaterMarkSize = (callMetaData.samplingRate / 10) * 2 * 2;
-    const audioInputStream = new BlockStream({ size: 1600 });
+    let recordingFileSize = 0;
+    const highWaterMarkSize = (callMetaData.samplingRate / 10) * 2 * 2;
+    const audioInputStream = new PassThrough({ highWaterMark: highWaterMarkSize });
+    const agentBlock = new BlockStream({ size: 2 });
+    const callerBlock = new BlockStream({ size: 2 });
+    const combinedStream = new PassThrough();
+    const combinedStreamBlock = new BlockStream({ size: 4 });
+
+    combinedStream.pipe(combinedStreamBlock);
+    interleave([agentBlock, callerBlock]).pipe(combinedStream);
+
     const socketCallMap:SocketCallData = {
         callMetadata: callMetaData,
         audioInputStream: audioInputStream,
         writeRecordingStream: writeRecordingStream,
         recordingFileSize: recordingFileSize,
         startStreamTime: new Date(),
-        inboundPayloads: [],
-        outboundPayloads: [],    
-        inboundTimestamps: [],
-        outboundTimestamps: [],
+        agentBlock: agentBlock,
+        callerBlock: callerBlock,
+        combinedStream: combinedStream,
+        combinedStreamBlock: combinedStreamBlock,
         ended: false,
     };
     socketMap.set(ws, socketCallMap);
 
     await writeCallStartEvent(callMetaData, server);
+
+    combinedStreamBlock.on('data', (chunk) => {
+        // server.log.info(`[COMBINED STREAM]: [${clientIP}][${callMetaData.callId}] - Writing combined chunk to audio input stream `);
+
+        audioInputStream.write(chunk);
+        writeRecordingStream.write(chunk);
+        recordingFileSize += chunk.length;
+
+    });
     startTranscribe(callMetaData, audioInputStream, socketCallMap, server);
 };
-
-function interleave(left: Uint8Array, right: Uint8Array): Int16Array {
-
-    const left16Bit = ulawToL16(left);
-    const right16Bit = ulawToL16(right);
-
-    const length = left16Bit.length + right16Bit.length;
-    const interleaved = new Int16Array(length);
-
-    for (let i = 0, j = 0; i < length; j += 1) {
-        interleaved[(i += 1)] = left16Bit[j];
-        interleaved[(i += 1)] = right16Bit[j];
-    }
-    return interleaved;
-}
-
-function syncTracksAndInterleave(inboundPayloads: Uint8Array[], outboundPayloads: Uint8Array[], inboundTimestamps: number[], outboundTimestamps: number[]): Uint8Array {
-
-    let startInboundTS = Infinity;
-    let endInboundTS = 0 ;
-    let startOutboundTS = Infinity;
-    let endOutboundTS = 0; 
-
-    // [0] will always be min, [-1] will always be max. No need to use min/max math functions
-    if (inboundTimestamps.length > 0) {
-        startInboundTS = inboundTimestamps[0];
-        endInboundTS = inboundTimestamps[inboundTimestamps.length - 1] + CHUNK_SIZE_IN_MS - 1;
-    }
-    if (outboundTimestamps.length > 0) {
-        startOutboundTS = outboundTimestamps[0];
-        endOutboundTS = outboundTimestamps[outboundTimestamps.length - 1] + CHUNK_SIZE_IN_MS - 1;
-    }
-    const bufferStartTS = Math.min(startInboundTS, startOutboundTS);
-    const bufferEndTS = Math.max(endInboundTS, endOutboundTS);
-    const bufferLength = msToBytes((bufferEndTS - bufferStartTS + 1), SAMPLE_RATE, 2);
-    server.log.info(`Buffer Start TS: ${bufferStartTS} End TS : ${bufferEndTS} Length Bytes: ${bufferLength}`);
-    
-    const inboundBuffer = new Uint8Array(bufferLength).fill(0);
-    const outboundBuffer = new Uint8Array(bufferLength).fill(0); 
-
-    if (inboundPayloads.length > 0) {
-        const inboundPayload = Buffer.concat(inboundPayloads);
-        const offsetTS = startInboundTS - bufferStartTS;
-        const byteOffset = msToBytes(offsetTS, SAMPLE_RATE, 2);
-        server.log.info(`inbound offset: TS ${offsetTS} Byte: ${byteOffset}`);
-        inboundBuffer.set(inboundPayload, byteOffset);
-    }
-    if (outboundPayloads.length > 0 ) {
-        const outboundPayload = Buffer.concat(outboundPayloads);
-        const offsetTS = startOutboundTS - bufferStartTS;
-        const byteOffset = msToBytes(offsetTS, SAMPLE_RATE, 2);
-        server.log.info(`outbound offset: TS ${offsetTS} Byte: ${byteOffset}`);
-        outboundBuffer.set(outboundPayload, byteOffset);
-    }
-    
-    const interleaved = interleave(inboundBuffer, outboundBuffer);
-    const chunk = new Uint8Array(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
-    return chunk;
-
-}
 
 const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMessage): Promise<void> => {
     const socketData = socketMap.get(ws);
@@ -288,31 +247,22 @@ const onMedia = async (clientIP: string, ws: WebSocket, data: MediaStreamMediaMe
     if (socketData && socketData.callMetadata) {
         callid = socketData.callMetadata.callId;
     }
-    server.log.info(`[ON MEDIA]: [${clientIP}][${callid}] - Received Media event from client. ${JSON.stringify(data)}`);
+    // server.log.info(`[ON MEDIA]: [${clientIP}][${callid}] - Received Media event from client. ${JSON.stringify(data)}`);
 
     if (socketData !== undefined && socketData.audioInputStream !== undefined &&
         socketData.writeRecordingStream !== undefined && socketData.recordingFileSize !== undefined) {
         
         const ulawBuffer = Buffer.from(data.media.payload, 'base64');
-        if (data.media.track == 'inbound') {
-            socketData.inboundPayloads.push(ulawBuffer);
-            socketData.inboundTimestamps.push(parseInt(data.media.timestamp));
-        } else if (data.media.track == 'outbound') {
-            socketData.outboundPayloads.push(ulawBuffer);
-            socketData.outboundTimestamps.push(parseInt(data.media.timestamp));
-        }
-        
-        if (parseInt(data.sequenceNumber) % 5 === 0) {
-            const interleaved = syncTracksAndInterleave(socketData.inboundPayloads, socketData.outboundPayloads, socketData.inboundTimestamps, socketData.outboundTimestamps);
-            socketData.audioInputStream.write(interleaved);
-            socketData.writeRecordingStream.write(interleaved);
-            socketData.recordingFileSize += interleaved.length;
+        const pcm16 = ulawToL16(ulawBuffer);
+        const pcm16Buffer = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
 
-            socketData.inboundPayloads = [];
-            socketData.outboundPayloads = [];    
-            socketData.inboundTimestamps = [];
-            socketData.outboundTimestamps = [];
+
+        if (data.media.track == 'outbound') {
+            socketData.agentBlock.write(pcm16Buffer);
+        } else if (data.media.track == 'inbound') {
+            socketData.callerBlock.write(pcm16Buffer);
         }
+
     } else {
         server.log.error(`[ON MEDIA]: [${clientIP}][${callid}] - Error: received 'media' event before receiving 'start' event. Check logs for errors related to 'start' event.`);
     }
@@ -326,16 +276,6 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
 
     if (socketData && socketData.ended === false) {
         if (socketData.audioInputStream && socketData.writeRecordingStream && socketData.recordingFileSize) {
-            const interleaved = syncTracksAndInterleave(socketData.inboundPayloads, socketData.outboundPayloads, socketData.inboundTimestamps, socketData.outboundTimestamps);
-            socketData.audioInputStream.write(interleaved);
-            socketData.writeRecordingStream.write(interleaved);
-            socketData.recordingFileSize += interleaved.length;
-
-            socketData.inboundPayloads = [];
-            socketData.outboundPayloads = [];    
-            socketData.inboundTimestamps = [];
-            socketData.outboundTimestamps = [];
-
             socketData.ended = true;
             await writeCallEndEvent(callMetaData, server);
             socketData.writeRecordingStream.end();

@@ -32,4 +32,19 @@ popd
 repo_arn=arn:aws:s3:::${BUCKET}/${PREFIX_AND_VERSION}/${dir}/${VERSION}/lca-talkdesk-ws.zip
 
 echo $repo_arn
-# aws codebuild start-build --project-name TranscriberCodeBuildProject-wbRLHS1k1QPo --source-location-override $repo_arn
+
+# buildid=$(aws codebuild start-build --project-name TranscriberCodeBuildProject-V3dCnMv8R2m0 --source-location-override $repo_arn --region $REGION | jq .build.id)
+# echo "$buildid"
+# while true; do 
+#     buildstatus=$(aws codebuild batch-get-builds --ids "${buildid}" | jq .builds[0])
+#     echo "$buildstatus"
+#     if [[ ${buildstatus}!="IN PROGRESS" ]]; then
+#         break;
+#     fi
+#     sleep 10s
+# done
+# aws codebuild start-build --project-name  --source-location-override <s3-arn> --region <region>
+# aws ecs update-service --cluster <value> --service <value> --force-new-deployment --region <region>
+
+# aws codebuild start-build --project-name TranscriberCodeBuildProject-V3dCnMv8R2m0 --source-location-override arn:aws:s3:::lca-solution-staging-752cf6e7c5a9-us-west-2/artifacts/0.8.76/lca-talkdesk-voicestream-stack/0.8.76/lca-talkdesk-ws.zip --region us-west-2
+# aws ecs update-service --cluster lca-ts9-TALKDESKSTACK-1TAJ7OYUEW0RQ-TranscribingCluster-diE8udJl97mF --service lca-ts9-TALKDESKSTACK-1TAJ7OYUEW0RQ-TranscriberWebsocketFargateService-uCqgm7Ha2wzz --force-new-deployment --region us-west-2
