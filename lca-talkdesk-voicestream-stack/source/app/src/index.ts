@@ -277,9 +277,12 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
     if (socketData !== undefined && socketData.ended === false) {
         if (socketData.audioInputStream !== undefined && socketData.writeRecordingStream !== undefined &&
             socketData.recordingFileSize !== undefined) {
+            socketData.agentBlock.end();
+            socketData.callerBlock.end();
+            socketData.writeRecordingStream.end();
+
             socketData.ended = true;
             await writeCallEndEvent(callMetaData, server);
-            socketData.writeRecordingStream.end();
             
             const header = createWavHeader(callMetaData.samplingRate, socketData.recordingFileSize);
             const tempRecordingFilename = getTempRecordingFileName(callMetaData);
