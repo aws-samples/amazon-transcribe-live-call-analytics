@@ -274,8 +274,9 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
         callMetaData = socketData.callMetadata;
     }
 
-    if (socketData && socketData.ended === false) {
-        if (socketData.audioInputStream && socketData.writeRecordingStream && socketData.recordingFileSize) {
+    if (socketData !== undefined && socketData.ended === false) {
+        if (socketData.audioInputStream !== undefined && socketData.writeRecordingStream !== undefined &&
+            socketData.recordingFileSize !== undefined) {
             socketData.ended = true;
             await writeCallEndEvent(callMetaData, server);
             socketData.writeRecordingStream.end();
@@ -302,12 +303,12 @@ const endCall = async (ws: WebSocket, callMetaData: CallMetaData|undefined, sock
             
             await writeCallRecordingEvent(callMetaData, recordingUrl, server);
         }
-        if (socketData.audioInputStream) {
+        if (socketData.audioInputStream !== undefined) {
             server.log.debug(`[${callMetaData.callEvent} LCA EVENT]: [${callMetaData.callId}] - Closing audio input stream:  ${JSON.stringify(callMetaData)}`);
             socketData.audioInputStream.end();
             socketData.audioInputStream.destroy();
         }
-        if (socketData) {
+        if (socketData !== undefined) {
             server.log.debug(`[${callMetaData.callEvent} LCA EVENT]: [${callMetaData.callId}] - Deleting websocket from map: ${JSON.stringify(callMetaData)}`);
             socketMap.delete(ws);
         }
@@ -341,11 +342,11 @@ const onStop = async (clientIP: string, ws: WebSocket, data: MediaStreamStopMess
 
 const onWsClose = async (clientIP: string, ws:WebSocket, code: number): Promise<void> => {
     ws.close(code);
-    // const socketData = socketMap.get(ws);
-    // if (socketData) {
-    //     server.log.debug(`[ON WSCLOSE]: [${clientIP}][${socketData.callMetadata.callId}] - Writing call end event due to websocket close event ${JSON.stringify(socketData.callMetadata)}`);
-    //     await endCall(ws, undefined, socketData);
-    // }
+    const socketData = socketMap.get(ws);
+    if (socketData !== undefined) {
+        server.log.debug(`[ON WSCLOSE]: [${clientIP}][${socketData.callMetadata.callId}] - Writing call end event due to websocket close event ${JSON.stringify(socketData.callMetadata)}`);
+        await endCall(ws, undefined, socketData);
+    }
 };
 
 // Start the websocket server on default port 3000 if no port supplied in environment variables
