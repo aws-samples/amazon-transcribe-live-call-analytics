@@ -234,7 +234,7 @@ const onStart = async (clientIP: string, ws: WebSocket, data: MediaStreamStartMe
 
         audioInputStream.write(chunk);
         writeRecordingStream.write(chunk);
-        recordingFileSize += chunk.length;
+        recordingFileSize += chunk.byteLength;
 
     });
     startTranscribe(callMetaData, audioInputStream, socketCallMap, server);
