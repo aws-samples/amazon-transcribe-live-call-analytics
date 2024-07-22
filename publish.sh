@@ -195,13 +195,13 @@ popd
 dir=lca-agentassist-setup-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
+./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
 popd
 
 dir=lca-bedrockkb-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
+./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
 popd
 
 echo "PACKAGING Main Stack Cfn artifacts"

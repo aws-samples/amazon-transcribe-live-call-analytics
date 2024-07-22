@@ -109,7 +109,7 @@ Parameters:
     Type: String
   AgentAssistWebCrawlURLs:
     Type: String
-  AgentAssistWebCrawlDepth:
+  AgentAssistWebCrawlSyncScope:
     Type: String
   IsSentimentAnalysisEnabled:
     Type: String
@@ -557,7 +557,7 @@ Resources:
       AgentAssistExistingLexV2BotAliasId: !Ref AgentAssistExistingLexV2BotAliasId
       AgentAssistExistingLambdaFunctionArn: !Ref AgentAssistExistingLambdaFunctionArn
       AgentAssistWebCrawlURLs: !Ref AgentAssistWebCrawlURLs
-      AgentAssistWebCrawlDepth: !Ref AgentAssistWebCrawlDepth
+      AgentAssistWebCrawlSyncScope: !Ref AgentAssistWebCrawlSyncScope
       IsSentimentAnalysisEnabled: !Ref IsSentimentAnalysisEnabled
       SentimentNegativeScoreThreshold: !Ref SentimentNegativeScoreThreshold
       SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
