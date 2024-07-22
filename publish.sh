@@ -103,17 +103,16 @@ tmpdir=/tmp/lca
 mkdir -p $tmpdir
 pwd
 
-
 dir=lca-chimevc-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-chimevc-stack $REGION || exit 1
+./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
 popd
 
 dir=lca-connect-kvs-stack
 echo "PACKAGING $dir"
 pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/lca-connect-kvs-stack $REGION || exit 1
+./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
 popd
 
 dir=lca-genesys-audiohook-stack
@@ -121,7 +120,7 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-genesys-audiohook-stack $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
 dir=lca-websocket-stack
@@ -129,13 +128,13 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-websocket-stack $VERSION $REGION || exit 1
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
 dir=lca-connect-integration-stack
 echo "PACKAGING $dir"
 pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-connect-integration-stack/template.yaml
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
 popd
 
 dir=lca-ai-stack
@@ -143,19 +142,13 @@ echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -fr ../out
 chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/lca-ai-stack $VERSION $REGION || exit 1
-popd
-
-dir=lca-kendra-stack
-echo "PACKAGING $dir"
-pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-kendra-stack/template.yaml
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
 dir=lca-ssm-stack
 echo "PACKAGING $dir"
 pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-ssm-stack/template.yaml
+aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
 popd
 
 echo "Initialize and update git submodules"
@@ -174,8 +167,6 @@ git submodule init
 git submodule update
 echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
 # LCA customizations
-cp -v ./patches/qnabot/lambda_schema_qna.js $dir/lambda/schema/qna.js
-cp -v ./patches/qnabot/website_js_admin.vue $dir/website/js/admin.vue
 cp -v ./patches/qnabot/Makefile $dir/Makefile
 echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
 # Detection of differences. sed varies betwen GNU sed and BSD sed
@@ -192,7 +183,8 @@ cat > config.json <<_EOF
   "profile": "${AWS_PROFILE:-default}",
   "region": "${REGION}",
   "buildType": "Custom",
-  "skipCheckTemplate":true
+  "skipCheckTemplate":true,
+  "noStackOutput": true
 }
 _EOF
 npm install
@@ -203,10 +195,14 @@ popd
 dir=lca-agentassist-setup-stack
 echo "PACKAGING $dir"
 pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-agentassist-setup-stack/template.yaml
-aws s3 cp ./qna-aa-demo.jsonl s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-agentassist-setup-stack/qna-aa-demo.jsonl
+./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
 popd
 
+dir=lca-bedrockkb-stack
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
+popd
 
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
