@@ -18,7 +18,11 @@ FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
 # default 0 - do not truncate.
 TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0'))
-SUMMARY_PROMPT_SSM_PARAMETER = os.environ["SUMMARY_PROMPT_SSM_PARAMETER"]
+
+# Table name and keys used for default and custom prompt templates items in DDB
+LLM_PROMPT_TEMPLATE_TABLE_NAME = os.environ["LLM_PROMPT_TEMPLATE_TABLE_NAME"]
+DEFAULT_PROMPT_TEMPLATES_PK = "DefaultSummaryPromptTemplates"
+CUSTOM_PROMPT_TEMPLATES_PK = "CustomSummaryPromptTemplates"
 
 # Optional environment variables allow region / endpoint override for bedrock Boto3
 BEDROCK_REGION = os.environ["BEDROCK_REGION_OVERRIDE"] if "BEDROCK_REGION_OVERRIDE" in os.environ else os.environ["AWS_REGION"]
@@ -26,31 +30,58 @@ BEDROCK_ENDPOINT_URL = os.environ.get(
     "BEDROCK_ENDPOINT_URL", f'https://bedrock-runtime.{BEDROCK_REGION}.amazonaws.com')
 
 lambda_client = boto3.client('lambda')
-ssmClient = boto3.client("ssm")
+dynamodb_client = boto3.client('dynamodb')
 bedrock = boto3.client(service_name='bedrock-runtime',
                        region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL)
 
 
-def get_templates_from_ssm(prompt_override):
+def get_templates_from_dynamodb(prompt_override):
     templates = []
     prompt_template_str = None
+
     if prompt_override is not None:
+        print("Prompt Template String override:", prompt_override)
         prompt_template_str = prompt_override
+        try:
+            prompt_templates = json.loads(prompt_template_str)
+            for k, v in prompt_templates.items():
+                prompt = v.replace("<br>", "\n")
+                templates.append({k: prompt})
+        except:
+            prompt = prompt_template_str.replace("<br>", "\n")
+            templates.append({
+                "Summary": prompt
+            })
 
     if prompt_template_str is None:
-        prompt_template_str = ssmClient.get_parameter(
-            Name=SUMMARY_PROMPT_SSM_PARAMETER)["Parameter"]["Value"]
+        try:
+            defaultPromptTemplatesResponse = dynamodb_client.get_item(Key={'LLMPromptTemplateId': {'S': DEFAULT_PROMPT_TEMPLATES_PK}},
+                                                                      TableName=LLM_PROMPT_TEMPLATE_TABLE_NAME)
+            customPromptTemplatesResponse = dynamodb_client.get_item(Key={'LLMPromptTemplateId': {'S': CUSTOM_PROMPT_TEMPLATES_PK}},
+                                                                     TableName=LLM_PROMPT_TEMPLATE_TABLE_NAME)
 
-    try:
-        prompt_templates = json.loads(prompt_template_str)
-        for k, v in prompt_templates.items():
-            prompt = v.replace("<br>", "\n")
-            templates.append({k: prompt})
-    except:
-        prompt = prompt_template_str.replace("<br>", "\n")
-        templates.append({
-            "Summary": prompt
-        })
+            defaultPromptTemplates = defaultPromptTemplatesResponse["Item"]
+            customPromptTemplates = customPromptTemplatesResponse["Item"]
+            print("Default Prompt Template:", defaultPromptTemplates)
+            print("Custom Template:", customPromptTemplates)
+
+            mergedPromptTemplates = {
+                **defaultPromptTemplates, **customPromptTemplates}
+            print("Merged Prompt Template:", mergedPromptTemplates)
+
+            for k in sorted(mergedPromptTemplates):
+                if (k != "LLMPromptTemplateId" and k != "*Information*"):
+                    prompt = mergedPromptTemplates[k]['S']
+                    # skip if prompt value is empty, or set to 'NONE'
+                    if (prompt and prompt != 'NONE'):
+                        prompt = prompt.replace("<br>", "\n")
+                        index = k.find('#')
+                        k_stripped = k[index+1:]
+                        templates.append({k_stripped: prompt})
+        except Exception as e:
+            print("Exception:", e)
+            raise (e)
+
     return templates
 
 
@@ -125,7 +156,7 @@ def call_bedrock(prompt_data):
 
 def generate_summary(transcript, prompt_override):
     # first check to see if this is one prompt, or many prompts as a json
-    templates = get_templates_from_ssm(prompt_override)
+    templates = get_templates_from_dynamodb(prompt_override)
     result = {}
     for item in templates:
         key = list(item.keys())[0]

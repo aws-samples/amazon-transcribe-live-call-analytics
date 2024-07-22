@@ -79,6 +79,19 @@ else
   PUBLIC=false
 fi
 
+function calculate_hash() {
+  local directory_path=$1
+  local HASH=$(
+    find "$directory_path" \( -name node_modules -o -name build \) -prune -o -type f -print0 | 
+    sort -f -z |
+    xargs -0 sha256sum |
+    sha256sum |
+    cut -d" " -f1 | 
+    cut -c1-16
+  )
+  echo $HASH
+}
+
 # Remove trailing slash from prefix if needed, and append VERSION
 VERSION=$(cat ./VERSION)
 [[ "${PREFIX}" == */ ]] && PREFIX="${PREFIX%?}"
@@ -145,11 +158,32 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
-dir=lca-ssm-stack
-echo "PACKAGING $dir"
-pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
+dir=lca-llm-template-setup-stack
+echo "PACKAGING $dir/deployment"
+pushd $dir/deployment
+
+# by hashing the contents of the source folder, we can force the custom resource lambda to re-run
+# when the code or prompt template contents change.
+echo "Computing hash of src folder contents"
+HASH=$(calculate_hash "../source")
+template=llm-template-setup.yaml
+echo "Replace hash in template"
+# Detection of differences. sed varies betwen GNU sed and BSD sed
+if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
+  sed -i 's/source_hash: .*/source_hash: '"$HASH"'/' ${template}
+else # BSD like sed
+  sed -i '' 's/source_hash: .*/source_hash: '"$HASH"'/' ${template}
+fi
+s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-llm-template-setup-stack/llm-template-setup.yaml"
+aws cloudformation package \
+--template-file ${template} \
+--output-template-file ${tmpdir}/${template} \
+--s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/lma-llm-template-setup-stack \
+--region ${REGION} || exit 1
+echo "Uploading template file to: ${s3_template}"
+aws s3 cp ${tmpdir}/${template} ${s3_template}
 popd
+
 
 echo "Initialize and update git submodules"
 git submodule init

@@ -299,6 +299,12 @@ Parameters:
     Description: >
       Whether or not to show the voice tone analysis panel in the UI
 
+  LLMPromptTemplateTableName:
+    Type: String
+    Description:
+      The DynamoDB table name where the default and custom summary prompt
+      templates are stored.
+
 Metadata:
   "AWS::CloudFormation::Interface":
     ParameterGroups:
@@ -955,7 +961,7 @@ Resources:
           FETCH_TRANSCRIPT_LAMBDA_ARN: !GetAtt FetchTranscript.Arn
           TOKEN_COUNT: "0"
           PROCESS_TRANSCRIPT: "True"
-          SUMMARY_PROMPT_SSM_PARAMETER: !Sub "${LCAStackName}-LLMPromptSummaryTemplate"
+          LLM_PROMPT_TEMPLATE_TABLE_NAME: !Ref LLMPromptTemplateTableName
       Timeout: 900
       MemorySize: 512
       Handler: index.handler
@@ -994,9 +1000,9 @@ Resources:
                 Resource: !GetAtt FetchTranscript.Arn
               - Effect: Allow
                 Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCAStackName}-*"
+                  - "dynamodb:GetItem"
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LLMPromptTemplateTableName}"
 
         - PolicyName: !Sub ${AWS::StackName}-BedrockSummary
           PolicyDocument:

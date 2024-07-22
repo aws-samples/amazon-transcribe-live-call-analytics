@@ -1175,12 +1175,13 @@ Resources:
         LLMApi: "LAMBDA"
         LLMLambdaArn: !GetAtt QNABOTBR.Outputs.LLMLambdaArn
 
-  SSMSTACK:
+  LLMTEMPLATESTACK:
     Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-ssm-stack/template.yaml
-      Parameters:
-        LCAStackName: !Ref AWS::StackName
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-llm-template-setup-stack/llm-template-setup.yaml
 
   AISTACK:
     Type: AWS::CloudFormation::Stack
@@ -1233,6 +1234,7 @@ Resources:
         EndOfCallLambdaHookFunctionArn: !Ref EndOfCallLambdaHookFunctionArn
         StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
         PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
+        LLMPromptTemplateTableName: !GetAtt LLMTEMPLATESTACK.Outputs.LLMPromptTemplateTableName
 
   BEDROCKKB:
     Type: AWS::CloudFormation::Stack
@@ -1596,9 +1598,17 @@ Outputs:
     Description: The ARN of a Lambda function that will process and export a call transcript as a string.
     Value: !GetAtt AISTACK.Outputs.FetchTranscriptArn
 
-  LLMPromptSummaryTemplateParameter:
-    Description: The LLM summary prompt template in SSM Parameter Store - open to customise call summary prompts.
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/parameters/${SSMSTACK.Outputs.LLMPromptSummaryTemplateParameter}"
+  LLMDefaultPromptSummaryTemplate:
+    Description:
+      View the *default* summary prompts. Do not edit. To override default
+      prompts, add or edit attributes in the custom summary prompts item.
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/dynamodbv2/home?region=${AWS::Region}#edit-item?itemMode=2&pk=DefaultSummaryPromptTemplates&route=ROUTE_ITEM_EXPLORER&sk=&table=${LLMTEMPLATESTACK.Outputs.LLMPromptTemplateTableName}"
+
+  LLMCustomPromptSummaryTemplate:
+    Description:
+      Edit the *custom* summary prompts. Attribute values here override
+      the default summary prompts, and are preserved during stack updates.
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/dynamodbv2/home?region=${AWS::Region}#edit-item?itemMode=2&pk=CustomSummaryPromptTemplates&route=ROUTE_ITEM_EXPLORER&sk=&table=${LLMTEMPLATESTACK.Outputs.LLMPromptTemplateTableName}"
 
   ConnectStartLCAFunctionName:
     Description: Amazon Connect Lambda function for contact flow integration when Amazon Connect KVS is selected as an audio source.
