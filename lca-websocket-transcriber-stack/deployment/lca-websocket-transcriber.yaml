@@ -16,9 +16,31 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: LCA Websocket
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Websocket Transcriber Server
 
 Parameters:
+  
+  # networking parameters
+  VPC:
+    Description: VPC ID
+    Type: String
+
+  PublicSubnet1:
+    Description: Public subnet 1 for Fargate
+    Type: String
+
+  PublicSubnet2:
+    Description: Public subnet 2 for Fargate
+    Type: String
+
+  PrivateSubnet1:
+    Description: Private subnet 1 for Fargate
+    Type: String
+
+  PrivateSubnet2:
+    Description: Private subnet 2 for Fargate
+    Type: String
+
   UserPoolId: 
     Type: String
     Description: >
@@ -191,6 +213,10 @@ Parameters:
   LCASettingsParameterName:
     Type: String
     Description: LCA settings SSM Parameter store 
+
+  UpdateLCASettingsFunctionArn:
+    Type: String
+    Description: Update LCA Settings Lambda function ARN
 
   # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
   # if the values are changed (and the LCASettings param was recreated in the ai-stack)
@@ -625,220 +651,6 @@ Resources:
         Enabled: true
       StreamSpecification:
         StreamViewType: NEW_IMAGE
-        
-  ##########################################################################
-  # VPC
-  ##########################################################################
-  TranscribingVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      InstanceTenancy: default
-      Tags:
-        - Key: Name
-          Value: LCAWebsocket/VPC
-
-  TranscribingVPCIGW:
-    Type: AWS::EC2::InternetGateway
-
-  TranscribingVPCVPCGW:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-      InternetGatewayId:
-        Ref: TranscribingVPCIGW
-
-  TranscribingVPCPublicSubnet1Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.0.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: true
-    DependsOn:
-      - TranscribingVPCVPCGW
-    
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W33
-            reason: Public IP on launch is needed by the solution
-
-  TranscribingVPCPublicSubnet1RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-    
-  TranscribingVPCPublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet1RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet1Subnet
-
-  TranscribingVPCPublicSubnet1DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet1RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: TranscribingVPCIGW
-    DependsOn:
-      - TranscribingVPCVPCGW
-
-  TranscribingVPCPublicSubnet:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  TranscribingVPCPublicSubnet1NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId:
-        Fn::GetAtt:
-          - TranscribingVPCPublicSubnet
-          - AllocationId
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet1Subnet
-
-  TranscribingVPCPublicSubnet2Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.64.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: true
-    DependsOn:
-      - TranscribingVPCVPCGW
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W33
-            reason: Public IP on launch is needed by the solution
-
-  TranscribingVPCPublicSubnet2RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-
-  TranscribingVPCPublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet2RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet2Subnet
-
-  TranscribingVPCPublicSubnet2DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet2RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: TranscribingVPCIGW
-    DependsOn:
-      - TranscribingVPCVPCGW
-
-  TranscribingVPCPublicSubnet2:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  TranscribingVPCPublicSubnet2NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId:
-        Fn::GetAtt:
-          - TranscribingVPCPublicSubnet2
-          - AllocationId
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet2Subnet
-
-  TranscribingVPCPrivateSubnet1Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.128.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: false
-
-  TranscribingVPCPrivateSubnet1RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-
-  TranscribingVPCPrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet1RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPrivateSubnet1Subnet
-
-  TranscribingVPCPrivateSubnet1DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet1RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: TranscribingVPCPublicSubnet1NATGateway
-
-  TranscribingVPCPrivateSubnet2Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.192.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: false
-
-  TranscribingVPCPrivateSubnet2RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-
-  TranscribingVPCPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet2RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPrivateSubnet2Subnet
-
-  TranscribingVPCPrivateSubnet2DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet2RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: TranscribingVPCPublicSubnet2NATGateway
 
 
   ##########################################################################
@@ -863,8 +675,8 @@ Resources:
           - TranscribingWebsocketLoadBalancerSecurityGroup
           - GroupId
       Subnets:
-        - !Ref TranscribingVPCPublicSubnet1Subnet
-        - !Ref TranscribingVPCPublicSubnet2Subnet
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       Type: application
 
   TranscribingWebsocketLoadBalancerSecurityGroup:
@@ -877,7 +689,7 @@ Resources:
           FromPort: 80
           IpProtocol: tcp
           ToPort: 80      
-      VpcId: !Ref TranscribingVPC
+      VpcId: !Ref VPC
  
   TranscribingWebsocketLoadBalancerSecurityGroupEgress:
     Type: AWS::EC2::SecurityGroupEgress
@@ -928,7 +740,7 @@ Resources:
           Value: '180'
       TargetType: ip
       UnhealthyThresholdCount: 2
-      VpcId: !Ref TranscribingVPC
+      VpcId: !Ref VPC
  
   TranscribingWebsocketLoadBalancerListenerRule1:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -1371,8 +1183,8 @@ Resources:
                 - TranscriberWebsocketFargateServiceSecurityGroup
                 - GroupId
           Subnets:
-            - Ref: TranscribingVPCPrivateSubnet1Subnet
-            - Ref: TranscribingVPCPrivateSubnet2Subnet
+            - Ref: PrivateSubnet1
+            - Ref: PrivateSubnet2
       TaskDefinition:
         Ref: TranscriberWebsocketTaskDef
     DependsOn:
@@ -1388,7 +1200,7 @@ Resources:
         - CidrIp: 0.0.0.0/0
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
-      VpcId: !Ref TranscribingVPC
+      VpcId: !Ref VPC
 
   TranscriberWebsocketFargateServiceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -1482,81 +1294,17 @@ Resources:
           - id: W70
             reason: This is using Cloudfront default TLS, can be changed by customer if needed.
 
-  WSEndpointLambdaRole: 
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: "sts:AssumeRole"
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-        Version: 2012-10-17
-      ManagedPolicyArns: 
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-      Policies:
-        - PolicyName: updateSSMStore
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:PutParameter
-                Resource:
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameterName}"
-
-  UpdateWSEndpointSettings:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Role: !GetAtt WSEndpointLambdaRole.Arn
-      Handler: index.handler
-      Runtime: python3.11
-      Timeout: 900
-      Code:
-        ZipFile: |
-          import boto3
-          import cfnresponse
-          import json
-
-          ssm = boto3.client('ssm')
-          def updateSSMParameter(props):
-            parameterName = props['LCASettings']
-            response = ssm.get_parameter(Name=parameterName)
-            settings = response['Parameter']['Value']
-            settingsJSON = json.loads(settings)
-            settingsJSON['WSEndpoint'] = props['WSEndpoint']
-            updatedsettings = json.dumps(settingsJSON)
-            ssm.put_parameter(Name=parameterName, Value=updatedsettings, Overwrite=True)
-                        
-          def handler(event, context):        
-            print(json.dumps(event))
-            status = cfnresponse.SUCCESS
-            responseData = {}
-            reason = "Success"
-            props = event["ResourceProperties"]
-            if event['RequestType'] != 'Delete':
-              try:
-                updateSSMParameter(props)
-              except Exception as e:
-                print(e)
-                reason = f"Exception thrown: {e}"
-                status = cfnresponse.FAILED              
-            cfnresponse.send(event, context, status, responseData, reason=reason)
-
-  UpdateWSEndpointSettingsExec:
+  UpdateLCASettingsWithWSEndpoint:
     Type: AWS::CloudFormation::CustomResource
     Properties:
-      ServiceToken: !GetAtt UpdateWSEndpointSettings.Arn
-      LCASettings: !Ref LCASettingsParameterName
-      WSEndpoint: !Join
-                      - ''
-                      - - 'wss://'
-                        - !GetAtt WebSocketCloudFrontDistribution.DomainName
-                        - '/api/v1/ws'
-      # Also force param update to replace WSEndpoint if any of these params (which reset the Param) are changed
-      CategoryAlertRegex: !Ref CategoryAlertRegEx
-      EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
+      ServiceToken: !Ref UpdateLCASettingsFunctionArn
+      LCASettingsName: !Ref LCASettingsParameterName
+      LCASettingsKeyValuePairs:
+        WSEndpoint: !Join
+          - ''
+          - - 'wss://'
+            - !GetAtt WebSocketCloudFrontDistribution.DomainName
+            - '/api/v1/ws'
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 

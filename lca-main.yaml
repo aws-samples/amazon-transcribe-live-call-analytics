@@ -47,12 +47,12 @@ Parameters:
 
   WebSocketAudioInput:
     Type: String
-    Default: Disabled
+    Default: Enabled
     AllowedValues:
       - Enabled
       - Disabled
     Description: >
-      Enable or Disable Websocket interface for streaming audio input from microphone and browser tabs.
+      Enable or Disable Websocket interface for streaming audio input from microphone and browser tabs, or custom client.
 
   CustomVoiceConnectorId:
     Type: String
@@ -556,10 +556,12 @@ Parameters:
     Description: >-
       Number of days to retain call records. Records will be automatically deleted from LCA after this time.
 
-  RecordingsBucketRetentionDays:
+  AudioRecordingExpirationInDays:
     Type: Number
-    Description: "Number of days after which bucket objects will be deleted from the Recordings bucket."
-    Default: 30
+    Description:
+      "Whole number of days after which audio recordings will be deleted
+      from the Recordings bucket."
+    Default: 90
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -642,7 +644,7 @@ Metadata:
           default: Retention
         Parameters:
           - DynamoDbExpirationInDays
-          - RecordingsBucketRetentionDays
+          - AudioRecordingExpirationInDays
       - Label:
           default: User Experience
         Parameters:
@@ -755,7 +757,7 @@ Metadata:
         default: CloudFront Allowed Geographies
       DynamoDbExpirationInDays:
         default: Record Expiration In Days
-      RecordingsBucketRetentionDays:
+      AudioRecordingExpirationInDays:
         default: Recording Expiration In Days
       CategoryAlertRegEx:
         default: Category Alert Regular Expression
@@ -771,6 +773,7 @@ Metadata:
         default: PCA Web App Call Path Prefix
 
 Conditions:
+  ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
   ShouldInstallDemoAsteriskServer:
     !Equals [!Ref CallAudioSource, "Demo Asterisk PBX Server"]
   ShouldInstallChimeVCsiprec:
@@ -1108,6 +1111,174 @@ Resources:
         - "amazon.titan-embed-text-v2:0" # Meeting Assistant
         - "amazon.titan-embed-text-v1" # QNABOTBR embedding model
 
+  ##########################################################################
+  # Resources shared by multiple nested stacks
+  ##########################################################################
+  CallDataStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      RetentionPeriodHours: 24
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+
+  # Initialise LCASettingsParameter as empty (so it never gets replaced)
+  # and use CR UpdateLCASettingsFunction to add/update values
+  LCASettingsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub "${AWS::StackName}-LCASettings"
+      Value: "{}"
+
+  UpdateLCASettingsFunctionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: updateSSMStore
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${LCASettingsParameter}"
+
+  UpdateLCASettingsFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Role: !GetAtt UpdateLCASettingsFunctionRole.Arn
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: 900
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          ssm = boto3.client('ssm')
+          def updateSSMParameter(props):
+            parameterName = props['LCASettingsName']
+            parameterValues = props['LCASettingsKeyValuePairs']
+            response = ssm.get_parameter(Name=parameterName)
+            settingsJSON = response['Parameter']['Value']
+            settings = json.loads(settingsJSON)
+            print(f"Existing settings: {settings}")
+            for key, value in parameterValues.items():
+              settings[key] = value
+            print(f"Updated settings: {settings}")
+            newSettingsJSON = json.dumps(settings)
+            ssm.put_parameter(Name=parameterName, Value=newSettingsJSON, Overwrite=True)
+                        
+          def handler(event, context):        
+            print(json.dumps(event))
+            status = cfnresponse.SUCCESS
+            responseData = {}
+            reason = "Success"
+            props = event["ResourceProperties"]
+            if event['RequestType'] != 'Delete':
+              try:
+                updateSSMParameter(props)
+              except Exception as e:
+                print(e)
+                reason = f"Exception thrown: {e}"
+                status = cfnresponse.FAILED              
+            cfnresponse.send(event, context, status, responseData, reason=reason)
+      LoggingConfig:
+        LogGroup:
+          Ref: UpdateLCASettingsFunctionLogGroup
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: Customer can use VPC if desired
+          - id: W92
+            reason: Customer can choose reserved concurrency based on their requirement.
+          - id: W58
+            reason: Managed policy already provides access to CloudWatch logs.
+
+  UpdateLCASettingsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /${AWS::StackName}/lambda/UpdateLCASettingsFunction
+      RetentionInDays: 14
+
+  UpdateLCASettingsWithInitialValues:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt UpdateLCASettingsFunction.Arn
+      LCASettingsName: !Ref LCASettingsParameter
+      LCASettingsKeyValuePairs:
+        CategoryAlertRegex: !Ref CategoryAlertRegEx
+        EnableVoiceToneAnalysis: !If
+          - ShouldEnableVoiceToneAnalysis
+          - "true"
+          - "false"
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+
+  ## BUCKET TO STORE STEREO RECORDINGS
+  RecordingsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Condition: ShouldCreateRecordingBucket
+    Properties:
+      AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: RuleRetention
+            Status: Enabled
+            Prefix: ""
+            ExpirationInDays: !Ref AudioRecordingExpirationInDays
+
+  RecordingsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateRecordingBucket
+    Properties:
+      Bucket: !Ref RecordingsBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "s3:*"
+            Effect: "Deny"
+            Principal: "*"
+            Resource:
+              - !GetAtt RecordingsBucket.Arn
+              - !Sub "${RecordingsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+
   ToJSONFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1194,13 +1365,15 @@ Resources:
       # yamllint enable rule:line-length
       Parameters:
         LCAStackName: !Ref AWS::StackName
-        RecordingsBucketRetentionDays: !Ref RecordingsBucketRetentionDays
         EnableVoiceToneAnalysis: !If
           - ShouldEnableVoiceToneAnalysis
           - "true"
           - "false"
         CallAudioSource: !Ref CallAudioSource
-        S3BucketName: !Ref S3BucketName
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
         AdminEmail: !Ref AdminEmail
         AllowedSignUpEmailDomain: !Ref AllowedSignUpEmailDomain
         CategoryAlertRegEx: !Ref CategoryAlertRegEx
@@ -1235,6 +1408,9 @@ Resources:
         StartOfCallLambdaHookFunctionArn: !Ref StartOfCallLambdaHookFunctionArn
         PostCallSummaryLambdaHookFunctionArn: !Ref PostCallSummaryLambdaHookFunctionArn
         LLMPromptTemplateTableName: !GetAtt LLMTEMPLATESTACK.Outputs.LLMPromptTemplateTableName
+        CallDataStream: !Ref CallDataStream
+        CallDataStreamArn: !GetAtt CallDataStream.Arn
+        LCASettingsParameterName: !Ref LCASettingsParameter
 
   BEDROCKKB:
     Type: AWS::CloudFormation::Stack
@@ -1363,6 +1539,15 @@ Resources:
         SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
         Version: v0.9.0
 
+  VPCSTACK:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-vpc-stack/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        LCAStackName: !Ref "AWS::StackName"
+
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallChimeVCStack
@@ -1389,9 +1574,12 @@ Resources:
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         AudioFilePrefix: !Ref AudioFilePrefix
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
-        KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
-        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        KinesisDataStreamName: !Ref CallDataStream
+        KinesisDataStreamArn: !GetAtt CallDataStream.Arn
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
         IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
         TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -1409,6 +1597,8 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
         Version: <VERSION_TOKEN>
 
   CONNECTKVSSTACK:
@@ -1421,9 +1611,12 @@ Resources:
       Parameters:
         ConnectInstanceArn: !Ref ConnectInstanceArn
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        KinesisDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
-        KinesisDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
-        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        KinesisDataStreamName: !Ref CallDataStream
+        KinesisDataStreamArn: !GetAtt CallDataStream.Arn
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
         IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
         TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -1437,7 +1630,7 @@ Resources:
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
 
-  GENESYSAUDIOHOOKSTACK:
+  GENESYSAUDIOHOOKTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallGenesysAudiohookStack
     Properties:
@@ -1445,11 +1638,14 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-genesys-audiohook-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
-        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CallDataStreamName: !Ref CallDataStream
+        CallDataStreamArn: !GetAtt CallDataStream.Arn
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -1465,21 +1661,29 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
-  WEBSOCKETSTACK:
+  WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
     Properties:
       # yamllint disable rule:line-length
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-stack/<VERSION_TOKEN>/template.yaml
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-transcriber-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
         UserPoolId: !GetAtt AISTACK.Outputs.UserPoolId
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
-        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CallDataStreamName: !Ref CallDataStream
+        CallDataStreamArn: !GetAtt CallDataStream.Arn
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -1495,7 +1699,8 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
-        LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
+        LCASettingsParameterName: !Ref LCASettingsParameter
+        UpdateLCASettingsFunctionArn: !GetAtt UpdateLCASettingsFunction.Arn
         # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
         # if the values are changed (and the LCASettings param was recreated in the ai-stack)
         CategoryAlertRegEx: !Ref CategoryAlertRegEx
@@ -1503,6 +1708,11 @@ Resources:
           - ShouldEnableVoiceToneAnalysis
           - "true"
           - "false"
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
@@ -1514,8 +1724,8 @@ Resources:
       Parameters:
         ConnectInstanceArn: !Ref ConnectInstanceArn
         CallEventProcessorFunctionRoleName: !GetAtt AISTACK.Outputs.CallEventProcessorFunctionRoleName
-        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
-        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
+        CallDataStreamName: !Ref CallDataStream
+        CallDataStreamArn: !GetAtt CallDataStream.Arn
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
 
@@ -1531,13 +1741,15 @@ Outputs:
       - !GetAtt CHIMEVCSTACK.Outputs.AsteriskInstanceId
       - "Demo Asterisk PBX not enabled"
 
+  CallDataStreamName:
+    Description: >-
+      The Name of Kinesis Data Stream to write the call data to.
+    Value: !Ref CallDataStream
+
   CallDataStreamArn:
     Description: >-
-      The ARN of Kinesis Data Stream for sending Call and Transcription events.
-    Value: !GetAtt AISTACK.Outputs.CallDataStreamArn
-    Export:
-      Name:
-        "Fn::Sub": "${AWS::StackName}-CallDataStreamArn"
+      The ARN of Kinesis Data Stream to write the call data to.
+    Value: !GetAtt CallDataStream.Arn
 
   DemoPBXIPAddress:
     Description: Demo Asterisk Server IP Address
@@ -1557,26 +1769,26 @@ Outputs:
     Description: Websocket endpoint for Genesys Cloud Audiohook integration
     Value: !If
       - ShouldInstallGenesysAudiohookStack
-      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
+      - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.WebSocketEndpoint
       - "Genesys Cloud Audiohook Web Socket not enabled"
 
   GenesysAudiohookWebSocketAPIKey:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
-      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIKey
+      - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.AudiohookAPIKey
       - "Genesys Cloud Audiohook Web Socket not enabled"
 
   GenesysAudiohookWebSocketAPIClientSecret:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
-      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
+      - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.AudiohookAPIClientSecret
       - "Genesys Cloud Audiohook Web Socket not enabled"
 
   LCAWebsocketEndpoint:
     Description: Websocket endpoint for websocket integration
     Value: !If
       - ShouldInstallWebSocketStack
-      - !GetAtt WEBSOCKETSTACK.Outputs.WebSocketEndpoint
+      - !GetAtt WEBSOCKETTRANSCRIBERSTACK.Outputs.WebSocketEndpoint
       - " Web Socket not enabled"
 
   QnaBotContentDesigner:
@@ -1588,7 +1800,10 @@ Outputs:
 
   RecordingsS3Bucket:
     Description: Bucket contains all the call recordings
-    Value: !GetAtt AISTACK.Outputs.S3BucketName
+    Value: !If
+      - ShouldCreateRecordingBucket
+      - !Ref RecordingsBucket
+      - !Ref S3BucketName
 
   SNSCategoryTopicName:
     Description: The name of the SNS Topic for matched category and alert notifications

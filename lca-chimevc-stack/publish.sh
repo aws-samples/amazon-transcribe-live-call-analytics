@@ -96,7 +96,7 @@ pwd
 region=$(aws s3api get-bucket-location --bucket $BUCKET --query "LocationConstraint" --output text) || region="us-east-1"
 [ -z "$region" -o "$region" == "None" ] && region=us-east-1;
 
-echo "$STACK: Packaging Cfn artifacts"
+echo "$STACK: Packaging Cfn artifacts."
 MAIN_TEMPLATE=template.yaml
 aws cloudformation package --template-file $MAIN_TEMPLATE --output-template-file $tmpdir/$MAIN_TEMPLATE --s3-bucket ${BUCKET} --s3-prefix ${PREFIX} || exit 1
 
@@ -114,7 +114,7 @@ if $PUBLIC; then
     done
 fi
 
-echo "$STACK: Validating Cfn artifacts"
+echo "$STACK: Validating Cfn artifacts."
 template="https://s3.${region}.amazonaws.com/${BUCKET}/${PREFIX}/$MAIN_TEMPLATE"
 aws cloudformation validate-template --template-url $template > /dev/null || exit 1
 

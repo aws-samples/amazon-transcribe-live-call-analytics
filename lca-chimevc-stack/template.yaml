@@ -254,6 +254,15 @@ Parameters:
     Type: String
     Description: Parent LCA Stack name
 
+  # networking parameters
+  VPC:
+    Description: VPC ID
+    Type: String
+
+  PublicSubnet1:
+    Description: Public subnet 1
+    Type: String
+
   Version:
     Type: String
 
@@ -293,7 +302,7 @@ Resources:
         to create the ChimeSDKMediaInsightsPipelineConfiguration.
       ContentUri: ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
-  DeployChimeVCAsteriskDemo:
+  ChimeVCAsteriskDemoStack:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallDemoAsteriskServer
     Properties:
@@ -302,6 +311,8 @@ Resources:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        AsteriskVPC: !Ref VPC
+        AsteriskSubnet1: !Ref PublicSubnet1
         Version: !Ref Version
 
   DeployChimeVCsiprec:
@@ -338,7 +349,7 @@ Resources:
           - ShouldCreateVoiceConnector
           - !If
             - ShouldInstallDemoAsteriskServer
-            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt ChimeVCAsteriskDemoStack.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
           - !Ref CustomVoiceConnectorId
 
@@ -374,7 +385,7 @@ Resources:
           - ShouldCreateVoiceConnector
           - !If
             - ShouldInstallDemoAsteriskServer
-            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt ChimeVCAsteriskDemoStack.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
           - ""
 
@@ -433,17 +444,17 @@ Outputs:
   DemoPBXIPAddress:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.IPAddress
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.IPAddress
       - "Demo PBX not enabled"
 
   DemoPBXPhoneNumber:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.PhoneNumber
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.PhoneNumber
       - "Demo PBX not enabled"
 
   AsteriskInstanceId:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.InstanceID
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.InstanceID
       - "Demo PBX not enabled"
