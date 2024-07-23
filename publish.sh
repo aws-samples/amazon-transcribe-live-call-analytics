@@ -92,6 +92,32 @@ function calculate_hash() {
   echo $HASH
 }
 
+haschanged() {
+    local dir=$1
+    local checksum_file="${dir}/.checksum"
+
+    # Compute current checksum of the directory's modification times excluding specified directories
+    current_checksum=$(find "$dir" -type d \( -name "python" -o -name "node_modules" -o -name "build" \) -prune -o -type f ! -name ".checksum" -exec stat --format='%Y' {} \; | sha256sum | awk '{ print $1 }')
+
+    # Check if the checksum file exists and read the previous checksum
+    if [ -f "$checksum_file" ]; then
+        previous_checksum=$(cat "$checksum_file")
+    else
+        previous_checksum=""
+    fi
+
+    echo "Current checksum: $current_checksum"
+    echo "Previous checksum: $previous_checksum"
+
+    # Save the current checksum if it has changed
+    if [ "$current_checksum" != "$previous_checksum" ]; then
+        echo "$current_checksum" > "$checksum_file"
+        return 0  # True, the directory has changed
+    else
+        return 1  # False, the directory has not changed
+    fi
+}
+
 # Remove trailing slash from prefix if needed, and append VERSION
 VERSION=$(cat ./VERSION)
 [[ "${PREFIX}" == */ ]] && PREFIX="${PREFIX%?}"
@@ -117,102 +143,134 @@ mkdir -p $tmpdir
 pwd
 
 dir=lca-chimevc-stack
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  ./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-connect-kvs-stack
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  ./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-genesys-audiohook-stack
-echo "PACKAGING $dir"
-pushd $dir/deployment
-rm -rf ../out
-chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir/deployment
+  rm -rf ../out
+  chmod +x ./build-s3-dist.sh
+  ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
+
 
 dir=lca-websocket-transcriber-stack
-echo "PACKAGING $dir"
-pushd $dir/deployment
-rm -rf ../out
-chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir/deployment
+  rm -rf ../out
+  chmod +x ./build-s3-dist.sh
+  ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-connect-integration-stack
-echo "PACKAGING $dir"
-pushd $dir
-aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-ai-stack
-echo "PACKAGING $dir"
-pushd $dir/deployment
-rm -fr ../out
-chmod +x ./build-s3-dist.sh
-./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir/deployment
+  rm -fr ../out
+  chmod +x ./build-s3-dist.sh
+  ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-llm-template-setup-stack
-echo "PACKAGING $dir/deployment"
-pushd $dir/deployment
-
-# by hashing the contents of the source folder, we can force the custom resource lambda to re-run
-# when the code or prompt template contents change.
-echo "Computing hash of src folder contents"
-HASH=$(calculate_hash "../source")
-template=llm-template-setup.yaml
-echo "Replace hash in template"
-# Detection of differences. sed varies betwen GNU sed and BSD sed
-if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
-  sed -i 's/source_hash: .*/source_hash: '"$HASH"'/' ${template}
-else # BSD like sed
-  sed -i '' 's/source_hash: .*/source_hash: '"$HASH"'/' ${template}
+if haschanged $dir; then
+  echo "PACKAGING $dir/deployment"
+  pushd $dir/deployment
+  # by hashing the contents of the source folder, we can force the custom resource lambda to re-run
+  # when the code or prompt template contents change.
+  echo "Computing hash of src folder contents"
+  HASH=$(calculate_hash "../source")
+  template=llm-template-setup.yaml
+  echo "Replace hash in template"
+  # Detection of differences. sed varies betwen GNU sed and BSD sed
+  if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
+    sed -i 's/source_hash: .*/source_hash: '"$HASH"'/' ${template}
+  else # BSD like sed
+    sed -i '' 's/source_hash: .*/source_hash: '"$HASH"'/' ${template}
+  fi
+  s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-llm-template-setup-stack/llm-template-setup.yaml"
+  aws cloudformation package \
+  --template-file ${template} \
+  --output-template-file ${tmpdir}/${template} \
+  --s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/lma-llm-template-setup-stack \
+  --region ${REGION} || exit 1
+  echo "Uploading template file to: ${s3_template}"
+  aws s3 cp ${tmpdir}/${template} ${s3_template}
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
 fi
-s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/lca-llm-template-setup-stack/llm-template-setup.yaml"
-aws cloudformation package \
---template-file ${template} \
---output-template-file ${tmpdir}/${template} \
---s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/lma-llm-template-setup-stack \
---region ${REGION} || exit 1
-echo "Uploading template file to: ${s3_template}"
-aws s3 cp ${tmpdir}/${template} ${s3_template}
-popd
-
 
 echo "Initialize and update git submodules"
 git submodule init
 git submodule update
 
 dir=submodule-aws-qnabot-plugins
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/aws-qnabot-plugins || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  ./publish.sh $BUCKET $PREFIX_AND_VERSION/aws-qnabot-plugins || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=submodule-aws-qnabot
-echo "PACKAGING $dir"
-git submodule init
-git submodule update
-echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
-# LCA customizations
-cp -v ./patches/qnabot/Makefile $dir/Makefile
-echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
-# Detection of differences. sed varies betwen GNU sed and BSD sed
-if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
-  sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
-else # BSD like sed
-  sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
-fi
-pushd $dir
-rm -fr ./ml_model/llm-qa-summarize # remove deleted folder if left over from previous build.
-mkdir -p build/templates/dev
-cat > config.json <<_EOF
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  git submodule init
+  git submodule update
+  echo "Applying patch files to simplify UX by removing some QnABot options not needed for LCA"
+  # LCA customizations
+  cp -v ./patches/qnabot/Makefile $dir/Makefile
+  echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
+  # Detection of differences. sed varies betwen GNU sed and BSD sed
+  if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
+    sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+  else # BSD like sed
+    sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+  fi
+  pushd $dir
+  rm -fr ./ml_model/llm-qa-summarize # remove deleted folder if left over from previous build.
+  mkdir -p build/templates/dev
+  cat > config.json <<_EOF
 {
   "profile": "${AWS_PROFILE:-default}",
   "region": "${REGION}",
@@ -221,39 +279,55 @@ cat > config.json <<_EOF
   "noStackOutput": true
 }
 _EOF
-npm install
-npm run build || exit 1
-aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
-popd
+  npm install
+  npm run build || exit 1
+  aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
+
 
 dir=lca-vpc-stack
-echo "PACKAGING $dir"
-pushd $dir
-template=template.yaml
-s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
-https_template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
-aws cloudformation package \
---template-file ${template} \
---output-template-file ${tmpdir}/${template} \
---s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/${dir} \
---region ${REGION} || exit 1
-echo "Uploading template file to: ${s3_template}"
-aws s3 cp ${tmpdir}/${template} ${s3_template}
-echo "Validating template"
-aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  template=template.yaml
+  s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
+  https_template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
+  aws cloudformation package \
+  --template-file ${template} \
+  --output-template-file ${tmpdir}/${template} \
+  --s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/${dir} \
+  --region ${REGION} || exit 1
+  echo "Uploading template file to: ${s3_template}"
+  aws s3 cp ${tmpdir}/${template} ${s3_template}
+  echo "Validating template"
+  aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-agentassist-setup-stack
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  ./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-bedrockkb-stack
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
-popd
+if haschanged $dir; then
+  echo "PACKAGING $dir"
+  pushd $dir
+  ./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
+  popd
+else
+  echo "SKIPPING $dir (unchanged)"
+fi
 
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
@@ -278,11 +352,17 @@ aws cloudformation validate-template --template-url $template > /dev/null || exi
 if $PUBLIC; then
   echo "Setting public read ACLs on published artifacts"
   files=$(aws s3api list-objects --bucket ${BUCKET} --prefix ${PREFIX_AND_VERSION} --query "(Contents)[].[Key]" --output text)
+  c=$(echo $files | wc -w)
+  counter=0
   for file in $files
     do
     aws s3api put-object-acl --acl public-read --bucket ${BUCKET} --key $file
+    counter=$((counter + 1))
+    echo -ne "Progress: $counter/$c files processed\r"
     done
   aws s3api put-object-acl --acl public-read --bucket ${BUCKET} --key ${PREFIX}/${MAIN_TEMPLATE}
+  echo ""
+  echo "Done."
 fi
 
 echo "OUTPUTS"
