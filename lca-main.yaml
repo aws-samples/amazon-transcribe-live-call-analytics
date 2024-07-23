@@ -1700,7 +1700,7 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         LCASettingsParameterName: !Ref LCASettingsParameter
-        UpdateLMASettingsFunctionArn: !GetAtt UpdateLCASettingsFunction.Arn
+        UpdateLCASettingsFunctionArn: !GetAtt UpdateLCASettingsFunction.Arn
         # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
         # if the values are changed (and the LCASettings param was recreated in the ai-stack)
         CategoryAlertRegEx: !Ref CategoryAlertRegEx
