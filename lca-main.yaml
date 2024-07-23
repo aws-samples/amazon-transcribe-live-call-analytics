@@ -1369,6 +1369,8 @@ Resources:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-vpc-stack/template.yaml
       # yamllint enable rule:line-length
+      Parameters:
+        LCAStackName: !Ref "AWS::StackName"
 
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack

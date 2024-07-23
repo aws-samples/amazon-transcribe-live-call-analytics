@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Amazon Transcribe Live Meeting Assist - Websocket Server
 
 Parameters:
+  LCAStackName:
+    Type: String
+    Default: "LCA"
+    Description: The name of the Live Connect Assistant stack
+
   CloudWatchLogsExpirationInDays:
     Type: Number
     Default: 14
@@ -38,7 +43,7 @@ Resources:
       InstanceTenancy: default
       Tags:
         - Key: Name
-          Value: LCA/VPC
+          Value: !Sub "${LCAStackName}/VPC"
 
   VPCIGW:
     Type: AWS::EC2::InternetGateway
@@ -50,6 +55,9 @@ Resources:
         Ref: VPC
       InternetGatewayId:
         Ref: VPCIGW
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/VPCGateway"
 
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
@@ -119,7 +127,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: LCA/PublicSubnet1
+          Value: !Sub "${LCAStackName}/PublicSubnet1"
     DependsOn:
       - VPCGateway
     Metadata:
@@ -135,7 +143,7 @@ Resources:
         Ref: VPC
       Tags:
         - Key: Name
-          Value: LCA/PublicSubnet1RouteTable
+          Value: !Sub "${LCAStackName}/PublicSubnet1RouteTable"
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -160,6 +168,9 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/NATGatewayEIP1"
 
   PublicSubnet1NATGateway:
     Type: AWS::EC2::NatGateway
@@ -170,6 +181,9 @@ Resources:
           - AllocationId
       SubnetId:
         Ref: PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/PublicSubnet1NATGateway"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -184,7 +198,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: LCA/PublicSubnet2
+          Value: !Sub "${LCAStackName}/PublicSubnet2"
     DependsOn:
       - VPCGateway
     Metadata:
@@ -200,7 +214,7 @@ Resources:
         Ref: VPC
       Tags:
         - Key: Name
-          Value: LCA/PublicSubnet1RouteTable
+          Value: !Sub "${LCAStackName}/PublicSubnet2RouteTable"
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -225,6 +239,9 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/NATGatewayEIP2"
 
   PublicSubnet2NATGateway:
     Type: AWS::EC2::NatGateway
@@ -235,6 +252,9 @@ Resources:
           - AllocationId
       SubnetId:
         Ref: PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/PublicSubnet2NATGateway"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -249,13 +269,16 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: LCA/PrivateSubnet1
+          Value: !Sub "${LCAStackName}/PrivateSubnet1"
 
   VPCPrivateSubnet1RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId:
         Ref: VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/PrivateSubnet1RouteTable"
 
   VPCPrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -287,13 +310,16 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: LCA/PrivateSubnet2
+          Value: !Sub "${LCAStackName}/PrivateSubnet2"
 
   VPCPrivateSubnet2RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId:
         Ref: VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${LCAStackName}/PrivateSubnet2RouteTable"
 
   VPCPrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
