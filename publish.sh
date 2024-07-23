@@ -95,27 +95,28 @@ function calculate_hash() {
 haschanged() {
     local dir=$1
     local checksum_file="${dir}/.checksum"
-
     # Compute current checksum of the directory's modification times excluding specified directories
     current_checksum=$(find "$dir" -type d \( -name "python" -o -name "node_modules" -o -name "build" \) -prune -o -type f ! -name ".checksum" -exec stat --format='%Y' {} \; | sha256sum | awk '{ print $1 }')
-
     # Check if the checksum file exists and read the previous checksum
     if [ -f "$checksum_file" ]; then
         previous_checksum=$(cat "$checksum_file")
     else
         previous_checksum=""
     fi
-
-    echo "Current checksum: $current_checksum"
-    echo "Previous checksum: $previous_checksum"
-
-    # Save the current checksum if it has changed
     if [ "$current_checksum" != "$previous_checksum" ]; then
-        echo "$current_checksum" > "$checksum_file"
         return 0  # True, the directory has changed
     else
         return 1  # False, the directory has not changed
     fi
+}
+
+update_checksum() {
+    local dir=$1
+    local checksum_file="${dir}/.checksum"
+    # Compute current checksum of the directory's modification times for files managed by Git
+    current_checksum=$(find "$dir" -type d \( -name "python" -o -name "node_modules" -o -name "build" \) -prune -o -type f ! -name ".checksum" -exec stat --format='%Y' {} \; | sha256sum | awk '{ print $1 }')
+    # Save the current checksum
+    echo "$current_checksum" > "$checksum_file"
 }
 
 # Remove trailing slash from prefix if needed, and append VERSION
@@ -148,6 +149,7 @@ if haschanged $dir; then
   pushd $dir
   ./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -158,6 +160,7 @@ if haschanged $dir; then
   pushd $dir
   ./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -170,6 +173,7 @@ if haschanged $dir; then
   chmod +x ./build-s3-dist.sh
   ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -183,6 +187,7 @@ if haschanged $dir; then
   chmod +x ./build-s3-dist.sh
   ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -193,6 +198,7 @@ if haschanged $dir; then
   pushd $dir
   aws s3 cp ./template.yaml s3://${BUCKET}/${PREFIX_AND_VERSION}/$dir/template.yaml
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -205,6 +211,7 @@ if haschanged $dir; then
   chmod +x ./build-s3-dist.sh
   ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -234,6 +241,7 @@ if haschanged $dir; then
   echo "Uploading template file to: ${s3_template}"
   aws s3 cp ${tmpdir}/${template} ${s3_template}
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -248,6 +256,7 @@ if haschanged $dir; then
   pushd $dir
   ./publish.sh $BUCKET $PREFIX_AND_VERSION/aws-qnabot-plugins || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -283,6 +292,7 @@ _EOF
   npm run build || exit 1
   aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -305,6 +315,7 @@ if haschanged $dir; then
   echo "Validating template"
   aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -315,6 +326,7 @@ if haschanged $dir; then
   pushd $dir
   ./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
@@ -325,6 +337,7 @@ if haschanged $dir; then
   pushd $dir
   ./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
   popd
+  update_checksum $dir
 else
   echo "SKIPPING $dir (unchanged)"
 fi
