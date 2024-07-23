@@ -349,7 +349,7 @@ Resources:
           - ShouldCreateVoiceConnector
           - !If
             - ShouldInstallDemoAsteriskServer
-            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt ChimeVCAsteriskDemoStack.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
           - !Ref CustomVoiceConnectorId
 
@@ -385,7 +385,7 @@ Resources:
           - ShouldCreateVoiceConnector
           - !If
             - ShouldInstallDemoAsteriskServer
-            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt ChimeVCAsteriskDemoStack.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
           - ""
 
@@ -444,17 +444,17 @@ Outputs:
   DemoPBXIPAddress:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.IPAddress
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.IPAddress
       - "Demo PBX not enabled"
 
   DemoPBXPhoneNumber:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.PhoneNumber
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.PhoneNumber
       - "Demo PBX not enabled"
 
   AsteriskInstanceId:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.InstanceID
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.InstanceID
       - "Demo PBX not enabled"

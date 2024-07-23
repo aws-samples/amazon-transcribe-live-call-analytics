@@ -1578,26 +1578,26 @@ Outputs:
     Description: Websocket endpoint for Genesys Cloud Audiohook integration
     Value: !If
       - ShouldInstallGenesysAudiohookStack
-      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.WebSocketEndpoint
+      - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.WebSocketEndpoint
       - "Genesys Cloud Audiohook Web Socket not enabled"
 
   GenesysAudiohookWebSocketAPIKey:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
-      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIKey
+      - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.AudiohookAPIKey
       - "Genesys Cloud Audiohook Web Socket not enabled"
 
   GenesysAudiohookWebSocketAPIClientSecret:
     Value: !If
       - ShouldInstallGenesysAudiohookStack
-      - !GetAtt GENESYSAUDIOHOOKSTACK.Outputs.AudiohookAPIClientSecret
+      - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.AudiohookAPIClientSecret
       - "Genesys Cloud Audiohook Web Socket not enabled"
 
   LCAWebsocketEndpoint:
     Description: Websocket endpoint for websocket integration
     Value: !If
       - ShouldInstallWebSocketStack
-      - !GetAtt WEBSOCKETSTACK.Outputs.WebSocketEndpoint
+      - !GetAtt WEBSOCKETTRANSCRIBERSTACK.Outputs.WebSocketEndpoint
       - " Web Socket not enabled"
 
   QnaBotContentDesigner:
