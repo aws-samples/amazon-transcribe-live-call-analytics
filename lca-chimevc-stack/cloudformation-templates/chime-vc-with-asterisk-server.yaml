@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Voice Connector with Asterisk demo server
@@ -25,7 +25,7 @@ Parameters:
     AllowedValues: [c6g.medium, c6g.large, c6g.xlarge, c6g.2xlarge]
   LatestImageId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: '/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id'
+    Default: "/aws/service/canonical/ubuntu/server/jammy/stable/current/arm64/hvm/ebs-gp2/ami-id"
   SoftPhoneCIDR:
     Description: CIDR block for soft phone access (optional)
     Type: String
@@ -33,7 +33,7 @@ Parameters:
     ConstraintDescription: Must be a valid public CIDR block in the form x.x.x.x/y
   CustomVoiceConnectorId:
     Type: String
-    Default: ''
+    Default: ""
     Description: Existing Amazon Chime SDK Voice Connector Id.
   DemoAsteriskAgentAudioURL:
     Type: String
@@ -48,119 +48,20 @@ Parameters:
     AllowedValues:
       - true
       - false
+
+  # networking parameters
+  AsteriskVPC:
+    Description: VPC ID
+    Type: String
+
+  AsteriskSubnet1:
+    Description: Public subnet 1
+    Type: String
+
   Version:
     Type: String
 
 Resources:
-  AsteriskVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      InstanceTenancy: default
-      Tags:
-        - Key: Name
-          Value: LCAAsterisk/VPC
-  AsteriskSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.0.0/24
-      VpcId:
-        Ref: AsteriskVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs: ''
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: aws-cdk:subnet-name
-          Value: asterisk
-        - Key: aws-cdk:subnet-type
-          Value: Public
-        - Key: Name
-          Value: LCAAsterisk/VPC/asteriskSubnet1
-  AsteriskSubnet1RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: AsteriskVPC
-      Tags:
-        - Key: Name
-          Value: LCAAsterisk/VPC/asteriskSubnet1
-  AsteriskSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: AsteriskSubnet1RouteTable
-      SubnetId:
-        Ref: AsteriskSubnet1
-  AsteriskSubnet1DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: AsteriskSubnet1RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: VPCInternetGateway
-    DependsOn:
-      - VPCGatewayAttachment
-  AsteriskSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.1.0/24
-      VpcId:
-        Ref: AsteriskVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs: ''
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: aws-cdk:subnet-name
-          Value: asterisk
-        - Key: aws-cdk:subnet-type
-          Value: Public
-        - Key: Name
-          Value: LCAAsterisk/VPC/asteriskSubnet2
-  AsteriskSubnet2RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: AsteriskVPC
-      Tags:
-        - Key: Name
-          Value: LCAAsterisk/VPC/asteriskSubnet2
-  AsteriskSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: AsteriskSubnet2RouteTable
-      SubnetId:
-        Ref: AsteriskSubnet2
-  AsteriskSubnet2DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: AsteriskSubnet2RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: VPCInternetGateway
-    DependsOn:
-      - VPCGatewayAttachment
-  VPCInternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: LCAAsterisk/VPC
-  VPCGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId:
-        Ref: AsteriskVPC
-      InternetGatewayId:
-        Ref: VPCInternetGateway
   AsteriskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -168,7 +69,7 @@ Resources:
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           Description: Allow all outbound traffic by default
-          IpProtocol: '-1'
+          IpProtocol: "-1"
       SecurityGroupIngress:
         - CidrIp: 3.80.16.0/23
           Description: Allow Amazon Chime SDK Voice Connector Signaling Access
@@ -221,9 +122,9 @@ Resources:
           IpProtocol: udp
           ToPort: 65535
         - CidrIp:
-            !If [SoftPhoneCIDRExists, !Ref SoftPhoneCIDR, !Ref 'AWS::NoValue']
+            !If [SoftPhoneCIDRExists, !Ref SoftPhoneCIDR, !Ref "AWS::NoValue"]
           Description: Soft Phone CIDR
-          IpProtocol: '-1'
+          IpProtocol: "-1"
       VpcId:
         Ref: AsteriskVPC
   InstanceRole:
@@ -236,14 +137,14 @@ Resources:
             Principal:
               Service:
                 Fn::Join:
-                  - ''
+                  - ""
                   - - ec2.
                     - Ref: AWS::URLSuffix
-        Version: '2012-10-17'
+        Version: "2012-10-17"
       ManagedPolicyArns:
         - Fn::Join:
-            - ''
-            - - 'arn:'
+            - ""
+            - - "arn:"
               - Ref: AWS::Partition
               - :iam::aws:policy/AmazonSSMManagedInstanceCore
   InstanceDefaultPolicy:
@@ -259,17 +160,17 @@ Resources:
             Effect: Allow
             Resource:
               Fn::Join:
-                - ''
-                - - 'arn:'
+                - ""
+                - - "arn:"
                   - Ref: AWS::Partition
-                  - ':ssm:'
+                  - ":ssm:"
                   - Ref: AWS::Region
-                  - ':'
+                  - ":"
                   - Ref: AWS::AccountId
                   - :parameter/
                   - Ref: AWS::StackName
-                  - '*'
-        Version: '2012-10-17'
+                  - "*"
+        Version: "2012-10-17"
       PolicyName: InstanceDefaultPolicy
       Roles:
         - Ref: InstanceRole
@@ -302,11 +203,11 @@ Resources:
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: '2012-10-17'
+        Version: "2012-10-17"
       ManagedPolicyArns:
         - Fn::Join:
-            - ''
-            - - 'arn:'
+            - ""
+            - - "arn:"
               - Ref: AWS::Partition
               - :iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
@@ -338,8 +239,8 @@ Resources:
                   - ssm:PutParameter
                   - ssm:DeleteParameter
                 Effect: Allow
-                Resource: '*'
-            Version: '2012-10-17'
+                Resource: "*"
+            Version: "2012-10-17"
           PolicyName: chimePolicy
 
   createVCLambda:
@@ -629,7 +530,7 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT10M
-        Count: '1'
+        Count: "1"
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref AsteriskInstanceTemplate
@@ -637,7 +538,7 @@ Resources:
       AvailabilityZone:
         Fn::Select:
           - 0
-          - Fn::GetAZs: ''
+          - Fn::GetAZs: ""
       IamInstanceProfile:
         Ref: InstanceProfile
       SecurityGroupIds:
@@ -648,7 +549,7 @@ Resources:
         Ref: AsteriskSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'AsteriskInstance-${AWS::StackName}'
+          Value: !Sub "AsteriskInstance-${AWS::StackName}"
       UserData:
         Fn::Base64: !Sub |
           Content-Type: multipart/mixed; boundary="//"
@@ -846,7 +747,7 @@ Resources:
                 [main]
                 stack=${AWS::StackId}
                 region=${AWS::Region}
-              mode: '000400'
+              mode: "000400"
               owner: root
               group: root
             /etc/cfn/hooks.d/cfn-auto-reloader.conf:
@@ -855,7 +756,7 @@ Resources:
                 triggers=post.update
                 path=Resources.AsteriskInstance.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource AsteriskInstance --region ${AWS::Region} --configsets InstallAndRun
-              mode: '000400'
+              mode: "000400"
               owner: root
               group: root
             /lib/systemd/system/cfn-hup.service:
@@ -900,10 +801,10 @@ Resources:
         Ref: AsteriskInstance
 
 Conditions:
-  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, '']]
+  SoftPhoneCIDRExists: !Not [!Equals [!Ref SoftPhoneCIDR, ""]]
   # AsteriskInstance depends on voiceConnectorResource. Always create voiceConnectorResource but return
   # either created VC Id or custom VC Id.
-  ShouldUseCreatedVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, '']
+  ShouldUseCreatedVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, ""]
 
 Outputs:
   IPAddress:
@@ -918,13 +819,13 @@ Outputs:
     Value: !If
       - ShouldUseCreatedVoiceConnector
       - Fn::GetAtt:
-        - voiceConnectorResource
-        - phoneNumber
-      - ''
+          - voiceConnectorResource
+          - phoneNumber
+      - ""
   VoiceConnector:
     Value: !If
       - ShouldUseCreatedVoiceConnector
       - Fn::GetAtt:
-        - voiceConnectorResource
-        - voiceConnectorId
+          - voiceConnectorResource
+          - voiceConnectorId
       - !Ref CustomVoiceConnectorId

@@ -47,12 +47,12 @@ Parameters:
 
   WebSocketAudioInput:
     Type: String
-    Default: Disabled
+    Default: Enabled
     AllowedValues:
       - Enabled
       - Disabled
     Description: >
-      Enable or Disable Websocket interface for streaming audio input from microphone and browser tabs.
+      Enable or Disable Websocket interface for streaming audio input from microphone and browser tabs, or custom client.
 
   CustomVoiceConnectorId:
     Type: String
@@ -1363,6 +1363,13 @@ Resources:
         SentimentPositiveScoreThreshold: !Ref SentimentPositiveScoreThreshold
         Version: v0.9.0
 
+  VPCSTACK:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-vpc-stack/template.yaml
+      # yamllint enable rule:line-length
+
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallChimeVCStack
@@ -1409,6 +1416,8 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
         Version: <VERSION_TOKEN>
 
   CONNECTKVSSTACK:
@@ -1465,13 +1474,18 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
   WEBSOCKETSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
     Properties:
       # yamllint disable rule:line-length
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-stack/<VERSION_TOKEN>/template.yaml
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-transcriber-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
         S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
@@ -1503,6 +1517,11 @@ Resources:
           - ShouldEnableVoiceToneAnalysis
           - "true"
           - "false"
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack

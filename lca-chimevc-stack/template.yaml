@@ -254,6 +254,15 @@ Parameters:
     Type: String
     Description: Parent LCA Stack name
 
+  # networking parameters
+  VPC:
+    Description: VPC ID
+    Type: String
+
+  PublicSubnet1:
+    Description: Public subnet 1
+    Type: String
+
   Version:
     Type: String
 
@@ -302,6 +311,8 @@ Resources:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        AsteriskVPC: !Ref VPC
+        AsteriskSubnet1: !Ref PublicSubnet1
         Version: !Ref Version
 
   DeployChimeVCsiprec:

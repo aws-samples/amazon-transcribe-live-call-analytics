@@ -136,7 +136,7 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
-dir=lca-websocket-stack
+dir=lca-websocket-transcriber-stack
 echo "PACKAGING $dir"
 pushd $dir/deployment
 rm -rf ../out
@@ -224,6 +224,23 @@ _EOF
 npm install
 npm run build || exit 1
 aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
+popd
+
+dir=lca-vpc-stack
+echo "PACKAGING $dir"
+pushd $dir
+template=template.yaml
+s3_template="s3://${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
+https_template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX_AND_VERSION}/${dir}/template.yaml"
+aws cloudformation package \
+--template-file ${template} \
+--output-template-file ${tmpdir}/${template} \
+--s3-bucket $BUCKET --s3-prefix ${PREFIX_AND_VERSION}/${dir} \
+--region ${REGION} || exit 1
+echo "Uploading template file to: ${s3_template}"
+aws s3 cp ${tmpdir}/${template} ${s3_template}
+echo "Validating template"
+aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
 popd
 
 dir=lca-agentassist-setup-stack
