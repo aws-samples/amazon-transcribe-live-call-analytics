@@ -302,7 +302,7 @@ Resources:
         to create the ChimeSDKMediaInsightsPipelineConfiguration.
       ContentUri: ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
-  DeployChimeVCAsteriskDemo:
+  ChimeVCAsteriskDemoStack:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallDemoAsteriskServer
     Properties:

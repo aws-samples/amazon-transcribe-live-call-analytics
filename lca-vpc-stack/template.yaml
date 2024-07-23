@@ -55,9 +55,6 @@ Resources:
         Ref: VPC
       InternetGatewayId:
         Ref: VPCIGW
-      Tags:
-        - Key: Name
-          Value: !Sub "${LCAStackName}/VPCGateway"
 
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup

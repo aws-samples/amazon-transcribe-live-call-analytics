@@ -1448,7 +1448,7 @@ Resources:
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
 
-  GENESYSAUDIOHOOKSTACK:
+  GENESYSAUDIOHOOKTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallGenesysAudiohookStack
     Properties:
@@ -1482,7 +1482,7 @@ Resources:
         PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
         PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
-  WEBSOCKETSTACK:
+  WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
     Properties:
