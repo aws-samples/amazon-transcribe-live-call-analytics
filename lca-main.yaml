@@ -1197,9 +1197,7 @@ Resources:
                 reason = f"Exception thrown: {e}"
                 status = cfnresponse.FAILED              
             cfnresponse.send(event, context, status, responseData, reason=reason)
-      LoggingConfig:
-        LogGroup:
-          Ref: UpdateLCASettingsFunctionLogGroup
+
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -1209,13 +1207,6 @@ Resources:
             reason: Customer can choose reserved concurrency based on their requirement.
           - id: W58
             reason: Managed policy already provides access to CloudWatch logs.
-
-  UpdateLCASettingsFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName:
-        Fn::Sub: /${AWS::StackName}/lambda/UpdateLCASettingsFunction
-      RetentionInDays: 14
 
   UpdateLCASettingsWithInitialValues:
     Type: AWS::CloudFormation::CustomResource
