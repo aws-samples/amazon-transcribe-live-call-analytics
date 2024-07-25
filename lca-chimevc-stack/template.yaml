@@ -230,6 +230,20 @@ Parameters:
   Version:
     Type: String
 
+  CloudWatchLogGroupRetentionInDays:
+    Type: Number
+    Default: 3653
+    Description: Value in number of days till which logs are retained in CloudWatch Log Group
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+
+  VoiceConnectorsRequireEncryption:
+    Type: String
+    Default: False
+    Description: Encryption configures your Voice Connector to use TLS transport for SIP signaling and Secure RTP (SRTP) for media. Enabling encryption causes inbound calls to use TLS transport, and blocks unencrypted outbound calls.
+    AllowedValues:
+      - True
+      - False
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -276,6 +290,7 @@ Resources:
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
         Version: !Ref Version
+        VoiceConnectorsRequireEncryption: !Ref VoiceConnectorsRequireEncryption
 
   DeployChimeVCsiprec:
     Type: AWS::CloudFormation::Stack
@@ -284,6 +299,7 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-siprec.yaml
       Parameters:
         SiprecAllowedCidrList: !Ref SiprecAllowedCidrList
+        VoiceConnectorsRequireEncryption: !Ref VoiceConnectorsRequireEncryption
 
   DeployCallTranscriber:
     Type: AWS::CloudFormation::Stack
@@ -305,6 +321,7 @@ Resources:
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
         SiprecLambdaHookFunctionArn: !Ref SiprecLambdaHookFunctionArn
+        CloudWatchLogGroupRetentionInDays: !Ref CloudWatchLogGroupRetentionInDays
         VoiceConnectorId: !If
           - ShouldCreateVoiceConnector
           - !If

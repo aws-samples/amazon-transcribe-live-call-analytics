@@ -126,6 +126,12 @@ Parameters:
     Description: >-
       Voice connector Id for setting up EventBridge Rule to restrict events to specific Amazon Chime SDK Voice Connector.
 
+  CloudWatchLogGroupRetentionInDays:
+    Type: Number
+    Default: 3653
+    Description: Value in number of days till which logs are retained in CloudWatch Log Group
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+
 Resources:
   ##########################################################################
   # NodeJS Transcriber Lambda Layer
@@ -173,8 +179,16 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_IMAGE
 
+  CallTranscriberLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      RetentionInDays: !Ref CloudWatchLogGroupRetentionInDays
+
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
+    DependsOn: CallTranscriberLogGroup
     Properties:
       Architectures:
         - arm64

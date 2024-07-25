@@ -22,6 +22,14 @@ Parameters:
     Type: CommaDelimitedList
     Description: Comma Delimited list of CIDR blocks that will be allow listed to send traffic to the Amazon Chime SDK Voice Connector.  CIDR blocks must be between /27 and /32 in length and use public IP ranges.  Example 203.0.113.128/27, 198.51.100.76/32
 
+  VoiceConnectorsRequireEncryption:
+    Type: String
+    Default: False
+    Description: Encryption configures your Voice Connector to use TLS transport for SIP signaling and Secure RTP (SRTP) for media. Enabling encryption causes inbound calls to use TLS transport, and blocks unencrypted outbound calls.
+    AllowedValues:
+      - True
+      - False
+
 Resources:
   CreateVCFunctionRole:
     Type: 'AWS::IAM::Role'
@@ -89,6 +97,10 @@ Resources:
       Handler: index.handler
       Runtime: python3.11
       Timeout: 300
+      Environment:
+        Variables:
+          VoiceConnectorsRequireEncryption:
+            Ref: VoiceConnectorsRequireEncryption
       Code:
         ZipFile: |
           from os import getenv
@@ -111,7 +123,7 @@ Resources:
               response = chime.create_voice_connector(
                   Name = stack_name + '-SIPREC-Trunk',
                   AwsRegion=os.environ['AWS_REGION'],
-                  RequireEncryption = getenv('VoiceConnectorsRequireEncryption', False)
+                  RequireEncryption = bool(getenv('VoiceConnectorsRequireEncryption', False))
               )
               logger.info(response)
               voice_connector_id = response['VoiceConnector']['VoiceConnectorId']

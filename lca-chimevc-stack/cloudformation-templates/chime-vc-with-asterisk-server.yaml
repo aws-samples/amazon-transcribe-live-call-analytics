@@ -50,6 +50,13 @@ Parameters:
       - false
   Version:
     Type: String
+  VoiceConnectorsRequireEncryption:
+    Type: String
+    Default: False
+    Description: Encryption configures your Voice Connector to use TLS transport for SIP signaling and Secure RTP (SRTP) for media. Enabling encryption causes inbound calls to use TLS transport, and blocks unencrypted outbound calls.
+    AllowedValues:
+      - True
+      - False
 
 Resources:
   AsteriskVPC:
@@ -347,6 +354,7 @@ Resources:
     Properties:
       Code:
         ZipFile: |
+          from os import getenv
           import json
           import time
           import os
@@ -368,7 +376,7 @@ Resources:
               response = chime.create_voice_connector(
                   Name = stack_name + '-PSTN-Trunk',
                   AwsRegion=os.environ['AWS_REGION'],
-                  RequireEncryption=False
+                  RequireEncryption=bool(getenv('VoiceConnectorsRequireEncryption', False))
               )
               logger.info(response)
               voice_connector_id = response['VoiceConnector']['VoiceConnectorId']
@@ -588,6 +596,10 @@ Resources:
           - createChimeLambdaRole
           - Arn
       Handler: index.handler
+      Environment:
+        Variables:
+          VoiceConnectorsRequireEncryption:
+            Ref: VoiceConnectorsRequireEncryption
       Runtime: python3.11
       Timeout: 300
 

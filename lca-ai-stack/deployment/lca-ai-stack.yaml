@@ -305,6 +305,29 @@ Parameters:
     Description: >
       Whether or not to show the voice tone analysis panel in the UI 
 
+  ExcludeVerboseContentValue:
+    Type: String
+    Default: FALSE
+    Description: Includes request headers, response headers, context and evaluated mapping templates regardless of field logging level.
+    AllowedValues: [TRUE, FALSE]
+
+  FieldLogLevelValue:
+    Type: String
+    Default: ALL
+    Description: Logs are generated based on selected type
+    AllowedValues: [NONE, ERROR, ALL]
+
+  BotoReadTimeout:
+    Type: Number
+    Default: 60
+    Description: Timeout value in sec used in AsyncTranscriptSummaryOrchestrator lambda
+
+  CloudWatchLogGroupRetentionInDays:
+    Type: Number
+    Default: 3653
+    Description: Value in number of days till which logs are retained in CloudWatch Log Group
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+
 Metadata:
   "AWS::CloudFormation::Interface":
     ParameterGroups:
@@ -312,6 +335,11 @@ Metadata:
           default: Amazon S3 Configuration
         Parameters:
           - S3BucketName
+      - Label:
+          default: Amazon Appsync Configuration
+        Parameters:
+          - ExcludeVerboseContentValue
+          - FieldLogLevelValue
       - Label:
           default: Amazon CloudFront Configuration
         Parameters:
@@ -1072,15 +1100,44 @@ Resources:
                     - !Sub "${AgentAssistExistingLambdaFunctionArn}"
                 - Ref: AWS::NoValue
 
+  # Custom resource to calculate timeout for AsyncTranscriptSummaryOrchestrator.                                            
+  GetProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.11
+      InlineCode: |
+          import cfnresponse
+          def handler(event, context):
+              output = int(event['ResourceProperties']['Op1']) * int(event['ResourceProperties']['Op2'])
+              responseData = {}
+              responseData['Value'] = output;
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+ 
+  AsyncTranscriptSummaryOrchestratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      RetentionInDays: !Ref CloudWatchLogGroupRetentionInDays
+ 
+  CalculateProductStackName:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt 'GetProductFunction.Arn'
+      Op1: !Ref BotoReadTimeout
+      Op2: 4
+
   AsyncTranscriptSummaryOrchestrator:
     Type: AWS::Serverless::Function
+    DependsOn: AsyncTranscriptSummaryOrchestratorLogGroup
     Properties:
       Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
       Runtime: python3.11
       Environment:
         Variables:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN: !If [
-            ShouldDeploySageMakerSummarizer, 
+            ShouldDeploySageMakerSummarizer,
             !GetAtt [SageMakerTranscriptSummaryStack, Outputs.InvokeLambdaArn],
             !If [
               ShouldEnableAnthropicSummarizer,
@@ -1092,9 +1149,9 @@ Resources:
               ]
             ]
           ]
-          CALL_DATA_STREAM_NAME: !Ref CallDataStream
-          BOTO_READ_TIMEOUT: 60
-      Timeout: 240
+        CALL_DATA_STREAM_NAME: !Ref CallDataStream
+        BOTO_READ_TIMEOUT: !Ref BotoReadTimeout
+      Timeout: !GetAtt 'CalculateProductStackName.Value'
       MemorySize: 128
       Handler: lambda_function.handler
       Layers:
@@ -1214,8 +1271,17 @@ Resources:
   ##########################################################################
   # Call Event Processor
   ##########################################################################
+
+  CallEventProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      RetentionInDays: !Ref CloudWatchLogGroupRetentionInDays
+
   CallEventProcessorFunction:
     Type: AWS::Serverless::Function
+    DependsOn: CallEventProcessorLogGroup
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -1423,8 +1489,8 @@ Resources:
         - AuthenticationType: AWS_IAM
       LogConfig:
         CloudWatchLogsRoleArn: !GetAtt AppSyncCwlRole.Arn
-        ExcludeVerboseContent: FALSE
-        FieldLogLevel: ALL
+        ExcludeVerboseContent: !Ref ExcludeVerboseContentValue
+        FieldLogLevel: !Ref FieldLogLevelValue
       # Commenting out Xray as it causes issues with the ServiceLinked role on first deployment
       # similar to: https://github.com/aws/aws-cdk/issues/16598
       # XrayEnabled: true
