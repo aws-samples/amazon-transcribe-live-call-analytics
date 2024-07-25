@@ -1680,12 +1680,14 @@ Resources:
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-talkdesk-voicestream-stack/<VERSION_TOKEN>/template.yaml
       # yamllint enable rule:line-length
       Parameters:
-        S3BucketName: !GetAtt AISTACK.Outputs.S3BucketName
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
         AudioFilePrefix: !Ref AudioFilePrefix
-        UserPoolId: !GetAtt AISTACK.Outputs.UserPoolId
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
-        CallDataStreamName: !GetAtt AISTACK.Outputs.CallDataStreamName
-        CallDataStreamArn: !GetAtt AISTACK.Outputs.CallDataStreamArn
+        CallDataStreamName: !Ref CallDataStream
+        CallDataStreamArn: !GetAtt CallDataStream.Arn
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         TranscribeApiMode: !Ref TranscribeApiMode
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
@@ -1699,7 +1701,6 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
-        LCASettingsParameterName: !GetAtt AISTACK.Outputs.LCASettingsParameterName
         TalkdeskAccountId: !Ref TalkdeskAccountId
 
   WEBSOCKETTRANSCRIBERSTACK:

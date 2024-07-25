@@ -168,10 +168,6 @@ Parameters:
     Default: dashboard/parsedFiles/
     Description: PCA path prefix for call detail pages.
 
-  LCASettingsParameterName:
-    Type: String
-    Description: LCA settings SSM Parameter store 
-
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
     Type: String
@@ -1120,8 +1116,6 @@ Resources:
               Value: 'DEV'
             - Name: CPU_HEALTH_THRESHOLD
               Value: '50'
-            - Name: USERPOOL_ID
-              Value: !Ref UserPoolId
             - Name: TALKDESK_ACCOUNT_ID
               Value: !Ref TalkdeskAccountId
             - Name: RECORDINGS_BUCKET_NAME
