@@ -19,11 +19,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Twilio Mediastream Websocket Stack
 
 Parameters:
-  UserPoolId: 
-    Type: String
-    Description: >
-      Cognito User Pool ID
-
   S3BucketName:
     Type: String
     Description: >
