@@ -1,0 +1,1 @@
+Completed 55.8 KiB/55.8 KiB (121.3 KiB/s) with 1 file(s) remainingupload: ../out/template-packaged-lca-solution-staging-752cf6e7c5a9-us-west-2-artifacts_0.8.76_lca-websocket-stack-0.8.76.yaml to s3://lca-solution-staging-752cf6e7c5a9-us-west-2/artifacts/0.8.76/lca-websocket-stack/0.8.76/template.yaml

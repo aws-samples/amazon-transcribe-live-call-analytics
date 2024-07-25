@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Voice Connector
@@ -56,7 +56,7 @@ Parameters:
 
   DemoSoftphoneAllowedCidr:
     Type: String
-    AllowedPattern: '( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))'
+    AllowedPattern: "( *|([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))"
     Description: >
       Ignored if Install Demo Asterisk Server is false.
       CIDR block allowed by demo Asterisk server for soft phone registration.
@@ -64,16 +64,16 @@ Parameters:
 
   SiprecAllowedCidrList:
     Type: String
-    AllowedPattern: '( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*'
+    AllowedPattern: "( *|(([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2]))))(, *([0-9]{1,3}.){3}[0-9]{1,3}(/([0-9]|[1-2][0-9]|3[0-2])))*"
     Description: >
       Ignored if Install Demo Asterisk Server is true.
       Comma delimited list of public CIDR blocks allowed by Amazon Chime SDK Voice Connector for SIPREC source hosts. Mask of /27 to /32 is allowed.
       Example: '198.51.100.0/27, 203.0.113.128/27'
 
   SiprecLambdaHookFunctionArn:
-    Default: ''
+    Default: ""
     Type: String
-    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    AllowedPattern: "^(|arn:aws:lambda:.*)$"
     Description: >
       (Optional) Used only when CallAudioSource is set to 'Amazon Chime SDK Voice Connector (SIPREC)' or
       'Demo Asterisk PBX Server'. If present, the specified Lambda function can selectively
@@ -113,13 +113,13 @@ Parameters:
 
   IsPartialTranscriptEnabled:
     Type: String
-    Default: 'true'
+    Default: "true"
     Description: >-
       Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn. Set to false to process only the
       final version of each conversation turn.
     AllowedValues:
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"
 
   TranscribeApiMode:
     Type: String
@@ -131,13 +131,13 @@ Parameters:
 
   IsContentRedactionEnabled:
     Type: String
-    Default: 'false'
+    Default: "false"
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
       the 'en-US', 'en-AU', 'en-GB' or 'es-US' languages are selected in the TranscribeLanguageCode parameter.
     AllowedValues:
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"
 
   TranscribeContentRedactionType:
     Type: String
@@ -154,26 +154,26 @@ Parameters:
       language identification can't  be combined with custom language models or redaction.
     Default: en-US
     AllowedValues:
-    - identify-language
-    - identify-multiple-languages
-    - en-US
-    - es-US
-    - en-GB
-    - fr-CA
-    - fr-FR
-    - en-AU
-    - it-IT
-    - de-DE
-    - pt-BR
-    - ja-JP
-    - ko-KR
-    - zh-CN
-    - hi-IN
-    - th-TH
+      - identify-language
+      - identify-multiple-languages
+      - en-US
+      - es-US
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
+      - hi-IN
+      - th-TH
 
   TranscribeLanguageOptions:
     Type: String
-    Default: 'en-US, es-US'
+    Default: "en-US, es-US"
     AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
     ConstraintDescription: >-
       Unsupported language code. Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR,
@@ -193,7 +193,6 @@ Parameters:
       Select a preferred language from the set of language codes you provide for TranscribeLanguageOptions,
       when  TranscribeLanguageCode is set to identify-language or identify-multiple-languages.
 
-
   TranscribePiiEntityTypes:
     Type: String
     # yamllint disable rule:line-length
@@ -205,14 +204,14 @@ Parameters:
 
   CustomVocabularyName:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       The name of the vocabulary to use when processing the transcription job. Leave blank if no
       custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
 
   CustomLanguageModelName:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
@@ -248,12 +247,21 @@ Parameters:
 
   CustomVoiceConnectorId:
     Type: String
-    Default: ''
+    Default: ""
     Description: Existing Amazon Chime SDK Voice Connector Id.
 
   LCAStackName:
     Type: String
     Description: Parent LCA Stack name
+
+  # networking parameters
+  VPC:
+    Description: VPC ID
+    Type: String
+
+  PublicSubnet1:
+    Description: Public subnet 1
+    Type: String
 
   Version:
     Type: String
@@ -270,17 +278,17 @@ Metadata:
 
 Conditions:
   ShouldInstallDemoAsteriskServer:
-    !Equals [!Ref InstallDemoAsteriskServer, 'true']
+    !Equals [!Ref InstallDemoAsteriskServer, "true"]
   ShouldInstallChimeVCsiprec:
     !And [
-      !Equals [!Ref InstallDemoAsteriskServer, 'false'],
-      !Equals [!Ref CustomVoiceConnectorId, '']
+      !Equals [!Ref InstallDemoAsteriskServer, "false"],
+      !Equals [!Ref CustomVoiceConnectorId, ""],
     ]
-  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
+  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, ""]]
   ShouldInstallCallTranscriber:
-    !Not [!Equals [!Ref UseChimeCallAnalytics, 'true']]
-  ShouldInstallChimeCallAnalytics: !Equals [!Ref UseChimeCallAnalytics, 'true']
-  ShouldCreateVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, '']
+    !Not [!Equals [!Ref UseChimeCallAnalytics, "true"]]
+  ShouldInstallChimeCallAnalytics: !Equals [!Ref UseChimeCallAnalytics, "true"]
+  ShouldCreateVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, ""]
 
 Resources:
   DeployBoto3LambdaLayer:
@@ -294,7 +302,7 @@ Resources:
         to create the ChimeSDKMediaInsightsPipelineConfiguration.
       ContentUri: ./lambda_layers/boto3_layer/boto3_lambda_layer.zip
 
-  DeployChimeVCAsteriskDemo:
+  ChimeVCAsteriskDemoStack:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallDemoAsteriskServer
     Properties:
@@ -303,6 +311,8 @@ Resources:
         SoftPhoneCIDR: !Ref DemoSoftphoneAllowedCidr
         DemoAsteriskAgentAudioURL: !Ref DemoAsteriskAgentAudioURL
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
+        AsteriskVPC: !Ref VPC
+        AsteriskSubnet1: !Ref PublicSubnet1
         Version: !Ref Version
 
   DeployChimeVCsiprec:
@@ -339,7 +349,7 @@ Resources:
           - ShouldCreateVoiceConnector
           - !If
             - ShouldInstallDemoAsteriskServer
-            - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
+            - !GetAtt ChimeVCAsteriskDemoStack.Outputs.VoiceConnector
             - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
           - !Ref CustomVoiceConnectorId
 
@@ -362,6 +372,8 @@ Resources:
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName
@@ -370,12 +382,12 @@ Resources:
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
         # when existing/custom VC is provided, set VC ID to empty so custom VC resource Lambda will skip updating VC configuration
         VoiceConnectorId: !If
-            - ShouldCreateVoiceConnector
-            - !If
-              - ShouldInstallDemoAsteriskServer
-              - !GetAtt DeployChimeVCAsteriskDemo.Outputs.VoiceConnector
-              - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
-            - ''
+          - ShouldCreateVoiceConnector
+          - !If
+            - ShouldInstallDemoAsteriskServer
+            - !GetAtt ChimeVCAsteriskDemoStack.Outputs.VoiceConnector
+            - !GetAtt DeployChimeVCsiprec.Outputs.VoiceConnector
+          - ""
 
   DeployPcaIntegration:
     Type: AWS::CloudFormation::Stack
@@ -432,17 +444,17 @@ Outputs:
   DemoPBXIPAddress:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.IPAddress
-      - 'Demo PBX not enabled'
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.IPAddress
+      - "Demo PBX not enabled"
 
   DemoPBXPhoneNumber:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.PhoneNumber
-      - 'Demo PBX not enabled'
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.PhoneNumber
+      - "Demo PBX not enabled"
 
   AsteriskInstanceId:
     Value: !If
       - ShouldInstallDemoAsteriskServer
-      - !GetAtt DeployChimeVCAsteriskDemo.Outputs.InstanceID
-      - 'Demo PBX not enabled'
+      - !GetAtt ChimeVCAsteriskDemoStack.Outputs.InstanceID
+      - "Demo PBX not enabled"

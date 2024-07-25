@@ -202,7 +202,7 @@ Parameters:
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
     Type: String
-    Default: ai-ml-blog
+    Default:  lca-solution-staging-752cf6e7c5a9
     Description: >
       Base name of bootstrap S3 bucket. The region is appended to the bucket name. For example if
       you provide a base name `mybucket`, a bucket with a region suffix must exist in the region
@@ -214,13 +214,13 @@ Parameters:
 
   BootstrapS3Prefix:
     Type: String
-    Default: artifacts/lca/lca-websocket
+    Default:  artifacts/0.8.76/lca-websocket-stack
     Description: >
       S3 prefix where the templates and source are stored under
 
   BootstrapVersion:
     Type: String
-    Default: 0.2.1
+    Default:  0.8.76
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket

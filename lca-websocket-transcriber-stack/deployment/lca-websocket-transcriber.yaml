@@ -16,9 +16,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - Genesys Audiohook
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - Websocket Transcriber Server
 
 Parameters:
+  
   # networking parameters
   VPC:
     Description: VPC ID
@@ -40,10 +41,15 @@ Parameters:
     Description: Private subnet 2 for Fargate
     Type: String
 
+  UserPoolId: 
+    Type: String
+    Description: >
+      Cognito User Pool ID
+
   S3BucketName:
     Type: String
     Description: >
-      Existing bucket where call recording files will be stored.
+      Existing bucket where call recording files will be stored. 
     # yamllint disable rule:line-length
     AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
     # yamllint enable rule:line-length
@@ -85,8 +91,8 @@ Parameters:
     Type: String
     Default: analytics
     AllowedValues:
-      - standard
-      - analytics
+        - standard
+        - analytics
     Description: Set the default operational mode for Transcribe
 
   IsContentRedactionEnabled:
@@ -110,65 +116,49 @@ Parameters:
   TranscribeLanguageCode:
     Type: String
     Description: >-
-      Language code or language identification setting for Amazon Transcribe. NOTE:
-      Language identification can't  be combined with custom language models or redaction.
+      Language code or language detection setting for Amazon Transcribe. NOTE: Streaming
+      language identification can't  be combined with custom language models or redaction.
     Default: en-US
     AllowedValues:
-      - identify-language
-      - identify-multiple-languages
-      - en-US
-      - es-US
-      - en-GB
-      - fr-CA
-      - fr-FR
-      - en-AU
-      - it-IT
-      - de-DE
-      - pt-BR
-      - ja-JP
-      - ko-KR
-      - zh-CN
-      - hi-IN
-      - th-TH
+    - identify-language
+    - identify-multiple-languages
+    - en-US
+    - es-US
+    - en-GB
+    - fr-CA
+    - fr-FR
+    - en-AU
+    - it-IT
+    - de-DE
+    - pt-BR
+    - ja-JP
+    - ko-KR
+    - zh-CN
+    - hi-IN
+    - th-TH
 
   TranscribeLanguageOptions:
     Type: String
-    Default: "en-US, es-US"
+    Default: 'en-US, es-US'
     AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
     ConstraintDescription: >-
-      Unsupported language code or invalid syntax. Allowed values are: en-US, es-US,
-      en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE, pt-BR, ja-JP, ko-KR, zh-CN, hi-IN,
-      th-TH
+      Unsupported language code. Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR,
+      en-AU, it-IT, de-DE, pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
     Description: >-
-      When using language identification, specify two or more language codes, e.g.
-      "en-US, es-US" that represent the languages that may be  used in your meeting.
-      Including more than five is not recommended.  Enter only one language dialect
-      per language - e.g. 'en-US, en-AU' is not allowed.
+      When TranscribeLanguageCode is set to 'identify-language' or 'identify-multiple-languages',   specify
+      two or more comma separated language codes, e.g. "en-US,es-US" that represent
+      the languages you  think may be used in your meeting. Including more than five
+      is not recommended.  You can select only one language dialect per language per
+      stream - i.e. you cannot select both en-US and en-AU as language options.
       Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE,
       pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
 
   TranscribePreferredLanguage:
     Type: String
     Description: >-
-      Optionally select a preferred language when using language identification -
-      must be one of the languages entered for TranscribeLanguageOptions.
-    Default: None
-    AllowedValues:
-      - None
-      - en-US
-      - es-US
-      - en-GB
-      - fr-CA
-      - fr-FR
-      - en-AU
-      - it-IT
-      - de-DE
-      - pt-BR
-      - ja-JP
-      - ko-KR
-      - zh-CN
-      - hi-IN
-      - th-TH
+      Select a preferred language from the set of language codes you provide for TranscribeLanguageOptions,
+      when  TranscribeLanguageCode is set to identify-language or identify-multiple-languages.
+
 
   TranscribePiiEntityTypes:
     Type: String
@@ -181,14 +171,14 @@ Parameters:
 
   CustomVocabularyName:
     Type: String
-    Default: ""
+    Default: ''
     Description: >-
       The name of the vocabulary to use when processing the transcription job. Leave blank if no
       custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
 
   CustomLanguageModelName:
     Type: String
-    Default: ""
+    Default: ''
     Description: >-
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If yes, the custom language model must pre-exist in your account.
@@ -213,12 +203,27 @@ Parameters:
   PcaWebAppURL:
     Type: String
     AllowedPattern: '^(|https:\/\/.*)$'
-    Description: Value of PCA stack "WebAppURL".
+    Description: Value of PCA stack "WebAppURL". 
 
   PcaWebAppCallPathPrefix:
     Type: String
     Default: dashboard/parsedFiles/
     Description: PCA path prefix for call detail pages.
+
+  LCASettingsParameterName:
+    Type: String
+    Description: LCA settings SSM Parameter store 
+
+  UpdateLCASettingsFunctionArn:
+    Type: String
+    Description: Update LCA Settings Lambda function ARN
+
+  # Pass CategoryAlertRegex and CategoryAlertRegEx to force LCASettingsParam to be updated with WSEndpoint
+  # if the values are changed (and the LCASettings param was recreated in the ai-stack)
+  CategoryAlertRegEx:
+    Type: String
+  EnableVoiceToneAnalysis:
+    Type: String
 
   # NOTE: These parameters are dynamically updated during release
   BootstrapBucketBaseName:
@@ -235,7 +240,7 @@ Parameters:
 
   BootstrapS3Prefix:
     Type: String
-    Default: artifacts/lca/lca-genesys-audiohook
+    Default: artifacts/lca/lca-websocket
     Description: >
       S3 prefix where the templates and source are stored under
 
@@ -279,13 +284,13 @@ Metadata:
 
 Conditions:
   ShouldEnableContentRedaction: !And
-    - !Equals [!Ref IsContentRedactionEnabled, "true"]
-    - !Or
-      - !Equals [!Ref TranscribeLanguageCode, "en-US"]
-      - !Equals [!Ref TranscribeLanguageCode, "en-AU"]
-      - !Equals [!Ref TranscribeLanguageCode, "en-GB"]
-      - !Equals [!Ref TranscribeLanguageCode, "es-US"]
-  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, ""]]
+    - !Equals [!Ref IsContentRedactionEnabled, 'true']
+    - !Or 
+      - !Equals [!Ref TranscribeLanguageCode, 'en-US']
+      - !Equals [!Ref TranscribeLanguageCode, 'en-AU']
+      - !Equals [!Ref TranscribeLanguageCode, 'en-GB']
+      - !Equals [!Ref TranscribeLanguageCode, 'es-US']
+  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
 
 Outputs:
   S3BucketName:
@@ -293,18 +298,16 @@ Outputs:
     Value: !Ref S3BucketName
 
   WebSocketEndpoint:
-    Description: Websocket endpoint for Audiohook integration
+    Description: Websocket endpoint for Websocket integration
     Value: !Join
-      - ""
-      - - "wss://"
-        - !GetAtt WebSocketCloudFrontDistribution.DomainName
-        - "/api/v1/audiohook/ws"
-  AudiohookAPIKey:
-    Value: !Ref SecretsManagerAPIKey
-  AudiohookAPIClientSecret:
-    Value: !Ref SecretsManagerAPIClientSecret
+              - ''
+              - - 'wss://'
+                - !GetAtt WebSocketCloudFrontDistribution.DomainName
+                - '/api/v1/ws'
 
 Resources:
+
+
   ##########################################################################
   # CodeBuild
   ##########################################################################
@@ -357,7 +360,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
-      Runtime: python3.11
+      Runtime: python3.9
       MemorySize: 128
       Timeout: 60
       Role: !GetAtt EcrImagesDeleteLambdaRole.Arn
@@ -471,6 +474,7 @@ Resources:
             reason: >-
               ECR do not support resource-level permissions for GetAuthorizationToken and therefore
               cannot be specificed directly.
+  
 
   TranscriberCodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -484,7 +488,7 @@ Resources:
       Source:
         Location:
           !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
-          ${BootstrapVersion}/audiohooksrc.zip"
+          ${BootstrapVersion}/lca-websocket.zip"
         Type: S3
         BuildSpec: |
           version: 0.2
@@ -505,7 +509,7 @@ Resources:
             build:
               commands:
                 - echo Build started on `date`
-                - echo Building Genesys audiohook container image
+                - echo Building websocket container image
                 - cd $CODEBUILD_SRC_DIR
                 - echo `pwd`
                 - docker build -t "${REPOSITORY_URI}:${IMAGE_TAG}" source/app/
@@ -603,13 +607,13 @@ Resources:
       # pass code location to support upgrades
       CodeLocation:
         !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
-        ${BootstrapVersion}/audiohooksrc.zip"
+        ${BootstrapVersion}/lca-websocket.zip"
 
   LambdaCodeBuildStartBuild:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.9
       Timeout: 60
       MemorySize: 128
       Handler: lambda_start_codebuild.handler
@@ -648,29 +652,6 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_IMAGE
 
-  SecretsManagerAPIKey:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: "API Key and client secret for Genesys Audiohook"
-      Name: !Sub "${AWS::StackName}/genesys/audiohook/wss/apikey"
-      GenerateSecretString:
-        GenerateStringKey: "apikey"
-        SecretStringTemplate: '{ "api": "audiohook" }'
-        PasswordLength: 32
-        RequireEachIncludedType: true
-        ExcludePunctuation: true
-
-  SecretsManagerAPIClientSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: "API Key and client secret for Genesys Audiohook"
-      Name: !Sub "${AWS::StackName}/genesys/audiohook/wss/clientsecret"
-      GenerateSecretString:
-        GenerateStringKey: "clientsecret"
-        SecretStringTemplate: '{ "api": "audiohook" }'
-        PasswordLength: 44
-        RequireEachIncludedType: true
-        ExcludePunctuation: true
 
   ##########################################################################
   # ELB
@@ -682,65 +663,65 @@ Resources:
         - Name: containerInsights
           Value: enabled
 
-  TranscribingAudiohookLoadBalancer:
+  TranscribingWebsocketLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       LoadBalancerAttributes:
         - Key: deletion_protection.enabled
-          Value: "false"
+          Value: 'false'
       Scheme: internet-facing
       SecurityGroups:
         - Fn::GetAtt:
-            - TranscribingAudiohookLoadBalancerSecurityGroup
-            - GroupId
+          - TranscribingWebsocketLoadBalancerSecurityGroup
+          - GroupId
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       Type: application
 
-  TranscribingAudiohookLoadBalancerSecurityGroup:
+  TranscribingWebsocketLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security Group for ELB
+      GroupDescription: Security Group for ELB  
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           Description: Allow from anyone on port 80
           FromPort: 80
           IpProtocol: tcp
-          ToPort: 80
+          ToPort: 80      
       VpcId: !Ref VPC
-
-  TranscribingAudiohookLoadBalancerSecurityGroupEgress:
+ 
+  TranscribingWebsocketLoadBalancerSecurityGroupEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       GroupId:
         Fn::GetAtt:
-          - TranscribingAudiohookLoadBalancerSecurityGroup
+          - TranscribingWebsocketLoadBalancerSecurityGroup
           - GroupId
       IpProtocol: tcp
       Description: Load balancer to target
       DestinationSecurityGroupId:
         Fn::GetAtt:
-          - TranscriberAudiohookFargateServiceSecurityGroup
+          - TranscriberWebsocketFargateServiceSecurityGroup
           - GroupId
       FromPort: 8080
       ToPort: 8080
 
-  TranscribingAudiohookLoadBalancerListener:
+  TranscribingWebsocketLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - FixedResponseConfig:
             ContentType: application/json
             MessageBody: '{"status":403,"message":"This is not a valid endpoint"}'
-            StatusCode: "403"
+            StatusCode: '403'
           Type: fixed-response
       LoadBalancerArn:
-        Ref: TranscribingAudiohookLoadBalancer
+        Ref: TranscribingWebsocketLoadBalancer
       Port: 80
       Protocol: HTTP
-
-  TranscribingAudiohookLoadBalancerListenerTargetGroup:
+ 
+  TranscribingWebsocketLoadBalancerListenerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckEnabled: true
@@ -749,24 +730,24 @@ Resources:
       HealthCheckTimeoutSeconds: 4
       HealthyThresholdCount: 2
       Matcher:
-        HttpCode: "200"
+        HttpCode: '200'
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
         - Key: stickiness.enabled
-          Value: "false"
+          Value: 'false'
         - Key: deregistration_delay.timeout_seconds
-          Value: "180"
+          Value: '180'
       TargetType: ip
       UnhealthyThresholdCount: 2
       VpcId: !Ref VPC
-
-  TranscribingAudiohookLoadBalancerListenerRule1:
+ 
+  TranscribingWebsocketLoadBalancerListenerRule1:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
         - TargetGroupArn:
-            Ref: TranscribingAudiohookLoadBalancerListenerTargetGroup
+            Ref: TranscribingWebsocketLoadBalancerListenerTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
@@ -778,17 +759,17 @@ Resources:
             Values:
               - "/api/v1/*"
       ListenerArn:
-        Ref: TranscribingAudiohookLoadBalancerListener
+        Ref: TranscribingWebsocketLoadBalancerListener
       Priority: 100
-
-  TranscribingAudiohookLoadBalancerListenerRule2:
+ 
+  TranscribingWebsocketLoadBalancerListenerRule2:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
         - FixedResponseConfig:
             ContentType: application/json
             MessageBody: '{"status":404,"message":"Resource not found"}'
-            StatusCode: "404"
+            StatusCode: '404'
           Type: fixed-response
       Conditions:
         - Field: host-header
@@ -796,14 +777,125 @@ Resources:
             Values:
               - !GetAtt WebSocketCloudFrontDistribution.DomainName
       ListenerArn:
-        Ref: TranscribingAudiohookLoadBalancerListener
+        Ref: TranscribingWebsocketLoadBalancerListener
       Priority: 200
+  
+  ECSCleanupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../source/lambda_functions/ecs_cleanup
+      Handler: ecs_cleanup.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt ECSCleanupLambdaRole.Arn
+      Timeout: 120 # Adjust as needed
+
+  ECSCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: LambdaECSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DeleteService
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                Resource: '*'
+
+  ECSCleanupCustomResource:
+    Type: Custom::ECSCleanup
+    Properties:
+      ServiceToken: !GetAtt ECSCleanupLambda.Arn
+      ClusterName: !Ref TranscribingCluster
 
   ##########################################################################
   # ECS
   #########################################################################
 
-  TranscriberAudiohookTaskDefTaskRole:
+  ECSCleanupLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.11
+      Role: !GetAtt ECSCleanupLambdaRole.Arn
+      Timeout: 720
+      InlineCode: |
+        import json
+        import boto3
+        import cfnresponse
+
+        def handler(event, context):
+            print(json.dumps(event))
+            ecs = boto3.client('ecs')
+            response_data = {}
+            try:
+                if event['RequestType'] == 'Delete':
+                    cluster_name = event['ResourceProperties']['ClusterName']
+                    
+                    # List services in the cluster
+                    services = ecs.list_services(cluster=cluster_name)['serviceArns']
+                    if services:
+                        # Update services to desired count 0
+                        for service in services:
+                            ecs.update_service(cluster=cluster_name, service=service, desiredCount=0)                        
+                        # Wait for running tasks to stop
+                        waiter = ecs.get_waiter('services_stable')
+                        waiter.wait(cluster=cluster_name, services=services)                        
+                        # Delete services
+                        for service in services:
+                            ecs.delete_service(cluster=cluster_name, service=service)
+                    response_data['Message'] = "ECS services stopped and deleted successfully"
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+            except Exception as e:
+                print(e)
+                response_data['Message'] = str(e)
+                cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+
+  ECSCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: LambdaECSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DeleteService
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                Resource:
+                 - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${TranscribingCluster}/*'
+
+  ECSCleanupCustomResource:
+    Type: Custom::ECSCleanup
+    Properties:
+      ServiceToken: !GetAtt ECSCleanupLambda.Arn
+      ClusterName: !Ref TranscribingCluster
+
+  TranscriberWebsocketTaskDefTaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -814,22 +906,22 @@ Resources:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
 
-  TranscriberAudiohookTaskDefTaskRoleDefaultPolicy:
+  TranscriberWebsocketTaskDefTaskRoleDefaultPolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
         Statement:
           - Action:
-              - s3:GetObject*
-              - s3:GetBucket*
-              - s3:List*
-              - s3:DeleteObject*
-              - s3:PutObject
-              - s3:PutObjectLegalHold
-              - s3:PutObjectRetention
-              - s3:PutObjectTagging
-              - s3:PutObjectVersionTagging
-              - s3:Abort*
+            - s3:GetObject*
+            - s3:GetBucket*
+            - s3:List*
+            - s3:DeleteObject*
+            - s3:PutObject
+            - s3:PutObjectLegalHold
+            - s3:PutObjectRetention
+            - s3:PutObjectTagging
+            - s3:PutObjectVersionTagging
+            - s3:Abort*
             Effect: Allow
             Resource:
               - !Sub
@@ -844,19 +936,6 @@ Resources:
             Resource:
               - !GetAtt TcaDataAccessRole.Arn
           - Action:
-              - secretsmanager:GetResourcePolicy
-              - secretsmanager:GetSecretValue
-              - secretsmanager:DescribeSecret
-              - secretsmanager:ListSecretVersionIds
-            Effect: Allow
-            Resource:
-              - !Ref SecretsManagerAPIClientSecret
-              - !Ref SecretsManagerAPIKey
-          - Action:
-              - secretsmanager:ListSecrets
-            Effect: Allow
-            Resource: "*"
-          - Action:
               - transcribe:DeleteTranscriptionJob
               - transcribe:GetTranscriptionJob
               - transcribe:GetVocabulary
@@ -870,12 +949,12 @@ Resources:
           - Action:
               - kinesis:PutRecord
             Effect: Allow
-            Resource:
-              - !Sub
+            Resource:  
+              - !Sub 
                 - "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${streamName}"
                 - streamName: !Ref CallDataStreamName
 
-          - Action:
+          - Action:  
               - dynamodb:Query
               - dynamodb:Scan
               - dynamodb:GetItem
@@ -888,11 +967,11 @@ Resources:
               - logs:CreateLogStream
               - logs:PutLogEvents
             Effect: Allow
-            Resource: !GetAtt TranscriberAudiohookTaskDefAudiohookContainerLogGroup.Arn
+            Resource: !GetAtt TranscriberWebsocketTaskDefWebsocketContainerLogGroup.Arn
         Version: "2012-10-17"
-      PolicyName: !Sub ${AWS::StackName}-TranscriberAudiohookTaskDefTaskRoleDefaultPolicy
+      PolicyName: !Sub ${AWS::StackName}-TranscriberWebsocketTaskDefTaskRoleDefaultPolicy
       Roles:
-        - !Ref TranscriberAudiohookTaskDefTaskRole
+        - !Ref TranscriberWebsocketTaskDefTaskRole
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -929,7 +1008,7 @@ Resources:
                     - bucket: !Ref S3BucketName
                   - !Sub
                     - "arn:aws:s3:::${bucket}/*"
-                    - bucket: !Ref S3BucketName
+                    - bucket: !Ref S3BucketName          
 
     Metadata:
       cfn_nag:
@@ -938,7 +1017,7 @@ Resources:
             reason: >-
               Transcribe does not support resource-level permissions and KVS streams are dynamic
 
-  TranscriberAudiohookTaskDef:
+  TranscriberWebsocketTaskDef:
     Type: AWS::ECS::TaskDefinition
     DependsOn: CodeBuildRun
     Properties:
@@ -947,7 +1026,11 @@ Resources:
             - Name: AWS_REGION
               Value: !Ref AWS::Region
             - Name: NODE_ENV
-              Value: "Production"
+              Value: 'DEV'
+            - Name: CPU_HEALTH_THRESHOLD
+              Value: '50'
+            - Name: USERPOOL_ID
+              Value: !Ref UserPoolId
             - Name: RECORDINGS_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX
@@ -957,19 +1040,15 @@ Resources:
             - Name: TCA_DATA_ACCESS_ROLE_ARN
               Value: !GetAtt TcaDataAccessRole.Arn
             - Name: POST_CALL_CONTENT_REDACTION_OUTPUT
-              Value: "redacted"
+              Value: 'redacted'
             - Name: SERVERHOST
-              Value: "0.0.0.0"
+              Value: '0.0.0.0'
             - Name: SERVERPORT
-              Value: "8080"
+              Value: '8080'
             - Name: KINESIS_STREAM_NAME
               Value: !Ref CallDataStreamName
             - Name: TRANSCRIBER_CALL_EVENT_TABLE_NAME
               Value: !Ref TranscriberCallEventTable
-            - Name: API_KEY_ARN
-              Value: !Ref SecretsManagerAPIKey
-            - Name: CLIENT_SECRET_ARN
-              Value: !Ref SecretsManagerAPIClientSecret
             - Name: SAVE_PARTIAL_TRANSCRIPTS
               Value: "true"
             - Name: TRANSCRIBE_API_MODE
@@ -977,12 +1056,12 @@ Resources:
             - Name: IS_CONTENT_REDACTION_ENABLED
               Value: !If
                 - ShouldEnableContentRedaction
-                - "true"
-                - "false"
+                - 'true'
+                - 'false'
             - Name: CONTENT_REDACTION_TYPE
-              Value: !Ref TranscribeContentRedactionType
+              Value: !Ref TranscribeContentRedactionType      
             - Name: TRANSCRIBE_PII_ENTITY_TYPES
-              Value: !Ref TranscribePiiEntityTypes
+              Value: !Ref TranscribePiiEntityTypes      
             - Name: TRANSCRIBE_LANGUAGE_CODE
               Value: !Ref TranscribeLanguageCode
             - Name: TRANSCRIBE_LANGUAGE_OPTIONS
@@ -1000,24 +1079,24 @@ Resources:
             LogDriver: awslogs
             Options:
               awslogs-group:
-                Ref: TranscriberAudiohookTaskDefAudiohookContainerLogGroup
-              awslogs-stream-prefix: audiohook
+                Ref: TranscriberWebsocketTaskDefWebsocketContainerLogGroup
+              awslogs-stream-prefix: lcawebsocket
               awslogs-region:
                 Ref: AWS::Region
-          Name: audiohookcontainer
+          Name: websocketcontainer
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
       Cpu: 2048
-      ExecutionRoleArn: !GetAtt TranscriberAudiohookTaskDefExecutionRole.Arn
-      Family: !Sub ${AWS::StackName}TranscriberAudiohookTaskDef
+      ExecutionRoleArn: !GetAtt TranscriberWebsocketTaskDefExecutionRole.Arn
+      Family: !Sub ${AWS::StackName}TranscriberWebsocketTaskDef
       Memory: 4096
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      TaskRoleArn: !GetAtt TranscriberAudiohookTaskDefTaskRole.Arn
+      TaskRoleArn: !GetAtt TranscriberWebsocketTaskDefTaskRole.Arn
 
-  TranscriberAudiohookTaskDefAudiohookContainerLogGroup:
+  TranscriberWebsocketTaskDefWebsocketContainerLogGroup:
     Type: AWS::Logs::LogGroup
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
@@ -1031,7 +1110,7 @@ Resources:
               By default CloudWatchLogs LogGroups data is encrypted using the CloudWatch
               server-side encryption keys (AWS Managed Keys).
 
-  TranscriberAudiohookTaskDefExecutionRole:
+  TranscriberWebsocketTaskDefExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -1042,7 +1121,7 @@ Resources:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
 
-  TranscriberAudiohookTaskDefExecutionRoleDefaultPolicy:
+  TranscriberWebsocketTaskDefExecutionRoleDefaultPolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
@@ -1065,20 +1144,21 @@ Resources:
             Effect: Allow
             Resource:
               Fn::GetAtt:
-                - TranscriberAudiohookTaskDefAudiohookContainerLogGroup
+                - TranscriberWebsocketTaskDefWebsocketContainerLogGroup
                 - Arn
         Version: "2012-10-17"
-      PolicyName: !Sub "${AWS::StackName}-\
-        TranscriberAudiohookTaskDefExecutionRoleDefaultPolicy"
+      PolicyName:
+        !Sub "${AWS::StackName}-\
+              TranscriberWebsocketTaskDefExecutionRoleDefaultPolicy"
       Roles:
-        - Ref: TranscriberAudiohookTaskDefExecutionRole
+        - Ref: TranscriberWebsocketTaskDefExecutionRole
     Metadata:
       cfn_nag:
         rules_to_suppress:
           - id: W12
             reason: comprehend, translate, and connect do not support resource-level permissions.
 
-  TranscriberAudiohookFargateService:
+  TranscriberWebsocketFargateService:
     Type: AWS::ECS::Service
     Properties:
       Cluster:
@@ -1091,39 +1171,38 @@ Resources:
       EnableECSManagedTags: false
       LaunchType: FARGATE
       LoadBalancers:
-        - ContainerName: audiohookcontainer
+        - ContainerName: websocketcontainer
           ContainerPort: 8080
           TargetGroupArn:
-            Ref: TranscribingAudiohookLoadBalancerListenerTargetGroup
+            Ref: TranscribingWebsocketLoadBalancerListenerTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
             - Fn::GetAtt:
-                - TranscriberAudiohookFargateServiceSecurityGroup
+                - TranscriberWebsocketFargateServiceSecurityGroup
                 - GroupId
           Subnets:
             - Ref: PrivateSubnet1
             - Ref: PrivateSubnet2
       TaskDefinition:
-        Ref: TranscriberAudiohookTaskDef
+        Ref: TranscriberWebsocketTaskDef
     DependsOn:
-      - TranscribingAudiohookLoadBalancerListenerTargetGroup
-      - TranscribingAudiohookLoadBalancerListenerRule1
-      - TranscribingAudiohookLoadBalancerListenerRule2
-      - TranscribingAudiohookLoadBalancerListener
+      - TranscribingWebsocketLoadBalancerListenerRule1
+      - TranscribingWebsocketLoadBalancerListenerRule2
+      - TranscribingWebsocketLoadBalancerListener
 
-  TranscriberAudiohookFargateServiceSecurityGroup:
+  TranscriberWebsocketFargateServiceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: audiohook-fargate/service/Service/SecurityGroup
+      GroupDescription: Websocket-fargate/service/Service/SecurityGroup
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       VpcId: !Ref VPC
 
-  TranscriberAudiohookFargateServiceSecurityGroupIngress:
+  TranscriberWebsocketFargateServiceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       IpProtocol: tcp
@@ -1131,42 +1210,13 @@ Resources:
       FromPort: 8080
       GroupId:
         Fn::GetAtt:
-          - TranscriberAudiohookFargateServiceSecurityGroup
+          - TranscriberWebsocketFargateServiceSecurityGroup
           - GroupId
       SourceSecurityGroupId:
         Fn::GetAtt:
-          - TranscribingAudiohookLoadBalancerSecurityGroup
+          - TranscribingWebsocketLoadBalancerSecurityGroup
           - GroupId
       ToPort: 8080
-
-  TranscriberAudiohookFargateServiceTaskCountTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MaxCapacity: 3
-      MinCapacity: 1
-      ResourceId: !Sub "service/${TranscribingCluster}/\
-        ${TranscriberAudiohookFargateService.Name}"
-      RoleARN:
-        !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/\
-        ecs.application-autoscaling.amazonaws.com/\
-        AWSServiceRoleForApplicationAutoScaling_ECSService"
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
-
-  TranscriberAudiohookFargateServiceTaskCountTargetCpuScaling:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Sub "${AWS::StackName}\
-        TranscriberAudiohookFargateServiceTaskCountTargetCpuScaling"
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId:
-        Ref: TranscriberAudiohookFargateServiceTaskCountTarget
-      TargetTrackingScalingPolicyConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ECSServiceAverageCPUUtilization
-        ScaleInCooldown: 60
-        ScaleOutCooldown: 60
-        TargetValue: 50
 
   CloudFrontOriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -1176,41 +1226,35 @@ Resources:
 
   CloudFrontOriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
-    Properties:
+    Properties: 
       OriginRequestPolicyConfig:
         Name: !Sub ${AWS::StackName}-CloudFrontOriginRequestPolicyConfig
-        CookiesConfig:
+        CookiesConfig: 
           CookieBehavior: none
-        HeadersConfig:
+        HeadersConfig: 
           HeaderBehavior: whitelist
-          Headers:
+          Headers: 
             - "Sec-WebSocket-Key"
             - "Sec-WebSocket-Version"
-            # - "Sec-WebSocket-Protocol"
-            # - "Sec-WebSocket-Accept"
             - "Host"
             - "Origin"
-            # - "Referer"
-            - "audiohook-organization-id"
-            - "audiohook-session-id"
-            - "audiohook-correlation-id"
             - "x-api-key"
             - "signature-input"
             - "signature"
 
-        QueryStringsConfig:
-          QueryStringBehavior: none
+        QueryStringsConfig: 
+          QueryStringBehavior: all
 
   WebSocketCloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: !Sub "Web Socket audiohook proxy cloudfront distribution ${AWS::StackName}"
+        Comment: !Sub "Web Socket Websocket proxy cloudfront distribution ${AWS::StackName}"
         Origins:
-          - Id: audiohook-fargate
-            DomainName: !GetAtt TranscribingAudiohookLoadBalancer.DNSName
-            CustomOriginConfig:
-              HTTPPort: "80"
+          - Id: Websocket-fargate
+            DomainName: !GetAtt TranscribingWebsocketLoadBalancer.DNSName
+            CustomOriginConfig: 
+              HTTPPort: '80'
               OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
           AllowedMethods:
@@ -1221,7 +1265,7 @@ Resources:
             - POST
             - PATCH
             - DELETE
-          TargetOriginId: audiohook-fargate
+          TargetOriginId: Websocket-fargate
           ViewerProtocolPolicy: https-only
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
@@ -1240,9 +1284,9 @@ Resources:
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
-        PriceClass: !Ref CloudFrontPriceClass
+        PriceClass: !Ref CloudFrontPriceClass       
         ViewerCertificate:
-          CloudFrontDefaultCertificate: "true"
+          CloudFrontDefaultCertificate: 'true'
 
     Metadata:
       cfn_nag:
@@ -1250,7 +1294,22 @@ Resources:
           - id: W70
             reason: This is using Cloudfront default TLS, can be changed by customer if needed.
 
+  UpdateLCASettingsWithWSEndpoint:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !Ref UpdateLCASettingsFunctionArn
+      LCASettingsName: !Ref LCASettingsParameterName
+      LCASettingsKeyValuePairs:
+        WSEndpoint: !Join
+          - ''
+          - - 'wss://'
+            - !GetAtt WebSocketCloudFrontDistribution.DomainName
+            - '/api/v1/ws'
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+
   PCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::Serverless::Function
     Condition: ShouldInstallPcaIntegration
     Properties:
@@ -1282,6 +1341,7 @@ Resources:
       CodeUri: ../source/lambda_functions/pca_integration
 
   PCAIntegrationFunctionRole:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::IAM::Role
     Condition: ShouldInstallPcaIntegration
     Properties:
@@ -1322,7 +1382,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:
+                Resource:  
                   - !Ref CallDataStreamArn
               - Effect: Allow
                 Action:
@@ -1350,6 +1410,7 @@ Resources:
                     - bucket: !Ref PcaS3BucketName
 
   AllowEventBridgeToCallPCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: "AWS::Lambda::Permission"
     Condition: ShouldInstallPcaIntegration
     Properties:
@@ -1360,6 +1421,7 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
 
   EventBridgeRuleToTriggerPCAIntegrationFunction:
+    Condition: ShouldInstallPcaIntegration
     Type: AWS::Events::Rule
     Condition: ShouldInstallPcaIntegration
     Properties:

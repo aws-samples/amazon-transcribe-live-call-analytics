@@ -52,7 +52,7 @@ cd deployment
 export RELEASE_S3_BUCKET=${RELEASE_S3_BUCKET_BASE}-${AWS_REGION}
 aws s3 cp ${OUT_DIR}/lca-websocket.zip s3://${RELEASE_S3_BUCKET}/${RELEASE_S3_PREFIX}/${RELEASE_VERSION}/lca-websocket.zip
 
-TEMPLATE_FILE="./lca-websocket.yaml"
+TEMPLATE_FILE="./lca-websocket-transcriber.yaml"
 RELEASE_S3_PREFIX_SUB=${RELEASE_S3_PREFIX////_}
 PACKAGE_RELEASE_REPLACE_OUT_FILE=${OUT_DIR}/template-replaced-${RELEASE_S3_BUCKET}-${RELEASE_S3_PREFIX_SUB}-${RELEASE_VERSION}.yaml
 sed -E \
