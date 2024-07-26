@@ -17,6 +17,8 @@ const {
   StartCallAnalyticsStreamTranscriptionCommand,
   ParticipantRole,
 } = require('@aws-sdk/client-transcribe-streaming');
+const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
+
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const BlockStream = require('block-stream2');
 const fs = require('fs');
@@ -53,6 +55,8 @@ const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 // eslint-disable-next-line prettier/prettier
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
+const TRANSCRIBE_LANGUAGE_OPTIONS = process.env['TRANSCRIBE_LANGUAGE_OPTIONS'] || undefined;
+const TRANSCRIBE_PREFERRED_LANGUAGE = process.env['TRANSCRIBE_PREFERRED_LANGUAGE'] || 'None';
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
@@ -305,7 +309,7 @@ const readStereoKVS = async (streamArn, lastFragment, callerStream, agentStream)
       if (chunk.id === EbmlTagId.Name) {
         console.log('TrackName', chunk.data);
         currentTrackName = chunk.data;
-        if(currentTrack && currentTrackName) {
+        if (currentTrack && currentTrackName) {
           trackDictionary[currentTrack] = currentTrackName;
         }
       }
@@ -331,8 +335,8 @@ const readStereoKVS = async (streamArn, lastFragment, callerStream, agentStream)
           timestampDeltaCheck(1);
         }
         try {
-          if(trackDictionary[chunk.track] === 'AUDIO_TO_CUSTOMER') agentStream.write(chunk.payload);
-          if(trackDictionary[chunk.track] === 'AUDIO_FROM_CUSTOMER') callerStream.write(chunk.payload);
+          if (trackDictionary[chunk.track] === 'AUDIO_TO_CUSTOMER') agentStream.write(chunk.payload);
+          if (trackDictionary[chunk.track] === 'AUDIO_FROM_CUSTOMER') callerStream.write(chunk.payload);
         } catch (error) {
           console.error('Error posting payload chunk', error);
         }
@@ -469,10 +473,11 @@ const go = async function go(callData) {
     tsClientArgs.endpoint = TRANSCRIBE_ENDPOINT;
   }
   console.log("Transcribe client args:", tsClientArgs);
+  console.log('AWS SDK - @aws-sdk/client-transcribe-streaming version:', transcribeStreamingPkg.version);
+
   const tsClient = new TranscribeStreamingClient(tsClientArgs);
   let tsStream;
   const tsParams = {
-    LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
     MediaSampleRateHertz: 8000,
     MediaEncoding: 'pcm',
     AudioStream: audioStream(),
@@ -482,6 +487,26 @@ const go = async function go(callData) {
   if (!isTCAEnabled) {
     tsParams.NumberOfChannels = 2;
     tsParams.EnableChannelIdentification = true;
+  }
+
+  if (TRANSCRIBE_LANGUAGE_CODE === 'identify-language') {
+    tsParams.IdentifyLanguage = true;
+    if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+      tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+      if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+        tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE;
+      }
+    }
+  } else if (TRANSCRIBE_LANGUAGE_CODE === 'identify-multiple-languages') {
+    tsParams.IdentifyMultipleLanguages = true;
+    if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+      tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+      if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+        tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE;
+      }
+    }
+  } else {
+    tsParams.LanguageCode = TRANSCRIBE_LANGUAGE_CODE;
   }
 
   /* common optional stream parameters */
@@ -509,11 +534,11 @@ const go = async function go(callData) {
   while (true) {
     try {
       if (isTCAEnabled) {
-        console.log("Transcribe StartCallAnalyticsStreamTranscriptionCommand args:", tsParams);
+        console.log(`Transcribe StartCallAnalyticsStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}, (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
       } else {
-        console.log("Transcribe StartStreamTranscriptionCommand args:", tsParams);
+        console.log(`Transcribe StartStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}, (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
       }

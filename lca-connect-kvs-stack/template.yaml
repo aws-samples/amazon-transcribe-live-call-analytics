@@ -83,21 +83,66 @@ Parameters:
   TranscribeLanguageCode:
     Type: String
     Description: >-
-      Language code to be used for Amazon Transcribe
+      Language code or language identification setting for Amazon Transcribe. NOTE:
+      Language identification can't  be combined with custom language models or redaction.
     Default: en-US
     AllowedValues:
-      - en-US
-      - es-US
-      - en-GB
-      - fr-CA
-      - fr-FR
-      - en-AU
-      - it-IT
-      - de-DE
-      - pt-BR
-      - ja-JP
-      - ko-KR
-      - zh-CN
+    - identify-language
+    - identify-multiple-languages
+    - en-US
+    - es-US
+    - en-GB
+    - fr-CA
+    - fr-FR
+    - en-AU
+    - it-IT
+    - de-DE
+    - pt-BR
+    - ja-JP
+    - ko-KR
+    - zh-CN
+    - hi-IN
+    - th-TH
+
+  TranscribeLanguageOptions:
+    Type: String
+    Default: 'en-US, es-US'
+    AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
+    ConstraintDescription: >-
+      Unsupported language code or invalid syntax. Allowed values are: en-US, es-US,
+      en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE, pt-BR, ja-JP, ko-KR, zh-CN, hi-IN,
+      th-TH
+    Description: >-
+      When using language identification, specify two or more language codes, e.g.
+      "en-US, es-US" that represent the languages that may be  used in your meeting.
+      Including more than five is not recommended.  Enter only one language dialect
+      per language - e.g. 'en-US, en-AU' is not allowed.
+      Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE,
+      pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
+
+  TranscribePreferredLanguage:
+    Type: String
+    Description: >-
+      Optionally select a preferred language when using language identification -
+      must be one of the languages entered for TranscribeLanguageOptions.
+    Default: None
+    AllowedValues:
+    - None
+    - en-US
+    - es-US
+    - en-GB
+    - fr-CA
+    - fr-FR
+    - en-AU
+    - it-IT
+    - de-DE
+    - pt-BR
+    - ja-JP
+    - ko-KR
+    - zh-CN
+    - hi-IN
+    - th-TH
+
 
   TranscribePiiEntityTypes:
     Type: String
@@ -381,6 +426,8 @@ Resources:
             - 'true'
             - 'false'
           TRANSCRIBE_LANGUAGE_CODE: !Ref TranscribeLanguageCode
+          TRANSCRIBE_LANGUAGE_OPTIONS: !Ref TranscribeLanguageOptions
+          TRANSCRIBE_PREFERRED_LANGUAGE: !Ref TranscribePreferredLanguage
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
@@ -556,6 +603,10 @@ Metadata:
         default: Type of Content Redaction
       TranscribeLanguageCode:
         default: Transcription Language Code
+      TranscribeLanguageOptions:
+        default: Transcribe Language Options
+      TranscribePreferredLanguage:
+        default: Transcribe Preferred Language
       TranscribePiiEntityTypes:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:

@@ -69,21 +69,48 @@ Parameters:
   TranscribeLanguageCode:
     Type: String
     Description: >-
-      Language code to be used for Amazon Transcribe
+      Language code or language detection setting for Amazon Transcribe. NOTE: Streaming
+      language identification can't  be combined with custom language models or redaction.
     Default: en-US
     AllowedValues:
-      - en-US
-      - es-US
-      - en-GB
-      - fr-CA
-      - fr-FR
-      - en-AU
-      - it-IT
-      - de-DE
-      - pt-BR
-      - ja-JP
-      - ko-KR
-      - zh-CN
+    - identify-language
+    - identify-multiple-languages
+    - en-US
+    - es-US
+    - en-GB
+    - fr-CA
+    - fr-FR
+    - en-AU
+    - it-IT
+    - de-DE
+    - pt-BR
+    - ja-JP
+    - ko-KR
+    - zh-CN
+    - hi-IN
+    - th-TH
+
+  TranscribeLanguageOptions:
+    Type: String
+    Default: 'en-US, es-US'
+    AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
+    ConstraintDescription: >-
+      Unsupported language code. Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR,
+      en-AU, it-IT, de-DE, pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
+    Description: >-
+      When TranscribeLanguageCode is set to 'identify-language' or 'identify-multiple-languages',   specify
+      two or more comma separated language codes, e.g. "en-US,es-US" that represent
+      the languages you  think may be used in your meeting. Including more than five
+      is not recommended.  You can select only one language dialect per language per
+      stream - i.e. you cannot select both en-US and en-AU as language options.
+      Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE,
+      pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
+
+  TranscribePreferredLanguage:
+    Type: String
+    Description: >-
+      Select a preferred language from the set of language codes you provide for TranscribeLanguageOptions,
+      when  TranscribeLanguageCode is set to identify-language or identify-multiple-languages.
 
   TranscribePiiEntityTypes:
     Type: String
@@ -228,6 +255,8 @@ Resources:
             - 'true'
             - 'false'
           TRANSCRIBE_LANGUAGE_CODE: !Ref TranscribeLanguageCode
+          TRANSCRIBE_LANGUAGE_OPTIONS: !Ref TranscribeLanguageOptions
+          TRANSCRIBE_PREFERRED_LANGUAGE: !Ref TranscribePreferredLanguage
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName

@@ -18,6 +18,8 @@ const {
   StartCallAnalyticsStreamTranscriptionCommand,
   ParticipantRole,
 } = require('@aws-sdk/client-transcribe-streaming');
+const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
+
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const BlockStream = require('block-stream2');
 const fs = require('fs');
@@ -54,6 +56,8 @@ const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 // eslint-disable-next-line prettier/prettier
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
+const TRANSCRIBE_LANGUAGE_OPTIONS = process.env['TRANSCRIBE_LANGUAGE_OPTIONS'] || undefined;
+const TRANSCRIBE_PREFERRED_LANGUAGE = process.env['TRANSCRIBE_PREFERRED_LANGUAGE'] || 'None';
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
 const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
@@ -775,10 +779,11 @@ const go = async function go(callData) {
     tsClientArgs.endpoint = TRANSCRIBE_ENDPOINT;
   }
   console.log(`Transcribe client args:`, tsClientArgs, ` (CallId: ${callId})`);
+  console.log('AWS SDK - @aws-sdk/client-transcribe-streaming version:', transcribeStreamingPkg.version);
+
   const tsClient = new TranscribeStreamingClient(tsClientArgs);
   let tsStream;
   const tsParams = {
-    LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
     MediaSampleRateHertz: 8000,
     MediaEncoding: 'pcm',
     AudioStream: audioStream(),
@@ -790,10 +795,30 @@ const go = async function go(callData) {
     tsParams.EnableChannelIdentification = true;
   }
 
-  /* common optional stream parameters */
+  if (TRANSCRIBE_LANGUAGE_CODE === 'identify-language') {
+    tsParams.IdentifyLanguage = true;
+    if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+      tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+      if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+        tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE;
+      }
+    }
+  } else if (TRANSCRIBE_LANGUAGE_CODE === 'identify-multiple-languages') {
+    tsParams.IdentifyMultipleLanguages = true;
+    if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+      tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+      if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+        tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE;
+      }
+    }
+  } else {
+    tsParams.LanguageCode = TRANSCRIBE_LANGUAGE_CODE;
+  }
+
   if (sessionId !== undefined) {
     tsParams.SessionId = sessionId;
   }
+
   if (IS_CONTENT_REDACTION_ENABLED && (
     TRANSCRIBE_LANGUAGE_CODE === 'en-US' ||
     TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
@@ -815,11 +840,11 @@ const go = async function go(callData) {
   while (true) {
     try {
       if (isTCAEnabled) {
-        console.log(`Transcribe StartCallAnalyticsStreamTranscriptionCommand args:`, tsParams, ` (CallId: ${callId})`);
+        console.log(`Transcribe StartCallAnalyticsStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}, (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
       } else {
-        console.log(`Transcribe StartStreamTranscriptionCommand args:`, tsParams, ` (CallId: ${callId})`);
+        console.log(`Transcribe StartStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}, (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
       }

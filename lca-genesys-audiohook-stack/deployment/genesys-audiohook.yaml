@@ -19,11 +19,31 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Genesys Audiohook
 
 Parameters:
+  # networking parameters
+  VPC:
+    Description: VPC ID
+    Type: String
+
+  PublicSubnet1:
+    Description: Public subnet 1 for Fargate
+    Type: String
+
+  PublicSubnet2:
+    Description: Public subnet 2 for Fargate
+    Type: String
+
+  PrivateSubnet1:
+    Description: Private subnet 1 for Fargate
+    Type: String
+
+  PrivateSubnet2:
+    Description: Private subnet 2 for Fargate
+    Type: String
 
   S3BucketName:
     Type: String
     Description: >
-      Existing bucket where call recording files will be stored. 
+      Existing bucket where call recording files will be stored.
     # yamllint disable rule:line-length
     AllowedPattern: '( *|(?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$))'
     # yamllint enable rule:line-length
@@ -65,8 +85,8 @@ Parameters:
     Type: String
     Default: analytics
     AllowedValues:
-        - standard
-        - analytics
+      - standard
+      - analytics
     Description: Set the default operational mode for Transcribe
 
   IsContentRedactionEnabled:
@@ -90,9 +110,12 @@ Parameters:
   TranscribeLanguageCode:
     Type: String
     Description: >-
-      Language code to be used for Amazon Transcribe
+      Language code or language identification setting for Amazon Transcribe. NOTE:
+      Language identification can't  be combined with custom language models or redaction.
     Default: en-US
     AllowedValues:
+      - identify-language
+      - identify-multiple-languages
       - en-US
       - es-US
       - en-GB
@@ -105,6 +128,47 @@ Parameters:
       - ja-JP
       - ko-KR
       - zh-CN
+      - hi-IN
+      - th-TH
+
+  TranscribeLanguageOptions:
+    Type: String
+    Default: "en-US, es-US"
+    AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
+    ConstraintDescription: >-
+      Unsupported language code or invalid syntax. Allowed values are: en-US, es-US,
+      en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE, pt-BR, ja-JP, ko-KR, zh-CN, hi-IN,
+      th-TH
+    Description: >-
+      When using language identification, specify two or more language codes, e.g.
+      "en-US, es-US" that represent the languages that may be  used in your meeting.
+      Including more than five is not recommended.  Enter only one language dialect
+      per language - e.g. 'en-US, en-AU' is not allowed.
+      Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR, en-AU, it-IT, de-DE,
+      pt-BR, ja-JP, ko-KR, zh-CN, hi-IN, th-TH
+
+  TranscribePreferredLanguage:
+    Type: String
+    Description: >-
+      Optionally select a preferred language when using language identification -
+      must be one of the languages entered for TranscribeLanguageOptions.
+    Default: None
+    AllowedValues:
+      - None
+      - en-US
+      - es-US
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
+      - hi-IN
+      - th-TH
 
   TranscribePiiEntityTypes:
     Type: String
@@ -117,14 +181,14 @@ Parameters:
 
   CustomVocabularyName:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       The name of the vocabulary to use when processing the transcription job. Leave blank if no
       custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
 
   CustomLanguageModelName:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If yes, the custom language model must pre-exist in your account.
@@ -149,7 +213,7 @@ Parameters:
   PcaWebAppURL:
     Type: String
     AllowedPattern: '^(|https:\/\/.*)$'
-    Description: Value of PCA stack "WebAppURL". 
+    Description: Value of PCA stack "WebAppURL".
 
   PcaWebAppCallPathPrefix:
     Type: String
@@ -202,6 +266,10 @@ Metadata:
         default: Type of Content Redaction
       TranscribeLanguageCode:
         default: Transcription Language Code
+      TranscribeLanguageOptions:
+        default: Transcribe Language Options
+      TranscribePreferredLanguage:
+        default: Transcribe Preferred Language
       TranscribePiiEntityTypes:
         default: Transcription PII Redaction Entity Types
       CustomVocabularyName:
@@ -211,13 +279,13 @@ Metadata:
 
 Conditions:
   ShouldEnableContentRedaction: !And
-    - !Equals [!Ref IsContentRedactionEnabled, 'true']
-    - !Or 
-      - !Equals [!Ref TranscribeLanguageCode, 'en-US']
-      - !Equals [!Ref TranscribeLanguageCode, 'en-AU']
-      - !Equals [!Ref TranscribeLanguageCode, 'en-GB']
-      - !Equals [!Ref TranscribeLanguageCode, 'es-US']
-  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, '']]
+    - !Equals [!Ref IsContentRedactionEnabled, "true"]
+    - !Or
+      - !Equals [!Ref TranscribeLanguageCode, "en-US"]
+      - !Equals [!Ref TranscribeLanguageCode, "en-AU"]
+      - !Equals [!Ref TranscribeLanguageCode, "en-GB"]
+      - !Equals [!Ref TranscribeLanguageCode, "es-US"]
+  ShouldInstallPcaIntegration: !Not [!Equals [!Ref PcaS3BucketName, ""]]
 
 Outputs:
   S3BucketName:
@@ -227,18 +295,16 @@ Outputs:
   WebSocketEndpoint:
     Description: Websocket endpoint for Audiohook integration
     Value: !Join
-              - ''
-              - - 'wss://'
-                - !GetAtt WebSocketCloudFrontDistribution.DomainName
-                - '/api/v1/audiohook/ws'
+      - ""
+      - - "wss://"
+        - !GetAtt WebSocketCloudFrontDistribution.DomainName
+        - "/api/v1/audiohook/ws"
   AudiohookAPIKey:
     Value: !Ref SecretsManagerAPIKey
-  AudiohookAPIClientSecret: 
+  AudiohookAPIClientSecret:
     Value: !Ref SecretsManagerAPIClientSecret
 
 Resources:
-
-
   ##########################################################################
   # CodeBuild
   ##########################################################################
@@ -405,7 +471,6 @@ Resources:
             reason: >-
               ECR do not support resource-level permissions for GetAuthorizationToken and therefore
               cannot be specificed directly.
-  
 
   TranscriberCodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -582,246 +647,30 @@ Resources:
         Enabled: true
       StreamSpecification:
         StreamViewType: NEW_IMAGE
-        
-  ##########################################################################
-  # VPC
-  ##########################################################################
-  TranscribingVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      InstanceTenancy: default
-      Tags:
-        - Key: Name
-          Value: LCAAudiohook/VPC
-
-  TranscribingVPCIGW:
-    Type: AWS::EC2::InternetGateway
-
-  TranscribingVPCVPCGW:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-      InternetGatewayId:
-        Ref: TranscribingVPCIGW
-
-  TranscribingVPCPublicSubnet1Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.0.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: true
-    DependsOn:
-      - TranscribingVPCVPCGW
-    
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W33
-            reason: Public IP on launch is needed by the solution
-
-  TranscribingVPCPublicSubnet1RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-    
-  TranscribingVPCPublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet1RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet1Subnet
-
-  TranscribingVPCPublicSubnet1DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet1RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: TranscribingVPCIGW
-    DependsOn:
-      - TranscribingVPCVPCGW
-
-  TranscribingVPCPublicSubnet:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  TranscribingVPCPublicSubnet1NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId:
-        Fn::GetAtt:
-          - TranscribingVPCPublicSubnet
-          - AllocationId
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet1Subnet
-
-  TranscribingVPCPublicSubnet2Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.64.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: true
-    DependsOn:
-      - TranscribingVPCVPCGW
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W33
-            reason: Public IP on launch is needed by the solution
-
-  TranscribingVPCPublicSubnet2RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-
-  TranscribingVPCPublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet2RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet2Subnet
-
-  TranscribingVPCPublicSubnet2DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPublicSubnet2RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: TranscribingVPCIGW
-    DependsOn:
-      - TranscribingVPCVPCGW
-
-  TranscribingVPCPublicSubnet2:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  TranscribingVPCPublicSubnet2NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId:
-        Fn::GetAtt:
-          - TranscribingVPCPublicSubnet2
-          - AllocationId
-      SubnetId:
-        Ref: TranscribingVPCPublicSubnet2Subnet
-
-  TranscribingVPCPrivateSubnet1Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.128.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: false
-
-  TranscribingVPCPrivateSubnet1RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-
-  TranscribingVPCPrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet1RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPrivateSubnet1Subnet
-
-  TranscribingVPCPrivateSubnet1DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet1RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: TranscribingVPCPublicSubnet1NATGateway
-
-  TranscribingVPCPrivateSubnet2Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      CidrBlock: 10.0.192.0/18
-      VpcId:
-        Ref: TranscribingVPC
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs: ""
-      MapPublicIpOnLaunch: false
-
-  TranscribingVPCPrivateSubnet2RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:
-        Ref: TranscribingVPC
-
-  TranscribingVPCPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet2RouteTable
-      SubnetId:
-        Ref: TranscribingVPCPrivateSubnet2Subnet
-
-  TranscribingVPCPrivateSubnet2DefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId:
-        Ref: TranscribingVPCPrivateSubnet2RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: TranscribingVPCPublicSubnet2NATGateway
-
-
 
   SecretsManagerAPIKey:
     Type: AWS::SecretsManager::Secret
-    Properties: 
+    Properties:
       Description: "API Key and client secret for Genesys Audiohook"
       Name: !Sub "${AWS::StackName}/genesys/audiohook/wss/apikey"
-      GenerateSecretString: 
-          GenerateStringKey: "apikey"
-          SecretStringTemplate: '{ "api": "audiohook" }'
-          PasswordLength: 32
-          RequireEachIncludedType: true
-          ExcludePunctuation: true
-   
+      GenerateSecretString:
+        GenerateStringKey: "apikey"
+        SecretStringTemplate: '{ "api": "audiohook" }'
+        PasswordLength: 32
+        RequireEachIncludedType: true
+        ExcludePunctuation: true
+
   SecretsManagerAPIClientSecret:
     Type: AWS::SecretsManager::Secret
-    Properties: 
+    Properties:
       Description: "API Key and client secret for Genesys Audiohook"
       Name: !Sub "${AWS::StackName}/genesys/audiohook/wss/clientsecret"
-      GenerateSecretString: 
-          GenerateStringKey: "clientsecret"
-          SecretStringTemplate: '{ "api": "audiohook" }'
-          PasswordLength: 44
-          RequireEachIncludedType: true
-          ExcludePunctuation: true
+      GenerateSecretString:
+        GenerateStringKey: "clientsecret"
+        SecretStringTemplate: '{ "api": "audiohook" }'
+        PasswordLength: 44
+        RequireEachIncludedType: true
+        ExcludePunctuation: true
 
   ##########################################################################
   # ELB
@@ -838,29 +687,29 @@ Resources:
     Properties:
       LoadBalancerAttributes:
         - Key: deletion_protection.enabled
-          Value: 'false'
+          Value: "false"
       Scheme: internet-facing
       SecurityGroups:
         - Fn::GetAtt:
-          - TranscribingAudiohookLoadBalancerSecurityGroup
-          - GroupId
+            - TranscribingAudiohookLoadBalancerSecurityGroup
+            - GroupId
       Subnets:
-        - !Ref TranscribingVPCPublicSubnet1Subnet
-        - !Ref TranscribingVPCPublicSubnet2Subnet
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       Type: application
 
   TranscribingAudiohookLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security Group for ELB  
+      GroupDescription: Security Group for ELB
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           Description: Allow from anyone on port 80
           FromPort: 80
           IpProtocol: tcp
-          ToPort: 80      
-      VpcId: !Ref TranscribingVPC
- 
+          ToPort: 80
+      VpcId: !Ref VPC
+
   TranscribingAudiohookLoadBalancerSecurityGroupEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -884,13 +733,13 @@ Resources:
         - FixedResponseConfig:
             ContentType: application/json
             MessageBody: '{"status":403,"message":"This is not a valid endpoint"}'
-            StatusCode: '403'
+            StatusCode: "403"
           Type: fixed-response
       LoadBalancerArn:
         Ref: TranscribingAudiohookLoadBalancer
       Port: 80
       Protocol: HTTP
- 
+
   TranscribingAudiohookLoadBalancerListenerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -900,18 +749,18 @@ Resources:
       HealthCheckTimeoutSeconds: 4
       HealthyThresholdCount: 2
       Matcher:
-        HttpCode: '200'
+        HttpCode: "200"
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
         - Key: stickiness.enabled
-          Value: 'false'
+          Value: "false"
         - Key: deregistration_delay.timeout_seconds
-          Value: '180'
+          Value: "180"
       TargetType: ip
       UnhealthyThresholdCount: 2
-      VpcId: !Ref TranscribingVPC
- 
+      VpcId: !Ref VPC
+
   TranscribingAudiohookLoadBalancerListenerRule1:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -931,7 +780,7 @@ Resources:
       ListenerArn:
         Ref: TranscribingAudiohookLoadBalancerListener
       Priority: 100
- 
+
   TranscribingAudiohookLoadBalancerListenerRule2:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -939,7 +788,7 @@ Resources:
         - FixedResponseConfig:
             ContentType: application/json
             MessageBody: '{"status":404,"message":"Resource not found"}'
-            StatusCode: '404'
+            StatusCode: "404"
           Type: fixed-response
       Conditions:
         - Field: host-header
@@ -949,7 +798,7 @@ Resources:
       ListenerArn:
         Ref: TranscribingAudiohookLoadBalancerListener
       Priority: 200
-   
+
   ##########################################################################
   # ECS
   #########################################################################
@@ -971,16 +820,16 @@ Resources:
       PolicyDocument:
         Statement:
           - Action:
-            - s3:GetObject*
-            - s3:GetBucket*
-            - s3:List*
-            - s3:DeleteObject*
-            - s3:PutObject
-            - s3:PutObjectLegalHold
-            - s3:PutObjectRetention
-            - s3:PutObjectTagging
-            - s3:PutObjectVersionTagging
-            - s3:Abort*
+              - s3:GetObject*
+              - s3:GetBucket*
+              - s3:List*
+              - s3:DeleteObject*
+              - s3:PutObject
+              - s3:PutObjectLegalHold
+              - s3:PutObjectRetention
+              - s3:PutObjectTagging
+              - s3:PutObjectVersionTagging
+              - s3:Abort*
             Effect: Allow
             Resource:
               - !Sub
@@ -994,7 +843,7 @@ Resources:
             Effect: Allow
             Resource:
               - !GetAtt TcaDataAccessRole.Arn
-          - Action: 
+          - Action:
               - secretsmanager:GetResourcePolicy
               - secretsmanager:GetSecretValue
               - secretsmanager:DescribeSecret
@@ -1021,12 +870,12 @@ Resources:
           - Action:
               - kinesis:PutRecord
             Effect: Allow
-            Resource:  
-              - !Sub 
+            Resource:
+              - !Sub
                 - "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${streamName}"
                 - streamName: !Ref CallDataStreamName
 
-          - Action:  
+          - Action:
               - dynamodb:Query
               - dynamodb:Scan
               - dynamodb:GetItem
@@ -1080,7 +929,7 @@ Resources:
                     - bucket: !Ref S3BucketName
                   - !Sub
                     - "arn:aws:s3:::${bucket}/*"
-                    - bucket: !Ref S3BucketName          
+                    - bucket: !Ref S3BucketName
 
     Metadata:
       cfn_nag:
@@ -1098,7 +947,7 @@ Resources:
             - Name: AWS_REGION
               Value: !Ref AWS::Region
             - Name: NODE_ENV
-              Value: 'Production'
+              Value: "Production"
             - Name: RECORDINGS_BUCKET_NAME
               Value: !Ref S3BucketName
             - Name: RECORDINGS_KEY_PREFIX
@@ -1108,11 +957,11 @@ Resources:
             - Name: TCA_DATA_ACCESS_ROLE_ARN
               Value: !GetAtt TcaDataAccessRole.Arn
             - Name: POST_CALL_CONTENT_REDACTION_OUTPUT
-              Value: 'redacted'
+              Value: "redacted"
             - Name: SERVERHOST
-              Value: '0.0.0.0'
+              Value: "0.0.0.0"
             - Name: SERVERPORT
-              Value: '8080'
+              Value: "8080"
             - Name: KINESIS_STREAM_NAME
               Value: !Ref CallDataStreamName
             - Name: TRANSCRIBER_CALL_EVENT_TABLE_NAME
@@ -1128,14 +977,18 @@ Resources:
             - Name: IS_CONTENT_REDACTION_ENABLED
               Value: !If
                 - ShouldEnableContentRedaction
-                - 'true'
-                - 'false'
+                - "true"
+                - "false"
             - Name: CONTENT_REDACTION_TYPE
-              Value: !Ref TranscribeContentRedactionType      
+              Value: !Ref TranscribeContentRedactionType
             - Name: TRANSCRIBE_PII_ENTITY_TYPES
-              Value: !Ref TranscribePiiEntityTypes      
+              Value: !Ref TranscribePiiEntityTypes
             - Name: TRANSCRIBE_LANGUAGE_CODE
               Value: !Ref TranscribeLanguageCode
+            - Name: TRANSCRIBE_LANGUAGE_OPTIONS
+              Value: !Ref TranscribeLanguageOptions
+            - Name: TRANSCRIBE_PREFERRED_LANGUAGE
+              Value: !Ref TranscribePreferredLanguage
             - Name: CUSTOM_VOCABULARY_NAME
               Value: !Ref CustomVocabularyName
             - Name: CUSTOM_LANGUAGE_MODEL_NAME
@@ -1215,9 +1068,8 @@ Resources:
                 - TranscriberAudiohookTaskDefAudiohookContainerLogGroup
                 - Arn
         Version: "2012-10-17"
-      PolicyName:
-        !Sub "${AWS::StackName}-\
-              TranscriberAudiohookTaskDefExecutionRoleDefaultPolicy"
+      PolicyName: !Sub "${AWS::StackName}-\
+        TranscriberAudiohookTaskDefExecutionRoleDefaultPolicy"
       Roles:
         - Ref: TranscriberAudiohookTaskDefExecutionRole
     Metadata:
@@ -1251,8 +1103,8 @@ Resources:
                 - TranscriberAudiohookFargateServiceSecurityGroup
                 - GroupId
           Subnets:
-            - Ref: TranscribingVPCPrivateSubnet1Subnet
-            - Ref: TranscribingVPCPrivateSubnet2Subnet
+            - Ref: PrivateSubnet1
+            - Ref: PrivateSubnet2
       TaskDefinition:
         Ref: TranscriberAudiohookTaskDef
     DependsOn:
@@ -1269,8 +1121,7 @@ Resources:
         - CidrIp: 0.0.0.0/0
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
-      VpcId: !Ref TranscribingVPC
-
+      VpcId: !Ref VPC
 
   TranscriberAudiohookFargateServiceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -1293,9 +1144,8 @@ Resources:
     Properties:
       MaxCapacity: 3
       MinCapacity: 1
-      ResourceId:
-        !Sub "service/${TranscribingCluster}/\
-              ${TranscriberAudiohookFargateService.Name}"
+      ResourceId: !Sub "service/${TranscribingCluster}/\
+        ${TranscriberAudiohookFargateService.Name}"
       RoleARN:
         !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/\
         ecs.application-autoscaling.amazonaws.com/\
@@ -1326,14 +1176,14 @@ Resources:
 
   CloudFrontOriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
-    Properties: 
+    Properties:
       OriginRequestPolicyConfig:
         Name: !Sub ${AWS::StackName}-CloudFrontOriginRequestPolicyConfig
-        CookiesConfig: 
+        CookiesConfig:
           CookieBehavior: none
-        HeadersConfig: 
+        HeadersConfig:
           HeaderBehavior: whitelist
-          Headers: 
+          Headers:
             - "Sec-WebSocket-Key"
             - "Sec-WebSocket-Version"
             # - "Sec-WebSocket-Protocol"
@@ -1348,7 +1198,7 @@ Resources:
             - "signature-input"
             - "signature"
 
-        QueryStringsConfig: 
+        QueryStringsConfig:
           QueryStringBehavior: none
 
   WebSocketCloudFrontDistribution:
@@ -1359,8 +1209,8 @@ Resources:
         Origins:
           - Id: audiohook-fargate
             DomainName: !GetAtt TranscribingAudiohookLoadBalancer.DNSName
-            CustomOriginConfig: 
-              HTTPPort: '80'
+            CustomOriginConfig:
+              HTTPPort: "80"
               OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
           AllowedMethods:
@@ -1390,9 +1240,9 @@ Resources:
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
-        PriceClass: !Ref CloudFrontPriceClass       
+        PriceClass: !Ref CloudFrontPriceClass
         ViewerCertificate:
-          CloudFrontDefaultCertificate: 'true'
+          CloudFrontDefaultCertificate: "true"
 
     Metadata:
       cfn_nag:
@@ -1472,7 +1322,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref CallDataStreamArn
               - Effect: Allow
                 Action:

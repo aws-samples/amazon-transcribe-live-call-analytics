@@ -1,84 +1,55 @@
-# Transcript Summarization (Experimental Feature)
+# Transcript Summarization
 
-LCA can now generate and display an abstractive call transcript summary (rendered in markdown) in addition to the existing extractive summarization from Real Time Transcribe Call Analytics. 
+Live Call Assistant (LCA) summarizes call transcripts once the call is over.
 
-Currently the transcript summarization feature is 'experimental'. In later releases we may adopt different techniques and add capabilities based on feedback from early adoption. We encourage experimentation, and feedback!
-  
-Example Transcript Summary:
-   
-![TranscriptSummary](./images/bedrock-summary.png)
-   
-Transcript Summaries are generated after the call has ended, and can take 20-30 seconds to appear on the UI.
-
-Configure Transcript Summarization by choosing a value for the `EndOfCallTranscriptSummary` CloudFormation parameter when deploying or updating your LCA stack. Valid values are 
-`DISABLED`, `BEDROCK`, `SAGEMAKER`, `ANTHROPIC`, and `LAMBDA`.
-If `BEDROCK` option is chosen, select a supported model ID from the list (`BedrockModelId` parameter)
-
-### **DISABLED**
-
-This option (default) disables call transcript summarization.
+![TranscriptSummary](./images/post-call-summaries.png)
+        
+You can configure Transcript Summarization by choosing a value for the `EndOfCallTranscriptSummary` CloudFormation parameter when deploying or updating your LCA stack. Valid values are 
+`BEDROCK` (default) and `LAMBDA`.
+If the `BEDROCK` option is chosen, select a supported model ID from the list (`BedrockModelId` parameter)
 
 ### **BEDROCK** (default)
 
-The `BEDROCK` option is enabled by default. You must [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for the model selected in the `BedrockModelId` parameter. By default, the selected model is `anthropic.claude-instant-v1`.  
+The `BEDROCK` option is enabled by default. You must [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for the model selected in the `BedrockModelId` parameter. By default, the selected model is `anthropic.claude-3-haiku-20240307-v1:0`.
 
-When `BEDROCK` option is enabled, LCA can run one or more LLM inferences against Amazon Bedrock after the call is complete. The prompt used to generate the insights is configured in a [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html). The name of the parameter is `{LCA-Stack-Name}-LLMPromptSummaryTemplate`. You can find a link to the parameter in the LCA main stack's CloudFormation outputs.
+LCA can run multiple LLM inferences after the call is complete. The prompt templates used to generate the insights from the transcript are stored in a DynamoDB table. There are two items (records) in the table:  
 
-The parameter's value is a JSON object with key/value pairs, each pair representing the label (key) and the prompt (value). After the call ends, LCA will iterate through the keys and run each prompt. In the prompt, LCA replaces `<br>` tags with newlines, and  `{transcript}` is replaced with the call transcript. The key will be used as a header for the section in the "Transcript Summary" section in the LCA UI.  You can learn more about how each of the prompts are designed in Anthropic's [Introduction to Prompt Design](https://docs.anthropic.com/claude/docs/introduction-to-prompt-design).
+1. **Default prompt templates:** These come with the LCA release, and define the summaries you get if you do not create custom prompt templates. Default prompts may change in new versions of LCA. View the default prompts by opening the DynamoDB URL in the LCA Stack output `LLMDefaultPromptSummaryTemplate`. 
 
-Below is the default value of `[LCA-Stack-Name]-LLMPromptSummaryTemplate`: 
+    ![DefaultPrompts](./images/summary-default-prompts.png)
 
+2. **Custom prompt templates:** Initially after deploying LCA, there are no custom prompts defined, but you can add your own. Create custom prompt templates to override or disable default summary prompts, or to add new ones. Custom prompt templates are not overwritten when you update your LCA stack to a new version. View and edit the custom prompts by opening the DynamoDB URL in the LCA Stack output `LLMCustomPromptSummaryTemplate`.
+
+    ![Custom](./images/summary-custom-prompts.png)
+
+The attribute named `**Information**` is ignored by LCA - it is informational only.
+
+All other attributes define the summary prompts that LCA executes when the call is over. Each has an attribute name used as the heading that shows up in the LCA summary, and an attribute value which defines the prompt template used to invoke the selected LLM.  
+
+**Attribute Name:** The attribute name must be formatted using a sequence number `N`, a `#` symbol, and the heading you want to use for the summary in the UI. For example, `1#Summary` defines a heading value of **Summary**, that will always be displayed above other headings with a higher sequence number. LCA removes the sequence number before displaying the title.
+
+**Attribute Value:** The attribute value is used as the prompt template. LCA replaces `<br>` tags with newlines. Use the template variable `{transcript}` to indicate where the call transcript will be placed in the prompt. LCA replaces `{transcript}` with the actual call transcript in the form:
 ```
-{
-    "Summary":"<br><br>Human: Answer the questions below, defined in <question></question> based on the transcript defined in <transcript></transcript>. If you cannot answer the question, reply with 'n/a'. Use gender neutral pronouns. When you reply, only respond with the answer.<br><br><question>What is a summary of the transcript?</question><br><br><transcript><br>{transcript}<br></transcript><br><br>Assistant:",
-    "Topic":"<br><br>Human: Answer the questions below, defined in <question></question> based on the transcript defined in <transcript></transcript>. If you cannot answer the question, reply with 'n/a'. Use gender neutral pronouns. When you reply, only respond with the answer.<br><br><question>What is the topic of the call? For example, iphone issue, billing issue, cancellation. Only reply with the topic, nothing more.</question><br><br><transcript><br>{transcript}<br></transcript><br><br>Assistant:",
-    "Follow-Up Actions":"<br><br>Human: Answer the question below, defined in <question></question> based on the transcript defined in <transcript></transcript>. If you cannot answer the question, reply with 'n/a'. Use gender neutral pronouns. When you reply, only respond with the answer.<br><br><question>What follow-up actions did the agent say they are going to take? </question><br><br><transcript><br>{transcript}<br></transcript><br><br>Assistant:"
-}
+<SpeakerName>: <transcription text>
+<SpeakerName>: <transcription text>
+...
 ```
+LCA invokes the Bedrock model using your prompt, and renders the results in the Summary section of the Call detail page, under your heading.
 
-The expected output after the summarize step is a single json object, as a string, that contains all the key/value pairs. For example:
+#### Customizing prompts
 
-```
-{
-  "Summary": "...",
-  "Topic": "...",
-  "Follow-Up Actions": "...",
-}
-```
+**Add a new custom summary:** Edit the Custom prompt templated by opening the DynamoDB URL in the LCA Stack output `LLMCustomPromptSummaryTemplate`. Initially this item has no prompt templates defined, but you can choose **Add new Attribute** to define your own prompt. Use the attribute type **String**. Use the **Attribute Name** format described above, e.g. `#4My Custom Call Insights`, and use **Attribute Value** to define the prompt template as described above.
 
+**Customize default prompts:** To override a default prompt value, provide an alternative prompt template for the same Attribute Name (heading) in the Custom prompt templates. LCA merges the default and custom prompts at runtime, and when both contain the same Attribute Name, the prompt template from the Custom prompt templates table is used instead of the default. *Do not edit the Default prompt templates item directly, as it may be overwritten during future stack updates.*
 
-### **SAGEMAKER**
-
-Choose the `SAGEMAKER` option to deploy a Lambda function and a SageMaker endpoint with the [bart-large-cnn-samsum](https://huggingface.co/philschmid/bart-large-cnn-samsum) model. 
-
-By default a 1-node ml.m5.xlarge endpoint is provisioned. For high call volume deployments, add additional nodes by increasing the parameter `SummarizationSageMakerInitialInstanceCount`. Please check [SageMaker pricing documentation](https://aws.amazon.com/sagemaker/pricing/) for relevant costs and information on Free Tier eligibility. (We have not yet tested summarization with high call volumes, so we don't yet have any scaling guidance. Please experiment and share your feedback.) 
-  
-By setting the parameter `SummarizationSageMakerInitialInstanceCount` to `0`, a [Serverless SageMaker endpoint](https://docs.aws.amazon.com/sagemaker/latest/dg/serverless-endpoints.html) is enabled. A serverless endpoint can save you money by scaling down to zero when not in use, however, there is a 'cold start' time of approximately 1-2 minutes which can delay the availability of the summary when used after a period of inactivity. LCA creates the serverless endpoint with default 4GB model memory, and max concurrency of 50 requests.  
-
-The `CallEventProcessor` Lambda invokes a `SummaryLambda` function at the end of a call. The `SummaryLambda` in turn invokes the `FetchTranscript` Lambda (see more details below) to fetch the full transcript of the call from the DynamoDB table. The transcript is then passed to the SageMaker endpoint to generate a summary.  The summary is returned from the `SummaryLambda` to the `CallEventProcessor`, mutated and persisted to AppSync/DynamoDB, and displayed in the Call Detail page for the call in the LCA UI, as shown above.
-
-NOTES: 
-- The summarization model used in this release limits the input text length to 1024 'tokens'. Tokens are words, punctuation, and new lines. Transcripts that are longer that 1024 tokens are automatically truncated to 1024 tokens by the `FetchTranscript` lambda to avoid errors when summarizing. This, unfortunately, reduces the accuracy of the summary for long calls. We hope to be able to increase this limit by adopting newer models in future releases.
-- The summarization model used in this release was trained and tested in **English** only. We hope to support additional languages in future releases.
-
-### **ANTHROPIC**
-
-Configure LCA to use 3rd party LLM services from Anthropic by selecting 'ANTHROPIC', and providing an API key issued by the third party provider. Note that when using third party providers, **your data will leave your AWS account and the AWS network** and will be sent in the payload of the API requests to the third party provider. 
-
-When using Anthropic, the latest Claude-2 model is used by default. 
-
-The LCA deployment creates an AWS Lambda function, `LLMAnthropicSummaryLambda`, that interacts with the Anthropic API on your behalf. You can optionally customize the behavior by modifying function enviornment variables:
-- ANTHROPIC_API_KEY: Set to the value you provided as `End of Call Summarization LLM Third Party API Key` during deployment.
-- ANTHROPIC_MODEL_IDENTIFIER: Set to `claude-2` by default.
-- SUMMARY_PROMPT_TEMPLATE: Default prompt template used to generate summary from Claude. Modify this template to customize your summaries. Note, the placeholder `{transcript}` must be present in the prompt template, and will be replaced by the actual call transcript retrieved by `FetchTranscript` Lambda (see more details below). 
-- TOKEN_COUNT: Defaults to '0' which means that the transcript is not truncated prior to inference. The default `claude-2` model supports 100k tokens, which we expect to be more than sufficient to handle even the longest call transcripts.
+**Remove default prompts:** Create a custom prompt template attribute with the same name as the default prompt you want to disable, but leave the attribute value empty, or give it the value 'NONE'. When LCA merges the default and custom values, the empty (or 'NONE') valued prompts are skipped.
 
 
 ### **LAMBDA**
 
 Use the LAMBDA option to provide your own summarization functions and/or machine learning models. This option allows you to experiment with different models and techniques to customize the summary as you need.
 
-When you choose the `LAMBDA` option, you must provide the Arn of your custom Lambda function in the `EndOfCallLambdaHookFunctionArn` CloudFormation parameter. At the end of a call, the `CallEventProcessor` Lambda function will invoke the custom Lambda and pass in the CallId of the call.
+When you choose the `LAMBDA` option, you must provide the Arn of your custom Lambda function in the `EndOfCallLambdaHookFunctionArn` CloudFormation parameter. At the end of a call, the `CallEventProcessor` Lambda function will invoke the custom Lambda function and pass in the CallId of the call.
 
 Your custom Lambda function must return the summary in the following JSON format:
 
@@ -93,7 +64,7 @@ The summary can optionally use Markdown syntax to include rich text, hyperlinks,
 If you would like to include more than one section in the summary, similar to the `BEDROCK` option, you may provide a JSON-encoded string that contains key value pairs as the summary's value. This will render each key as a section header, and the value as the body of the section. The following is an example:
 ```
 {
-  "summary": "{\n\"Summary\":\"This is a summary.\",\n\"Topic\":\"Credit Cards\",\n\"Follow-Up Actions\": \"The agent will send a replacement card.\"\n}"
+  "summary": "{\n\"Summary\":\"The weekly report was reviewed.\",\n\"Topic\":\"Weekly Report\",\n\"Follow-Up Actions\": \"John will set up a follow-up call.\"\n}"
 }
 ```
 This would be rendered as:
@@ -115,9 +86,7 @@ def lambda_handler(event, context):
 
 This example function trivially returns a hardcoded string as the summary. Your function will be much smarter, and will implement your custom rules or models.
   
-Use the provided [FetchTranscript utility Lambda function ](./FetchTranscriptLambda.md) in your custom summarization Lambda to retrieve the call transcript, optionally truncated to the maximum input token limit imposed by your summarization model.
-
-Use the provided SageMaker based `SummaryLambda` function as a reference for creating your own. The function is defined as resource `SummaryLambda` in the CloudFormation template [sagemaker-summary-stack.yaml](./ml-stacks/sagemaker-summary-stack.yaml).
+Use the provided [FetchTranscript utility Lambda function ](./FetchTranscriptLambda.md) in your custom summarization Lambda to retrieve the call transcript, and optionally truncated to the maximum input token limit imposed by your summarization model.
 
 If your custom Lambda fails at runtime, or you do not want to return a summary for the call, return an empty string for the value of the summary field.
 
