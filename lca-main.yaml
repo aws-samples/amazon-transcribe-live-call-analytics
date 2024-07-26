@@ -1702,6 +1702,11 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         TalkdeskAccountId: !Ref TalkdeskAccountId
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
   WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
