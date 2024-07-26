@@ -21,7 +21,7 @@ npm run setup
 npm run buildcheck || exit 1
 popd
 
-dir=lca-talkdesk-voicestream-stack
+dir=lca-genesys-audiohook-stack
 echo "PACKAGING $dir"
 pushd deployment
 rm -rf ../out

@@ -17,7 +17,6 @@ import {
     StartStreamTranscriptionCommandInput,
     ContentRedactionOutput,
     LanguageCode,
-    ContentRedactionType
 } from '@aws-sdk/client-transcribe-streaming';
 
 import { 

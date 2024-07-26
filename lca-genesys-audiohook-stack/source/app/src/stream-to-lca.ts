@@ -23,7 +23,8 @@ import {
     ParticipantRole,
     ChannelDefinition,
     LanguageCode,
-    StartStreamTranscriptionCommandInput
+    StartStreamTranscriptionCommandInput,
+    ContentRedactionOutput,
 } from '@aws-sdk/client-transcribe-streaming';
 const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
 
@@ -134,7 +135,7 @@ export const addStreamToLCA = (session: Session) => {
                         DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
                     };
                     if (IS_CONTENT_REDACTION_ENABLED) {
-                        configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
+                        configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT as ContentRedactionOutput;
                     }
                 }
                 yield { ConfigurationEvent: configuration_event };
