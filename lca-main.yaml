@@ -682,7 +682,6 @@ Metadata:
           default: Retention
         Parameters:
           - DynamoDbExpirationInDays
-          - RecordingsBucketRetentionDays
           - AudioRecordingExpirationInDays
           - CloudWatchLogGroupRetentionInDays
       - Label:
