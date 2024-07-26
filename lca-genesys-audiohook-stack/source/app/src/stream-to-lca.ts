@@ -22,6 +22,7 @@ import {
     ConfigurationEvent,
     ParticipantRole,
     ChannelDefinition,
+    LanguageCode,
     StartStreamTranscriptionCommandInput
 } from '@aws-sdk/client-transcribe-streaming';
 const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
@@ -71,7 +72,7 @@ const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env['POST_CALL_CONTENT_REDACT
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 const tcaOutputLocation = `s3://${RECORDINGS_BUCKET_NAME}/${CALL_ANALYTICS_FILE_PREFIX}`;
 
-type transcribeInput<TCAEnabled> = TCAEnabled extends true
+type transcriptionCommandInput<TCAEnabled> = TCAEnabled extends true
     ? StartCallAnalyticsStreamTranscriptionCommandInput
     : StartStreamTranscriptionCommandInput;
 
@@ -82,7 +83,7 @@ type SessionData = {
     agentId?: string,
     callStreamingStartTime: string,
     tcaOutputLocation: string,
-    tsParms: transcribeInput<typeof isTCAEnabled>
+    tsParms: transcriptionCommandInput<typeof isTCAEnabled>
 };
 
 const dynamoClient = new DynamoDBClient({ region: AWS_REGION });
@@ -149,7 +150,7 @@ export const addStreamToLCA = (session: Session) => {
         let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
         let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
 
-        const tsParams: transcribeInput<typeof isTCAEnabled> = {
+        const tsParams: transcriptionCommandInput<typeof isTCAEnabled> = {
             MediaSampleRateHertz: selectedMedia?.rate || 8000,
             MediaEncoding: 'pcm',
             AudioStream: transcribeInput()
@@ -180,7 +181,7 @@ export const addStreamToLCA = (session: Session) => {
             TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
             TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
             TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
-            tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
+            tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as 'PII' | undefined;
             if (TRANSCRIBE_PII_ENTITY_TYPES) {
                 tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
             }

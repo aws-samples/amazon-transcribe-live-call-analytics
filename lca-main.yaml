@@ -1693,6 +1693,8 @@ Resources:
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
         TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
         CustomVocabularyName: !Ref CustomVocabularyName
         CustomLanguageModelName: !Ref CustomLanguageModelName

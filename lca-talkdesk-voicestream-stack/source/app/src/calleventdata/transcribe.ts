@@ -58,6 +58,8 @@ const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
+const TRANSCRIBE_LANGUAGE_OPTIONS = process.env['TRANSCRIBE_LANGUAGE_OPTIONS'] || undefined;
+const TRANSCRIBE_PREFERRED_LANGUAGE = process.env['TRANSCRIBE_PREFERRED_LANGUAGE'] || 'None';
 const CUSTOM_VOCABULARY_NAME = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
 const CUSTOM_LANGUAGE_MODEL_NAME = process.env['CUSTOM_LANGUAGE_MODEL_NAME'] || undefined;
 const IS_CONTENT_REDACTION_ENABLED = (process.env['IS_CONTENT_REDACTION_ENABLED'] || '') === 'true';
@@ -165,14 +167,37 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
     let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
     
     const tsParams:transcriptionCommandInput<typeof isTCAEnabled> = {
-        LanguageCode: TRANSCRIBE_LANGUAGE_CODE as LanguageCode,
         MediaSampleRateHertz: callMetaData.samplingRate,
         MediaEncoding: 'pcm',
         AudioStream: transcribeInput()
     };
-    
-    if (IS_CONTENT_REDACTION_ENABLED && TRANSCRIBE_LANGUAGE_CODE === 'en-US') {
-        tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as ContentRedactionType;
+
+    if (TRANSCRIBE_LANGUAGE_CODE === 'identify-language') {
+        tsParams.IdentifyLanguage = true;
+        if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+            tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+            if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+                tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE as LanguageCode;
+            }
+        }
+    } else if (TRANSCRIBE_LANGUAGE_CODE === 'identify-multiple-languages') {
+        tsParams.IdentifyMultipleLanguages = true;
+        if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+            tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+            if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+                tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE as LanguageCode;
+            }
+        }
+    } else {
+        tsParams.LanguageCode = TRANSCRIBE_LANGUAGE_CODE as LanguageCode;
+    }
+
+    if (IS_CONTENT_REDACTION_ENABLED && (
+        TRANSCRIBE_LANGUAGE_CODE === 'en-US' ||
+        TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
+        TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
+        TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
+        tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as 'PII' | undefined;
         if (TRANSCRIBE_PII_ENTITY_TYPES) {
             tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
         }
