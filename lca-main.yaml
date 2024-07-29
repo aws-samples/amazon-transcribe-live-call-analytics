@@ -117,11 +117,11 @@ Parameters:
 
   TalkdeskAccountId:
     Type: String
-    Default: ''
+    Default: ""
     Description: >
       (Optional) The Account identifier that created the Talkdesk stream. Used only when CallAudioSource is 
       set to 'Talkdesk Voice Stream Websocket'. Provide the unique account identifier assigned to your 
-      Talkdesk account.  
+      Talkdesk account.
 
   AgentAssistOption:
     Type: String
@@ -697,8 +697,8 @@ Metadata:
         default: Lambda Hook Function ARN for SIPREC Call Initialization (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
-      TalkdeskAccountId: 
-        default: Talkdesk Account Identifier for "Talkdesk Voice Stream Websocket" Call Audio Source 
+      TalkdeskAccountId:
+        default: Talkdesk Account Identifier for "Talkdesk Voice Stream Websocket" Call Audio Source
       AgentAssistOption:
         default: Enable Agent Assist
       BedrockKnowledgeBaseId:
@@ -1434,6 +1434,7 @@ Resources:
   # Format nested JSON strings before nesting them in QnABotSettings in AGENTASSISTSETUP
   SettingsJSON:
     Type: Custom::ToJSON
+    Condition: ShouldInstallAWSQnaBot
     Properties:
       ServiceToken: !GetAtt ToJSONFunction.Arn
       EMBEDDINGS_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreThreshold
@@ -1830,9 +1831,9 @@ Outputs:
   TalkdeskWebsocketEndpoint:
     Description: Websocket endpoint for Talkdesk websocket integration
     Value: !If
-      - ShouldInstallTalkdeskStack  
+      - ShouldInstallTalkdeskStack
       - !GetAtt TALKDESKSTACK.Outputs.WebSocketEndpoint
-      - ' Talkdesk WebSocket source not enabled'
+      - " Talkdesk WebSocket source not enabled"
 
   LCAWebsocketEndpoint:
     Description: Websocket endpoint for websocket integration
