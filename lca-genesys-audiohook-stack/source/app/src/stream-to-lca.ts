@@ -26,7 +26,6 @@ import {
     StartStreamTranscriptionCommandInput,
     ContentRedactionOutput,
 } from '@aws-sdk/client-transcribe-streaming';
-const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
 
 import {
     DynamoDBClient,
@@ -116,7 +115,6 @@ export const addStreamToLCA = (session: Session) => {
             clientArgs.endpoint = TRANSCRIBE_ENDPOINT;
         }
         session.logger.info(`Transcribe client args: ${JSON.stringify(clientArgs)}`);
-        session.logger.info(`AWS SDK - @aws-sdk/client-transcribe-streaming version: ${transcribeStreamingPkg.version}`);
         const client = new TranscribeStreamingClient(clientArgs);
 
         const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio');

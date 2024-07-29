@@ -29,7 +29,7 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
 popd
 
-repo_arn=arn:aws:s3:::${BUCKET}/${PREFIX_AND_VERSION}/${dir}/${VERSION}/lca-talkdesk-ws.zip
+repo_arn=arn:aws:s3:::${BUCKET}/${PREFIX_AND_VERSION}/${dir}/${VERSION}/audiohooksrc.zip
 
 echo $repo_arn
 
