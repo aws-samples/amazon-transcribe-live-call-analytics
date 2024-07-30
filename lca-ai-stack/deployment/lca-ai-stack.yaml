@@ -43,6 +43,7 @@ Parameters:
       - Demo Asterisk PBX Server
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
+      - Talkdesk Voice Stream Websocket
       - Amazon Connect Contact Lens
       - Amazon Connect Kinesis Video Streams
     Description: >

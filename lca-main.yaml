@@ -25,6 +25,7 @@ Parameters:
       - Demo Asterisk PBX Server
       - Amazon Chime SDK Voice Connector (SIPREC)
       - Genesys Cloud Audiohook Web Socket
+      - Talkdesk Voice Stream Websocket
       - Amazon Connect Contact Lens
       - Amazon Connect Kinesis Video Streams
     Description: >
@@ -113,6 +114,14 @@ Parameters:
       Required when CallAudioSource is set to 'Amazon Connect Contact Lens' or 'Amazon Connect Kinesis Video Streams'.
       Amazon Connect instance ARN of a working instance. Prerequisite: Agent queue and Real Time Contact Lens must be enabled, or 
       Media Streams must be enabled.
+
+  TalkdeskAccountId:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) The Account identifier that created the Talkdesk stream. Used only when CallAudioSource is 
+      set to 'Talkdesk Voice Stream Websocket'. Provide the unique account identifier assigned to your 
+      Talkdesk account.
 
   AgentAssistOption:
     Type: String
@@ -584,6 +593,7 @@ Metadata:
           - SiprecAllowedCidrList
           - SiprecLambdaHookFunctionArn
           - ConnectInstanceArn
+          - TalkdeskAccountId
       - Label:
           default: Agent Assist Options
         Parameters:
@@ -687,6 +697,8 @@ Metadata:
         default: Lambda Hook Function ARN for SIPREC Call Initialization (existing)
       ConnectInstanceArn:
         default: Amazon Connect instance ARN (existing)
+      TalkdeskAccountId:
+        default: Talkdesk Account Identifier for "Talkdesk Voice Stream Websocket" Call Audio Source
       AgentAssistOption:
         default: Enable Agent Assist
       BedrockKnowledgeBaseId:
@@ -787,6 +799,8 @@ Conditions:
     !Equals [!Ref CallAudioSource, "Amazon Connect Kinesis Video Streams"]
   ShouldInstallGenesysAudiohookStack:
     !Equals [!Ref CallAudioSource, "Genesys Cloud Audiohook Web Socket"]
+  ShouldInstallTalkdeskStack:
+    !Equals [!Ref CallAudioSource, "Talkdesk Voice Stream Websocket"]
   ShouldInstallWebSocketStack: !Equals [!Ref WebSocketAudioInput, "Enabled"]
   ShouldInstallConnectIntegrationStack:
     !Equals [!Ref CallAudioSource, "Amazon Connect Contact Lens"]
@@ -1420,6 +1434,7 @@ Resources:
   # Format nested JSON strings before nesting them in QnABotSettings in AGENTASSISTSETUP
   SettingsJSON:
     Type: Custom::ToJSON
+    Condition: ShouldInstallAWSQnaBot
     Properties:
       ServiceToken: !GetAtt ToJSONFunction.Arn
       EMBEDDINGS_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreThreshold
@@ -1658,6 +1673,44 @@ Resources:
         PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
         PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
 
+  TALKDESKSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldInstallTalkdeskStack
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-talkdesk-voicestream-stack/<VERSION_TOKEN>/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
+        AudioFilePrefix: !Ref AudioFilePrefix
+        CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
+        CallDataStreamName: !Ref CallDataStream
+        CallDataStreamArn: !GetAtt CallDataStream.Arn
+        CloudFrontPriceClass: !Ref CloudFrontPriceClass
+        TranscribeApiMode: !Ref TranscribeApiMode
+        IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
+        TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
+        TranscribeLanguageCode: !Ref TranscribeLanguageCode
+        TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
+        TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
+        TranscribePiiEntityTypes: !Ref TranscribePiiEntityTypes
+        CustomVocabularyName: !Ref CustomVocabularyName
+        CustomLanguageModelName: !Ref CustomLanguageModelName
+        PcaS3BucketName: !Ref PcaS3BucketName
+        PcaTranscriptsPrefix: !Ref PcaTranscriptsPrefix
+        PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
+        PcaWebAppURL: !Ref PcaWebAppURL
+        PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
+        TalkdeskAccountId: !Ref TalkdeskAccountId
+        VPC: !GetAtt VPCSTACK.Outputs.VPC
+        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+
   WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
@@ -1774,6 +1827,13 @@ Outputs:
       - ShouldInstallGenesysAudiohookStack
       - !GetAtt GENESYSAUDIOHOOKTRANSCRIBERSTACK.Outputs.AudiohookAPIClientSecret
       - "Genesys Cloud Audiohook Web Socket not enabled"
+
+  TalkdeskWebsocketEndpoint:
+    Description: Websocket endpoint for Talkdesk websocket integration
+    Value: !If
+      - ShouldInstallTalkdeskStack
+      - !GetAtt TALKDESKSTACK.Outputs.WebSocketEndpoint
+      - " Talkdesk WebSocket source not enabled"
 
   LCAWebsocketEndpoint:
     Description: Websocket endpoint for websocket integration

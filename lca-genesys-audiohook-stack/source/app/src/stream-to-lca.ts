@@ -22,9 +22,10 @@ import {
     ConfigurationEvent,
     ParticipantRole,
     ChannelDefinition,
-    StartStreamTranscriptionCommandInput
+    LanguageCode,
+    StartStreamTranscriptionCommandInput,
+    ContentRedactionOutput,
 } from '@aws-sdk/client-transcribe-streaming';
-const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
 
 import {
     DynamoDBClient,
@@ -71,7 +72,7 @@ const POST_CALL_CONTENT_REDACTION_OUTPUT = process.env['POST_CALL_CONTENT_REDACT
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 const tcaOutputLocation = `s3://${RECORDINGS_BUCKET_NAME}/${CALL_ANALYTICS_FILE_PREFIX}`;
 
-type transcribeInput<TCAEnabled> = TCAEnabled extends true
+type transcriptionCommandInput<TCAEnabled> = TCAEnabled extends true
     ? StartCallAnalyticsStreamTranscriptionCommandInput
     : StartStreamTranscriptionCommandInput;
 
@@ -82,7 +83,7 @@ type SessionData = {
     agentId?: string,
     callStreamingStartTime: string,
     tcaOutputLocation: string,
-    tsParms: transcribeInput<typeof isTCAEnabled>
+    tsParms: transcriptionCommandInput<typeof isTCAEnabled>
 };
 
 const dynamoClient = new DynamoDBClient({ region: AWS_REGION });
@@ -114,7 +115,6 @@ export const addStreamToLCA = (session: Session) => {
             clientArgs.endpoint = TRANSCRIBE_ENDPOINT;
         }
         session.logger.info(`Transcribe client args: ${JSON.stringify(clientArgs)}`);
-        session.logger.info(`AWS SDK - @aws-sdk/client-transcribe-streaming version: ${transcribeStreamingPkg.version}`);
         const client = new TranscribeStreamingClient(clientArgs);
 
         const audioDataIterator = pEvent.iterator<'audio', MediaDataFrame>(session, 'audio');
@@ -133,7 +133,7 @@ export const addStreamToLCA = (session: Session) => {
                         DataAccessRoleArn: TCA_DATA_ACCESS_ROLE_ARN
                     };
                     if (IS_CONTENT_REDACTION_ENABLED) {
-                        configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT;
+                        configuration_event.PostCallAnalyticsSettings.ContentRedactionOutput = POST_CALL_CONTENT_REDACTION_OUTPUT as ContentRedactionOutput;
                     }
                 }
                 yield { ConfigurationEvent: configuration_event };
@@ -149,7 +149,7 @@ export const addStreamToLCA = (session: Session) => {
         let outputCallAnalyticsStream: AsyncIterable<CallAnalyticsTranscriptResultStream> | undefined;
         let outputTranscriptStream: AsyncIterable<TranscriptResultStream> | undefined;
 
-        const tsParams: transcribeInput<typeof isTCAEnabled> = {
+        const tsParams: transcriptionCommandInput<typeof isTCAEnabled> = {
             MediaSampleRateHertz: selectedMedia?.rate || 8000,
             MediaEncoding: 'pcm',
             AudioStream: transcribeInput()
@@ -180,7 +180,7 @@ export const addStreamToLCA = (session: Session) => {
             TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
             TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
             TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
-            tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
+            tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE as 'PII' | undefined;
             if (TRANSCRIBE_PII_ENTITY_TYPES) {
                 tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
             }

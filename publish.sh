@@ -184,6 +184,18 @@ else
 echo "SKIPPING $dir (unchanged)"
 fi
 
+dir=lca-talkdesk-voicestream-stack
+if haschanged $dir; then
+echo "PACKAGING $dir"
+pushd $dir/deployment
+rm -rf ../out
+chmod +x ./build-s3-dist.sh
+./build-s3-dist.sh $BUCKET_BASENAME $PREFIX_AND_VERSION/$dir $VERSION $REGION || exit 1
+popd
+update_checksum $dir
+else
+echo "SKIPPING $dir (unchanged)"
+fi
 
 dir=lca-websocket-transcriber-stack
 if haschanged $dir; then
