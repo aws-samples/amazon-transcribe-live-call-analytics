@@ -59,8 +59,8 @@ const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
 const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
 const TRANSCRIBE_LANGUAGE_OPTIONS = process.env['TRANSCRIBE_LANGUAGE_OPTIONS'] || undefined;
 const TRANSCRIBE_PREFERRED_LANGUAGE = process.env['TRANSCRIBE_PREFERRED_LANGUAGE'] || 'None';
-const CUSTOM_VOCABULARY_NAME = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
-const CUSTOM_LANGUAGE_MODEL_NAME = process.env['CUSTOM_LANGUAGE_MODEL_NAME'] || undefined;
+const CUSTOM_VOCABULARY_NAMES = process.env['CUSTOM_VOCABULARY_NAME'] || undefined;
+const CUSTOM_LANGUAGE_MODEL_NAMES = process.env['CUSTOM_LANGUAGE_MODEL_NAME'] || undefined;
 const IS_CONTENT_REDACTION_ENABLED = (process.env['IS_CONTENT_REDACTION_ENABLED'] || '') === 'true';
 const CONTENT_REDACTION_TYPE = process.env['CONTENT_REDACTION_TYPE'] || 'PII';
 const TRANSCRIBE_PII_ENTITY_TYPES = process.env['TRANSCRIBE_PII_ENTITY_TYPES'] || undefined;
@@ -264,6 +264,37 @@ export const writeAddCallCategoryEvent = async function (categoryEvent: Category
     }
 };
 
+/*
+Function to get the correct Custom Vocabulary or Custom Language Model name. 
+The function first splits the CUSTOM_VOCABULARY_NAMES or CUSTOM_LANGUAGE_MODEL_NAMES into an array.
+It then checks for names with the correct language code suffix.
+If there are multiple matches with the suffix, it returns the first match.
+If no matches are found with the suffix, it checks for names without any language code suffix.
+If there are multiple names without suffixes, it returns the first one.
+If no matches are found in both cases, it returns null.
+*/
+function getCustomVocabName(languageCode: string) {
+    return getNameByLanguageCode(CUSTOM_VOCABULARY_NAMES as string, languageCode);
+}
+
+function getCustomLanguageModelName(languageCode: string) {
+    return getNameByLanguageCode(CUSTOM_LANGUAGE_MODEL_NAMES as string, languageCode);
+}
+
+function getNameByLanguageCode(names: string, languageCode: string) {
+    const nameList = names.split(',').map(name => name.trim());
+    // Check for names with the correct language code suffix
+    const matchingSuffix = nameList.filter(name => name.endsWith(`_${languageCode}`));
+    if (matchingSuffix.length > 0) {
+        return matchingSuffix[0];
+    }
+    // Check for names without any language code suffix
+    const noSuffix = nameList.filter(name => !name.includes('_'));
+    if (noSuffix.length > 0) {
+        return noSuffix[0];
+    }
+    return null;
+}
 
 export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough, socketCallMap: SocketCallData, server: FastifyInstance) => {
 
@@ -331,11 +362,24 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             tsParams.PiiEntityTypes = TRANSCRIBE_PII_ENTITY_TYPES;
         }
     }
-    if (CUSTOM_VOCABULARY_NAME) {
-        tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
+
+    if (CUSTOM_VOCABULARY_NAMES) {
+        const vocabName = getCustomVocabName(CUSTOM_VOCABULARY_NAMES);
+        if (vocabName !== null) {
+            console.log(`[TRANSCRIBING]: [${callMetaData.callId}] - Using custom vocabulary ${vocabName} for language code ${TRANSCRIBE_LANGUAGE_CODE}`);
+            tsParams.VocabularyName = vocabName;
+        } else {
+            console.log(`[TRANSCRIBING]: [${callMetaData.callId}] - No custom vocabulary found in [${CUSTOM_VOCABULARY_NAMES}] for language code ${TRANSCRIBE_LANGUAGE_CODE}`);
+        }
     }
-    if (CUSTOM_LANGUAGE_MODEL_NAME) {
-        tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
+    if (CUSTOM_LANGUAGE_MODEL_NAMES) {
+        const langModelName = getCustomLanguageModelName(CUSTOM_LANGUAGE_MODEL_NAMES);
+        if (langModelName !== null) {
+            console.log(`[TRANSCRIBING]: [${callMetaData.callId}] - Using custom language model ${langModelName} for language code ${TRANSCRIBE_LANGUAGE_CODE}`);
+            tsParams.LanguageModelName = langModelName;
+        } else {
+            console.log(`[TRANSCRIBING]: [${callMetaData.callId}] - No custom language model found in [${CUSTOM_LANGUAGE_MODEL_NAMES}] for language code ${TRANSCRIBE_LANGUAGE_CODE}`);
+        }
     }
 
     if (isTCAEnabled) {
