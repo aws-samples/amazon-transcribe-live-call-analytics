@@ -199,8 +199,13 @@ const StreamAudio = () => {
       const monoMicSource = convertToMono(micAudioSource.current);
 
       channelMerger.current = audioContext.current.createChannelMerger(2);
-      monoMicSource.connect(channelMerger.current, 0, 0);
-      monoDisplaySource.connect(channelMerger.current, 0, 1);
+      if (micInputOption.value === 'agent') {
+        monoMicSource.connect(channelMerger.current, 0, 0);
+        monoDisplaySource.connect(channelMerger.current, 0, 1);
+      } else {
+        monoMicSource.connect(channelMerger.current, 0, 1);
+        monoDisplaySource.connect(channelMerger.current, 0, 0);        
+      }
 
       console.log(`
         DEBUG - [${new Date().toISOString()}]: Registering and adding AudioWorklet processor to capture audio
