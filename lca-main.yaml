@@ -361,8 +361,13 @@ Parameters:
     Type: String
     Default: ""
     Description: >-
-      The name of the vocabulary to use when processing the transcription job. Leave blank if no custom vocabulary to be used. If yes, the custom
-      vocabulary must pre-exist in your account.
+      The name of the vocabulary to use when processing the transcription job. Leave blank if no
+      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+      Multiple values are currently supported only when CallAudioSource is either 'Demo Asterisk PBX Server' or 
+      'Amazon Chime SDK Voice Connector (SIPREC)', AND CallAudioProcessor is 'Call Transcriber Lambda'.
+      Specify multiple custom vocabularies by separating them with a comma (,) and appending language 
+      code after each vocabulary name as '_<langcode>', e.g. 'MyVocab_en-US,MyVocab_es-US' to support using custom 
+      vocabularies for different languages set by a custom call initialization Lambda Hook.
 
   CustomLanguageModelName:
     Type: String
@@ -371,6 +376,11 @@ Parameters:
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
       match the Language Code selected above, and use the 'Narrow Band' base model.
+      Multiple values are currently supported only when CallAudioSource is either 'Demo Asterisk PBX Server' or 
+      'Amazon Chime SDK Voice Connector (SIPREC)', AND CallAudioProcessor is 'Call Transcriber Lambda'.
+      Specify multiple custom language models by separating them with a comma (,) and appending language 
+      code after each language model name as '_<langcode>', e.g. 'MyCLM_en-US, MyCLM_es-US' to support using custom 
+      language models for different languages set by a custom call initialization Lambda Hook.
 
   IsSentimentAnalysisEnabled:
     Type: String
@@ -1016,26 +1026,45 @@ Resources:
         import cfnresponse
         import json
         import boto3
+        import re
         def is_model_available(modelId):
           try:
-              client = boto3.client('bedrock-runtime')
-              prompt = "Why is the sky blue?"
-              if 'embed' in modelId:
-                  body = {"inputText": prompt}
-              else:
-                  body = {
-                      "anthropic_version": "bedrock-2023-05-31",
-                      "messages": [{"role": "user", "content": [{'type': 'text', 'text': prompt}]}],
-                      "max_tokens": 128
-                  }
-              print(f"Testing model: {modelId} - {body}")
-              client.invoke_model(body=json.dumps(
-                  body), modelId=modelId, accept='application/json', contentType='application/json')
-              print(f"The model '{modelId}' is available and enabled.")
-              return True
+            client = boto3.client('bedrock-runtime')
+            prompt = "Why is the sky blue?"
+            if 'embed' in modelId:
+              body = {"inputText": prompt}
+            else:
+              body = {
+                  "anthropic_version": "bedrock-2023-05-31",
+                  "messages": [{"role": "user", "content": [{'type': 'text', 'text': prompt}]}],
+                  "max_tokens": 128
+              }
+            print(f"Testing model: {modelId} - {body}")
+            client.invoke_model(body=json.dumps(
+                body), modelId=modelId, accept='application/json', contentType='application/json')
+            print(f"The model '{modelId}' is available and enabled.")
+            return True
           except Exception as e:
-              print(f"The model '{modelId}' is not available or not enabled. {e}")
+            print(f"The model '{modelId}' is not available or not enabled. {e}")
+            return False
+        def isCvOrClmListAllowed(nameList, callAudioSource, callAudioProcessor):
+          names = nameList.split(',')
+          if len(names) == 1:
+            return True
+          if callAudioSource in ['Demo Asterisk PBX Server', 'Amazon Chime SDK Voice Connector (SIPREC)'] and callAudioProcessor in ['Call Transcriber Lambda']:
+            return True
+          return False
+        def isValidCvOrClmName(nameList):
+          names = nameList.split(',')
+          if len(names) == 1:
+              return True
+          # Define the expected language code pattern
+          lang_code_pattern = "_[a-z]{2}-[A-Z]{2}$"
+          for name in names:
+            if not re.search(lang_code_pattern, name):
+              print(f"Error: The name '{name}' is invalid. Each name should contain a language code suffix of the form '_<langcode>'.")
               return False
+          return True
         def handler(event, context):
             print(json.dumps(event))
             status = cfnresponse.SUCCESS
@@ -1048,12 +1077,27 @@ Resources:
               transcribePreferredLanguage = event['ResourceProperties'].get('TranscribePreferredLanguage', '')
               customVocabularyName = event['ResourceProperties'].get('CustomVocabularyName', '')
               customLanguageModelName = event['ResourceProperties'].get('CustomLanguageModelName', '')
-              # Check language code and options are valid for Transcribe analytics
+              callAudioSource = event['ResourceProperties'].get('CallAudioSource', '')
+              callAudioProcessor = event['ResourceProperties'].get('CallAudioProcessor', '')
               if transcribeApiMode == 'analytics':
                 allowedTCALanguages = ['en-US', 'en-GB', 'es-US', 'fr-CA', 'fr-FR', 'en-AU',  'it-IT', 'de-DE', 'pt-BR']
                 if transcribeLanguageCode not in allowedTCALanguages:
                   status = cfnresponse.FAILED
                   reason = f"Selected Transcribe Language '{transcribeLanguageCode}' is not supported by Transcribe Call Analytics - must be one of: {allowedTCALanguages}. Please choose a supported language or set Transcribe API mode to 'standard'"
+              if customVocabularyName:
+                if not isCvOrClmListAllowed(customVocabularyName, callAudioSource, callAudioProcessor):
+                  status = cfnresponse.FAILED
+                  reason = f"CustomVocabularyName '{customVocabularyName}' is not valid for CallAudioSource '{callAudioSource}' and CallAudioProcessor '{callAudioProcessor}' . Multiple values are currently supported only when callAudioSource is either 'Demo Asterisk PBX Server' or 'Amazon Chime SDK Voice Connector (SIPREC)', AND CallAudioProcessor is 'Call Transcriber Lambda'."
+                elif not isValidCvOrClmName(customVocabularyName):
+                  status = cfnresponse.FAILED
+                  reason = f"CustomVocabularyName '{customVocabularyName}' is not valid. When a list is provided, each name in the list must have a valid language code suffix, eg 'MyName_en-US, MyName_es-US'"
+              if customLanguageModelName:
+                if isCvOrClmListAllowed(customLanguageModelName, callAudioSource, callAudioProcessor):
+                  status = cfnresponse.FAILED
+                  reason = f"CustomLanguageModelName '{customLanguageModelName}' is not valid for CallAudioSource '{callAudioSource}' and CallAudioProcessor '{callAudioProcessor}' . Multiple values are currently supported only when callAudioSource is either 'Demo Asterisk PBX Server' or 'Amazon Chime SDK Voice Connector (SIPREC)', AND CallAudioProcessor is 'Call Transcriber Lambda'."
+                elif not isValidCvOrClmName(customLanguageModelName):
+                  status = cfnresponse.FAILED
+                  reason = f"CustomLanguageModelName '{customLanguageModelName}' is not valid. When a list is provided, each name in the list must have a valid language code suffix, eg 'MyName_en-US, MyName_es-US'"
               if transcribeLanguageCode in ['identify-language', 'identify-multiple-languages']:
                 if customVocabularyName:
                   status = cfnresponse.FAILED
@@ -1119,6 +1163,8 @@ Resources:
       TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
       CustomVocabularyName: !Ref CustomVocabularyName
       CustomLanguageModelName: !Ref CustomLanguageModelName
+      CallAudioSource: !Ref CallAudioSource
+      CallAudioProcessor: !Ref CallAudioProcessor
       BedrockModelIds:
         - !Ref SummaryBedrockModelId # Call summarization
         - !Ref AgentAssistLLMBedrockModelId # Agent assistant
@@ -1547,6 +1593,9 @@ Resources:
 
   VPCSTACK:
     Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-vpc-stack/template.yaml
@@ -1557,6 +1606,9 @@ Resources:
   CHIMEVCSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallChimeVCStack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-chimevc-stack/template.yaml
@@ -1610,6 +1662,9 @@ Resources:
   CONNECTKVSSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallConnectKVSStack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-kvs-stack/template.yaml
@@ -1639,6 +1694,9 @@ Resources:
   GENESYSAUDIOHOOKTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallGenesysAudiohookStack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-genesys-audiohook-stack/<VERSION_TOKEN>/template.yaml
@@ -1714,6 +1772,9 @@ Resources:
   WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-websocket-transcriber-stack/<VERSION_TOKEN>/template.yaml
@@ -1761,6 +1822,9 @@ Resources:
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallConnectIntegrationStack
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
       TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-connect-integration-stack/template.yaml

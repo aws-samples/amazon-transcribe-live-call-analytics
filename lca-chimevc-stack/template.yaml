@@ -206,8 +206,12 @@ Parameters:
     Type: String
     Default: ""
     Description: >-
-      The name of the vocabulary to use when processing the transcription job. Leave blank if no
-      custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
+      The name of the custom language model to use when processing the transcription job. Leave blank if no
+      custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
+      match the Language Code selected above, and use the 'Narrow Band' base model.
+      Specify multiple custom language models by separating them with a comma (,) and appending language 
+      code after each language model name as '_<langcode>', e.g. 'MyCLM_en-US, MyCLM_es-US' to support using custom 
+      language models for different languages set by a custom call initialization Lambda Hook.
 
   CustomLanguageModelName:
     Type: String
@@ -216,6 +220,9 @@ Parameters:
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
       match the Language Code selected above, and use the 'Narrow Band' base model.
+      Specify multiple custom language models by separating them with a comma (,) and appending language 
+      code after each language model name as '_<langcode>', e.g. 'MyCLM_en-US, MyCLM_es-US' to support using custom 
+      language models for different languages set by a custom call initialization Lambda Hook.
 
   PcaS3BucketName:
     Type: String
