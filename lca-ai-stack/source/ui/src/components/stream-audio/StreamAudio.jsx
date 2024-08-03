@@ -204,7 +204,7 @@ const StreamAudio = () => {
         monoDisplaySource.connect(channelMerger.current, 0, 1);
       } else {
         monoMicSource.connect(channelMerger.current, 0, 1);
-        monoDisplaySource.connect(channelMerger.current, 0, 0);        
+        monoDisplaySource.connect(channelMerger.current, 0, 0);
       }
 
       console.log(`
