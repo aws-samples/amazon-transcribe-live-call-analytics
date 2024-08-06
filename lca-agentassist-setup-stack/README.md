@@ -119,8 +119,7 @@ Some other example phrases you can ask as the caller are below.  See more on res
 
 |Phrase	|Response Type	|Details	|
 |---	|---	|---	|
-|I want to pay my credit card bill.	|Dynamic, context aware response	|3 slots required:  Account Number, Account Type, and Amount to pay. Agent Assist suggested responses will ask for these values if necessary.	|
-|I’m calling about my rewards card.	|Dynamic, knowledge base response	|2 slots required: Card Type and First Name.  Agent Assist suggested responses will ask for these values if necessary. Note: In the phrase, it already says the card type, "rewards card", so Agent Assist knows not to ask for it again. If the caller says 'I'm calling about my card', then Agent Assist will ask which type of card.	|
+|I’m calling about my rewards card.	|Dynamic response	|1 slots required: Card Type.  Agent Assist suggested responses will ask for these values if necessary. Note: In the phrase, it already says the card type, "rewards card", so Agent Assist knows not to ask for it again. If the caller says 'I'm calling about my card', then Agent Assist will ask which type of card.	|
 |What is the cash back rate for this card?	|Dynamic, context aware response	|1 slot required: Card Type. Note: Agent Assist can share the value of slots between different intents, so it may already have the Card Type from the previous phrase and will not ask for it again.|
 |What types of accidents are covered by accidental death insurance?	|Knowledge base fallback response	|There is no preconfigured response for this question, so the utterance is sent to the configured knowledge base on Amazon Bedrock to see if there is any relevant information in the knowledge base.	|
 |That’s all I need for now.	|Static response	|Many companies require agents to wrap up a call with very specific messaging. This response is tailored to the caller, including the caller's name. 	|
@@ -163,7 +162,7 @@ Use the Designer TEST tab to try a variety of questions that you want to test to
 
 #### ***Context aware response***
 
-Responses that have inputs, also called slots, require you to first configure the SlotType. There are two example slot types in the examples, SlotType.ACCOUNTTYPE and SlotType.CARDTYPE. You may also skip creating your own slot type if you want to use any of the built-in Amazon Lex V2 slot types, such as Amazon.FirstName, Amazon.City, etc.  The full list of built-in slot types can be found here: https://docs.aws.amazon.com/lexv2/latest/dg/howitworks-builtins-slots.html
+Responses that have inputs, also called slots, require you to first configure the SlotType. There is one example slot type in the example, SlotType.CARDTYPE. You may also skip creating your own slot type if you want to use any of the built-in Amazon Lex V2 slot types, such as Amazon.FirstName, Amazon.City, etc.  The full list of built-in slot types can be found here: https://docs.aws.amazon.com/lexv2/latest/dg/howitworks-builtins-slots.html
 
 To create a new slot type, select the same **Add** button in the upper right of QnABot Designer, and choose the **slottype** document type. Expand the Advanced section and it will look like the screenshot below:
 
@@ -204,7 +203,11 @@ Custom business logic is accomplished by writing a custom AWS Lambda Function. T
 
 ### **Amazon Bedrock Knowledge Base Fallback Response**
 
-If all else fails, and there are no matching Agent Assist responses found based on the items you configured usiong Content Designer (above), the user’s utterance will be sent to the knowledge base on Amazon Bedrock, which searches its index of unstructured documents such as crawled web pages, word or PDF documents, or documents ingested from any data source connector. 
+This is the simplest method to use for Agent Assist, as there is no setup required, other than to ingest documents into your knowledge base!
+
+If there are no matching Agent Assist responses found based on the items you configured usiong Content Designer (above), the user’s utterance will be sent to the knowledge base on Amazon Bedrock, which searches its index of unstructured documents such as crawled web pages, word or PDF documents, or documents ingested from any data source connector.  
+
+Questions are answered using the context of the meeting transcript, so it can handle followup questions in the correct context.
 
 
 ### **Rebuild Lex Bot**
