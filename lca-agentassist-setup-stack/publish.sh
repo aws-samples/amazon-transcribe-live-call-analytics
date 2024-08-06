@@ -74,6 +74,7 @@ echo "Validating template"
 aws cloudformation validate-template --template-url ${https_template} > /dev/null || exit 1
 echo "Validated: ${https_template}"
 aws s3 cp ./qna-aa-demo.jsonl s3://${BUCKET}/${PREFIX}/${NAME}/qna-aa-demo.jsonl
+aws s3 cp ./qna-aa-demo3.jsonl s3://${BUCKET}/${PREFIX}/${NAME}/qna-aa-demo3.jsonl
 
 if $PUBLIC; then
   echo "Setting public read ACLs on published artifacts"
