@@ -1190,7 +1190,6 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Type: String
-      Name: !Sub "${AWS::StackName}-LCASettings"
       Value: "{}"
 
   UpdateLCASettingsFunctionRole:
