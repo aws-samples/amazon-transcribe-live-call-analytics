@@ -71,64 +71,6 @@
       ]
     },
     {
-      "args": [
-        "<br><br>Human:<br>{transcript}<br><br>Summarize the most recent issue or topic discussed in this call.<br><br>Assistant: The most recent topic or issue is:"
-      ],
-      "a": "Call summary lambda hook failed",
-      "r": {
-        "buttons": [
-          {
-            "text": "Summarize Current Call",
-            "value": "QID::AA.SummarizeCall"
-          },
-          {
-            "text": "Identify Current Topic",
-            "value": "QID::AA.CurrentTopic"
-          },
-          {
-            "text": "Generate Email",
-            "value": "QID::AA.GenerateEmail"
-          }
-        ],
-        "title": "Buttons"
-      },
-      "type": "qna",
-      "l": "QNA-SummarizeCall-LCA-ASTERISK",
-      "qid": "AA.CurrentTopic",
-      "q": [
-        "Identify current topic"
-      ]
-    },
-    {
-      "args": [
-        "<br><br>Human:<br>{transcript}<br><br>Write a follow-up email from the agent to the caller. The email should include a greeting, a summary of the reasons why the caller called, a summary of actions taken during the call, a summary of any outstanding issues, and a summary of action items and next steps, if any. Write the email in the first person.<br><br>Assistant:"
-      ],
-      "a": "Call summary lambda hook failed",
-      "r": {
-        "buttons": [
-          {
-            "text": "Summarize Current Call",
-            "value": "QID::AA.SummarizeCall"
-          },
-          {
-            "text": "Identify Current Topic",
-            "value": "QID::AA.CurrentTopic"
-          },
-          {
-            "text": "Generate Email",
-            "value": "QID::AA.GenerateEmail"
-          }
-        ],
-        "title": "Buttons"
-      },
-      "type": "qna",
-      "l": "QNA-SummarizeCall-LCA-ASTERISK",
-      "qid": "AA.GenerateEmail",
-      "q": [
-        "Write followup email"
-      ]
-    },
-    {
       "a": "*LCA Agent Assistant is ready. Ask knowledge base questions or request a summary of the current call.*",
       "r": {
         "buttons": [
@@ -209,6 +151,64 @@
       ]
     },
     {
+      "args": [
+        "<br><br>Human:<br>{transcript}<br><br>Summarize the most recent issue or topic discussed in this call.<br><br>Assistant: The most recent topic or issue is:"
+      ],
+      "a": "Call summary lambda hook failed",
+      "r": {
+        "buttons": [
+          {
+            "text": "Summarize Current Call",
+            "value": "QID::AA.SummarizeCall"
+          },
+          {
+            "text": "Identify Current Topic",
+            "value": "QID::AA.CurrentTopic"
+          },
+          {
+            "text": "Generate Email",
+            "value": "QID::AA.GenerateEmail"
+          }
+        ],
+        "title": "Buttons"
+      },
+      "type": "qna",
+      "l": "QNA-SummarizeCall-LCA-ASTERISK",
+      "qid": "AA.CurrentTopic",
+      "q": [
+        "Identify current topic"
+      ]
+    },
+    {
+      "args": [
+        "<br><br>Human:<br>{transcript}<br><br>Write a follow-up email from the agent to the caller. The email should include a greeting, a summary of the reasons why the caller called, a summary of actions taken during the call, a summary of any outstanding issues, and a summary of action items and next steps, if any. Write the email in the first person.<br><br>Assistant:"
+      ],
+      "a": "Call summary lambda hook failed",
+      "r": {
+        "buttons": [
+          {
+            "text": "Summarize Current Call",
+            "value": "QID::AA.SummarizeCall"
+          },
+          {
+            "text": "Identify Current Topic",
+            "value": "QID::AA.CurrentTopic"
+          },
+          {
+            "text": "Generate Email",
+            "value": "QID::AA.GenerateEmail"
+          }
+        ],
+        "title": "Buttons"
+      },
+      "type": "qna",
+      "l": "QNA-SummarizeCall-LCA-ASTERISK",
+      "qid": "AA.GenerateEmail",
+      "q": [
+        "Write followup email"
+      ]
+    },
+    {
       "a": "{{#ifCond (getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified') '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified'}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?",
       "alt": {
         "markdown": "{{#ifCond (getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified') '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified'}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?"
@@ -217,6 +217,19 @@
       "qid": "AADEMO.CashBackEnquiry",
       "q": [
         "I was wondering what is the cash back rate for this card?"
+      ]
+    },
+    {
+      "a": "Thanks! We appreciate your business. Check out our website at ACMEBank.com to learn about all our other products, and feel free to call back if you have any additional questions. Have a great day.",
+      "alt": {
+        "markdown": "Thanks! We appreciate your business. Check out our website at [ACMEBank.com](http://acme.com/) to learn about all our other products, and feel free to call back if you have any additional questions. Have a great day."
+      },
+      "type": "qna",
+      "qid": "AADEMO.Wrapup",
+      "q": [
+        "Nothing else just now.",
+        "That's all i need for now.",
+        "Nothing else just now. You've been a big help. Thanks so much."
       ]
     }
   ]
