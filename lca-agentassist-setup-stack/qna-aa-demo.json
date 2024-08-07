@@ -1,0 +1,276 @@
+﻿{
+  "qna": [
+    {
+      "a": "All information captured.. Last 4 digits of account number = {{getSlot 'accountno' '?'}}, Amount = ${{getSlot 'amount' '?'}}, Account = {{getSlot 'accounttype' '?'}}.\nSuggested response: Great, so I’ve processed payment of ${{getSlot 'amount' '?'}} from your {{getSlot 'accounttype' '?'}} account.  Is there anything else I can help you with?",
+      "slots": [
+        {
+          "slotName": "accountno",
+          "slotPrompt": "Ask caller for last 4 digits of card number",
+          "slotRequired": true,
+          "slotType": "AMAZON.Number"
+        },
+        {
+          "slotName": "amount",
+          "slotPrompt": "Confirm that card balance is $75.34. How much do you want to pay? There’s a $50 minimum payment.",
+          "slotRequired": true,
+          "slotType": "AMAZON.Number",
+          "slotSampleUtterances": "I'll pay {amount} dollars please, {amount} dollars please, I'll pay {amount} dollars, I'll pay $ {amount} please, I'll pay $ {amount}, $ {amount}"
+        },
+        {
+          "slotName": "accounttype",
+          "slotPrompt": "Ask caller if they want to pay from their checking or savings account",
+          "slotRequired": true,
+          "slotType": "SlotType.ACCOUNTTYPE",
+          "slotSampleUtterances": "Let's use my {accounttype} account, my {accounttype} please"
+        }
+      ],
+      "enableQidIntent": true,
+      "alt": {
+        "markdown": "**All information captured.. Last 4 digits of account number = {{getSlot 'accountno' '?'}}, Amount = ${{getSlot 'amount' '?'}}, Account = {{getSlot 'accounttype' '?'}}.**\n<br>Suggested response: Great, so I’ve processed payment of ${{getSlot 'amount' '?'}} from your {{getSlot 'accounttype' '?'}} account.  Is there anything else I can help you with?"
+      },
+      "type": "qna",
+      "qid": "AADEMO.Transaction.MakePayment",
+      "q": [
+        "Hi, I want to pay my credit card bill.",
+        "Can I pay my card bill.",
+        "Let me pay the card bill",
+        "Can i pay my card bill now while I’m on the phone?",
+        "Thanks, yes. Can i pay my card bill now?"
+      ]
+    },
+    {
+      "a": "{{#ifCond Slots.cardtype '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{Slots.cardtype}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?",
+      "slots": [
+        {
+          "slotName": "cardtype",
+          "slotPrompt": "Ask: Is this a rewards card, or a purchase card?",
+          "slotRequired": true,
+          "slotType": "SlotType.CARDTYPE",
+          "slotValueCached": true,
+          "slotSampleUtterances": "It's a {cardtype} card"
+        }
+      ],
+      "enableQidIntent": true,
+      "alt": {
+        "markdown": "{{#ifCond Slots.cardtype '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{Slots.cardtype}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?"
+      },
+      "type": "qna",
+      "qid": "AADEMO.CashBackEnquiry",
+      "q": [
+        "I was wondering what is the cash back rate for this card?",
+        "What is the cash back rate for the {cardtype} card?"
+      ]
+    },
+    {
+      "a": "Open https://en.wikipedia.org/wiki/Life_insurance\nSuggested response: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more.",
+      "alt": {
+        "markdown": "Open [Life_insurance](https://en.wikipedia.org/wiki/Life_insurance)\n<br>Suggested response: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more."
+      },
+      "type": "qna",
+      "qid": "AADEMO.LifeInsurancePolicyEnquiry",
+      "q": [
+        "Do you offer life insurance policies?",
+        "What life insurance policies do you have?",
+        "Can you tell me what kinds of life insurance policies you have"
+      ]
+    },
+    {
+      "a": "Thanks {{getSessionAttr 'qnabotcontext.slot.firstname' ''}}! We appreciate your business. Check out our website at ACMEBank.com to learn about all our other products, and feel free to call back if you have any additional questions. Have a great day.",
+      "type": "qna",
+      "qid": "AADEMO.Wrapup",
+      "q": [
+        "Nothing else just now.",
+        "You’ve been a big help. That's all I need for now.",
+        "That's all I need for now."
+      ]
+    },
+    {
+      "descr": "Capture account type",
+      "resolutionStrategyRestrict": true,
+      "type": "slottype",
+      "qid": "SlotType.ACCOUNTTYPE",
+      "slotTypeValues": [
+        {
+          "synonyms": "checking account",
+          "samplevalue": "checking"
+        },
+        {
+          "synonyms": "savings account",
+          "samplevalue": "savings"
+        }
+      ]
+    },
+    {
+      "descr": "Capture credit card type",
+      "resolutionStrategyRestrict": true,
+      "type": "slottype",
+      "qid": "SlotType.CARDTYPE",
+      "slotTypeValues": [
+        {
+          "synonyms": "rewards",
+          "samplevalue": "reward-cards"
+        },
+        {
+          "synonyms": "purchase",
+          "samplevalue": "purchase-cards"
+        }
+      ]
+    },
+    {
+      "a": "Suggested response: Perfect! Hi {{getSlot 'firstname' '?'}}! How can i help you with your {{getSlot 'cardtype' '?'}} card?",
+      "slots": [
+        {
+          "slotName": "cardtype",
+          "slotPrompt": "Ask: Is this a rewards card, or a purchase card?",
+          "slotRequired": true,
+          "slotType": "SlotType.CARDTYPE",
+          "slotValueCached": true,
+          "slotSampleUtterances": "It's a {cardtype} card"
+        },
+        {
+          "slotName": "firstname",
+          "slotPrompt": "Ask caller to state their first name only, for verification purposes. It should be ‘Bob’ per callerId lookup.",
+          "slotRequired": true,
+          "slotType": "AMAZON.FirstName",
+          "slotValueCached": true
+        }
+      ],
+      "enableQidIntent": true,
+      "type": "qna",
+      "qid": "AADEMO.CardTypeAndName",
+      "q": [
+        "I’m calling about my {cardtype} card.",
+        "Hi. My name is {firstname}. I’m calling about my card.",
+        "Hi. My name is {firstname}. I’m calling about my {cardtype} card.",
+        "Hi. My name is {firstname}."
+      ]
+    },
+    {
+      "args": [
+        "{\"AnswerPrefix\":\"Assistant Answer:\", \"QueryPrefix\":\"Assistant Query:\", \"ShowContextText\":true, \"ShowSourceLinks\":true}"
+      ],
+      "a": "Default message - you'll see this only if the lambda hook failed",
+      "type": "qna",
+      "l": "QNA-LCA-ASTERISK-BedrockKB-LambdaHook",
+      "qid": "CustomNoMatches",
+      "q": [
+        "no_hits"
+      ]
+    },
+    {
+      "args": [
+        "<br><br>Human:<br>{transcript}<br><br>Summarize the above transcript in no more than 5 sentences, using gender neutral pronouns. Were the caller's needs met during the call?<br><br>Assistant: Here is a summary in 5 sentences:"
+      ],
+      "a": "Call summary lambda hook failed",
+      "r": {
+        "buttons": [
+          {
+            "text": "Summarize Current Call",
+            "value": "QID::AA.SummarizeCall"
+          },
+          {
+            "text": "Identify Current Topic",
+            "value": "QID::AA.CurrentTopic"
+          },
+          {
+            "text": "Generate Email",
+            "value": "QID::AA.GenerateEmail"
+          }
+        ],
+        "title": "Buttons"
+      },
+      "type": "qna",
+      "l": "QNA-SummarizeCall-LCA-ASTERISK",
+      "qid": "AA.SummarizeCall",
+      "q": [
+        "Summarize current call"
+      ]
+    },
+    {
+      "args": [
+        "<br><br>Human:<br>{transcript}<br><br>Summarize the most recent issue or topic discussed in this call.<br><br>Assistant: The most recent topic or issue is:"
+      ],
+      "a": "Call summary lambda hook failed",
+      "r": {
+        "buttons": [
+          {
+            "text": "Summarize Current Call",
+            "value": "QID::AA.SummarizeCall"
+          },
+          {
+            "text": "Identify Current Topic",
+            "value": "QID::AA.CurrentTopic"
+          },
+          {
+            "text": "Generate Email",
+            "value": "QID::AA.GenerateEmail"
+          }
+        ],
+        "title": "Buttons"
+      },
+      "type": "qna",
+      "l": "QNA-SummarizeCall-LCA-ASTERISK",
+      "qid": "AA.CurrentTopic",
+      "q": [
+        "Identify current topic"
+      ]
+    },
+    {
+      "args": [
+        "<br><br>Human:<br>{transcript}<br><br>Write a follow-up email from the agent to the caller. The email should include a greeting, a summary of the reasons why the caller called, a summary of actions taken during the call, a summary of any outstanding issues, and a summary of action items and next steps, if any. Write the email in the first person.<br><br>Assistant:"
+      ],
+      "a": "Call summary lambda hook failed",
+      "r": {
+        "buttons": [
+          {
+            "text": "Summarize Current Call",
+            "value": "QID::AA.SummarizeCall"
+          },
+          {
+            "text": "Identify Current Topic",
+            "value": "QID::AA.CurrentTopic"
+          },
+          {
+            "text": "Generate Email",
+            "value": "QID::AA.GenerateEmail"
+          }
+        ],
+        "title": "Buttons"
+      },
+      "type": "qna",
+      "l": "QNA-SummarizeCall-LCA-ASTERISK",
+      "qid": "AA.GenerateEmail",
+      "q": [
+        "Write followup email"
+      ]
+    },
+    {
+      "a": "*LCA Agent Assistant is ready. Ask knowledge base questions or request a summary of the current call.*",
+      "r": {
+        "buttons": [
+          {
+            "text": "Summarize Current Call",
+            "value": "QID::AA.SummarizeCall"
+          },
+          {
+            "text": "Identify Current Topic",
+            "value": "QID::AA.CurrentTopic"
+          },
+          {
+            "text": "Generate Email",
+            "value": "QID::AA.GenerateEmail"
+          }
+        ],
+        "title": "Buttons"
+      },
+      "alt": {
+        "markdown": "*LCA Agent Assistant is ready. Ask knowledge base questions or request a summary of the current call.*"
+      },
+      "type": "qna",
+      "qid": "AA.StartMessage",
+      "q": [
+        "Start Agent Assist"
+      ]
+    }
+  ]
+}

@@ -514,7 +514,7 @@ Parameters:
 
   DemoAsteriskAgentAudioURL:
     Type: String
-    Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent.wav
+    Default: https://raw.githubusercontent.com/aws-samples/amazon-transcribe-live-call-analytics/main/lca-chimevc-stack/demo-audio/agent3.wav
     Description: URL for audio (agent.wav) file download for demo Asterisk server.
 
   CloudFrontPriceClass:
@@ -1492,8 +1492,6 @@ Resources:
       LLM_QA_ENABLE: "FALSE"
       LLM_QA_PROMPT_TEMPLATE: ""
       EMPTYMESSAGE: "No response from agent assist QnAbot"
-      BEDROCK_KB_RETRIEVE_PROMPT_TEMPLATE: "deprecated"
-      BEDROCK_KB_GENERATE_PROMPT_TEMPLATE: "deprecated"
       ASSISTANT_NO_HITS_REGEX: "Sorry,"
       ASSISTANT_QUERY_PROMPT_TEMPLATE:
         'Let''''s think carefully step by step. Here is
@@ -1558,7 +1556,7 @@ Resources:
             !Ref TranscribeLanguageCode,
             Value,
           ]
-        QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo.jsonl
+        QnaAgentAssistDemoJson: <ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-agentassist-setup-stack/qna-aa-demo3.jsonl
         QnaBotSettings: !GetAtt SettingsJSON.Output
         WebAppBucket: !GetAtt AISTACK.Outputs.WebAppBucket
         CloudFrontDistributionId: !GetAtt AISTACK.Outputs.CloudFrontDistributionId
