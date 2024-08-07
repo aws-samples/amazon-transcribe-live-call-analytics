@@ -78,13 +78,13 @@ By default, QnABot uses Amazon Bedrock to generate text embeddings for stored it
 
 QnABot also uses **knowledge bases on Amazon Bedrock**  as an integrated knowledge base and ML powered intelligent search service that finds the best response to a caller's enquiry from 'unstructured' documents such as crawled web pages, word documents, or other sources that have been ingested into a knowledge base using a data source connector. See [Knowledge base on Amazon Bedrock features](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html) to to learn about the key concepts, such as Indexes, FAQs, Connectors, etc. 
 
-Also read the QnABot Implementation Guide at [Configure intent and slot matching](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/intent-and-slot-matching.html) to learn how QnABot (v5.2.0 and later) creates Lex intents and slots directly from the ContentDesigner UI. LCA agent assist uses this feature to identify caller intents and to guide the agent to ask for additional information (slots) when needed. 
+Also read the QnABot Implementation Guide at [Configure intent and slot matching](https://docs.aws.amazon.com/solutions/latest/qnabot-on-aws/intent-and-slot-matching.html) to learn how QnABot creates Lex intents and slots directly from the ContentDesigner UI. LCA agent assist uses this feature to identify caller intents and to guide the agent to ask for additional information (slots) when needed. 
 
 Now, recall the example from the [agent assist demo script](lca-agentassist-setup-stack/agent-assist-demo-script.md) that you used already when you installed LCA and followed the tutorial. If a caller says “I’m calling about my card”, but does not specify the type of card, Amazon Lex can identify what the intent is (which is calling about a card), but it still needs more information (the slot value, which is the type of card). In this case, the Agent Assist suggested response would be “What type of card are you interested in? A rewards card or purchase card?”. The caller then can reply with “rewards card”, which will “fulfill” the intent. This means all the required slots have been collected.
 
 ## How to enable Agent Assist
 
-By following the tutorial in the [LCA blog post](www.amazon.com/live-call-analytics) you have already installed and configured Agent Assist with the the default option: `QnABot on AWS with new Kendra Index (Developer Edition)`.
+By following the tutorial in the [LCA blog post](www.amazon.com/live-call-analytics) you have already installed and configured Agent Assist with the the default option: `QnABot on AWS with new Bedrock knowledge base`.
 
 Other Agent Assist options can be specified during stack deployment or update by providing values for the **Agent Assist Options** CloudFormation parameters as shown below.
 
