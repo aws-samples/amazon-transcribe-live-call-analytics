@@ -853,6 +853,8 @@ Conditions:
       !Condition ShouldCreateBedrockKnowledgeBase,
       !Condition ShouldUseExistingBedrockKnowledgeBase,
     ]
+  ShouldUseBedrockForSummary:
+    !Equals [!Ref EndOfCallTranscriptSummary, "BEDROCK"]
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -1166,10 +1168,22 @@ Resources:
       CallAudioSource: !Ref CallAudioSource
       CallAudioProcessor: !Ref CallAudioProcessor
       BedrockModelIds:
-        - !Ref SummaryBedrockModelId # Call summarization
-        - !Ref AgentAssistLLMBedrockModelId # Agent assistant
-        - "amazon.titan-embed-text-v2:0" # Meeting Assistant
-        - "amazon.titan-embed-text-v1" # QNABOTBR embedding model
+        - !If
+          - ShouldUseBedrockForSummary
+          - !Ref SummaryBedrockModelId # Call summarization
+          - AWS::NoValue
+        - !If
+          - ShouldInstallAWSQnaBot
+          - !Ref AgentAssistLLMBedrockModelId # Agent assistant
+          - AWS::NoValue
+        - !If
+          - ShouldInstallAWSQnaBot
+          - "amazon.titan-embed-text-v2:0" # Agent Assistant (KB embedding)
+          - AWS::NoValue
+        - !If
+          - ShouldInstallAWSQnaBot
+          - "amazon.titan-embed-text-v1" # Agent Assistant (QnABot embedding)
+          - AWS::NoValue
 
   ##########################################################################
   # Resources shared by multiple nested stacks
