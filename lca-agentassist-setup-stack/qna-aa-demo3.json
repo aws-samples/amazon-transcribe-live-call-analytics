@@ -1,29 +1,6 @@
 ﻿{
   "qna": [
     {
-      "a": "{{#ifCond Slots.cardtype '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{Slots.cardtype}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?",
-      "slots": [
-        {
-          "slotName": "cardtype",
-          "slotPrompt": "Ask: Is this a rewards card, or a purchase card?",
-          "slotRequired": true,
-          "slotType": "SlotType.CARDTYPE",
-          "slotValueCached": true,
-          "slotSampleUtterances": "It's a {cardtype} card"
-        }
-      ],
-      "enableQidIntent": true,
-      "alt": {
-        "markdown": "{{#ifCond Slots.cardtype '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{Slots.cardtype}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?"
-      },
-      "type": "qna",
-      "qid": "AADEMO.CashBackEnquiry",
-      "q": [
-        "I was wondering what is the cash back rate for this card?",
-        "What is the cash back rate for the {cardtype} card?"
-      ]
-    },
-    {
       "a": "Open https://en.wikipedia.org/wiki/Life_insurance\nSuggested response: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more.",
       "alt": {
         "markdown": "Open [Life_insurance](https://en.wikipedia.org/wiki/Life_insurance)\n<br>Suggested response: We offer many types of Term life insurance, and Permanent life insurance, including Whole life, Universal life, Endowment policies, Accidental death policies, and more."
@@ -229,6 +206,17 @@
       "qid": "AADEMO.CardType",
       "q": [
         "Hi, I’m calling about my {cardtype} card."
+      ]
+    },
+    {
+      "a": "{{#ifCond (getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified') '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified'}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?",
+      "alt": {
+        "markdown": "{{#ifCond (getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified') '===' 'reward-cards'}} \n    I see here that the rewards card has a 2% cashback rate on your everyday spending. \n{{else}}\n    I see here that the {{getSessionAttr 'qnabotcontext.slot.cardtype' 'unspecified'}} does not offer cash back. You might want to consider our rewards card. \n{{/ifCond}}\nAnything else I can help with today?"
+      },
+      "type": "qna",
+      "qid": "AADEMO.CashBackEnquiry",
+      "q": [
+        "I was wondering what is the cash back rate for this card?"
       ]
     }
   ]
