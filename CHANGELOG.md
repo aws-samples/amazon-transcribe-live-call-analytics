@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Option to integrate Talkdesk Audio stream as a call data source (see [Talkdesk](./lca-talkdesk-voicestream-stack/README.md)) #174
 - Ability to override default Transcribe language code using SIPREC Call initialization lambda hook #165
 - Ability to specify multiple language-specific CustomVocabulary or CLM and associated logic to select the appropriate one based on dynamic LanguageCode when using SIPREC Call initialization lambda hook #165
+- Simplified and more robust default demo agent recording and [demo script](./lca-agentassist-setup-stack/agent-assist-demo-script.md) for demos using Asterisk.
 
 
 ## [0.8.13] - 2024-05-22

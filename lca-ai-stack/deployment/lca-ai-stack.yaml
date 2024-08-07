@@ -288,7 +288,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.8.13
+    Default: 0.9.0
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -421,6 +421,16 @@ Outputs:
   CloudFrontDomainName:
     Description: The full domain name of the CloudFront distribution
     Value: !GetAtt WebAppCloudFrontDistribution.DomainName
+  LocalUITestingEnv:
+    Description: Copy to create .env file for local UI testing
+    Value: !Sub >-
+      REACT_APP_USER_POOL_ID=${UserPool}
+      REACT_APP_USER_POOL_CLIENT_ID=${UserPoolClient}
+      REACT_APP_IDENTITY_POOL_ID=${IdentityPool}
+      REACT_APP_APPSYNC_GRAPHQL_URL=${AppSyncApi.GraphQLUrl}
+      REACT_APP_AWS_REGION=${AWS::Region}
+      REACT_APP_SETTINGS_PARAMETER=${LCASettingsParameterName}
+      REACT_APP_ENABLE_LEX_AGENT_ASSIST=true
 
   TranscriptSummaryFunctionArn:
     Description: Call Summarizer Lambda function ARN
@@ -559,7 +569,7 @@ Resources:
               ECR do not support resource-level permissions for GetAuthorizationToken and therefore
               cannot be specificed directly.
 
-  TranscriberCodeBuildProject:
+  LCAUICodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
       Description: !Sub >-
@@ -569,9 +579,8 @@ Resources:
       Artifacts:
         Type: NO_ARTIFACTS
       Source:
-        Location:
-          !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
-          ${BootstrapVersion}/src.zip"
+        # Makefile calculates and substitute code hash in the filename here during package build
+        Location: !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/src-hash.zip"
         Type: S3
         BuildSpec: |
           version: 0.2
@@ -679,7 +688,7 @@ Resources:
                 Action:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
-                Resource: !GetAtt TranscriberCodeBuildProject.Arn
+                Resource: !GetAtt LCAUICodeBuildProject.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -715,13 +724,14 @@ Resources:
     Type: Custom::CodeBuildRun
     Properties:
       ServiceToken: !GetAtt LambdaCodeBuildStartBuild.Arn
-      BuildProjectName: !Ref TranscriberCodeBuildProject
+      BuildProjectName: !Ref LCAUICodeBuildProject
       IsLexAgentAssistEnabled: !Ref IsLexAgentAssistEnabled
       EnableVoiceToneAnalysis: !Ref EnableVoiceToneAnalysis
-      # pass code location to support upgrades
-      CodeLocation:
-        !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/\
-        ${BootstrapVersion}/src.zip"
+      LCASettingsParameterName: !Ref LCASettingsParameterName
+      # Makefile calculates and substitute code hash in the filename here during package build
+      # to force codebuild to rerun when source code changes, and to correctly roll back to
+      # previous version if build fails.
+      CodeLocation: !Sub "arn:aws:s3:::${BootstrapBucketBaseName}-${AWS::Region}/${BootstrapS3Prefix}/${BootstrapVersion}/src-hash.zip"
 
   LambdaCodeBuildStartBuild:
     Type: AWS::Serverless::Function
