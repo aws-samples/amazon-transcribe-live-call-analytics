@@ -1171,19 +1171,19 @@ Resources:
         - !If
           - ShouldUseBedrockForSummary
           - !Ref SummaryBedrockModelId # Call summarization
-          - AWS::NoValue
+          - !Ref AWS::NoValue
         - !If
           - ShouldInstallAWSQnaBot
           - !Ref AgentAssistLLMBedrockModelId # Agent assistant
-          - AWS::NoValue
+          - !Ref AWS::NoValue
         - !If
           - ShouldInstallAWSQnaBot
           - "amazon.titan-embed-text-v2:0" # Agent Assistant (KB embedding)
-          - AWS::NoValue
+          - !Ref AWS::NoValue
         - !If
           - ShouldInstallAWSQnaBot
           - "amazon.titan-embed-text-v1" # Agent Assistant (QnABot embedding)
-          - AWS::NoValue
+          - !Ref AWS::NoValue
 
   ##########################################################################
   # Resources shared by multiple nested stacks
