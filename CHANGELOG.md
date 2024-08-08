@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2024-07-02
 ### Fixed
 - Stack deployment now fails fast if required Bedrock models are not available or enabled in the account/region
+- Mic input role (CALLER vs. AGENT) assignment not working #169
+
 ### Added
 - Support for Bedrock anthropic-claude-3-haiku and anthropic-claude-3-sonnet models (removed support for older models) #152
 - Knowledge bases for Amazon Bedrock replaces Amazon Kendra for Agent Assist #157
