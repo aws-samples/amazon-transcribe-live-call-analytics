@@ -508,7 +508,7 @@ Resources:
   # CodeBuild
   ##########################################################################
 
-  TranscriberCodeBuildServiceRole:
+  LCAUICodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
       Path: /
@@ -574,7 +574,7 @@ Resources:
     Properties:
       Description: !Sub >-
         Builds docker images and the website of stack: ${AWS::StackName}
-      ServiceRole: !Ref TranscriberCodeBuildServiceRole
+      ServiceRole: !Ref LCAUICodeBuildServiceRole
       EncryptionKey: alias/aws/s3
       Artifacts:
         Type: NO_ARTIFACTS
