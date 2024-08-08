@@ -1,27 +1,27 @@
-/* eslint-disable indent */
+/* eslint-disable implicit-arrow-linebreak */
 import * as XLSX from 'xlsx';
 
-// eslint-disable-next-line prettier/prettier
-export const onImportExcelAsync = (file) => new Promise((resolve, reject) => {
-  const { files } = file.target;
-  const fileReader = new FileReader();
-  fileReader.onload = (event) => {
-    const { result } = event.target;
-    const workbook = XLSX.read(result, { type: 'binary' });
-    let data = [];
-    // iterate over each worksheet to read (here only the first table is read by default)
-    // eslint-disable-next-line no-restricted-syntax
-    for (const sheet in workbook.Sheets) {
-      // eslint-disable-next-line no-prototype-builtins
-      if (workbook.Sheets.hasOwnProperty(sheet)) {
-        data = data.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheet]));
+export const onImportExcelAsync = (file) =>
+  new Promise((resolve, reject) => {
+    const { files } = file.target;
+    const fileReader = new FileReader();
+    fileReader.onload = (event) => {
+      const { result } = event.target;
+      const workbook = XLSX.read(result, { type: 'binary' });
+      let data = [];
+      // iterate over each worksheet to read (here only the first table is read by default)
+      // eslint-disable-next-line no-restricted-syntax
+      for (const sheet in workbook.Sheets) {
+        // eslint-disable-next-line no-prototype-builtins
+        if (workbook.Sheets.hasOwnProperty(sheet)) {
+          data = data.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheet]));
+        }
       }
-    }
-    resolve(data);
-  };
-  fileReader.onerror = reject;
-  fileReader.readAsBinaryString(files[0]);
-});
+      resolve(data);
+    };
+    fileReader.onerror = reject;
+    fileReader.readAsBinaryString(files[0]);
+  });
 
 export const exportToExcel = async (data, nameFile) => {
   if (data.length > 0) {
