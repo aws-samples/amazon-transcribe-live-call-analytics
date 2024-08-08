@@ -21,11 +21,13 @@
 .sentiment-image-popover {
     cursor: pointer;
 }
+
 .issue-detected {
     text-decoration: underline;
     text-decoration-color: red;
     text-decoration-thickness: 3px;
 }
+
 span.issue-span {
     text-decoration: underline;
     text-decoration-color: red;
@@ -42,7 +44,7 @@ span.issue-pill {
     padding-bottom: 0.1em;
 }
 
-.transcript-segment-category-match  {
+.transcript-segment-category-match {
     background-color: lavender;
     border-radius: 2em;
     padding-left: 1em;
@@ -52,11 +54,11 @@ span.issue-pill {
 }
 
 .transcript-segment-category-match p {
-    height:1.5em;
+    height: 1.5em;
     padding: 0px !important;
 }
 
-.transcript-segment-category-match-alert  {
+.transcript-segment-category-match-alert {
     background-color: rgb(255, 147, 147);
     border-radius: 2em;
     padding-left: 1em;
@@ -64,12 +66,29 @@ span.issue-pill {
     padding-bottom: 0.1em;
     line-height: 2.5em !important;
 }
+
 .transcript-segment-category-match-alert p {
-    height:1.5em;
+    height: 1.5em;
     padding: 0px !important;
-    color:white;
+    color: white;
 }
 
 .hide-transcript {
-    display:none;
+    display: none;
+}
+
+.flex {
+    display: flex;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.items-start {
+    align-items: flex-start;
+}
+
+.btn-download-right {
+    margin-left: 0.5em;
 }

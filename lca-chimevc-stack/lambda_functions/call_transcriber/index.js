@@ -18,6 +18,8 @@ const {
   StartCallAnalyticsStreamTranscriptionCommand,
   ParticipantRole,
 } = require('@aws-sdk/client-transcribe-streaming');
+const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
+
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const BlockStream = require('block-stream2');
 const fs = require('fs');
@@ -54,10 +56,12 @@ const BUFFER_SIZE = parseInt(process.env.BUFFER_SIZE || '128', 10);
 // eslint-disable-next-line prettier/prettier
 const IS_CONTENT_REDACTION_ENABLED = (process.env.IS_CONTENT_REDACTION_ENABLED || 'true') === 'true';
 const TRANSCRIBE_LANGUAGE_CODE = process.env.TRANSCRIBE_LANGUAGE_CODE || 'en-US';
+const TRANSCRIBE_LANGUAGE_OPTIONS = process.env['TRANSCRIBE_LANGUAGE_OPTIONS'] || undefined;
+const TRANSCRIBE_PREFERRED_LANGUAGE = process.env['TRANSCRIBE_PREFERRED_LANGUAGE'] || 'None';
 const CONTENT_REDACTION_TYPE = process.env.CONTENT_REDACTION_TYPE || 'PII';
 const PII_ENTITY_TYPES = process.env.PII_ENTITY_TYPES || 'ALL';
-const CUSTOM_VOCABULARY_NAME = process.env.CUSTOM_VOCABULARY_NAME || '';
-const CUSTOM_LANGUAGE_MODEL_NAME = process.env.CUSTOM_LANGUAGE_MODEL_NAME || '';
+const CUSTOM_VOCABULARY_NAMES = process.env.CUSTOM_VOCABULARY_NAME || '';
+const CUSTOM_LANGUAGE_MODEL_NAMES = process.env.CUSTOM_LANGUAGE_MODEL_NAME || '';
 const KEEP_ALIVE = process.env.KEEP_ALIVE || '10000';
 const LAMBDA_HOOK_FUNCTION_ARN = process.env.LAMBDA_HOOK_FUNCTION_ARN || '';
 const TRANSCRIBE_API_MODE = process.env.TRANSCRIBE_API_MODE || 'standard';
@@ -198,6 +202,7 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     toNumber: callEvent.detail.toNumber,
     agentId: callEvent.detail.agentId,
     metadatajson: undefined,
+    transcribeLanguageCode: TRANSCRIBE_LANGUAGE_CODE,
     callerStreamArn,
     agentStreamArn,
     lambdaCount: 0,
@@ -233,7 +238,8 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
           fromNumber: <string>,
           toNumber: <string>,
           shouldRecordCall: <boolean>,
-          metadatajson: <string>
+          metadatajson: <string>,
+          transcribeLanguageCode: <string>
         }
     */
 
@@ -275,6 +281,12 @@ const getCallDataFromChimeEvents = async function getCallDataFromChimeEvents(cal
     if (payload.metadatajson) {
       console.log(`Lambda hook returned metadatajson: "${payload.metadatajson}"`);
       callData.metadatajson = payload.metadatajson;
+    }
+
+    // Transcribe language code?
+    if (payload.transcribeLanguageCode) {
+      console.log(`Lambda hook returned transcribeLanguageCode: "${payload.transcribeLanguageCode}"`);
+      callData.transcribeLanguageCode = payload.transcribeLanguageCode;
     }
 
     // Should we process this call?
@@ -713,6 +725,40 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
   }
 };
 
+
+/*
+Function to get the correct Custom Vocabulary or Custom Language Model name. 
+The function first splits the CUSTOM_VOCABULARY_NAMES or CUSTOM_LANGUAGE_MODEL_NAMES into an array.
+It then checks for names with the correct language code suffix.
+If there are multiple matches with the suffix, it returns the first match.
+If no matches are found with the suffix, it checks for names without any language code suffix.
+If there are multiple names without suffixes, it returns the first one.
+If no matches are found in both cases, it returns null.
+*/
+function getCustomVocabName(languageCode) {
+  return getNameByLanguageCode(CUSTOM_VOCABULARY_NAMES, languageCode);
+}
+
+function getCustomLanguageModelName(languageCode) {
+  return getNameByLanguageCode(CUSTOM_LANGUAGE_MODEL_NAMES, languageCode);
+}
+
+function getNameByLanguageCode(names, languageCode) {
+  const nameList = names.split(',').map(name => name.trim());
+  // Check for names with the correct language code suffix
+  const matchingSuffix = nameList.filter(name => name.endsWith(`_${languageCode}`));
+  if (matchingSuffix.length > 0) {
+    return matchingSuffix[0];
+  }
+  // Check for names without any language code suffix
+  const noSuffix = nameList.filter(name => !name.includes('_'));
+  if (noSuffix.length > 0) {
+    return noSuffix[0];
+  }
+  return null;
+}
+
+
 const go = async function go(callData) {
   const {
     callId,
@@ -725,7 +771,8 @@ const go = async function go(callData) {
     lastCallerFragment,
     tcaOutputLocation,
     lambdaCount,
-    originalCallId
+    originalCallId,
+    transcribeLanguageCode
   } = callData;
   let sessionId = callData.sessionId;
   let firstChunkToTranscribe = true;
@@ -775,10 +822,11 @@ const go = async function go(callData) {
     tsClientArgs.endpoint = TRANSCRIBE_ENDPOINT;
   }
   console.log(`Transcribe client args:`, tsClientArgs, ` (CallId: ${callId})`);
+  console.log('AWS SDK - @aws-sdk/client-transcribe-streaming version:', transcribeStreamingPkg.version);
+
   const tsClient = new TranscribeStreamingClient(tsClientArgs);
   let tsStream;
   const tsParams = {
-    LanguageCode: TRANSCRIBE_LANGUAGE_CODE,
     MediaSampleRateHertz: 8000,
     MediaEncoding: 'pcm',
     AudioStream: audioStream(),
@@ -790,23 +838,55 @@ const go = async function go(callData) {
     tsParams.EnableChannelIdentification = true;
   }
 
-  /* common optional stream parameters */
+  if (transcribeLanguageCode === 'identify-language') {
+    tsParams.IdentifyLanguage = true;
+    if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+      tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+      if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+        tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE;
+      }
+    }
+  } else if (transcribeLanguageCode === 'identify-multiple-languages') {
+    tsParams.IdentifyMultipleLanguages = true;
+    if (TRANSCRIBE_LANGUAGE_OPTIONS) {
+      tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
+      if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
+        tsParams.PreferredLanguage = TRANSCRIBE_PREFERRED_LANGUAGE;
+      }
+    }
+  } else {
+    tsParams.LanguageCode = transcribeLanguageCode;
+  }
+
   if (sessionId !== undefined) {
     tsParams.SessionId = sessionId;
   }
+
   if (IS_CONTENT_REDACTION_ENABLED && (
-    TRANSCRIBE_LANGUAGE_CODE === 'en-US' ||
-    TRANSCRIBE_LANGUAGE_CODE === 'en-AU' ||
-    TRANSCRIBE_LANGUAGE_CODE === 'en-GB' ||
-    TRANSCRIBE_LANGUAGE_CODE === 'es-US')) {
+    transcribeLanguageCode === 'en-US' ||
+    transcribeLanguageCode === 'en-AU' ||
+    transcribeLanguageCode === 'en-GB' ||
+    transcribeLanguageCode === 'es-US')) {
     tsParams.ContentRedactionType = CONTENT_REDACTION_TYPE;
     if (PII_ENTITY_TYPES) tsParams.PiiEntityTypes = PII_ENTITY_TYPES;
   }
-  if (CUSTOM_VOCABULARY_NAME) {
-    tsParams.VocabularyName = CUSTOM_VOCABULARY_NAME;
+  if (CUSTOM_VOCABULARY_NAMES) {
+    const vocabName = getCustomVocabName(transcribeLanguageCode);
+    if (vocabName !== null) {
+      console.log(`Using custom vocabulary ${vocabName} for language code ${transcribeLanguageCode}, (CallId: ${callId})`);
+      tsParams.VocabularyName = vocabName;
+    } else {
+      console.log(`No custom vocabulary found in [${CUSTOM_VOCABULARY_NAMES}] for language code ${transcribeLanguageCode}, (CallId: ${callId})`);
+    }
   }
-  if (CUSTOM_LANGUAGE_MODEL_NAME) {
-    tsParams.LanguageModelName = CUSTOM_LANGUAGE_MODEL_NAME;
+  if (CUSTOM_LANGUAGE_MODEL_NAMES) {
+    const langModelName = getCustomLanguageModelName(transcribeLanguageCode);
+    if (langModelName !== null) {
+      console.log(`Using custom language model ${langModelName} for language code ${transcribeLanguageCode}, (CallId: ${callId})`);
+      tsParams.LanguageModelName = langModelName;
+    } else {
+      console.log(`No custom language model found in [${CUSTOM_LANGUAGE_MODEL_NAMES}] for language code ${transcribeLanguageCode}, (CallId: ${callId})`);
+    }
   }
 
   /* start the stream - retry on exceptions */
@@ -815,11 +895,11 @@ const go = async function go(callData) {
   while (true) {
     try {
       if (isTCAEnabled) {
-        console.log(`Transcribe StartCallAnalyticsStreamTranscriptionCommand args:`, tsParams, ` (CallId: ${callId})`);
+        console.log(`Transcribe StartCallAnalyticsStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}, (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartCallAnalyticsStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.CallAnalyticsTranscriptResultStream);
       } else {
-        console.log(`Transcribe StartStreamTranscriptionCommand args:`, tsParams, ` (CallId: ${callId})`);
+        console.log(`Transcribe StartStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}, (CallId: ${callId})`);
         tsResponse = await tsClient.send(new StartStreamTranscriptionCommand(tsParams));
         tsStream = stream.Readable.from(tsResponse.TranscriptResultStream);
       }

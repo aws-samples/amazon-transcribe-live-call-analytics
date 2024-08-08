@@ -40,6 +40,7 @@ import {
 import './CallPanel.css';
 import { SentimentTrendIcon } from '../sentiment-trend-icon/SentimentTrendIcon';
 import { SentimentIcon } from '../sentiment-icon/SentimentIcon';
+import { exportToExcel } from '../common/download-func';
 import useAppContext from '../../contexts/app';
 import awsExports from '../../aws-exports';
 
@@ -63,6 +64,7 @@ const piiTypesSplitRegEx = new RegExp(`\\[(${piiTypes.join('|')})\\]`);
 
 const MAXIMUM_ATTEMPTS = 100;
 const MAXIMUM_RETRY_DELAY = 1000;
+const PAUSE_TO_MERGE_IN_SECONDS = 1;
 
 const languageCodes = [
   { value: '', label: 'Choose a Language' },
@@ -148,7 +150,16 @@ const CallAttributes = ({ item, setToolsOpen }) => (
   <Container
     header={
       <Header variant="h4" info={<InfoLink onFollow={() => setToolsOpen(true)} />}>
-        Call Attributes
+        <div className="flex items-center">
+          <div>Call Attributes</div>
+          <div className="btn-download-right">
+            <Button
+              iconName="download"
+              variant="normals"
+              onClick={() => exportToExcel([item], 'call-details')}
+            />
+          </div>
+        </div>
       </Header>
     }
   >
@@ -537,6 +548,62 @@ const TranscriptSegment = ({ segment, translateCache }) => {
   );
 };
 
+const formatTranscriptExcel = (item, callTranscriptPerCallId) => {
+  // channels: AGENT, AGENT_ASSIST, CALLER, CATEGORY_MATCH
+  const maxChannels = 4;
+  const { callId } = item;
+  const transcriptsForThisCallId = callTranscriptPerCallId[callId] || {};
+  const transcriptChannels = Object.keys(transcriptsForThisCallId).slice(0, maxChannels);
+  const data = transcriptChannels
+    .map((c) => {
+      const { segments } = transcriptsForThisCallId[c];
+      return segments;
+    })
+    // sort entries by end time
+    .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
+    .map(
+      // prettier-ignore
+      (s) => (
+        s?.segmentId
+        && s?.createdAt
+        && s
+      ),
+    );
+
+  return data;
+};
+
+/**
+ * Check whether the current segment should be merged to the previous segment to get better
+ * user experience. The conditions for merge are:
+ * - Same speaker
+ * - Same channel
+ * - The gap between two segments is less than PAUSE_TO_MERGE_IN_SECONDS second
+ * - Add language code check if available
+ * TODO: Check language code once it is returned
+ * @param previous previous segment
+ * @param current current segment
+ * @returns {boolean} indicates whether to merge or not
+ */
+const shouldAppendToPreviousSegment = ({ previous, current }) =>
+  // prettier-ignore
+  // eslint-disable-next-line implicit-arrow-linebreak
+  previous.speaker === current.speaker
+  && previous.channel === current.channel
+  && current.startTime - previous.endTime < PAUSE_TO_MERGE_IN_SECONDS;
+
+/**
+ * Append current segment to its previous segment
+ * @param previous previous segment
+ * @param current current segment
+ */
+const appendToPreviousSegment = ({ previous, current }) => {
+  /* eslint-disable no-param-reassign */
+  previous.transcript += ` ${current.transcript}`;
+  previous.endTime = current.endTime;
+  previous.isPartial = current.isPartial;
+};
+
 const CallInProgressTranscript = ({
   item,
   callTranscriptPerCallId,
@@ -569,6 +636,23 @@ const CallInProgressTranscript = ({
       })
       // sort entries by end time
       .reduce((p, c) => [...p, ...c].sort((a, b) => a.endTime - b.endTime), [])
+      .reduce((accumulator, current) => {
+        if (
+          // prettier-ignore
+          !accumulator.length
+          || !shouldAppendToPreviousSegment(
+            { previous: accumulator[accumulator.length - 1], current },
+          )
+          // Enable it once it is compatible with translation
+          || translateOn
+        ) {
+          // Get copy of current segment to avoid direct modification
+          accumulator.push({ ...current });
+        } else {
+          appendToPreviousSegment({ previous: accumulator[accumulator.length - 1], current });
+        }
+        return accumulator;
+      }, [])
       .map((c) => {
         const t = c;
         return t;
@@ -710,7 +794,7 @@ const CallInProgressTranscript = ({
           s?.segmentId
           && s?.createdAt
           && (s.agentTranscript === undefined
-              || s.agentTranscript || s.channel !== 'AGENT')
+            || s.agentTranscript || s.channel !== 'AGENT')
           && (s.channel !== 'AGENT_VOICETONE')
           && (s.channel !== 'CALLER_VOICETONE')
           && <TranscriptSegment key={`${s.segmentId}-${s.createdAt}`} segment={s} translateCache={translateCache} />
@@ -917,7 +1001,21 @@ const CallTranscriptContainer = ({
               </SpaceBetween>
             }
           >
-            Call Transcript
+            <div className="flex items-center">
+              <div> Call Transcript </div>
+              <div className="btn-download-right">
+                <Button
+                  iconName="download"
+                  variant="normals"
+                  onClick={() => {
+                    exportToExcel(
+                      formatTranscriptExcel(item, callTranscriptPerCallId),
+                      'call-transcript',
+                    );
+                  }}
+                />
+              </div>
+            </div>
           </Header>
         }
       >
