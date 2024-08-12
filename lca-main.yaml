@@ -1094,7 +1094,7 @@ Resources:
                   status = cfnresponse.FAILED
                   reason = f"CustomVocabularyName '{customVocabularyName}' is not valid. When a list is provided, each name in the list must have a valid language code suffix, eg 'MyName_en-US, MyName_es-US'"
               if customLanguageModelName:
-                if isCvOrClmListAllowed(customLanguageModelName, callAudioSource, callAudioProcessor):
+                if not isCvOrClmListAllowed(customLanguageModelName, callAudioSource, callAudioProcessor):
                   status = cfnresponse.FAILED
                   reason = f"CustomLanguageModelName '{customLanguageModelName}' is not valid for CallAudioSource '{callAudioSource}' and CallAudioProcessor '{callAudioProcessor}' . Multiple values are currently supported only when callAudioSource is either 'Demo Asterisk PBX Server' or 'Amazon Chime SDK Voice Connector (SIPREC)', AND CallAudioProcessor is 'Call Transcriber Lambda'."
                 elif not isValidCvOrClmName(customLanguageModelName):
