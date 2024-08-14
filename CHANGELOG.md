@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2024-08-14
+
+### Fixed
+
+- Stack fails when Call Audio Source is set to Genesys Audio Hook - regression in Genesys nested stack introduced in v0.9.0 #178
+
 ## [0.9.1] - 2024-08-12
 
 ### Fixed
@@ -437,8 +443,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 
 [Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-meeting-assistant/compare/main...develop
-[0.9.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.12...v0.9.1
-[0.9.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.12...v0.9.0
+[0.9.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.13...v0.9.0
 [0.8.13]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.12...v0.8.13
 [0.8.12]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.11...v0.8.12
 [0.8.11]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.10...v0.8.11
