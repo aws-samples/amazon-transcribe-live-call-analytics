@@ -54,32 +54,7 @@ The entire processing flow, from ingested speech to live webpage updates, is eve
 
 ### (optional) Build and Publish LCA CloudFormation artifacts
 
-_Note: Perform this step only if you want to create deployment artifacts in your own account. Otherwise, we have hosted a CloudFormation template for 1-click deployment in the [deploy](#deploy) section_.
-
-_Pre-requisite_: You must already have the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) and the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) (version 1.49 or higher) installed and configured. You can use an AWS Cloud9 environment.
-
-Use the [publish.sh](./publish.sh) bash script to build the project and deploy CloudFormation templates to your own deployment bucket.
-
-Run the script with up to 4 parameters:
-
-```
-./publish.sh <cfn_bucket_basename> <cfn_prefix> <region> [public]
-
-- <cfn_bucket_basename>: basename name of S3 bucket to deploy CloudFormation templates and code artifacts. Actual bucketname is determined by appending region to bucket basename. If bucket does not exist it will be created.
-- <cfn_prefix>: artifacts will be copied to the path specified by this prefix (path/to/artifacts/)
-- <region>: aws region to use for building and deploying artifacts.. artifacts must be installed in this same region. We have currently tested LCA deployments only in Northern Virgina (us-east-1) and Oregon (us-west-2).
-- public: (optional) Adding the argument "public" will set public-read acl on all published artifacts, for sharing with any account.
-```
-
-It downloads package dependencies, builds code zipfiles, replaces local filesystem references in CloudFormation templates, and copies templates and zip files to the cfn_bucket.
-When complete, it displays the URLS for the CloudFormation templates, 1-click URLs for launching the stack create in CloudFormation, and CLI deployment command , e.g.:
-
-```
-Outputs
-Template URL: https://s3.us-east-1.amazonaws.com/bobs-lca-artifacts-us-east-1/LCA-public/0.1.0/lca-main.yaml
-CF Launch URL: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://s3.us-east-1.amazonaws.com/bobs-lca-artifacts-us-east-1/LCA-public/0.1.0/lca-main.yaml&stackName=LiveCallAnalytics&param_installDemoAsteriskServer=true
-CLI Deploy: aws cloudformation deploy --region us-east-1 --template-file /tmp/lca/lca-main.yaml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LiveCallAnalytics --parameter-overrides AdminEmail='jdoe@example.com' installDemoAsteriskServer=true
-```
+If you’re a developer, and you want to build, deploy, or publish the solution from code, refer to the [Developer README](./README_DEVELOPERS.md).
 
 ### Deploy a new stack
 
