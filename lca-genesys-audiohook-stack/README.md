@@ -87,7 +87,7 @@ Now, follow the below steps to enable the Audio hook into Gensys Cloud flows.
 ***
 
 ## Genesys Custom Application Integration - Live Call Analytics 
-To streamline access for LCA application instead of swith between Genesys Cloud and LCA, you can now setup a custom applicaiton integration in Genesys.
+To streamline access for LCA application instead of switching between Genesys Cloud and LCA, you can now setup a custom application integration in Genesys.
 
 Follow the steps as documented in [here](https://help.mypurecloud.com/articles/set-custom-client-application-integration/) to setup custom application integration in Genesys
 
