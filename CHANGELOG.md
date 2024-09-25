@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New README_DEVELOPERS.md with information on how to clone and publish LCA from source code.
+
+### Fixed
+
+- Publish script fails to detect make failure in lca-ai-stack during build.. #191
+- When publishing, AISTACK `make` fails to find bash with new version of gnu make (4.3) #190
+- Muliple dependabot PRs
+- Improved detail in [Genesys AudioHook README](./lca-genesys-audiohook-stack/README.md) PR #199, #188
+
+
+
 ## [0.9.2] - 2024-08-14
 
 ### Fixed
