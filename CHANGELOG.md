@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated QnABot nested stack to QnABot v6.1.1 - PR #119
 - Publish script fails to detect make failure in lca-ai-stack during build.. #191
 - When publishing, AISTACK `make` fails to find bash with new version of gnu make (4.3) #190
+- Improved welcome email formatting and reduce risk of copy/pasting whitespace after temp password.
 - Muliple dependabot PRs
 - Improved detail in [Genesys AudioHook README](./lca-genesys-audiohook-stack/README.md) PR #199, #188
 
