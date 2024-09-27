@@ -1642,16 +1642,13 @@ Resources:
         InviteMessageTemplate:
           EmailSubject: Welcome to Live Call Analytics with Agent Assist!
           EmailMessage: !Sub |-
-            <p>Hello {username},
-            <p>Welcome to Live Call Analytics with Agent Assist! Your temporary password is:
-            <p>     {####}
-            <p>
+            <p>Hello {username},</p>
+            <p>Welcome to Live Call Analytics with Agent Assist (LCA)! Your temporary password is: <strong>{####}</strong></p>
             <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
-            the Live Call Analytics web interface and set your permanent password.
-            <p>     https://${WebAppCloudFrontDistribution.DomainName}/
-            <p>
-            <p>Good luck!
-            <p>Live Call Analytics with Agent Assist (amazon.com/live-call-analytics)
+            the Live Call Analytics web interface and set your permanent password.</p>
+            <p>     https://${WebAppCloudFrontDistribution.DomainName}/</p>
+            <p>Thanks,</p>
+            <p>Live Call Analytics with Agent Assist (www.amazon.com/live-call-analytics)</p>
       AutoVerifiedAttributes:
         - email
       EmailConfiguration:
