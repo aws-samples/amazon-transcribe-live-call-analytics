@@ -269,7 +269,7 @@ if haschanged $dir; then
 echo "PACKAGING $dir"
 git submodule init
 git submodule update
-# lma customizations
+# lca customizations
 echo "Applying patch files to remove unused KMS keys from QnABot and customize designer settings page"
 cp -v ./patches/qnabot/templates_examples_examples_index.js $dir/source/templates/examples/examples/index.js
 cp -v ./patches/qnabot/templates_examples_extensions_index.js $dir/source/templates/examples/extensions/index.js
@@ -277,20 +277,19 @@ cp -v ./patches/qnabot/website_js_lib_store_api_actions_settings.js $dir/source/
 echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
 # Detection of differences. sed varies betwen GNU sed and BSD sed
 if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
-  sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+  sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/source/package.json
 else # BSD like sed
-  sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/package.json
+  sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/source/package.json
 fi
-pushd $dir
-rm -fr ./ml_model/llm-qa-summarize # remove deleted folder if left over from previous build.
+pushd $dir/source
 mkdir -p build/templates/dev
 cat > config.json <<_EOF
 {
-"profile": "${AWS_PROFILE:-default}",
-"region": "${REGION}",
-"buildType": "Custom",
-"skipCheckTemplate":true,
-"noStackOutput": true
+  "profile": "${AWS_PROFILE:-default}",
+  "region": "${REGION}",
+  "buildType": "Custom",
+  "skipCheckTemplate":true,
+  "noStackOutput": true
 }
 _EOF
 npm install

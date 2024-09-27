@@ -1376,7 +1376,7 @@ Resources:
       Parameters:
         Email: !Ref AdminEmail
         Username: "Admin"
-        OpenSearchNodeCount: !Ref MeetingAssistQnABotOpenSearchNodeCount
+        OpenSearchNodeCount: !Ref AgentAssistQnABotOpenSearchNodeCount
         OpenSearchFineGrainAccessControl: "FALSE"
         LexV2BotLocaleIds:
           !FindInMap [
