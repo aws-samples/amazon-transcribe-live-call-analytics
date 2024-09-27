@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New README_DEVELOPERS.md with information on how to clone and publish LCA from source code.
 
 ### Fixed
-
+- Updated QnABot nested stack to QnABot v6.1.1 - PR #119
 - Publish script fails to detect make failure in lca-ai-stack during build.. #191
 - When publishing, AISTACK `make` fails to find bash with new version of gnu make (4.3) #190
 - Muliple dependabot PRs
