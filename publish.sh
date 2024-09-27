@@ -265,9 +265,10 @@ echo "SKIPPING $dir (unchanged)"
 fi
 
 dir=submodule-aws-qnabot
-if haschanged $dir; then
 echo "PACKAGING $dir"
 git submodule init
+echo "Removing any QnAbot changes from previous builds"
+pushd $dir && git checkout . && popd
 git submodule update
 # lca customizations
 echo "Applying patch files to remove unused KMS keys from QnABot and customize designer settings page"
@@ -281,6 +282,7 @@ if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
 else # BSD like sed
   sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/source/package.json
 fi
+if haschanged $dir; then
 pushd $dir/source
 mkdir -p build/templates/dev
 cat > config.json <<_EOF
