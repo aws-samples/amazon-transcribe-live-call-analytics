@@ -1178,11 +1178,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - ShouldInstallAWSQnaBot
-          - "amazon.titan-embed-text-v2:0" # Agent Assistant (KB embedding)
-          - !Ref AWS::NoValue
-        - !If
-          - ShouldInstallAWSQnaBot
-          - "amazon.titan-embed-text-v1" # Agent Assistant (QnABot embedding)
+          - "amazon.titan-embed-text-v2:0" # Agent Assistant (KB embedding) & QnABot
           - !Ref AWS::NoValue
 
   ##########################################################################
@@ -1367,20 +1363,6 @@ Resources:
               print(f"Request type is {event['RequestType']} - skipping")
             cfnresponse.send(event, context, status, result, reason=reason)
 
-  QNABOTBR:
-    Type: AWS::CloudFormation::Stack
-    Condition: ShouldInstallAWSQnaBot
-    DependsOn:
-      - IsStacknameLengthOK
-      - ValidateParameters
-    Properties:
-      # yamllint disable rule:line-length
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/bedrock-embeddings-and-llm.yaml
-      # yamllint enable rule:line-length
-      Parameters:
-        EmbeddingsModelId: "amazon.titan-embed-text-v1"
-        LLMModelId: !Ref AgentAssistLLMBedrockModelId
-
   QNABOT:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallAWSQnaBot
@@ -1389,12 +1371,13 @@ Resources:
       - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot/templates/master.json
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot/templates/qnabot-main.json
       # yamllint enable rule:line-length
       Parameters:
         Email: !Ref AdminEmail
         Username: "Admin"
-        ElasticSearchNodeCount: !Ref AgentAssistQnABotOpenSearchNodeCount
+        OpenSearchNodeCount: !Ref MeetingAssistQnABotOpenSearchNodeCount
+        OpenSearchFineGrainAccessControl: "FALSE"
         LexV2BotLocaleIds:
           !FindInMap [
             TranscribeToLexLocaleId,
@@ -1404,11 +1387,10 @@ Resources:
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
         InstallLexResponseBots: "false"
-        EmbeddingsApi: "LAMBDA"
-        EmbeddingsLambdaArn: !GetAtt QNABOTBR.Outputs.EmbeddingsLambdaArn
-        EmbeddingsLambdaDimensions: !GetAtt QNABOTBR.Outputs.EmbeddingsLambdaDimensions
-        LLMApi: "LAMBDA"
-        LLMLambdaArn: !GetAtt QNABOTBR.Outputs.LLMLambdaArn
+        EmbeddingsApi: "BEDROCK"
+        EmbeddingsBedrockModelId: "amazon.titan-embed-text-v2"
+        LLMApi: "DISABLED"  # LMA configures its own KB/QBusiness LambdaHooks
+        LogRetentionPeriod: 30
 
   LLMTEMPLATESTACK:
     Type: AWS::CloudFormation::Stack
@@ -1496,10 +1478,6 @@ Resources:
     Condition: ShouldInstallAWSQnaBot
     Properties:
       ServiceToken: !GetAtt ToJSONFunction.Arn
-      EMBEDDINGS_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreThreshold
-      EMBEDDINGS_SCORE_ANSWER_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreAnswerThreshold
-      EMBEDDINGS_TEXT_PASSAGE_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsTextPassageScoreThreshold
-      LLM_QA_USE_KENDRA_RETRIEVAL_API: "FALSE"
       LLM_GENERATE_QUERY_ENABLE: "FALSE"
       LLM_GENERATE_QUERY_PROMPT_TEMPLATE: ""
       LLM_QA_ENABLE: "FALSE"
