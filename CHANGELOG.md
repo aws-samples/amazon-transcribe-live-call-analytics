@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Muliple dependabot PRs
 - Improved detail in [Genesys AudioHook README](./lca-genesys-audiohook-stack/README.md) - PR #199, #188
 - Upgrade all python Lambda functions to python3.12 (latest)
+- Fix failing mounting call_event_processor #189 
 
 
 ## [0.9.2] - 2024-08-14
