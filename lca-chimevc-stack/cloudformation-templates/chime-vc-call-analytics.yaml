@@ -348,7 +348,7 @@ Resources:
               Action: iam:PassRole
               Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:*
       Handler: index.lambda_handler
-      Runtime: python3.11
+      Runtime: python3.12
       Timeout: 300
       InlineCode: |
         import boto3
@@ -615,7 +615,7 @@ Resources:
         AWS Lambda Function that will accept events from Amazon Chime SDK Call Analytics voice
         tone analysis, modify them for use for LCA, and save them to the LCA Kinesis Data Streams
         as a voice tone analysis
-      Runtime: python3.11
+      Runtime: python3.12
       Handler: lambda_function.lambda_handler
       Layers:
         - !Ref Boto3LayerArn

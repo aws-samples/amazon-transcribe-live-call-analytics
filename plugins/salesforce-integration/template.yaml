@@ -71,7 +71,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt SalesforceLookupLambdaRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           LOGGING_LEVEL: "INFO"
@@ -90,7 +90,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt SalesforceCreateCaseLambdaRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           LOGGING_LEVEL: "INFO"
