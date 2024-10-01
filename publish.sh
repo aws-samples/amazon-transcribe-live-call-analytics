@@ -117,7 +117,7 @@ local HASH=$(
 echo $HASH
 }
 
-
+# Function to check if any source files in the directory have been changed
 haschanged() {
   local dir=$1
   local checksum_file="${dir}/.checksum"
@@ -137,7 +137,6 @@ haschanged() {
       return 1  # False, the directory has not changed
   fi
 }
-
 update_checksum() {
   local dir=$1
   local checksum_file="${dir}/.checksum"
@@ -147,6 +146,37 @@ update_checksum() {
   current_checksum=$(echo -n "$combined_string" | sha256sum | awk '{ print $1 }')
   # Save the current checksum
   echo "$current_checksum" > "$checksum_file"
+}
+
+# Function to check if the submodule commit hash has changed
+hassubmodulechanged() {
+    local dir=$1
+    local hash_file="${dir}/.commit-hash"
+    # Get the current commit hash of the submodule
+    cd "$dir" || exit 1
+    current_hash=$(git rev-parse HEAD)
+    cd - > /dev/null || exit 1
+    # Check if the hash file exists and read the previous hash
+    if [ -f "$hash_file" ]; then
+        previous_hash=$(cat "$hash_file")
+    else
+        previous_hash=""
+    fi
+    if [ "$current_hash" != "$previous_hash" ]; then
+        return 0  # True, the submodule has changed
+    else
+        return 1  # False, the submodule has not changed
+    fi
+}
+update_submodule_hash() {
+    local dir=$1
+    local hash_file="${dir}/.commit-hash"
+    # Get the current commit hash of the submodule
+    cd "$dir" || exit 1
+    current_hash=$(git rev-parse HEAD)
+    cd - > /dev/null || exit 1
+    # Save the current hash
+    echo "$current_hash" > "$hash_file"
 }
 
 dir=lca-chimevc-stack
@@ -265,7 +295,7 @@ echo "SKIPPING $dir (unchanged)"
 fi
 
 dir=submodule-aws-qnabot
-echo "PACKAGING $dir"
+echo "UPDATING $dir"
 git submodule init
 echo "Removing any QnAbot changes from previous builds"
 pushd $dir && git checkout . && popd
@@ -275,17 +305,15 @@ echo "Applying patch files to remove unused KMS keys from QnABot and customize d
 cp -v ./patches/qnabot/templates_examples_examples_index.js $dir/source/templates/examples/examples/index.js
 cp -v ./patches/qnabot/templates_examples_extensions_index.js $dir/source/templates/examples/extensions/index.js
 cp -v ./patches/qnabot/website_js_lib_store_api_actions_settings.js $dir/source/website/js/lib/store/api/actions/settings.js
-echo "modify QnABot version string from 'N.N.N' to 'N.N.N-LCA'"
+echo "modify QnABot version string from 'N.N.N' to 'N.N.N-lca'"
 # Detection of differences. sed varies betwen GNU sed and BSD sed
 if sed --version 2>/dev/null | grep -q GNU; then # GNU sed
-  sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/source/package.json
+  sed -i 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-lca"/' $dir/source/package.json
 else # BSD like sed
-  sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-LCA"/' $dir/source/package.json
+  sed -i '' 's/"version": *"\([0-9]*\.[0-9]*\.[0-9]*\)"/"version": "\1-lca"/' $dir/source/package.json
 fi
-if haschanged $dir; then
-pushd $dir/source
-mkdir -p build/templates/dev
-cat > config.json <<_EOF
+echo "Creating config.json"
+cat > $dir/source/config.json <<_EOF
 {
   "profile": "${AWS_PROFILE:-default}",
   "region": "${REGION}",
@@ -294,6 +322,14 @@ cat > config.json <<_EOF
   "noStackOutput": true
 }
 _EOF
+
+# only re-build QnABot if patch files or submodule version has changed
+if haschanged ./patches/qnabot || hassubmodulechanged $dir; then
+
+echo "PACKAGING $dir"
+
+pushd $dir/source
+mkdir -p build/templates/dev
 npm install
 npm run build || exit 1
 # Rename OpenbsearchDomain resource in template to force resource replacement during upgrade/downgrade
@@ -302,7 +338,8 @@ npm run build || exit 1
 cat ./build/templates/master.json | sed -e "s%OpensearchDomain%LMAQnaBotOpensearchDomain%g" > ./build/templates/qnabot-main.json
 aws s3 sync ./build/ s3://${BUCKET}/${PREFIX_AND_VERSION}/aws-qnabot/ --delete 
 popd
-update_checksum $dir
+update_checksum ./patches/qnabot
+update_submodule_hash $dir
 else
 echo "SKIPPING $dir (unchanged)"
 fi
