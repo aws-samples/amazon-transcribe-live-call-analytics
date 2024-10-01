@@ -489,7 +489,7 @@ Resources:
           - createChimeLambdaRole
           - Arn
       Handler: index.handler
-      Runtime: python3.11
+      Runtime: python3.12
       Timeout: 300
 
   voiceConnectorResource:

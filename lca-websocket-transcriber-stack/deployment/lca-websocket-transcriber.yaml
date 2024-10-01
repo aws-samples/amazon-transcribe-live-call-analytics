@@ -826,7 +826,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.11
+      Runtime: python3.12
       Role: !GetAtt ECSCleanupLambdaRole.Arn
       Timeout: 720
       InlineCode: |
