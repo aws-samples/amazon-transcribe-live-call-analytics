@@ -58,11 +58,37 @@ The cloudformation stack deploys the proxy service and creates the required reso
 
 The audiohook is now ready to stream audio to LCA.
 
+Now, follow the below steps to enable the Audio hook into Gensys Cloud flows.
+
+## Genesys Audiohook - Configure Flows
+1. Define a new flow or use an existing flow to enable the audio hook.
+2. Add Audio hook task in the flow as shown below
+ 
+ ![Enable Audiohook for a flow](../images/lca-genesys-add-audiohook-to-flow.png)
+
+3. Enable the Audio hook
+4. Modify General speech settings for the flow to uncheck the option 'Supress recording for the entire flow'
+
+![Record and Speech Recogniton settings for the flow](../images/lca-genesys-audiohook-flow-settings.png)
+
+5. Navigate to the applicable Queue settings for the flow and turn on Audio Monitoring option
+
+![Turn Audio monitoring on for Queue](../images/lca-genesys-audiohook-queue-settings.png)
+
+***
+
 ## Genesys Audiohook - LCA Testing
 1. Login to Genesys Cloud and access the Agent console. 
 2. Call the phone number that is assigned to you in Genesys Cloud
 3. Once the call appears in the agent queue, answer the call
 4. As soon as the call is connected, you will see the call entry in LCA UI in 'in progress' status
 5. Click on the Call ID to see the call details page that includes live turn-by-turn transcripts and sentiment trends
+
+***
+
+## Genesys Custom Application Integration - Live Call Analytics 
+To streamline access for LCA application instead of switching between Genesys Cloud and LCA, you can now setup a custom application integration in Genesys.
+
+Follow the steps as documented in [here](https://help.mypurecloud.com/articles/set-custom-client-application-integration/) to setup custom application integration in Genesys
 
 ***

@@ -7,3 +7,4 @@
 .aws-sam
 samconfig.toml
 .checksum
+.commit-hash

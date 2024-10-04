@@ -149,6 +149,7 @@ Parameters:
     AllowedValues:
       - "anthropic.claude-3-haiku-20240307-v1:0"
       - "anthropic.claude-3-sonnet-20240229-v1:0"
+      - "anthropic.claude-3-5-sonnet-20240620-v1:0"
 
     Description: >
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
@@ -288,7 +289,7 @@ Parameters:
 
   BootstrapVersion:
     Type: String
-    Default: 0.9.2
+    Default: 0.9.3
     Description: >
       Artifacts version (semver). Used to point to a specific release in the S3
       bootstrap bucket
@@ -737,7 +738,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaCodeBuildStartBuildExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Timeout: 60
       MemorySize: 128
       Handler: lambda_start_codebuild.handler
@@ -782,7 +783,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LambdaFetchTranscriptExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
@@ -824,7 +825,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt LLMAnthropicSummaryLambdaExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           LCA_CALL_EVENTS_TABLE: !Ref EventSourcingTable
@@ -879,7 +880,7 @@ Resources:
     Condition: ShouldEnableBedrockSummarizer
     Properties:
       Role: !GetAtt BedrockSummaryLambdaExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
@@ -944,7 +945,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt AsyncAgentAssistOrchestratorExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           CALL_DATA_STREAM_NAME: !Ref CallDataStream
@@ -1011,7 +1012,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt AsyncTranscriptSummaryOrchestratorExecutionRole.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Environment:
         Variables:
           TRANSCRIPT_SUMMARY_FUNCTION_ARN:
@@ -1250,7 +1251,7 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AsyncAgentAssistOrchestrator.Arn
-      Runtime: python3.11
+      Runtime: python3.12
       Timeout: 900
       Environment:
         Variables:
@@ -1290,14 +1291,15 @@ Resources:
   TranscriptEnrichmentPythonLayer:
     Type: AWS::Serverless::LayerVersion
     Metadata:
-      BuildMethod: python3.11
+      BuildMethod: python3.12
+      BuildArchitecture: arm64
     Properties:
       Description: !Sub "Transcript Enrichment Python Layer for stack: ${AWS::StackName}"
       ContentUri: ../source/lambda_layers/transcript_enrichment_layer
       CompatibleArchitectures:
         - arm64
       CompatibleRuntimes:
-        - python3.11
+        - python3.12
       RetentionPolicy: Delete
 
   ##########################################################################
@@ -1642,16 +1644,13 @@ Resources:
         InviteMessageTemplate:
           EmailSubject: Welcome to Live Call Analytics with Agent Assist!
           EmailMessage: !Sub |-
-            <p>Hello {username},
-            <p>Welcome to Live Call Analytics with Agent Assist! Your temporary password is:
-            <p>     {####}
-            <p>
+            <p>Hello {username},</p>
+            <p>Welcome to Live Call Analytics with Agent Assist (LCA)! Your temporary password is: <strong>{####}</strong></p>
             <p>When the CloudFormation stack is COMPLETE, use the link below to log in to
-            the Live Call Analytics web interface and set your permanent password.
-            <p>     https://${WebAppCloudFrontDistribution.DomainName}/
-            <p>
-            <p>Good luck!
-            <p>Live Call Analytics with Agent Assist (amazon.com/live-call-analytics)
+            the Live Call Analytics web interface and set your permanent password.</p>
+            <p>     https://${WebAppCloudFrontDistribution.DomainName}/</p>
+            <p>Thanks,</p>
+            <p>Live Call Analytics with Agent Assist (www.amazon.com/live-call-analytics)</p>
       AutoVerifiedAttributes:
         - email
       EmailConfiguration:
@@ -1900,7 +1899,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: "index.lambda_handler"
-      Runtime: python3.11
+      Runtime: python3.12
       MemorySize: 128
       Timeout: 60
       Role: !GetAtt BucketDeleteLambdaRole.Arn

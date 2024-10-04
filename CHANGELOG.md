@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2024-10-03
+
+### Added
+
+- Support for Anthropic Claude 3.5 Sonnet
+- New README_DEVELOPERS.md with information on how to clone and publish LCA from source code.
+
+### Fixed
+- Support deployment using existing VPC/subnets - PR #198
+- Updated QnABot nested stack to QnABot v6.1.1 - PR #119
+- Publish script fails to detect make failure in lca-ai-stack during build - #191
+- When publishing, AISTACK `make` fails to find bash with new version of gnu make (4.3) - #190
+- Improved welcome email formatting and reduce risk of copy/pasting whitespace after temp password.
+- Muliple dependabot PRs
+- Improved detail in [Genesys AudioHook README](./lca-genesys-audiohook-stack/README.md) - PR #199, #188
+- Upgrade all python Lambda functions to python3.12 (latest)
+- Fix failing mounting call_event_processor #189 
+
+
 ## [0.9.2] - 2024-08-14
 
 ### Fixed
@@ -443,6 +462,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 
 [Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-meeting-assistant/compare/main...develop
+[0.9.3]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.8.13...v0.9.0

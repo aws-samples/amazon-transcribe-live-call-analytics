@@ -15,9 +15,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.2) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.3) (SO9072)
 
 Parameters:
+
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
@@ -209,6 +210,7 @@ Parameters:
     AllowedValues:
       - "anthropic.claude-3-haiku-20240307-v1:0"
       - "anthropic.claude-3-sonnet-20240229-v1:0"
+      - "anthropic.claude-3-5-sonnet-20240620-v1:0"
     Description: Choose Bedrock modelId'
 
   AgentAssistQnABotOpenSearchNodeCount:
@@ -451,6 +453,7 @@ Parameters:
     AllowedValues:
       - "anthropic.claude-3-haiku-20240307-v1:0"
       - "anthropic.claude-3-sonnet-20240229-v1:0"
+      - "anthropic.claude-3-5-sonnet-20240620-v1:0"
 
     Description: >
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
@@ -582,6 +585,51 @@ Parameters:
       from the Recordings bucket."
     Default: 90
 
+  UseExistingVPC:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >-
+      Use an existing VPC for the solution instead of creating a new one. If set to
+      true, the VPC ID and subnets must be provided. DO NOT CHANGE VALUE WHEN UPDATING AN EXISTING STACK.
+
+  VPC:
+    Type: String
+    Description: >-
+      ID of the VPC to use for the solution. Required if UseExistingVPC is true. DO NOT CHANGE VALUE WHEN 
+      UPDATING AN EXISTING STACK.
+    AllowedPattern: "^(|vpc-[a-zA-Z0-9-]+)$"
+
+  PublicSubnet1:
+    Type: String
+    Description: >-
+      ID of the public subnet in Availability Zone 1. Required if UseExistingVPC is
+      true. DO NOT CHANGE VALUE WHEN UPDATING AN EXISTING STACK.
+    AllowedPattern: "^(|subnet-[a-zA-Z0-9-]+)$"
+
+  PublicSubnet2:
+    Type: String
+    Description: >-
+      ID of the public subnet in Availability Zone 2. Required if UseExistingVPC is
+      true. DO NOT CHANGE VALUE WHEN UPDATING AN EXISTING STACK.
+    AllowedPattern: "^(|subnet-[a-zA-Z0-9-]+)$"
+
+  PrivateSubnet1:
+    Type: String
+    Description: >-
+      ID of the private subnet in Availability Zone 1. Required if UseExistingVPC is
+      true. DO NOT CHANGE VALUE WHEN UPDATING AN EXISTING STACK.
+    AllowedPattern: "^(|subnet-[a-zA-Z0-9-]+)$"
+
+  PrivateSubnet2:
+    Type: String
+    Description: >-
+      ID of the private subnet in Availability Zone 2. Required if UseExistingVPC is
+      true. DO NOT CHANGE VALUE WHEN UPDATING AN EXISTING STACK.
+    AllowedPattern: "^(|subnet-[a-zA-Z0-9-]+)$"
+      
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -617,6 +665,7 @@ Metadata:
           - AgentAssistExistingLexV2BotAliasId
           - AgentAssistExistingLambdaFunctionArn
           - AgentAssistLLMBedrockModelId
+          - AgentAssistQnABotOpenSearchNodeCount
       - Label:
           default: Amazon S3 Configuration
         Parameters:
@@ -677,6 +726,15 @@ Metadata:
           - PcaPlaybackAudioFilePrefix
           - PcaWebAppURL
           - PcaWebAppCallPathPrefix
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - UseExistingVPC
+          - VPC
+          - PublicSubnet1
+          - PublicSubnet2
+          - PrivateSubnet1
+          - PrivateSubnet2
 
     ParameterLabels:
       CallAudioProcessor:
@@ -793,6 +851,18 @@ Metadata:
         default: PCA Web App URL
       PcaWebAppCallPathPrefix:
         default: PCA Web App Call Path Prefix
+      UseExistingVPC:
+        default: Use Existing VPC
+      VPC:
+        default: Existing VPC ID
+      PublicSubnet1:
+        default: Existing Public Subnet 1
+      PublicSubnet2:
+        default: Existing Public Subnet 2
+      PrivateSubnet1:
+        default: Existing Private Subnet 1
+      PrivateSubnet2:
+        default: Existing Private Subnet 2
 
 Conditions:
   ShouldCreateRecordingBucket: !Equals [!Ref S3BucketName, ""]
@@ -855,6 +925,8 @@ Conditions:
     ]
   ShouldUseBedrockForSummary:
     !Equals [!Ref EndOfCallTranscriptSummary, "BEDROCK"]
+
+  ShouldCreateVPC: !Equals [!Ref UseExistingVPC, "false"]    
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -967,7 +1039,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.11
+      Runtime: python3.12
       InlineCode: |
         import cfnresponse
         import time
@@ -1021,7 +1093,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.11
+      Runtime: python3.12
       Role: !GetAtt ValidateParametersFunctionRole.Arn
       Timeout: 60
       InlineCode: |
@@ -1178,11 +1250,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - ShouldInstallAWSQnaBot
-          - "amazon.titan-embed-text-v2:0" # Agent Assistant (KB embedding)
-          - !Ref AWS::NoValue
-        - !If
-          - ShouldInstallAWSQnaBot
-          - "amazon.titan-embed-text-v1" # Agent Assistant (QnABot embedding)
+          - "amazon.titan-embed-text-v2:0" # Agent Assistant (KB embedding) & QnABot
           - !Ref AWS::NoValue
 
   ##########################################################################
@@ -1235,7 +1303,7 @@ Resources:
     Properties:
       Role: !GetAtt UpdateLCASettingsFunctionRole.Arn
       Handler: index.handler
-      Runtime: python3.11
+      Runtime: python3.12
       Timeout: 900
       Code:
         ZipFile: |
@@ -1347,7 +1415,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.11
+      Runtime: python3.12
       InlineCode: |
         import cfnresponse
         import json
@@ -1367,20 +1435,6 @@ Resources:
               print(f"Request type is {event['RequestType']} - skipping")
             cfnresponse.send(event, context, status, result, reason=reason)
 
-  QNABOTBR:
-    Type: AWS::CloudFormation::Stack
-    Condition: ShouldInstallAWSQnaBot
-    DependsOn:
-      - IsStacknameLengthOK
-      - ValidateParameters
-    Properties:
-      # yamllint disable rule:line-length
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot-plugins/bedrock-embeddings-and-llm.yaml
-      # yamllint enable rule:line-length
-      Parameters:
-        EmbeddingsModelId: "amazon.titan-embed-text-v1"
-        LLMModelId: !Ref AgentAssistLLMBedrockModelId
-
   QNABOT:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallAWSQnaBot
@@ -1389,12 +1443,13 @@ Resources:
       - ValidateParameters
     Properties:
       # yamllint disable rule:line-length
-      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot/templates/master.json
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/aws-qnabot/templates/qnabot-main.json
       # yamllint enable rule:line-length
       Parameters:
         Email: !Ref AdminEmail
         Username: "Admin"
-        ElasticSearchNodeCount: !Ref AgentAssistQnABotOpenSearchNodeCount
+        OpenSearchNodeCount: !Ref AgentAssistQnABotOpenSearchNodeCount
+        OpenSearchFineGrainAccessControl: "FALSE"
         LexV2BotLocaleIds:
           !FindInMap [
             TranscribeToLexLocaleId,
@@ -1404,11 +1459,10 @@ Resources:
         BootstrapBucket: <ARTIFACT_BUCKET_TOKEN>
         BootstrapPrefix: <ARTIFACT_PREFIX_TOKEN>/aws-qnabot
         InstallLexResponseBots: "false"
-        EmbeddingsApi: "LAMBDA"
-        EmbeddingsLambdaArn: !GetAtt QNABOTBR.Outputs.EmbeddingsLambdaArn
-        EmbeddingsLambdaDimensions: !GetAtt QNABOTBR.Outputs.EmbeddingsLambdaDimensions
-        LLMApi: "LAMBDA"
-        LLMLambdaArn: !GetAtt QNABOTBR.Outputs.LLMLambdaArn
+        EmbeddingsApi: "BEDROCK"
+        EmbeddingsBedrockModelId: "amazon.titan-embed-text-v2"
+        LLMApi: "DISABLED"  # LMA configures its own KB/QBusiness LambdaHooks
+        LogRetentionPeriod: 30
 
   LLMTEMPLATESTACK:
     Type: AWS::CloudFormation::Stack
@@ -1496,10 +1550,6 @@ Resources:
     Condition: ShouldInstallAWSQnaBot
     Properties:
       ServiceToken: !GetAtt ToJSONFunction.Arn
-      EMBEDDINGS_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreThreshold
-      EMBEDDINGS_SCORE_ANSWER_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsScoreAnswerThreshold
-      EMBEDDINGS_TEXT_PASSAGE_SCORE_THRESHOLD: !GetAtt QNABOTBR.Outputs.QnABotSettingEmbeddingsTextPassageScoreThreshold
-      LLM_QA_USE_KENDRA_RETRIEVAL_API: "FALSE"
       LLM_GENERATE_QUERY_ENABLE: "FALSE"
       LLM_GENERATE_QUERY_PROMPT_TEMPLATE: ""
       LLM_QA_ENABLE: "FALSE"
@@ -1604,6 +1654,7 @@ Resources:
 
   VPCSTACK:
     Type: AWS::CloudFormation::Stack
+    Condition: ShouldCreateVPC
     DependsOn:
       - IsStacknameLengthOK
       - ValidateParameters
@@ -1666,8 +1717,14 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         CustomVoiceConnectorId: !Ref CustomVoiceConnectorId
-        VPC: !GetAtt VPCSTACK.Outputs.VPC
-        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
+        VPC: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.VPC
+          - !Ref VPC
+        PublicSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet1
+          - !Ref PublicSubnet1     
         Version: <VERSION_TOKEN>
 
   CONNECTKVSSTACK:
@@ -1736,11 +1793,26 @@ Resources:
         PcaPlaybackAudioFilePrefix: !Ref PcaPlaybackAudioFilePrefix
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
-        VPC: !GetAtt VPCSTACK.Outputs.VPC
-        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
-        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
-        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
-        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+        VPC: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.VPC
+          - !Ref VPC
+        PublicSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet1
+          - !Ref PublicSubnet1
+        PublicSubnet2: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet2
+          - !Ref PublicSubnet2
+        PrivateSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+          - !Ref PrivateSubnet1
+        PrivateSubnet2: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+          - !Ref PrivateSubnet2
 
   TALKDESKSTACK:
     Type: AWS::CloudFormation::Stack
@@ -1774,12 +1846,28 @@ Resources:
         PcaWebAppURL: !Ref PcaWebAppURL
         PcaWebAppCallPathPrefix: !Ref PcaWebAppCallPathPrefix
         TalkdeskAccountId: !Ref TalkdeskAccountId
-        VPC: !GetAtt VPCSTACK.Outputs.VPC
-        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
-        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
-        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
-        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+        VPC: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.VPC
+          - !Ref VPC
+        PublicSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet1
+          - !Ref PublicSubnet1
+        PublicSubnet2: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet2
+          - !Ref PublicSubnet2
+        PrivateSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+          - !Ref PrivateSubnet1
+        PrivateSubnet2: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+          - !Ref PrivateSubnet2
 
+          
   WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack
@@ -1824,11 +1912,26 @@ Resources:
           - ShouldEnableVoiceToneAnalysis
           - "true"
           - "false"
-        VPC: !GetAtt VPCSTACK.Outputs.VPC
-        PublicSubnet1: !GetAtt VPCSTACK.Outputs.PublicSubnet1
-        PublicSubnet2: !GetAtt VPCSTACK.Outputs.PublicSubnet2
-        PrivateSubnet1: !GetAtt VPCSTACK.Outputs.PrivateSubnet1
-        PrivateSubnet2: !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+        VPC: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.VPC
+          - !Ref VPC
+        PublicSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet1
+          - !Ref PublicSubnet1
+        PublicSubnet2: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PublicSubnet2
+          - !Ref PublicSubnet2
+        PrivateSubnet1: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PrivateSubnet1
+          - !Ref PrivateSubnet1
+        PrivateSubnet2: !If
+          - ShouldCreateVPC
+          - !GetAtt VPCSTACK.Outputs.PrivateSubnet2
+          - !Ref PrivateSubnet2
 
   CONNECTINTEGRATIONSTACK:
     Type: AWS::CloudFormation::Stack
