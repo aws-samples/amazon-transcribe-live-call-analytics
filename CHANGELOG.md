@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Support for Anthropic Claude 3.5 Sonnet
 - New README_DEVELOPERS.md with information on how to clone and publish LCA from source code.
 
 ### Fixed
