@@ -92,3 +92,10 @@ To streamline access for LCA application instead of switching between Genesys Cl
 Follow the steps as documented in [here](https://help.mypurecloud.com/articles/set-custom-client-application-integration/) to setup custom application integration in Genesys
 
 ***
+
+## Test docker build locally after making code changes
+```
+cd ./lca-genesys-audiohook-stack/source/app
+npm install
+docker build -t lca-genesys .
+```
