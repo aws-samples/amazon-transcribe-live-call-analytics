@@ -49,3 +49,10 @@ The cloudformation stack deploys the websocket server and creates the required r
 4. Click on the Call ID to see the call details page that includes live turn-by-turn transcripts and sentiment trends
 
 ---
+
+## Test docker build locally after making code changes
+```
+cd ./lca-talkdesk-voicestream-stack/source/app
+npm install
+docker build -t lca-talkdesk .
+```
