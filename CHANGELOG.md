@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] - 2024-10-11
+### Fixed
+- Revert fastify dependabot version change - Issue #207
+
+
 ## [0.9.3] - 2024-10-03
 
 ### Added
@@ -462,6 +467,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 
 [Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-meeting-assistant/compare/main...develop
+[0.9.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.2...v0.9.4
 [0.9.3]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.0...v0.9.1
