@@ -127,7 +127,15 @@ Parameters:
     AllowedValues:
       - standard
       - analytics
-    Description: Set the default operational mode for Transcribe
+      - whisper-on-sagemaker
+    Description: Set the default operational mode for Transcribe. 
+
+  WhisperSageMakerEndpointName:
+    Type: String
+    Default: ""
+    Description: >-
+      The name of the SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
+      used when TranscribeApiMode is set to "whisper-on-sagemaker".
 
   IsContentRedactionEnabled:
     Type: String
@@ -337,6 +345,7 @@ Resources:
       TemplateURL: ./cloudformation-templates/chime-vc-call-transcriber.yaml
       Parameters:
         TranscribeApiMode: !Ref TranscribeApiMode
+        WhisperSageMakerEndpointName: !Ref WhisperSageMakerEndpointName
         AudioFilePrefix: !Ref AudioFilePrefix
         CallAnalyticsPrefix: !Ref CallAnalyticsPrefix
         KinesisDataStreamName: !Ref KinesisDataStreamName
