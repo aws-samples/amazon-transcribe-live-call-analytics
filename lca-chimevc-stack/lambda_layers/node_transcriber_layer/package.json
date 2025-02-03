@@ -28,6 +28,7 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-prettier": "^4.2.1",
     "interleave-stream": "^1.0.2",
-    "prettier": "^2.7.1"
+    "prettier": "^2.7.1",
+    "node-record-lpcm16": "^1.0.1"
   }
 }
