@@ -16,6 +16,8 @@ const NO_SPEECH_THRESHOLD = parseFloat(process.env.NO_SPEECH_THRESHOLD || '0.2')
 const TRANSCRIPTION_INTERVAL = parseInt(process.env.TRANSCRIPTION_INTERVAL || '1000'); // 1 second in milliseconds
 const WHISPER_SAGEMAKER_ENDPOINT = process.env.WHISPER_SAGEMAKER_ENDPOINT || '';
 
+const DEBUG_WRITE_TO_S3 = process.env.DEBUG_WRITE_TO_S3 === 'true' || false;
+
 // Initialize S3 client
 const s3Client = new S3Client({});
 // Initialize SageMaker runtime client
@@ -218,27 +220,6 @@ class TranscribeStreamingClient {
 
           // Ensure audioData is a Buffer before processing
           const audioBuffer = Buffer.isBuffer(audioData) ? audioData : Buffer.from(audioData);
-
-          // // Upload audio chunk to S3 with metadata
-          // const s3Params = {
-          //   Bucket: OUTPUT_BUCKET,
-          //   Key: `lca-raw-audio/${Date.now()}_chunk_${audioChunkCount}.raw`,
-          //   Body: audioBuffer,
-          //   ContentType: 'audio/x-raw',
-          //   Metadata: {
-          //     'chunk-number': String(audioChunkCount),
-          //     'content-encoding': 'pcm_s16le',  // updated to reflect actual encoding
-          //     'sample-rate': '8000',
-          //     'channels': '2'
-          //   }
-          // };
-          
-          // try {
-          //   await s3Client.send(new PutObjectCommand(s3Params));
-          //   console.log(`Successfully uploaded audio chunk ${audioChunkCount} to S3 (size: ${audioBuffer.length} bytes)`);
-          // } catch (error) {
-          //   console.error('Error uploading audio chunk to S3:', error);
-          // }
 
           // Split stereo PCM and upsample to 16kHz by duplicating samples
           for (let i = 0; i < audioBuffer.length; i += 4) { // Read 2 bytes per channel
@@ -549,7 +530,7 @@ async function transcribeBuffer(audioBuffer, channelId, tempDir, utteranceCount,
   fs.writeFileSync(utteranceFile, wavBuffer);
   console.log(`Wrote utterance to ${utteranceFile}`);
 
-  if(!periodic) {
+  if(!periodic && DEBUG_WRITE_TO_S3) {
     const s3Key = `lca-audio-raw/utterance_ch${channelId}_${utteranceCount}.wav`;
     const s3Url = `s3://${OUTPUT_BUCKET}/${s3Key}`;
     console.log(`Uploading utterance to ${s3Url}`);
