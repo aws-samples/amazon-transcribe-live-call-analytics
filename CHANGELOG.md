@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Added support for Amazon Nova models (amazon.nova-micro-v1:0, amazon.nova-lite-v1:0)
+- Updated Anthropic Claude models to the latest 3.5 versions (anthropic.claude-3-5-haiku-20241022-v1:0, anthropic.claude-3-5-sonnet-20241022-v2:0)
+- Refactored Bedrock calls to use the Converse API eliminating the need for custom model specific payloads.
+- Refactored all model invocation to use Inference Profiles. This is required for Nova models. It is also applied to Anthropic models for consistency and improved scalability.
 
 ## [0.9.4] - 2024-10-11
 ### Fixed

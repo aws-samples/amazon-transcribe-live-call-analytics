@@ -13,7 +13,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
 # grab environment variables
+
+# use inference profile for model id as Nova models require the use of inference profiles
 BEDROCK_MODEL_ID = os.environ["BEDROCK_MODEL_ID"]
+INFERENCE_PROFILE_ID = os.environ["INFERENCE_PROFILE_ID"]
+
 FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
 # default 0 - do not truncate.
@@ -101,55 +105,27 @@ def get_transcripts(callId):
     return response
 
 
-def get_request_body(modelId, prompt, max_tokens, temperature):
-    provider = modelId.split(".")[0]
-    request_body = None
-    if provider == "anthropic":
-        # claude-3 models use new messages format
-        if modelId.startswith("anthropic.claude-3"):
-            request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "messages": [{"role": "user", "content": [{'type': 'text', 'text': prompt}]}],
-                "max_tokens": max_tokens,
-                "temperature": temperature
-            }
-        else:
-            request_body = {
-                "prompt": prompt,
-                "max_tokens_to_sample": max_tokens,
-                "temperature": temperature
-            }
-    else:
-        raise Exception("Unsupported provider: ", provider)
-    return request_body
-
-
-def get_generated_text(modelId, response):
-    provider = modelId.split(".")[0]
-    generated_text = None
-    response_body = json.loads(response.get("body").read())
-    print("Response body: ", json.dumps(response_body))
-    if provider == "anthropic":
-        # claude-3 models use new messages format
-        if modelId.startswith("anthropic.claude-3"):
-            generated_text = response_body.get("content")[0].get("text")
-        else:
-            generated_text = response_body.get("completion")
-    else:
-        raise Exception("Unsupported provider: ", provider)
-    return generated_text
+def get_generated_text(response):
+    return response["output"]["message"]["content"][0]["text"]
 
 
 def call_bedrock(prompt_data):
-    modelId = BEDROCK_MODEL_ID
-    accept = 'application/json'
-    contentType = 'application/json'
-    body = get_request_body(modelId, prompt_data,
-                            max_tokens=512, temperature=0)
-    print("Bedrock request - ModelId", modelId, "-  Body: ", body)
-    response = bedrock.invoke_model(body=json.dumps(
-        body), modelId=modelId, accept=accept, contentType=contentType)
-    generated_text = get_generated_text(modelId, response)
+    modelId = INFERENCE_PROFILE_ID
+    print("Bedrock request - ModelId", modelId)
+    message = {
+        "role": "user",
+        "content": [{"text": prompt_data}]
+    }
+
+    response = bedrock.converse(
+        modelId=modelId, 
+        messages=[message],
+        inferenceConfig={
+            "maxTokens": 512,
+            "temperature": 0
+        }
+    )
+    generated_text = get_generated_text(response)
     print("Bedrock response: ", json.dumps(generated_text))
     return generated_text
 

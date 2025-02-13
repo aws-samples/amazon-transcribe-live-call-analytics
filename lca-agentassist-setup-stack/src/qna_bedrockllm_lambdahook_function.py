@@ -6,8 +6,11 @@ import re
 FETCH_TRANSCRIPT_FUNCTION_ARN = os.environ['FETCH_TRANSCRIPT_FUNCTION_ARN']
 
 BR_REGION = os.environ.get("BR_REGION") or os.environ["AWS_REGION"]
-MODEL_ID = os.environ.get("MODEL_ID")
-MODEL_ARN = f"arn:aws:bedrock:{BR_REGION}::foundation-model/{MODEL_ID}"
+
+# use inference profile for model id as Nova models require the use of inference profiles
+MODEL_ID = os.environ.get('MODEL_ID')
+INFERENCE_PROFILE_ID = os.environ.get('INFERENCE_PROFILE_ID')
+
 DEFAULT_MAX_TOKENS = 256
 
 LAMBDA_CLIENT = boto3.client("lambda")
@@ -67,51 +70,27 @@ def get_br_response(generatePromptTemplate, transcript, query):
         resp = get_bedrock_response(prompt)
     return resp
 
-
-def get_request_body(modelId, prompt):
-    provider = modelId.split(".")[0]
-    request_body = None
-    if provider == "anthropic":
-        # claude-3 models use new messages format
-        if modelId.startswith("anthropic.claude-3"):
-            request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "messages": [{"role": "user", "content": [{'type': 'text', 'text': prompt}]}],
-                "max_tokens": DEFAULT_MAX_TOKENS
-            }
-        else:
-            request_body = {
-                "prompt": prompt,
-                "max_tokens_to_sample": DEFAULT_MAX_TOKENS
-            }
-    else:
-        raise Exception("Unsupported provider: ", provider)
-    return request_body
-
-
-def get_generate_text(modelId, response):
-    provider = modelId.split(".")[0]
-    generated_text = None
-    response_body = json.loads(response.get("body").read())
-    print("Response body: ", json.dumps(response_body))
-    if provider == "anthropic":
-        # claude-3 models use new messages format
-        if modelId.startswith("anthropic.claude-3"):
-            generated_text = response_body.get("content")[0].get("text")
-        else:
-            generated_text = response_body.get("completion")
-    else:
-        raise Exception("Unsupported provider: ", provider)
-    return generated_text
-
+def get_generate_text(response):
+    return response["output"]["message"]["content"][0]["text"]
 
 def get_bedrock_response(prompt):
-    modelId = MODEL_ID
-    body = get_request_body(modelId, prompt)
-    print("Bedrock request - ModelId", modelId, "-  Body: ", body)
-    response = BEDROCK_CLIENT.invoke_model(body=json.dumps(
-        body), modelId=modelId, accept='application/json', contentType='application/json')
-    generated_text = get_generate_text(modelId, response)
+    modelId = INFERENCE_PROFILE_ID
+
+    print("Bedrock request - ModelId", modelId)
+    message = {
+        "role": "user",
+        "content": [{"text": prompt}]
+    }
+
+    response = BEDROCK_CLIENT.converse(
+        modelId=modelId,
+        messages=[message],
+        inferenceConfig={
+            "maxTokens": DEFAULT_MAX_TOKENS
+        }
+    )
+
+    generated_text = get_generate_text(response)
     print("Bedrock response: ", generated_text)
     return generated_text
 
