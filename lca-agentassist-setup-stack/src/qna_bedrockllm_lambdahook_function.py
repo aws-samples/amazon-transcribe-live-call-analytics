@@ -9,7 +9,6 @@ BR_REGION = os.environ.get("BR_REGION") or os.environ["AWS_REGION"]
 
 # use inference profile for model id as Nova models require the use of inference profiles
 MODEL_ID = os.environ.get('MODEL_ID')
-INFERENCE_PROFILE_ID = os.environ.get('INFERENCE_PROFILE_ID')
 
 DEFAULT_MAX_TOKENS = 256
 
@@ -74,7 +73,7 @@ def get_generate_text(response):
     return response["output"]["message"]["content"][0]["text"]
 
 def get_bedrock_response(prompt):
-    modelId = INFERENCE_PROFILE_ID
+    modelId = MODEL_ID
 
     print("Bedrock request - ModelId", modelId)
     message = {

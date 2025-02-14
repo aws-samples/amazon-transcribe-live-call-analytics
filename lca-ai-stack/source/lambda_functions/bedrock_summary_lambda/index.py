@@ -16,7 +16,6 @@ logger.setLevel(logging.ERROR)
 
 # use inference profile for model id as Nova models require the use of inference profiles
 BEDROCK_MODEL_ID = os.environ["BEDROCK_MODEL_ID"]
-INFERENCE_PROFILE_ID = os.environ["INFERENCE_PROFILE_ID"]
 
 FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
 PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
@@ -110,7 +109,7 @@ def get_generated_text(response):
 
 
 def call_bedrock(prompt_data):
-    modelId = INFERENCE_PROFILE_ID
+    modelId = BEDROCK_MODEL_ID
     print("Bedrock request - ModelId", modelId)
     message = {
         "role": "user",

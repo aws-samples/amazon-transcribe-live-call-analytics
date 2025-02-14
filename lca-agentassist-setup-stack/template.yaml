@@ -20,12 +20,17 @@ Parameters:
 
   AgentAssistLLMBedrockModelId:
     Type: String
-    Default: "anthropic.claude-3-5-haiku-20241022-v1:0"
+    Default: "us.amazon.nova-lite-v1:0"
     AllowedValues:
-      - "anthropic.claude-3-5-haiku-20241022-v1:0"
-      - "anthropic.claude-3-5-sonnet-20241022-v2:0"
-      - "amazon.nova-micro-v1:0"
-      - "amazon.nova-lite-v1:0"
+      - "anthropic.claude-3-haiku-20240307-v1:0"
+      - "anthropic.claude-3-sonnet-20240229-v1:0"
+      - "us.amazon.nova-micro-v1:0"
+      - "us.amazon.nova-lite-v1:0"
+      - "us.amazon.nova-pro-v1:0"
+      - "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+      - "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+      - "eu.anthropic.claude-3-5-sonnet-20240620-v1:0"
+      - "apac.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
   BedrockKnowledgeBaseID:
     Type: String
@@ -325,7 +330,6 @@ Resources:
           KB_ACCOUNT_ID: !Ref AWS::AccountId
           KB_REGION: !Ref AWS::Region
           MODEL_ID: !Ref AgentAssistLLMBedrockModelId
-          INFERENCE_PROFILE_ID: !Sub "us.${AgentAssistLLMBedrockModelId}"
       Code: ./src
       LoggingConfig:
         LogGroup:
@@ -409,7 +413,6 @@ Resources:
         Variables:
           FETCH_TRANSCRIPT_FUNCTION_ARN: !Ref FetchTranscriptFunctionArn
           MODEL_ID: !Ref AgentAssistLLMBedrockModelId
-          INFERENCE_PROFILE_ID: !Sub "us.${AgentAssistLLMBedrockModelId}"
       Code: ./src
       LoggingConfig:
         LogGroup:

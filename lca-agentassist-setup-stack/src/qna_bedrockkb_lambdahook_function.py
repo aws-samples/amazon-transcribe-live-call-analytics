@@ -13,8 +13,14 @@ KB_ACCOUNT_ID = os.environ.get("KB_ACCOUNT_ID")
 
 # use inference profile for model id and arn as Nova models require the use of inference profiles
 MODEL_ID = os.environ.get('MODEL_ID')
-INFERENCE_PROFILE_ID = os.environ.get('INFERENCE_PROFILE_ID')
-MODEL_ARN = f"arn:aws:bedrock:{KB_REGION}:{KB_ACCOUNT_ID}:inference-profile/{INFERENCE_PROFILE_ID}"
+
+# if model id starts with Anthropic it is the legacy 3.0 models - use the model Id for the ARN
+# else it is an Inference Profile and use the profile's ARN
+
+if MODEL_ID.startswith("anthropic"):
+    MODEL_ARN = f"arn:aws:bedrock:{KB_REGION}::foundation-model/{MODEL_ID}"
+else:
+    MODEL_ARN = f"arn:aws:bedrock:{KB_REGION}:{KB_ACCOUNT_ID}:inference-profile/{MODEL_ID}"
 
 DEFAULT_MAX_TOKENS = 256
 
@@ -112,7 +118,7 @@ def get_generate_text(response):
 
 
 def get_bedrock_response(prompt):
-    modelId = INFERENCE_PROFILE_ID
+    modelId = MODEL_ID
 
     print("Bedrock request - ModelId", modelId)
     message = {

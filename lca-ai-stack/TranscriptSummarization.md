@@ -10,7 +10,7 @@ If the `BEDROCK` option is chosen, select a supported model ID from the list (`B
 
 ### **BEDROCK** (default)
 
-The `BEDROCK` option is enabled by default. You must [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for the model selected in the `BedrockModelId` parameter. By default, the selected model is `anthropic.claude-3-5-haiku-20241022-v1:0`.
+The `BEDROCK` option is enabled by default. You must [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for the model selected in the `BedrockModelId` parameter. By default, the selected model is `us.amazon.nova-lite-v1:0`.
 
 LCA can run multiple LLM inferences after the call is complete. The prompt templates used to generate the insights from the transcript are stored in a DynamoDB table. There are two items (records) in the table:  
 
