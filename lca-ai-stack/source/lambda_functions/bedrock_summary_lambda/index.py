@@ -7,6 +7,7 @@ import json
 import re
 import boto3
 import requests
+from botocore.config import Config
 
 import logging
 logger = logging.getLogger()
@@ -34,8 +35,12 @@ BEDROCK_ENDPOINT_URL = os.environ.get(
 
 lambda_client = boto3.client('lambda')
 dynamodb_client = boto3.client('dynamodb')
-bedrock = boto3.client(service_name='bedrock-runtime',
-                       region_name=BEDROCK_REGION, endpoint_url=BEDROCK_ENDPOINT_URL)
+bedrock = boto3.client(
+    service_name='bedrock-runtime',
+    region_name=BEDROCK_REGION, 
+    endpoint_url=BEDROCK_ENDPOINT_URL,
+    config=Config(retries={'max_attempts': 50, 'mode': 'adaptive'})
+)
 
 
 def get_templates_from_dynamodb(prompt_override):

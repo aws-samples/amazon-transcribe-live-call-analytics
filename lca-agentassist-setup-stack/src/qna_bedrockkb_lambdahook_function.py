@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import re
+from botocore.config import Config
 
 print("Boto3 version: ", boto3.__version__)
 
@@ -28,11 +29,14 @@ LAMBDA_CLIENT = boto3.client("lambda")
 
 KB_CLIENT = boto3.client(
     service_name="bedrock-agent-runtime",
-    region_name=KB_REGION
+    region_name=KB_REGION,
+    config=Config(retries={'max_attempts': 50, 'mode': 'adaptive'})
 )
+
 BEDROCK_CLIENT = boto3.client(
     service_name="bedrock-runtime",
-    region_name=KB_REGION
+    region_name=KB_REGION,
+    config=Config(retries={'max_attempts': 50, 'mode': 'adaptive'})
 )
 
 

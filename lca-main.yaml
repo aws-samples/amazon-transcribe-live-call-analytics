@@ -1121,9 +1121,10 @@ Resources:
         import json
         import boto3
         import re
+        from botocore.config import Config
         def is_model_available(modelId):
           try:
-            client = boto3.client('bedrock-runtime')
+            client = boto3.client('bedrock-runtime', config=Config(retries={'max_attempts': 50, 'mode': 'adaptive'}))
             prompt = "Why is the sky blue?"
             if 'embed' in modelId:
               body = {"inputText": prompt}

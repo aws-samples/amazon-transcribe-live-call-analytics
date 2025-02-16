@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import re
+from botocore.config import Config
 
 FETCH_TRANSCRIPT_FUNCTION_ARN = os.environ['FETCH_TRANSCRIPT_FUNCTION_ARN']
 
@@ -15,7 +16,8 @@ DEFAULT_MAX_TOKENS = 256
 LAMBDA_CLIENT = boto3.client("lambda")
 BEDROCK_CLIENT = boto3.client(
     service_name="bedrock-runtime",
-    region_name=BR_REGION
+    region_name=BR_REGION,
+    config=Config(retries={'max_attempts': 50, 'mode': 'adaptive'})
 )
 
 
