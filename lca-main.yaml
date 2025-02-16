@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.4) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.5) (SO9072)
 
 Parameters:
 
@@ -206,12 +206,19 @@ Parameters:
 
   AgentAssistLLMBedrockModelId:
     Type: String
-    Default: anthropic.claude-3-haiku-20240307-v1:0
+    Default: "us.amazon.nova-lite-v1:0"
     AllowedValues:
       - "anthropic.claude-3-haiku-20240307-v1:0"
       - "anthropic.claude-3-sonnet-20240229-v1:0"
-      - "anthropic.claude-3-5-sonnet-20240620-v1:0"
-    Description: Choose Bedrock modelId'
+      - "us.amazon.nova-micro-v1:0"
+      - "us.amazon.nova-lite-v1:0"
+      - "us.amazon.nova-pro-v1:0"
+      - "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+      - "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+      - "eu.anthropic.claude-3-5-sonnet-20240620-v1:0"
+      - "apac.anthropic.claude-3-5-sonnet-20240620-v1:0"
+
+    Description: Choose Bedrock modelId
 
   AgentAssistQnABotOpenSearchNodeCount:
     Type: String
@@ -448,16 +455,22 @@ Parameters:
       provided list (SummaryBedrockModelId).
 
   SummaryBedrockModelId:
-    Default: "anthropic.claude-3-haiku-20240307-v1:0"
     Type: String
+    Default: "us.amazon.nova-lite-v1:0"
     AllowedValues:
       - "anthropic.claude-3-haiku-20240307-v1:0"
       - "anthropic.claude-3-sonnet-20240229-v1:0"
-      - "anthropic.claude-3-5-sonnet-20240620-v1:0"
+      - "us.amazon.nova-micro-v1:0"
+      - "us.amazon.nova-lite-v1:0"
+      - "us.amazon.nova-pro-v1:0"
+      - "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+      - "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+      - "eu.anthropic.claude-3-5-sonnet-20240620-v1:0"
+      - "apac.anthropic.claude-3-5-sonnet-20240620-v1:0"
 
     Description: >
       If EndOfCallTranscriptSummary is BEDROCK, then choose a model ID from the list of supported models. 
-      Defaults to 'anthropic.claude-3-haiku-20240307-v1:0'
+      Defaults to 'us.amazon.nova-lite-v1:0'
 
   SummarizationSageMakerInitialInstanceCount:
     Type: Number
@@ -1086,7 +1099,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - "bedrock:InvokeModel"
-                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/*"
+                Resource: 
+                  - !Sub "arn:aws:bedrock:*::foundation-model/*"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*"
+              - Effect: Allow
+                Action:
+                  - "bedrock:GetInferenceProfile"
+                Resource:
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*"
           PolicyName: BedrockPolicy
 
   ValidateParametersFunction:
@@ -1101,21 +1121,25 @@ Resources:
         import json
         import boto3
         import re
+        from botocore.config import Config
         def is_model_available(modelId):
           try:
-            client = boto3.client('bedrock-runtime')
+            client = boto3.client('bedrock-runtime', config=Config(retries={'max_attempts': 50, 'mode': 'adaptive'}))
             prompt = "Why is the sky blue?"
             if 'embed' in modelId:
               body = {"inputText": prompt}
+              print(f"Testing model: {modelId} - {body}")
+              client.invoke_model(body=json.dumps(
+                  body), modelId=modelId, accept='application/json', contentType='application/json')
             else:
-              body = {
-                  "anthropic_version": "bedrock-2023-05-31",
-                  "messages": [{"role": "user", "content": [{'type': 'text', 'text': prompt}]}],
-                  "max_tokens": 128
+              message = {
+                "role": "user",
+                "content": [{"text": prompt}]
               }
-            print(f"Testing model: {modelId} - {body}")
-            client.invoke_model(body=json.dumps(
-                body), modelId=modelId, accept='application/json', contentType='application/json')
+              
+              print(f"Testing model: {modelId} - {message}")
+              client.converse(modelId=modelId, messages=[message])
+
             print(f"The model '{modelId}' is available and enabled.")
             return True
           except Exception as e:
