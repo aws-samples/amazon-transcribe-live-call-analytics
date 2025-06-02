@@ -105,7 +105,8 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
        **Amazon Transcribe Configuration**
 
    18. `Enable Partial Transcripts` - Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn.
-   19. `Transcribe API mode` - Set the default API mode for Transcribe. Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support call categories and alerts, call summarization, and PCA integration.
+   19. `Transcribe API mode` - Set the default API mode for Transcribe. Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support call categories and alerts, call summarization, and PCA integration. Set to 'whisper-on-sagemaker' to use the Whisper ASR model deployed on SageMaker.
+   20. `Whisper SageMaker Endpoint Name` - The name of the SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only used when TranscribeApiMode is set to "whisper-on-sagemaker".
    20. `Enable Content Redaction for Transcripts` - Enable content redaction from Amazon Transcribe transcription output. **NOTE:** Content redaction is only available when using English (en-US, en-GB, en-AU) or Spanish (es-US). This parameter is ignored when not using other languages.
    21. `Language for Transcription` - Language code to be used for Amazon Transcribe. To transcribe meetings in a supported language other than US English, chose the desired value for **Language for Transcription**. You can also choose to have Transcribe identify the primary language, or even multiple languages used during the meeting by setting **Language for Transcription** to `identify-language` or `identify-multiple-languages` and optionally provide a list of languages - see [Language identification with streaming transcriptions](https://docs.aws.amazon.com/transcribe/latest/dg/lang-id-stream.html).
    22. `Content Redaction Type for Transcription` - Type of content redaction from Amazon Transcribe transcription output
@@ -211,6 +212,7 @@ For automated testing, see
 - [Customize transcript summarization](./lca-ai-stack/TranscriptSummarization.md)
 - [Amazon Chime SDK Call Analytics & voice tone analysis](./lca-chimevc-stack/ChimeCallAnalytics.md)
 - [Amazon Connect Kinesis Video Streams](./lca-connect-kvs-stack/README.md)
+- [Whisper on SageMaker Integration](./lca-whisper-sagemaker-stack/README.md)
 
 ## Post Call Analytics: Companion solution
 

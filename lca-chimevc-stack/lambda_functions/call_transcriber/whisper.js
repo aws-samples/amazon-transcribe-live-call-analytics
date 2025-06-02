@@ -550,28 +550,43 @@ async function transcribeBuffer(audioBuffer, channelId, tempDir, utteranceCount,
   }
 
   try {
-    // Create payload with audio and parameters
+    const audioArray = Array.from(new Uint8Array(wavBuffer));
+    
+    // Create payload with audio and parameters properly structured
     const payload = {
-      audio: Array.from(wavBuffer),  // Convert buffer to array
-      parameters: {
-        language: "en",              // Specify language
-        task: "transcribe",          // transcribe or translate
-        temperature: 0.0,            // Lower temperature for more focused sampling
-        no_speech_threshold: NO_SPEECH_THRESHOLD,
-        // Add any other parameters your endpoint supports
-      }
+      audio_input: audioArray,
+    parameters: {
+      language: "en",
+      task: "transcribe",
+      temperature: 0.0,
+      no_speech_threshold: NO_SPEECH_THRESHOLD,
+      beam_size: 5
+      // Removed fp16 parameter to let SageMaker use its default behavior
+    }
     };
+    
+    // Log the keys to verify structure
+    console.log('FINAL PAYLOAD KEYS:', Object.keys(payload));
 
     // Invoke SageMaker endpoint
     const response = await sagemakerClient.send(new InvokeEndpointCommand({
       EndpointName: WHISPER_SAGEMAKER_ENDPOINT,
-      ContentType: 'application/json',  // Changed to JSON
+      ContentType: 'application/json',
       Body: JSON.stringify(payload)
     }));
+
+    // Log that we received a response
+    console.log('DEBUGGING: SageMaker response received');
 
     // Parse the response
     const responseBody = JSON.parse(new TextDecoder().decode(response.Body));
     console.log('SageMaker response:', responseBody);
+
+    // Check for error in response
+    if (responseBody.error) {
+      console.error('Error from SageMaker endpoint:', responseBody.error);
+      return '';
+    }
 
     // Check for no speech probability if available in the response
     if (responseBody.no_speech_prob !== undefined && responseBody.no_speech_prob > NO_SPEECH_THRESHOLD) {
@@ -594,8 +609,6 @@ async function transcribeBuffer(audioBuffer, channelId, tempDir, utteranceCount,
     console.error('Error calling SageMaker endpoint:', error);
     return '';
   }
-
-  return 'Error with transcription';
 }
 
 module.exports = {
@@ -603,4 +616,4 @@ module.exports = {
   StartStreamTranscriptionCommand,
   StartCallAnalyticsStreamTranscriptionCommand,
   ParticipantRole
-}; 
+};

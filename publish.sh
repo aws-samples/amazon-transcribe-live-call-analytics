@@ -419,6 +419,17 @@ else
 echo "SKIPPING $dir (unchanged)"
 fi
 
+dir=lca-whisper-sagemaker-stack
+if haschanged $dir; then
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
+popd
+update_checksum $dir
+else
+echo "SKIPPING $dir (unchanged)"
+fi
+
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
 
@@ -461,4 +472,3 @@ echo CF Launch URL: https://${REGION}.console.aws.amazon.com/cloudformation/home
 echo CLI Deploy: aws cloudformation deploy --region $REGION --template-file $tmpdir/$MAIN_TEMPLATE --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LCA --parameter-overrides AdminEmail='jdoe@example.com' CallAudioSource='Demo Asterisk PBX Server' demoSoftphoneAllowedCidr=CIDRBLOCK siprecAllowedCidrList=\"\" S3BucketName=\"\"
 echo Done
 exit 0
-
