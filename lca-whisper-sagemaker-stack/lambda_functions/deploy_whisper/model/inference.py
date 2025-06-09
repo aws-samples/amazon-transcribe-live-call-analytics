@@ -277,6 +277,9 @@ def predict_fn(input_data, model):
         # Extract parameters with defaults
         parameters = input_data.get('parameters', {})
         
+        logger.info(f"Received input_data keys: {list(input_data.keys())}")
+        logger.info(f"Input data type: {type(input_data)}")
+    
         # Process based on input type
         if 'audio_input' in input_data:
             # Handle array of audio data

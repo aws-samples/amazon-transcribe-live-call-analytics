@@ -8,3 +8,5 @@
 samconfig.toml
 .checksum
 .commit-hash
+.venv
+__pycache__

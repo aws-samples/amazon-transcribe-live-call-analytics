@@ -181,6 +181,8 @@ Resources:
                   - sagemaker:CreateEndpointConfig
                   - sagemaker:CreateEndpoint
                   - sagemaker:DescribeEndpoint
+                  - sagemaker:DescribeModel
+                  - sagemaker:UpdateEndpoint
                   - sagemaker:DeleteModel
                   - sagemaker:DeleteEndpointConfig
                   - sagemaker:DeleteEndpoint
