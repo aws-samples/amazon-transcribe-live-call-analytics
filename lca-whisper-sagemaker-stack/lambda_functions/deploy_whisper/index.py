@@ -6,25 +6,23 @@ import boto3
 import shutil
 import time
 import traceback
-import urllib.request
+
 import cfnresponse
 from datetime import datetime
+from botocore.exceptions import ClientError
 # Import our custom sagemaker module from the Lambda layer
 import sagemaker
 from sagemaker import get_execution_role
 from sagemaker import Model
 from config import (
-    S3_BUCKET, S3_PREFIX, S3_OUTPUT_PATH, INSTANCE_TYPE, 
+    S3_BUCKET, S3_PREFIX, S3_OUTPUT_PATH, INSTANCE_TYPE,
     INSTANCE_COUNT, MODEL_DIR, ENDPOINT_INFO_FILE, WHISPER_MODEL,
     SAGEMAKER_ROLE_ARN
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 
 def download_model_files():
     """
@@ -78,6 +76,242 @@ except ImportError:
     logger.info(f"Model files prepared in {MODEL_DIR}")
     return True
 
+def check_endpoint_exists(endpoint_name):
+    """
+    Check if a SageMaker endpoint exists.
+    
+    Args:
+        endpoint_name: Name of the endpoint to check
+        
+    Returns:
+        tuple: (exists: bool, status: str or None)
+    """
+    try:
+        sm_client = boto3.client('sagemaker')
+        response = sm_client.describe_endpoint(EndpointName=endpoint_name)
+        return True, response['EndpointStatus']
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ValidationException':
+            return False, None
+        else:
+            # Re-raise other errors
+            raise e
+
+def create_sagemaker_model(model):
+    """
+    Create a SageMaker model using the SageMaker client.
+    
+    Args:
+        model: SageMaker Model object
+        
+    Returns:
+        str: The model name
+    """
+    try:
+        sm_client = boto3.client('sagemaker')
+        
+        logger.info(f"Creating SageMaker model: {model.name}")
+        sm_client.create_model(
+            ModelName=model.name,
+            PrimaryContainer={
+                'Image': model.image_uri,
+                'ModelDataUrl': model.model_data,
+                'Environment': model.env
+            },
+            ExecutionRoleArn=model.role
+        )
+        logger.info(f"Model {model.name} created successfully")
+        return model.name
+        
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ValidationException' and 'already exists' in str(e):
+            logger.info(f"Model {model.name} already exists, continuing...")
+            return model.name
+        else:
+            logger.error(f"Error creating model: {str(e)}")
+            raise e
+
+def deregister_autoscaling_targets(endpoint_name):
+    """
+    Deregister Application Auto Scaling targets for the endpoint.
+    
+    Args:
+        endpoint_name: Name of the endpoint
+        
+    Returns:
+        list: List of scalable targets that were deregistered
+    """
+    try:
+        autoscaling_client = boto3.client('application-autoscaling')
+        
+        # Get all scalable targets for this endpoint (search without specifying variant name)
+        logger.info(f"Checking for auto scaling targets for endpoint: {endpoint_name}")
+        
+        # First, try to get all scalable targets for sagemaker namespace
+        response = autoscaling_client.describe_scalable_targets(
+            ServiceNamespace='sagemaker'
+        )
+        
+        scalable_targets = response.get('ScalableTargets', [])
+        
+        # Filter for targets that belong to this specific endpoint
+        endpoint_targets = []
+        for target in scalable_targets:
+            resource_id = target['ResourceId']
+            # Check if this target belongs to our endpoint
+            if resource_id.startswith(f"endpoint/{endpoint_name}/variant/"):
+                endpoint_targets.append(target)
+                logger.info(f"Found auto scaling target: {resource_id}")
+        
+        if not endpoint_targets:
+            logger.info(f"No auto scaling targets found for endpoint {endpoint_name}")
+            return []
+        
+        # Deregister each scalable target
+        deregistered_targets = []
+        for target in endpoint_targets:
+            logger.info(f"Deregistering scalable target: {target['ResourceId']}")
+            autoscaling_client.deregister_scalable_target(
+                ServiceNamespace='sagemaker',
+                ResourceId=target['ResourceId'],
+                ScalableDimension=target['ScalableDimension']
+            )
+            deregistered_targets.append(target)
+        
+        logger.info(f"Deregistered {len(deregistered_targets)} auto scaling targets")
+        return deregistered_targets
+        
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ValidationException':
+            logger.info("No auto scaling targets to deregister")
+            return []
+        else:
+            logger.error(f"Error deregistering auto scaling targets: {str(e)}")
+            raise e
+
+
+def re_register_autoscaling_targets(endpoint_name, deregistered_targets):
+    """
+    Re-register Application Auto Scaling targets for the endpoint.
+    
+    Args:
+        endpoint_name: Name of the endpoint
+        deregistered_targets: List of previously deregistered targets to restore
+    """
+    if not deregistered_targets:
+        logger.info("No auto scaling targets to re-register")
+        return
+    
+    try:
+        autoscaling_client = boto3.client('application-autoscaling')
+        
+        for target in deregistered_targets:
+            logger.info(f"Re-registering scalable target: {target['ResourceId']}")
+            
+            # Prepare the registration parameters
+            register_params = {
+                'ServiceNamespace': 'sagemaker',
+                'ResourceId': target['ResourceId'],
+                'ScalableDimension': target['ScalableDimension'],
+                'MinCapacity': target['MinCapacity'],
+                'MaxCapacity': target['MaxCapacity']
+            }
+            
+            # Only include RoleArn if it exists in the target (for SageMaker endpoints, 
+            # this is often optional as service-linked roles are used automatically)
+            if 'RoleArn' in target and target['RoleArn']:
+                register_params['RoleArn'] = target['RoleArn']
+                logger.info(f"Using existing role: {target['RoleArn']}")
+            else:
+                logger.info("No RoleArn provided, Application Auto Scaling will use service-linked role")
+            
+            autoscaling_client.register_scalable_target(**register_params)
+        
+        logger.info(f"Re-registered {len(deregistered_targets)} auto scaling targets")
+        
+    except Exception as e:
+        logger.error(f"Error re-registering auto scaling targets: {str(e)}")
+        # Don't raise here as the endpoint update might have succeeded
+
+
+def update_endpoint(endpoint_name, model, instance_type, instance_count):
+    """
+    Update an existing SageMaker endpoint with a new model.
+    
+    Args:
+        endpoint_name: Name of the endpoint to update
+        model: SageMaker Model object to deploy
+        instance_type: Instance type for the endpoint
+        instance_count: Number of instances
+        
+    Returns:
+        bool: True if successful
+    """
+    deregistered_targets = []
+    try:
+        sm_client = boto3.client('sagemaker')
+        
+        # Step 1: Deregister any auto scaling targets
+        deregistered_targets = deregister_autoscaling_targets(endpoint_name)
+        
+        # Step 2: Create the model first
+        model_name = create_sagemaker_model(model)
+        
+        # Step 3: Create a new endpoint configuration
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        new_config_name = f"{endpoint_name}-config-{timestamp}"
+        
+        logger.info(f"Creating new endpoint configuration: {new_config_name}")
+        sm_client.create_endpoint_config(
+            EndpointConfigName=new_config_name,
+            ProductionVariants=[
+                {
+                    'VariantName': 'AllTraffic',
+                    'ModelName': model_name,
+                    'InitialInstanceCount': instance_count,
+                    'InstanceType': instance_type,
+                    'InitialVariantWeight': 1.0
+                }
+            ]
+        )
+        
+        # Step 4: Update the endpoint to use the new configuration
+        logger.info(f"Updating endpoint {endpoint_name} with new configuration")
+        sm_client.update_endpoint(
+            EndpointName=endpoint_name,
+            EndpointConfigName=new_config_name
+        )
+        
+        # Step 5: Wait for the update to complete
+        logger.info("Waiting for endpoint update to complete...")
+        waiter = sm_client.get_waiter('endpoint_in_service')
+        waiter.wait(
+            EndpointName=endpoint_name,
+            WaiterConfig={
+                'Delay': 30,
+                'MaxAttempts': 40  # 20 minutes max
+            }
+        )
+        
+        # Step 6: Re-register auto scaling targets if they were deregistered
+        re_register_autoscaling_targets(endpoint_name, deregistered_targets)
+        
+        logger.info(f"Endpoint {endpoint_name} updated successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error updating endpoint: {str(e)}")
+        
+        # Try to re-register auto scaling targets even if update failed
+        if deregistered_targets:
+            logger.info("Attempting to re-register auto scaling targets after failure...")
+            try:
+                re_register_autoscaling_targets(endpoint_name, deregistered_targets)
+            except Exception as re_reg_error:
+                logger.error(f"Failed to re-register auto scaling targets: {str(re_reg_error)}")
+        
+        raise e
+
 def deploy_model(event, context):
     """
     Deploy the Whisper model to SageMaker.
@@ -99,6 +333,21 @@ def deploy_model(event, context):
         endpoint_name = event.get('ResourceProperties', {}).get('EndpointName', f"whisper-endpoint-{datetime.now().strftime('%Y%m%d%H%M%S')}")
         sagemaker_role_arn = event.get('ResourceProperties', {}).get('SageMakerRoleArn', SAGEMAKER_ROLE_ARN)
         
+        # Check if this is an update and if the endpoint already exists
+        request_type = event.get('RequestType', 'Create')
+        endpoint_exists = False
+        endpoint_status = None
+        
+        if request_type == 'Update':
+            # Use the physical resource ID from the previous deployment if available
+            existing_endpoint_name = event.get('PhysicalResourceId')
+            if existing_endpoint_name:
+                endpoint_name = existing_endpoint_name
+                endpoint_exists, endpoint_status = check_endpoint_exists(endpoint_name)
+                logger.info(f"Stack update detected. Endpoint {endpoint_name} exists: {endpoint_exists}")
+                if endpoint_exists:
+                    logger.info(f"Endpoint status: {endpoint_status}")
+        
         # Set environment variables for config.py
         os.environ['WHISPER_MODEL'] = whisper_model
         os.environ['S3_BUCKET'] = s3_bucket
@@ -108,8 +357,8 @@ def deploy_model(event, context):
         os.environ['ENDPOINT_NAME'] = endpoint_name
         os.environ['SAGEMAKER_ROLE_ARN'] = sagemaker_role_arn
         
-        # Get project root directory
-        project_root = os.path.dirname(os.path.abspath(__file__))
+        # Get project root directory (for future use)
+        # project_root = os.path.dirname(os.path.abspath(__file__))
         
         # Download and prepare model files
         download_model_files()
@@ -155,12 +404,13 @@ def deploy_model(event, context):
         logger.info(f"Using IAM role: {role}")
         
         # Create model with optimized settings
-        logger.info("Creating SageMaker model")
+        model_name = f"whisper-model-{timestamp}"
+        logger.info(f"Creating SageMaker model: {model_name}")
         model = Model(
             image_uri=image_uri,
             role=role,
             model_data=s3_path,
-            name=f"whisper-model-{timestamp}",
+            name=model_name,
             env={
                 'SAGEMAKER_CONTAINER_LOG_LEVEL': '20',  # INFO level logging
                 'SAGEMAKER_PROGRAM': 'inference.py',
@@ -180,53 +430,58 @@ def deploy_model(event, context):
             }
         )
         
-        # Deploy model with optimized configuration
-        logger.info(f"Deploying model to endpoint {endpoint_name}")
-        logger.info(f"Instance type: {instance_type}, Instance count: {instance_count}")
-        
-        try:
-            # Set a timeout for the deployment
-            timeout = 1800  # 30 minutes
-            start_time = time.time()
+        # Deploy or update the endpoint
+        if endpoint_exists and endpoint_status in ['InService', 'Updating']:
+            logger.info(f"Updating existing endpoint {endpoint_name}")
+            update_endpoint(endpoint_name, model, instance_type, instance_count)
+        else:
+            # Deploy new endpoint
+            logger.info(f"Deploying new endpoint {endpoint_name}")
+            logger.info(f"Instance type: {instance_type}, Instance count: {instance_count}")
             
-            # Start the deployment
-            logger.info("Starting model deployment...")
-            
-            # Configure model server settings for better performance
-            model_server_workers = max(1, int(os.environ.get('MODEL_SERVER_WORKERS', '1')))
-            
-            logger.info("This may take 10-15 minutes to complete...")
-            # Deploy without DataCaptureConfig since it's disabled
-            predictor = model.deploy(
-                endpoint_name=endpoint_name,
-                initial_instance_count=instance_count,
-                instance_type=instance_type,
-                wait=True,  # Wait for deployment to complete
-                model_server_workers=model_server_workers,  # Set number of model server workers
-                container_startup_health_check_timeout=600  # Increase health check timeout
-            )
-            
-            # Deployment completed successfully
-            elapsed_time = time.time() - start_time
-            logger.info(f"Deployment completed successfully in {elapsed_time:.2f} seconds")
-                
-        except Exception as deploy_error:
-            # Log the full exception details
-            logger.error("Deployment error details:")
-            logger.error(traceback.format_exc())
-            
-            # Check if the endpoint was created despite the error
             try:
-                sm_client = boto3.client('sagemaker')
-                response = sm_client.describe_endpoint(EndpointName=endpoint_name)
-                status = response['EndpointStatus']
-                logger.info(f"Despite the error, endpoint exists with status: {status}")
-                logger.info("You can check the endpoint status in the AWS SageMaker console")
-            except Exception:
-                logger.error(f"Could not find endpoint {endpoint_name} - it may not have been created")
+                # Set a timeout for the deployment
+                timeout = 1800  # 30 minutes
+                start_time = time.time()
                 
-            # Re-raise the original error
-            raise deploy_error
+                # Start the deployment
+                logger.info("Starting model deployment...")
+                
+                # Configure model server settings for better performance
+                model_server_workers = max(1, int(os.environ.get('MODEL_SERVER_WORKERS', '1')))
+                
+                logger.info("This may take 10-15 minutes to complete...")
+                # Deploy without DataCaptureConfig since it's disabled
+                predictor = model.deploy(
+                    endpoint_name=endpoint_name,
+                    initial_instance_count=instance_count,
+                    instance_type=instance_type,
+                    wait=True,  # Wait for deployment to complete
+                    model_server_workers=model_server_workers,  # Set number of model server workers
+                    container_startup_health_check_timeout=600  # Increase health check timeout
+                )
+                
+                # Deployment completed successfully
+                elapsed_time = time.time() - start_time
+                logger.info(f"Deployment completed successfully in {elapsed_time:.2f} seconds")
+                    
+            except Exception as deploy_error:
+                # Log the full exception details
+                logger.error("Deployment error details:")
+                logger.error(traceback.format_exc())
+                
+                # Check if the endpoint was created despite the error
+                try:
+                    sm_client = boto3.client('sagemaker')
+                    response = sm_client.describe_endpoint(EndpointName=endpoint_name)
+                    status = response['EndpointStatus']
+                    logger.info(f"Despite the error, endpoint exists with status: {status}")
+                    logger.info("You can check the endpoint status in the AWS SageMaker console")
+                except Exception:
+                    logger.error(f"Could not find endpoint {endpoint_name} - it may not have been created")
+                    
+                # Re-raise the original error
+                raise deploy_error
         
         # Save endpoint information to a file
         endpoint_info = {
@@ -245,12 +500,12 @@ def deploy_model(event, context):
         os.remove(model_archive_path)
         logger.info(f"Removed temporary model archive {model_archive_path}")
         
-        logger.info(f"Model deployment complete. Endpoint name: {endpoint_name}")
+        logger.info(f"Model deployment/update complete. Endpoint name: {endpoint_name}")
         
         # Return success response with endpoint name
         return {
             'EndpointName': endpoint_name,
-            'ModelName': f"whisper-model-{timestamp}",
+            'ModelName': model_name,
             'S3ModelPath': s3_path
         }
         
