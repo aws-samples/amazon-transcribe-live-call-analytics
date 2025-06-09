@@ -14,7 +14,7 @@ const rightVad = new VAD(VAD.Mode.AGGRESSIVE);
 const SAMPLE_RATE = 16000; // sample rate for 16kHz audio
 const NO_SPEECH_THRESHOLD = parseFloat(process.env.NO_SPEECH_THRESHOLD || '0.2'); // Probability of no speech - closer to zero, better chance its speech
 const TRANSCRIPTION_INTERVAL = parseInt(process.env.TRANSCRIPTION_INTERVAL || '1000'); // 1 second in milliseconds
-const WHISPER_SAGEMAKER_ENDPOINT = process.env.WHISPER_SAGEMAKER_ENDPOINT || 'endpoint-quick-start-zha1f';
+const WHISPER_SAGEMAKER_ENDPOINT = process.env.WHISPER_SAGEMAKER_ENDPOINT || '';
 
 // Initialize S3 client
 const s3Client = new S3Client({});

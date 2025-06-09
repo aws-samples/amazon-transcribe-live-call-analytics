@@ -286,6 +286,12 @@ Resources:
           PolicyDocument:
             Version: 2012-10-17
             Statement:
+              # Add SageMaker invoke permissions
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${WhisperSageMakerEndpointName}"
               - Effect: Allow
                 Action:
                   - iam:PassRole
