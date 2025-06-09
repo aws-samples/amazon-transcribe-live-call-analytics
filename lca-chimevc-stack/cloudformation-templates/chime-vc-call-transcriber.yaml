@@ -34,9 +34,17 @@ Parameters:
     Type: String
     Default: analytics
     AllowedValues:
-      - standard
-      - analytics
-    Description: Set the default operational mode for Transcribe
+      - "standard"
+      - "analytics"
+      - "whisper-on-sagemaker"
+    Description: Set the default operational mode for ASR. 
+
+  WhisperSageMakerEndpointName:
+    Type: String
+    Default: ""
+    Description: >-
+      The name of the SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
+      used when TranscribeApiMode is set to "whisper-on-sagemaker".
 
   IsPartialTranscriptEnabled:
     Type: String
@@ -206,29 +214,26 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_IMAGE
 
+  # Create new function with container image
   CallTranscriberFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Architectures:
-        - arm64
+      PackageType: Image
+      ImageUri: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/lca-call-transcriber:latest
+      ImageConfig:
+        Command: ["index.handler"]
       Description: >-
         AWS Lambda Function that will be triggered when a new call starts. This will
         read from the KVS streams, stitch the channels together, send audio to
         transcribe, and store the transcriptions in DynamoDB
-      Handler: index.handler
-      Layers:
-        # periodically update the Lambda Insights Layer
-        # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
-        - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallTranscriberFunctionRole.Arn
-      Runtime: nodejs18.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active
       Environment:
         Variables:
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
+          WHISPER_SAGEMAKER_ENDPOINT: !Ref WhisperSageMakerEndpointName
           BUFFER_SIZE: "3200"
           LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
@@ -254,12 +259,10 @@ Resources:
           CUSTOM_VOCABULARY_NAME: !Ref CustomVocabularyName
           CUSTOM_LANGUAGE_MODEL_NAME: !Ref CustomLanguageModelName
           LAMBDA_HOOK_FUNCTION_ARN: !Ref SiprecLambdaHookFunctionArn
-      CodeUri: ../lambda_functions/call_transcriber
     Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W89
-            reason: Customer can use VPC if desired
+      Dockerfile: Dockerfile
+      DockerContext: ../lambda_functions/call_transcriber
+      DockerTag: latest
 
   CallTranscriberFunctionRole:
     Type: AWS::IAM::Role
@@ -347,6 +350,12 @@ Resources:
                     - lambda:InvokeFunction
                   Resource: !Sub "${SiprecLambdaHookFunctionArn}"
                 - Ref: AWS::NoValue
+              - Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource:
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/lca-call-transcriber
 
   TcaDataAccessRole:
     Type: AWS::IAM::Role
@@ -387,10 +396,11 @@ Resources:
             reason: >-
               Transcribe does not support resource-level permissions and KVS streams are dynamic
 
+  # Update EventBridge permissions to use new function
   AllowEventBridgeToCallTranscriberFunctionLambdaFromChimeVC:
-    Type: "AWS::Lambda::Permission"
+    Type: "AWS::Lambda::Permission" 
     Properties:
-      FunctionName: !Ref CallTranscriberFunction
+      FunctionName: !Ref CallTranscriberFunction  # Updated reference
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC.Arn
@@ -410,13 +420,13 @@ Resources:
           - aws.chime
       Targets:
         - Id: CallTranscriberTarget
-          Arn: !GetAtt CallTranscriberFunction.Arn
+          Arn: !GetAtt CallTranscriberFunction.Arn  # Updated reference
       State: "ENABLED"
 
   AllowEventBridgeToCallTranscriberFunctionLambdFromIVR:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref CallTranscriberFunction
+      FunctionName: !Ref CallTranscriberFunction  # Updated reference
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR.Arn
@@ -425,7 +435,7 @@ Resources:
   EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR:
     Type: AWS::Events::Rule
     Properties:
-      Description: "This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR"
+      Description: "This rule is triggered when a START_CALL_PROCESSING event is sent from IVR"
       EventPattern:
         detail-type:
           - "START_CALL_PROCESSING"
@@ -433,7 +443,7 @@ Resources:
           - lca-solution
       Targets:
         - Id: CallTranscriberTarget
-          Arn: !GetAtt CallTranscriberFunction.Arn
+          Arn: !GetAtt CallTranscriberFunction.Arn  # Updated reference
       State: "ENABLED"
 
   # Permission for Call Transcriber to invoke itself
@@ -441,7 +451,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref CallTranscriberFunction
+      FunctionName: !Ref CallTranscriberFunction  # Updated reference
       Principal: !GetAtt CallTranscriberFunctionRole.Arn
 
 Metadata:
@@ -491,3 +501,11 @@ Outputs:
       - ShouldEnableContentRedaction
       - "true"
       - "false"
+
+  CallTranscriberFunctionArn:
+    Value: !GetAtt CallTranscriberFunction.Arn
+    Description: ARN of the Call Transcriber Lambda Function
+    
+  CallTranscriberFunctionName:
+    Value: !Ref CallTranscriberFunction
+    Description: Name of the Call Transcriber Lambda Function

@@ -269,10 +269,23 @@ Parameters:
     AllowedValues:
       - standard
       - analytics
+      - whisper-on-sagemaker
     Description: >-
-      Set the default API mode for Transcribe. 
+      Set the default API mode for ASR (Automatic Speech Recognition).
+      Set to 'standard' to use the Amazon Transcribe Standard StreamingAPI.
       Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support 
       call categories and alerts, call summarization, and PCA integration.
+      Set to 'whisper-on-sagemaker' to use the Whisper ASR model deployed on SageMaker.
+      Whisper only works when the Call Audio Source is set to 'Demo Asterisk PBX Server' or 
+      'Amazon Chime SDK Voice Connector (SIPREC)', and the Call Audio Processor is set to 'Call Transcriber Lambda'.
+      
+  WhisperSageMakerEndpointName:
+    Type: String
+    Default: ""
+    Description: >-
+      The name of the SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
+      used when TranscribeApiMode is set to "whisper-on-sagemaker". 
+      This must be a SageMaker endpoint with the Whisper Large V3 Turbo model from Amazon Bedrock.
 
   CategoryAlertRegEx:
     Type: String
@@ -673,10 +686,11 @@ Metadata:
           - AudioFilePrefix
           - CallAnalyticsPrefix
       - Label:
-          default: Amazon Transcribe Configuration
+          default: Transcription Configuration
         Parameters:
           - IsPartialTranscriptEnabled
           - TranscribeApiMode
+          - WhisperSageMakerEndpointName
           - IsContentRedactionEnabled
           - TranscribeLanguageCode
           - TranscribeLanguageOptions
@@ -790,7 +804,9 @@ Metadata:
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
       TranscribeApiMode:
-        default: Transcribe API mode
+        default: Transcription API mode
+      WhisperSageMakerEndpointName:
+        default: Whisper SageMaker Endpoint Name
       IsContentRedactionEnabled:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
@@ -1702,6 +1718,7 @@ Resources:
           - !Ref S3BucketName
         IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
         TranscribeApiMode: !Ref TranscribeApiMode
+        WhisperSageMakerEndpointName: !Ref WhisperSageMakerEndpointName
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
