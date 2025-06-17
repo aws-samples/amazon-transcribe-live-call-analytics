@@ -43,11 +43,11 @@ const generateS3PresignedUrl = async (url, credentials) => {
       return null;
     }
 
-    // Build the correct S3 URL
+    // Build the correct S3URL
     const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
     logger.debug('Constructed S3 URL:', s3Url);
 
-    // Parse the S3 URL
+    // Parse the S3URL
     const s3ObjectUrl = parseUrl(s3Url);
 
     // Generate the signed URL
