@@ -23,7 +23,6 @@
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "groq-sdk": "^0.12.0",
     "interleave-stream": "^1.0.2",
     "node-vad": "^1.1.4",
     "play-sound": "^1.1.6",

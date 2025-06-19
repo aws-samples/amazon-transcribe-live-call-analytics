@@ -309,7 +309,7 @@ function getNameByLanguageCode(names: string, languageCode: string) {
 export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough, socketCallMap: SocketCallData, server: FastifyInstance) => {
     // Initialize the appropriate transcribe client based on API mode
     if (useWhisper) {
-        transcribeClient = new WhisperStreamingClient(server);
+        transcribeClient = new WhisperStreamingClient(server, callMetaData.samplingRate);
         server.log.info(`[TRANSCRIBING]: [${callMetaData.callId}] - Using Whisper SageMaker endpoint: ${process.env['WHISPER_SAGEMAKER_ENDPOINT']}`);
     } else {
         transcribeClient = new TranscribeStreamingClient({ region: AWS_REGION });
