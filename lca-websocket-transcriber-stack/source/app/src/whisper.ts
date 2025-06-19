@@ -54,7 +54,7 @@ const WHISPER_SAGEMAKER_ENDPOINT = process.env['WHISPER_SAGEMAKER_ENDPOINT'] || 
 const NO_SPEECH_THRESHOLD = parseFloat(process.env['NO_SPEECH_THRESHOLD'] || '0.2');
 const TRANSCRIPTION_INTERVAL = parseInt(process.env['TRANSCRIPTION_INTERVAL'] || '1000'); // 1 second in milliseconds
 const SAMPLE_RATE = 16000; // 16kHz audio
-const DEBUG_WRITE_TO_S3 = process.env['DEBUG_WRITE_TO_S3'] === 'true' || true;
+const DEBUG_WRITE_TO_S3 = process.env['DEBUG_WRITE_TO_S3'] === 'true' || false;
 const OUTPUT_BUCKET = process.env['RECORDINGS_BUCKET_NAME'] || '';
 
 // Initialize VAD instances for each channel
