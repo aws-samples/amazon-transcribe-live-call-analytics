@@ -623,11 +623,41 @@ def handler(event, context):
         logger.error(f"Error handling {request_type} request: {str(e)}")
         logger.error(traceback.format_exc())
         
-        # Send failure response
+        # Create a more detailed error message for CloudFormation
+        error_message = str(e)
+        error_type = type(e).__name__
+        
+        # Truncate very long error messages but keep important details
+        if len(error_message) > 1000:
+            error_message = error_message[:900] + "... (truncated)"
+        
+        # Create comprehensive error response
+        error_response = {
+            "Error": error_message,
+            "ErrorType": error_type,
+            "RequestType": request_type,
+            "Timestamp": datetime.now().isoformat()
+        }
+        
+        # Add context-specific error information
+        if request_type in ['Create', 'Update']:
+            try:
+                endpoint_name = event.get('ResourceProperties', {}).get('EndpointName', 'unknown')
+                error_response["EndpointName"] = endpoint_name
+                error_response["Message"] = f"Failed to {request_type.lower()} SageMaker endpoint '{endpoint_name}': {error_message}"
+            except Exception:
+                error_response["Message"] = f"Failed to {request_type.lower()} SageMaker endpoint: {error_message}"
+        elif request_type == 'Delete':
+            error_response["Message"] = f"Failed to delete SageMaker resources: {error_message}"
+        
+        # Log the full error response for debugging
+        logger.error(f"Sending error response to CloudFormation: {json.dumps(error_response, indent=2)}")
+        
+        # Send failure response with detailed error information
         cfnresponse.send(
             event,
             context,
             cfnresponse.FAILED,
-            {"Error": str(e)},
+            error_response,
             physical_resource_id
         )

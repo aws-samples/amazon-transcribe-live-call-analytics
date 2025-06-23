@@ -283,9 +283,8 @@ Parameters:
     Type: String
     Default: ""
     Description: >-
-      The name of the SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
-      used when TranscribeApiMode is set to "whisper-on-sagemaker". 
-      This must be a SageMaker endpoint with the Whisper Large V3 Turbo model from Amazon Bedrock.
+      The name of an existing SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
+      used when TranscribeApiMode is set to "whisper-on-sagemaker". Leave empty to automatically create a new endpoint.
       
   # Whisper SageMaker Autoscaling Parameters
   WhisperSageMakerEnableAutoScaling:
