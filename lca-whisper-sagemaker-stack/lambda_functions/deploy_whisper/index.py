@@ -659,5 +659,6 @@ def handler(event, context):
             context,
             cfnresponse.FAILED,
             error_response,
-            physical_resource_id
+            physical_resource_id,
+            reason=error_message
         )
