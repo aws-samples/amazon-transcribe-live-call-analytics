@@ -7,15 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.5]
+## [0.9.6]
 
 ### Added
 - Experimental transcription with Whisper on SageMaker AI
 
+## [0.9.5] - 2025-02-16
+- Added support for Amazon Nova models (amazon.nova-micro-v1:0, amazon.nova-lite-v1:0) - PR #221
+- Updated Anthropic Claude models to the latest 3.5 versions (anthropic.claude-3-5-haiku-20241022-v1:0, anthropic.claude-3-5-sonnet-20241022-v2:0) - PR #221
+- Refactored Bedrock calls to use the Converse API eliminating the need for custom model specific payloads - PR #221
+- Refactored all model invocation to use Inference Profiles. This is required for Nova models. It is also applied to Anthropic models for consistency and improved scalability. - PR #221
+- Added adaptive retry configuration to Bedrock api calls to add some tolerance for quota throttling exceptions (at the expense of latency) - PR #221
+
 ## [0.9.4] - 2024-10-11
 ### Fixed
 - Revert fastify dependabot version change - Issue #207
-
 
 ## [0.9.3] - 2024-10-03
 
@@ -472,7 +478,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 
 [Unreleased]: https://github.com/aws-samples/amazon-transcribe-live-meeting-assistant/compare/main...develop
-[0.9.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.2...v0.9.4
+[0.9.5]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.4...v0.9.5
+[0.9.4]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aws-samples/amazon-transcribe-live-call-analytics/compare/v0.9.0...v0.9.1
