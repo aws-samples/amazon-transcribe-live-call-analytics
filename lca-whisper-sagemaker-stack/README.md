@@ -1,6 +1,8 @@
-# Amazon Transcribe Live Call Analytics - Whisper on SageMaker Integration
+# Amazon Transcribe Live Call Analytics - Whisper on SageMaker Integration - EXPERIMENTAL
 
-This CloudFormation stack deploys OpenAI's Whisper speech-to-text model on Amazon SageMaker for integration with Amazon Transcribe Live Call Analytics (LCA). It provides an alternative transcription engine using Whisper's state-of-the-art speech recognition capabilities.
+This experimental CloudFormation stack deploys OpenAI's Whisper speech-to-text model on Amazon SageMaker for integration with Amazon Transcribe Live Call Analytics (LCA). It provides an alternative transcription engine using Whisper's state-of-the-art speech recognition capabilities.
+
+This feature has not been thoroughly tested and is meant for experimental/evaluation purposes only.
 
 ## Overview
 

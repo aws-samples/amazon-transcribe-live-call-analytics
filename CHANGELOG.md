@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5]
+
+### Added
+- Experimental transcription with Whisper on SageMaker AI
+
 ## [0.9.4] - 2024-10-11
 ### Fixed
 - Revert fastify dependabot version change - Issue #207
