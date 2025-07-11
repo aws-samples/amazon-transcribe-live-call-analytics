@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.6]
 
 ### Added
-- Experimental transcription with Whisper on SageMaker AI
+- Experimental transcription with Whisper on SageMaker AI - see [Whisper README](./lca-whisper-sagemaker-stack/README.md) for more details.
 
 ## [0.9.5] - 2025-02-16
 - Added support for Amazon Nova models (amazon.nova-micro-v1:0, amazon.nova-lite-v1:0) - PR #221
