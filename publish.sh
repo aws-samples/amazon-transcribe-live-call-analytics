@@ -432,6 +432,7 @@ fi
 
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
+MAIN_TEMPLATE_WITH_VERSION=lca-main-${VERSION}.yaml
 
 echo "Inline edit $MAIN_TEMPLATE to replace "
 echo "   <ARTIFACT_BUCKET_TOKEN> with bucket name: $BUCKET"
@@ -445,6 +446,7 @@ sed -e "s%<VERSION_TOKEN>%$VERSION%g" |
 sed -e "s%<REGION_TOKEN>%$REGION%g" > $tmpdir/$MAIN_TEMPLATE
 # upload main template
 aws s3 cp $tmpdir/$MAIN_TEMPLATE s3://${BUCKET}/${PREFIX}/$MAIN_TEMPLATE || exit 1
+aws s3 cp $tmpdir/$MAIN_TEMPLATE s3://${BUCKET}/${PREFIX}/${MAIN_TEMPLATE_WITH_VERSION} || exit 1
 
 template="https://s3.${REGION}.amazonaws.com/${BUCKET}/${PREFIX}/${MAIN_TEMPLATE}"
 echo "Validating template: $template"
