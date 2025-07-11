@@ -1,0 +1,373 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Amazon Transcribe Live Call Analytics - Whisper on SageMaker Integration
+
+Parameters:
+  WhisperModelSize:
+    Type: String
+    Default: large-v2
+    AllowedValues:
+      - tiny
+      - tiny.en
+      - base
+      - base.en
+      - small
+      - small.en
+      - medium
+      - medium.en
+      - large
+      - large-v1
+      - large-v2
+      - large-v3
+    Description: >
+      The size of the Whisper model to deploy. Larger models are more accurate but require more resources.
+
+  SageMakerInstanceType:
+    Type: String
+    Default: ml.g5.2xlarge
+    AllowedValues:
+      - ml.g4dn.xlarge
+      - ml.g4dn.2xlarge
+      - ml.g4dn.4xlarge
+      - ml.g5.xlarge
+      - ml.g5.2xlarge
+      - ml.g5.4xlarge
+    Description: >
+      The instance type to use for the SageMaker endpoint. G5 instances are recommended for best performance.
+
+  SageMakerInstanceCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 3
+    Description: >
+      The number of instances to deploy for the SageMaker endpoint.
+
+  S3BucketName:
+    Type: String
+    Description: >
+      The S3 bucket to use for storing model artifacts. If not provided, a new bucket will be created.
+    Default: ""
+
+  EndpointName:
+    Type: String
+    Description: >
+      The name to use for the SageMaker endpoint. If not provided, a name will be generated.
+    Default: ""
+    
+  # Autoscaling Parameters
+  EnableAutoScaling:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >
+      Enable or disable autoscaling for the SageMaker endpoint.
+      
+  AutoScalingMinCapacity:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 3
+    Description: >
+      The minimum number of instances for autoscaling.
+      
+  AutoScalingMaxCapacity:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 3
+    Description: >
+      The maximum number of instances for autoscaling.
+      
+  AutoScalingTargetGpuUtilization:
+    Type: Number
+    Default: 50
+    MinValue: 10
+    MaxValue: 90
+    Description: >
+      The target GPU utilization percentage for autoscaling.
+      
+  AutoScalingScaleOutCooldown:
+    Type: Number
+    Default: 60
+    MinValue: 0
+    MaxValue: 3600
+    Description: >
+      The cooldown period (in seconds) after a scale-out activity.
+      
+  AutoScalingScaleInCooldown:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 3600
+    Description: >
+      The cooldown period (in seconds) after a scale-in activity.
+
+Conditions:
+  CreateS3Bucket: !Equals [!Ref S3BucketName, ""]
+  UseGeneratedEndpointName: !Equals [!Ref EndpointName, ""]
+  EnableAutoScalingCondition: !Equals [!Ref EnableAutoScaling, "true"]
+
+Resources:
+  # S3 Bucket for model artifacts
+  ModelArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateS3Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # IAM Role for the Lambda function
+  WhisperDeploymentLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WhisperDeploymentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !If
+                    - CreateS3Bucket
+                    - !GetAtt ModelArtifactsBucket.Arn
+                    - !Sub arn:aws:s3:::${S3BucketName}
+                  - !If
+                    - CreateS3Bucket
+                    - !Sub ${ModelArtifactsBucket.Arn}/*
+                    - !Sub arn:aws:s3:::${S3BucketName}/*
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateModel
+                  - sagemaker:CreateEndpointConfig
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:DescribeEndpoint
+                  - sagemaker:DescribeModel
+                  - sagemaker:UpdateEndpoint
+                  - sagemaker:DeleteModel
+                  - sagemaker:DeleteEndpointConfig
+                  - sagemaker:DeleteEndpoint
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt SageMakerExecutionRole.Arn
+
+  # IAM Role for SageMaker
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: WhisperSageMakerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !If
+                    - CreateS3Bucket
+                    - !GetAtt ModelArtifactsBucket.Arn
+                    - !Sub arn:aws:s3:::${S3BucketName}
+                  - !If
+                    - CreateS3Bucket
+                    - !Sub ${ModelArtifactsBucket.Arn}/*
+                    - !Sub arn:aws:s3:::${S3BucketName}/*
+                    
+  # IAM Role for Application Auto Scaling
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Condition: EnableAutoScalingCondition
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ApplicationAutoScalingForSageMaker
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "application-autoscaling:*"
+                  - "cloudwatch:DescribeAlarms"
+                  - "cloudwatch:PutMetricAlarm"
+                  - "iam:CreateServiceLinkedRole"
+                  - "sagemaker:DescribeEndpoint"
+                  - "sagemaker:DescribeEndpointConfig"
+                  - "sagemaker:UpdateEndpointWeightsAndCapacities"
+                Resource: "*"
+
+  # Lambda layer for dependencies
+  WhisperDependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: whisper-dependencies
+      Description: Dependencies for Whisper deployment Lambda function
+      ContentUri: lambda_layers/dependencies/
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Retain
+
+  # Lambda function for deploying the Whisper model
+  WhisperDeploymentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_functions/deploy_whisper/
+      Handler: index.handler
+      Runtime: python3.9
+      Timeout: 900
+      MemorySize: 1024
+      Role: !GetAtt WhisperDeploymentLambdaRole.Arn
+      Layers:
+        - !Ref WhisperDependenciesLayer
+      Environment:
+        Variables:
+          WHISPER_MODEL: !Ref WhisperModelSize
+          S3_BUCKET: !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
+          S3_PREFIX: whisper
+          INSTANCE_TYPE: !Ref SageMakerInstanceType
+          INSTANCE_COUNT: !Ref SageMakerInstanceCount
+          ENDPOINT_NAME: !If [UseGeneratedEndpointName, !Sub "whisper-endpoint-${AWS::StackName}", !Ref EndpointName]
+          SAGEMAKER_ROLE_ARN: !GetAtt SageMakerExecutionRole.Arn
+
+  # Custom resource for deploying the Whisper model
+  WhisperModelDeployment:
+    Type: Custom::WhisperModelDeployment
+    Properties:
+      ServiceToken: !GetAtt WhisperDeploymentFunction.Arn
+      WhisperModel: !Ref WhisperModelSize
+      S3Bucket: !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
+      S3Prefix: whisper
+      InstanceType: !Ref SageMakerInstanceType
+      InstanceCount: !Ref SageMakerInstanceCount
+      EndpointName: !If [UseGeneratedEndpointName, !Sub "whisper-endpoint-${AWS::StackName}", !Ref EndpointName]
+      SageMakerRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      
+  # Application Auto Scaling - Scalable Target
+  WhisperEndpointScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: EnableAutoScalingCondition
+    DependsOn: WhisperModelDeployment
+    Properties:
+      MaxCapacity: !Ref AutoScalingMaxCapacity
+      MinCapacity: !Ref AutoScalingMinCapacity
+      ResourceId: !Sub endpoint/${WhisperModelDeployment.EndpointName}/variant/AllTraffic
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ScalableDimension: sagemaker:variant:DesiredInstanceCount
+      ServiceNamespace: sagemaker
+      
+  # Application Auto Scaling - GPU Utilization Policy
+  WhisperEndpointScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: EnableAutoScalingCondition
+    Properties:
+      PolicyName: WhisperEndpointGPUUtilizationScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WhisperEndpointScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: SageMakerVariantInvocationsPerInstance
+        TargetValue: !Ref AutoScalingTargetGpuUtilization
+        ScaleOutCooldown: !Ref AutoScalingScaleOutCooldown
+        ScaleInCooldown: !Ref AutoScalingScaleInCooldown
+        DisableScaleIn: false
+
+Outputs:
+  WhisperSageMakerEndpointName:
+    Description: The name of the SageMaker endpoint for Whisper
+    Value: !GetAtt WhisperModelDeployment.EndpointName
+
+  WhisperModelSize:
+    Description: The size of the Whisper model deployed
+    Value: !Ref WhisperModelSize
+
+  S3BucketName:
+    Description: The S3 bucket used for model artifacts
+    Value: !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
+    
+  # Autoscaling Status
+  AutoScalingEnabled:
+    Description: Whether autoscaling is enabled for the SageMaker endpoint
+    Value: !Ref EnableAutoScaling
+    
+  # Autoscaling Outputs (only shown when autoscaling is enabled)
+  AutoScalingMinCapacity:
+    Condition: EnableAutoScalingCondition
+    Description: The minimum number of instances for autoscaling
+    Value: !Ref AutoScalingMinCapacity
+    
+  AutoScalingMaxCapacity:
+    Condition: EnableAutoScalingCondition
+    Description: The maximum number of instances for autoscaling
+    Value: !Ref AutoScalingMaxCapacity
+    
+  AutoScalingTargetGpuUtilization:
+    Condition: EnableAutoScalingCondition
+    Description: The target GPU utilization percentage for autoscaling
+    Value: !Ref AutoScalingTargetGpuUtilization
+    
+  AutoScalingScaleOutCooldown:
+    Condition: EnableAutoScalingCondition
+    Description: The cooldown period (in seconds) after a scale-out activity
+    Value: !Ref AutoScalingScaleOutCooldown
+    
+  AutoScalingScaleInCooldown:
+    Condition: EnableAutoScalingCondition
+    Description: The cooldown period (in seconds) after a scale-in activity
+    Value: !Ref AutoScalingScaleInCooldown

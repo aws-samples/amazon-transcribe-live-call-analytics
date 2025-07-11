@@ -12,13 +12,22 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { KinesisClient } = require('@aws-sdk/client-kinesis');
 
 /* Transcribe and Streaming Libraries */
+const useWhisper = process.env.TRANSCRIBE_API_MODE == 'whisper-on-sagemaker';
+const transcribeClient = useWhisper ? 
+  require('./whisper') :
+  require('@aws-sdk/client-transcribe-streaming');
+
 const {
   TranscribeStreamingClient,
   StartStreamTranscriptionCommand,
   StartCallAnalyticsStreamTranscriptionCommand,
   ParticipantRole,
-} = require('@aws-sdk/client-transcribe-streaming');
-const transcribeStreamingPkg = require('@aws-sdk/client-transcribe-streaming/package.json');
+} = transcribeClient;
+
+// Only load package.json for AWS Transcribe, not needed for Whisper
+const transcribeStreamingPkg = !useWhisper ? 
+  require('@aws-sdk/client-transcribe-streaming/package.json') : 
+  { version: 'whisper' };
 
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const BlockStream = require('block-stream2');
@@ -711,11 +720,13 @@ const readTranscripts = async function readTranscripts(tsStream, callId, session
       if (event.UtteranceEvent) {
         writeAddTranscriptSegmentEventToKds(kinesisClient, event.UtteranceEvent, undefined, callId);
       }
-      if (event.CategoryEvent) {
+      else if (event.CategoryEvent) {
         writeCategoryEventToKds(kinesisClient, event.CategoryEvent, callId);
       }
-      if (event.TranscriptEvent) {
+      else if (event.TranscriptEvent) {
         writeTranscriptionSegmentToKds(kinesisClient, event.TranscriptEvent, callId);
+      } else {
+        console.log(`Unknown event type: ${JSON.stringify(event)}`);
       }
     }
   } catch (error) {
@@ -776,7 +787,7 @@ const go = async function go(callData) {
   } = callData;
   let sessionId = callData.sessionId;
   let firstChunkToTranscribe = true;
-  const passthroughStream = new stream.PassThrough({ highWaterMark: BUFFER_SIZE });
+  const passthroughStream = new BlockStream(BUFFER_SIZE); // new stream.PassThrough({ highWaterMark: BUFFER_SIZE });
   const audioStream = async function* audioStream() {
     try {
       if (isTCAEnabled) {
@@ -822,7 +833,7 @@ const go = async function go(callData) {
     tsClientArgs.endpoint = TRANSCRIBE_ENDPOINT;
   }
   console.log(`Transcribe client args:`, tsClientArgs, ` (CallId: ${callId})`);
-  console.log('AWS SDK - @aws-sdk/client-transcribe-streaming version:', transcribeStreamingPkg.version);
+  console.log(`Transcription service: ${useWhisper ? 'Whisper' : 'AWS Transcribe'} (version: ${transcribeStreamingPkg.version})`);
 
   const tsClient = new TranscribeStreamingClient(tsClientArgs);
   let tsStream;

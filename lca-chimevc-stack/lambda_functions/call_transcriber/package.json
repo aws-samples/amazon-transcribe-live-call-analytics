@@ -13,7 +13,9 @@
     "@aws-sdk/client-kinesis-video-media": "^3.451.0",
     "@aws-sdk/client-lambda": "^3.451.0",
     "@aws-sdk/client-s3": "^3.451.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.734.0",
     "@aws-sdk/client-transcribe-streaming": "3.451.0",
+    "alawmulaw": "^6.0.0",
     "block-stream2": "^2.1.0",
     "ebml-stream": "^1.0.3",
     "eslint": "^8.23.1",
@@ -22,6 +24,8 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-prettier": "^4.2.1",
     "interleave-stream": "^1.0.2",
+    "node-vad": "^1.1.4",
+    "play-sound": "^1.1.6",
     "prettier": "^2.7.1"
   }
 }

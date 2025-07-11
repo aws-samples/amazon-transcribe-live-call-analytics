@@ -1,0 +1,10 @@
+# Using faster-whisper directly instead of whisperx
+faster-whisper==0.7.1
+# Use standard PyTorch version and let SageMaker handle CUDA compatibility
+torch==2.0.0
+torchaudio==2.0.0
+numpy>=1.24.0
+boto3>=1.28.0
+imageio-ffmpeg>=0.6.0
+ffmpeg-python>=0.2.0
+ctranslate2==3.17.1
