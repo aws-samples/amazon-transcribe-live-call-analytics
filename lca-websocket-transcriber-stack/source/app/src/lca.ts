@@ -20,6 +20,13 @@ import {
     ContentRedactionType,
 } from '@aws-sdk/client-transcribe-streaming';
 
+// Import Whisper client when using whisper-on-sagemaker mode
+import {
+    WhisperStreamingClient,
+    StartStreamTranscriptionCommand as WhisperStartStreamTranscriptionCommand,
+    StartCallAnalyticsStreamTranscriptionCommand as WhisperStartCallAnalyticsStreamTranscriptionCommand
+} from './whisper';
+
 import {
     KinesisClient,
     PutRecordCommand
@@ -56,6 +63,7 @@ dotenv.config();
 const AWS_REGION = process.env['AWS_REGION'] || 'us-east-1';
 const TRANSCRIBE_API_MODE = process.env['TRANSCRIBE_API_MODE'] || 'standard';
 const isTCAEnabled = TRANSCRIBE_API_MODE === 'analytics';
+const useWhisper = TRANSCRIBE_API_MODE === 'whisper-on-sagemaker';
 const TRANSCRIBE_LANGUAGE_CODE = process.env['TRANSCRIBE_LANGUAGE_CODE'] || 'en-US';
 const TRANSCRIBE_LANGUAGE_OPTIONS = process.env['TRANSCRIBE_LANGUAGE_OPTIONS'] || undefined;
 const TRANSCRIBE_PREFERRED_LANGUAGE = process.env['TRANSCRIBE_PREFERRED_LANGUAGE'] || 'None';
@@ -92,7 +100,9 @@ export type CallMetaData = {
 };
 
 const kinesisClient = new KinesisClient({ region: AWS_REGION });
-const transcribeClient = new TranscribeStreamingClient({ region: AWS_REGION });
+
+// We'll initialize the transcribe client in startTranscribe based on the API mode
+let transcribeClient: TranscribeStreamingClient | WhisperStreamingClient;
 
 export const writeCallEvent = async (callEvent: CallStartEvent | CallEndEvent | CallRecordingEvent, server: FastifyInstance) => {
 
@@ -297,6 +307,13 @@ function getNameByLanguageCode(names: string, languageCode: string) {
 }
 
 export const startTranscribe = async (callMetaData: CallMetaData, audioInputStream: stream.PassThrough, socketCallMap: SocketCallData, server: FastifyInstance) => {
+    // Initialize the appropriate transcribe client based on API mode
+    if (useWhisper) {
+        transcribeClient = new WhisperStreamingClient(server, callMetaData.samplingRate);
+        server.log.info(`[TRANSCRIBING]: [${callMetaData.callId}] - Using Whisper SageMaker endpoint: ${process.env['WHISPER_SAGEMAKER_ENDPOINT']}`);
+    } else {
+        transcribeClient = new TranscribeStreamingClient({ region: AWS_REGION });
+    }
 
     const transcribeInput = async function* () {
         if (isTCAEnabled) {
@@ -382,35 +399,41 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         }
     }
 
-    if (isTCAEnabled) {
-        server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] -StartCallAnalyticsStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}`);
-        try {
-            const response = await transcribeClient.send(
-                new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
-            );
+    try {
+        if (isTCAEnabled) {
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] - StartCallAnalyticsStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}`);
+            
+            // Use the appropriate command based on whether we're using Whisper or standard Transcribe
+            const command = useWhisper 
+                ? new WhisperStartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput)
+                : new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput);
+            
+            const response = await transcribeClient.send(command);
             server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from TCA. Session Id: ${response.SessionId} ===`);
 
-            outputCallAnalyticsStream = response.CallAnalyticsTranscriptResultStream;
-        } catch (err) {
-            server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Error in StartCallAnalyticsStreamTranscriptionCommand: ${normalizeErrorForLogging(err)}`);
-            return;
-        }
-    } else {
-        (tsParams as StartStreamTranscriptionCommandInput).EnableChannelIdentification = true;
-        (tsParams as StartStreamTranscriptionCommandInput).NumberOfChannels = 2;
-        server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] -StartCallAnalyticsStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}`);
-        try {
-            const response = await transcribeClient.send(
-                new StartStreamTranscriptionCommand(tsParams)
-            );
-            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from Transcribe. Session Id: ${response.SessionId} ===`);
+            // Cast response to handle both standard Transcribe and Whisper responses
+            outputCallAnalyticsStream = (response as { CallAnalyticsTranscriptResultStream: AsyncIterable<CallAnalyticsTranscriptResultStream> }).CallAnalyticsTranscriptResultStream;
+        } else {
+            (tsParams as StartStreamTranscriptionCommandInput).EnableChannelIdentification = true;
+            (tsParams as StartStreamTranscriptionCommandInput).NumberOfChannels = 2;
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] - StartStreamTranscriptionCommand args: ${JSON.stringify(tsParams)}`);
+            
+            // Use the appropriate command based on whether we're using Whisper or standard Transcribe
+            const command = useWhisper
+                ? new WhisperStartStreamTranscriptionCommand(tsParams)
+                : new StartStreamTranscriptionCommand(tsParams);
+            
+            const response = await transcribeClient.send(command);
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from ${useWhisper ? 'Whisper' : 'Transcribe'}. Session Id: ${response.SessionId} ===`);
 
-            outputTranscriptStream = response.TranscriptResultStream;
-        } catch (err) {
-            server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Error in StartStreamTranscription: ${normalizeErrorForLogging(err)}`);
-            return;
+            // Cast response to handle both standard Transcribe and Whisper responses
+            outputTranscriptStream = (response as { TranscriptResultStream: AsyncIterable<TranscriptResultStream> }).TranscriptResultStream;
         }
+    } catch (err) {
+        server.log.error(`[TRANSCRIBING]: [${callMetaData.callId}] - Error in ${isTCAEnabled ? 'StartCallAnalyticsStreamTranscription' : 'StartStreamTranscription'}: ${normalizeErrorForLogging(err)}`);
+        return;
     }
+    
     socketCallMap.startStreamTime = new Date();
 
     if (outputCallAnalyticsStream) {
@@ -444,4 +467,3 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
         // writeCallEndEvent(callMetaData);
     }
 };
-

@@ -16,6 +16,30 @@ set -e
 
 USAGE="$0 <cfn_bucket_basename> <cfn_prefix> <region> [public]"
 
+build_container_lambda() {
+  local dir=$1
+  local ecr_repo=$2
+  local region=$3
+  
+  # Get AWS account ID
+  AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+  
+  # Create ECR repository if it doesn't exist
+  aws ecr describe-repositories --repository-names ${ecr_repo} --region ${region} || \
+    aws ecr create-repository --repository-name ${ecr_repo} --region ${region}
+  
+  # Get ECR login token
+  aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com
+  
+  # Build and push container
+  docker build -t ${ecr_repo}:latest ${dir}
+  docker tag ${ecr_repo}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:latest
+  docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:latest
+  
+  # Return the ECR URI
+  echo "${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:latest"
+}
+
 if ! [ -x "$(command -v docker)" ]; then
 echo 'Error: docker is not running and required.' >&2
 echo 'Error: docker is not installed.' >&2
@@ -181,13 +205,19 @@ update_submodule_hash() {
 
 dir=lca-chimevc-stack
 if haschanged $dir; then
-echo "PACKAGING $dir"
-pushd $dir
-./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
-popd
-update_checksum $dir
+  echo "PACKAGING $dir"
+  pushd $dir
+  
+  # Build container for call transcriber
+  ECR_URI=$(build_container_lambda "lambda_functions/call_transcriber" "lca-call-transcriber" ${REGION})
+  echo "Container image URI: ${ECR_URI}"
+  
+  # Continue with rest of packaging
+  ./publish.sh $BUCKET $PREFIX_AND_VERSION/$dir $REGION || exit 1
+  popd
+  update_checksum $dir
 else
-echo "SKIPPING $dir (unchanged)"
+  echo "SKIPPING $dir (unchanged)"
 fi
 
 dir=lca-connect-kvs-stack
@@ -389,6 +419,17 @@ else
 echo "SKIPPING $dir (unchanged)"
 fi
 
+dir=lca-whisper-sagemaker-stack
+if haschanged $dir; then
+echo "PACKAGING $dir"
+pushd $dir
+./publish.sh $BUCKET $PREFIX_AND_VERSION $REGION || exit 1
+popd
+update_checksum $dir
+else
+echo "SKIPPING $dir (unchanged)"
+fi
+
 echo "PACKAGING Main Stack Cfn artifacts"
 MAIN_TEMPLATE=lca-main.yaml
 
@@ -431,4 +472,3 @@ echo CF Launch URL: https://${REGION}.console.aws.amazon.com/cloudformation/home
 echo CLI Deploy: aws cloudformation deploy --region $REGION --template-file $tmpdir/$MAIN_TEMPLATE --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --stack-name LCA --parameter-overrides AdminEmail='jdoe@example.com' CallAudioSource='Demo Asterisk PBX Server' demoSoftphoneAllowedCidr=CIDRBLOCK siprecAllowedCidrList=\"\" S3BucketName=\"\"
 echo Done
 exit 0
-

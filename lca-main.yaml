@@ -15,7 +15,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.5) (SO9072)
+Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.6) (SO9072)
 
 Parameters:
 
@@ -276,10 +276,72 @@ Parameters:
     AllowedValues:
       - standard
       - analytics
+      - whisper-on-sagemaker
     Description: >-
-      Set the default API mode for Transcribe. 
+      Set the default API mode for ASR (Automatic Speech Recognition).
+      Set to 'standard' to use the Amazon Transcribe Standard StreamingAPI.
       Set to 'analytics' to use the Amazon Transcribe Real-time Call Analytics service, used to support 
       call categories and alerts, call summarization, and PCA integration.
+      Set to 'whisper-on-sagemaker' to use the Whisper ASR model deployed on SageMaker.
+      Whisper only works when the Call Audio Source is set to 'Demo Asterisk PBX Server' or 
+      'Amazon Chime SDK Voice Connector (SIPREC)', and the Call Audio Processor is set to 'Call Transcriber Lambda'.
+      
+  WhisperSageMakerEndpointName:
+    Type: String
+    Default: ""
+    Description: >-
+      The name of an existing SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
+      used when TranscribeApiMode is set to "whisper-on-sagemaker". Leave empty to automatically create a new endpoint.
+      
+  # Whisper SageMaker Autoscaling Parameters
+  WhisperSageMakerEnableAutoScaling:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >
+      Enable or disable autoscaling for the Whisper SageMaker endpoint.
+      
+  WhisperSageMakerAutoScalingMinCapacity:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 3
+    Description: >
+      The minimum number of instances for Whisper SageMaker endpoint autoscaling.
+      
+  WhisperSageMakerAutoScalingMaxCapacity:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 3
+    Description: >
+      The maximum number of instances for Whisper SageMaker endpoint autoscaling.
+      
+  WhisperSageMakerAutoScalingTargetGpuUtilization:
+    Type: Number
+    Default: 50
+    MinValue: 10
+    MaxValue: 90
+    Description: >
+      The target GPU utilization percentage for Whisper SageMaker endpoint autoscaling.
+      
+  WhisperSageMakerAutoScalingScaleOutCooldown:
+    Type: Number
+    Default: 60
+    MinValue: 0
+    MaxValue: 3600
+    Description: >
+      The cooldown period (in seconds) after a scale-out activity for Whisper SageMaker endpoint.
+      
+  WhisperSageMakerAutoScalingScaleInCooldown:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 3600
+    Description: >
+      The cooldown period (in seconds) after a scale-in activity for Whisper SageMaker endpoint.
 
   CategoryAlertRegEx:
     Type: String
@@ -686,10 +748,11 @@ Metadata:
           - AudioFilePrefix
           - CallAnalyticsPrefix
       - Label:
-          default: Amazon Transcribe Configuration
+          default: Transcription Configuration
         Parameters:
           - IsPartialTranscriptEnabled
           - TranscribeApiMode
+          - WhisperSageMakerEndpointName
           - IsContentRedactionEnabled
           - TranscribeLanguageCode
           - TranscribeLanguageOptions
@@ -698,6 +761,15 @@ Metadata:
           - TranscribePiiEntityTypes
           - CustomVocabularyName
           - CustomLanguageModelName
+      - Label:
+          default: Whisper SageMaker Autoscaling Configuration
+        Parameters:
+          - WhisperSageMakerEnableAutoScaling
+          - WhisperSageMakerAutoScalingMinCapacity
+          - WhisperSageMakerAutoScalingMaxCapacity
+          - WhisperSageMakerAutoScalingTargetGpuUtilization
+          - WhisperSageMakerAutoScalingScaleOutCooldown
+          - WhisperSageMakerAutoScalingScaleInCooldown
       - Label:
           default: Transcript Event Processing Configuration
         Parameters:
@@ -803,7 +875,21 @@ Metadata:
       IsPartialTranscriptEnabled:
         default: Enable Partial Transcripts
       TranscribeApiMode:
-        default: Transcribe API mode
+        default: Transcription API mode
+      WhisperSageMakerEndpointName:
+        default: Whisper SageMaker Endpoint Name
+      WhisperSageMakerEnableAutoScaling:
+        default: Enable Whisper SageMaker Autoscaling
+      WhisperSageMakerAutoScalingMinCapacity:
+        default: Whisper SageMaker Autoscaling Min Capacity
+      WhisperSageMakerAutoScalingMaxCapacity:
+        default: Whisper SageMaker Autoscaling Max Capacity
+      WhisperSageMakerAutoScalingTargetGpuUtilization:
+        default: Whisper SageMaker Autoscaling Target GPU Utilization
+      WhisperSageMakerAutoScalingScaleOutCooldown:
+        default: Whisper SageMaker Autoscaling Scale-Out Cooldown
+      WhisperSageMakerAutoScalingScaleInCooldown:
+        default: Whisper SageMaker Autoscaling Scale-In Cooldown
       IsContentRedactionEnabled:
         default: Enable Content Redaction for Transcripts
       TranscribeLanguageCode:
@@ -939,6 +1025,15 @@ Conditions:
   ShouldUseBedrockForSummary:
     !Equals [!Ref EndOfCallTranscriptSummary, "BEDROCK"]
 
+  ShouldUseWhisperOnSageMaker:
+    !Equals [!Ref TranscribeApiMode, "whisper-on-sagemaker"]
+
+  ShouldDeployWhisperSageMakerEndpoint:
+    !And [
+      !Condition ShouldUseWhisperOnSageMaker,
+      !Equals [!Ref WhisperSageMakerEndpointName, ""]
+    ]
+
   ShouldCreateVPC: !Equals [!Ref UseExistingVPC, "false"]    
 
 Mappings:
@@ -1045,6 +1140,19 @@ Rules:
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLambdaFunctionArn, ""]]
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
+        
+  WhisperOnSageMakerCompatibility:
+    RuleCondition:
+      !Equals [!Ref TranscribeApiMode, "whisper-on-sagemaker"]
+    Assertions:
+      - Assert: 
+          !Or [
+            !Equals [!Ref CallAudioSource, "Demo Asterisk PBX Server"],
+            !Equals [!Ref CallAudioSource, "Amazon Chime SDK Voice Connector (SIPREC)"]
+          ]
+        AssertDescription: "When using 'whisper-on-sagemaker' as TranscribeApiMode, CallAudioSource must be either 'Demo Asterisk PBX Server' or 'Amazon Chime SDK Voice Connector (SIPREC)'"
+      - Assert: !Equals [!Ref CallAudioProcessor, "Call Transcriber Lambda"]
+        AssertDescription: "When using 'whisper-on-sagemaker' as TranscribeApiMode, CallAudioProcessor must be 'Call Transcriber Lambda'"
 
 Resources:
   # Custom resource to enforce max length of StackName - prevent downstream failures
@@ -1726,6 +1834,10 @@ Resources:
           - !Ref S3BucketName
         IsPartialTranscriptEnabled: !Ref IsPartialTranscriptEnabled
         TranscribeApiMode: !Ref TranscribeApiMode
+        WhisperSageMakerEndpointName: !If
+          - ShouldDeployWhisperSageMakerEndpoint
+          - !GetAtt WHISPERSAGEMAKERSTACK.Outputs.WhisperSageMakerEndpointName
+          - !Ref WhisperSageMakerEndpointName
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
@@ -1914,6 +2026,13 @@ Resources:
         CallDataStreamArn: !GetAtt CallDataStream.Arn
         CloudFrontPriceClass: !Ref CloudFrontPriceClass
         TranscribeApiMode: !Ref TranscribeApiMode
+        WhisperSageMakerEndpointName: !If
+          - ShouldUseWhisperOnSageMaker
+          - !If
+            - ShouldDeployWhisperSageMakerEndpoint
+            - !GetAtt WHISPERSAGEMAKERSTACK.Outputs.WhisperSageMakerEndpointName
+            - !Ref WhisperSageMakerEndpointName
+          - ""
         IsContentRedactionEnabled: !Ref IsContentRedactionEnabled
         TranscribeContentRedactionType: !Ref TranscribeContentRedactionType
         TranscribeLanguageCode: !Ref TranscribeLanguageCode
@@ -1974,6 +2093,32 @@ Resources:
         CallDataStreamArn: !GetAtt CallDataStream.Arn
         EventSourcingTableName: !GetAtt AISTACK.Outputs.EventSourcingTableName
         EventSourcingTableArn: !GetAtt AISTACK.Outputs.EventSourcingTableArn
+
+  WHISPERSAGEMAKERSTACK:
+    Type: AWS::CloudFormation::Stack
+    Condition: ShouldDeployWhisperSageMakerEndpoint
+    DependsOn:
+      - IsStacknameLengthOK
+      - ValidateParameters
+    Properties:
+      # yamllint disable rule:line-length
+      TemplateURL: https://s3.<REGION_TOKEN>.amazonaws.com/<ARTIFACT_BUCKET_TOKEN>/<ARTIFACT_PREFIX_TOKEN>/lca-whisper-sagemaker-stack/template.yaml
+      # yamllint enable rule:line-length
+      Parameters:
+        WhisperModelSize: large-v2
+        SageMakerInstanceType: ml.g5.2xlarge
+        SageMakerInstanceCount: 1
+        S3BucketName: !If
+          - ShouldCreateRecordingBucket
+          - !Ref RecordingsBucket
+          - !Ref S3BucketName
+        EndpointName: !Sub "whisper-endpoint-${AWS::StackName}"
+        EnableAutoScaling: !Ref WhisperSageMakerEnableAutoScaling
+        AutoScalingMinCapacity: !Ref WhisperSageMakerAutoScalingMinCapacity
+        AutoScalingMaxCapacity: !Ref WhisperSageMakerAutoScalingMaxCapacity
+        AutoScalingTargetGpuUtilization: !Ref WhisperSageMakerAutoScalingTargetGpuUtilization
+        AutoScalingScaleOutCooldown: !Ref WhisperSageMakerAutoScalingScaleOutCooldown
+        AutoScalingScaleInCooldown: !Ref WhisperSageMakerAutoScalingScaleInCooldown
 
 Outputs:
   ApplicationCloudfrontEndpoint:
@@ -2084,3 +2229,10 @@ Outputs:
       - ShouldInstallConnectKVSStack
       - !GetAtt CONNECTKVSSTACK.Outputs.StartLCAFunctionName
       - "Amazon Connect KVS audio source not enabled"
+
+  WhisperSageMakerEndpoint:
+    Description: The SageMaker endpoint for Whisper ASR
+    Value: !If
+      - ShouldDeployWhisperSageMakerEndpoint
+      - !GetAtt WHISPERSAGEMAKERSTACK.Outputs.WhisperSageMakerEndpointName
+      - !Ref WhisperSageMakerEndpointName

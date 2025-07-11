@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6]
+
+### Added
+- Experimental transcription with Whisper on SageMaker AI - see [Whisper README](./lca-whisper-sagemaker-stack/README.md) for more details.
+
 ## [0.9.5] - 2025-02-16
 - Added support for Amazon Nova models (amazon.nova-micro-v1:0, amazon.nova-lite-v1:0) - PR #221
 - Updated Anthropic Claude models to the latest 3.5 versions (anthropic.claude-3-5-haiku-20241022-v1:0, anthropic.claude-3-5-sonnet-20241022-v2:0) - PR #221

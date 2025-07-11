@@ -1,7 +1,15 @@
 ARG NODE_VERSION=16
 
 # First, build the project
-FROM public.ecr.aws/docker/library/node:16-stretch AS builder
+FROM public.ecr.aws/docker/library/node:16-bullseye AS builder
+
+# Install Python 3.9 (available in Bullseye) for build process
+RUN apt-get update && \
+    apt-get install -y python3 python3-dev python3-pip && \
+    ln -sfn /usr/bin/python3 /usr/bin/python && \
+    ln -sfn /usr/bin/pip3 /usr/bin/pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

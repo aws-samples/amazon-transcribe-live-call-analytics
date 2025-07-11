@@ -93,7 +93,15 @@ Parameters:
     AllowedValues:
         - standard
         - analytics
+        - whisper-on-sagemaker
     Description: Set the default operational mode for Transcribe
+
+  WhisperSageMakerEndpointName:
+    Type: String
+    Default: ""
+    Description: >-
+      The name of the SageMaker endpoint to use for Whisper ASR. Only
+      used when TranscribeApiMode is set to "whisper-on-sagemaker".
 
   IsContentRedactionEnabled:
     Type: String
@@ -947,6 +955,12 @@ Resources:
             Effect: Allow
             Resource: "*"
           - Action:
+              - sagemaker:InvokeEndpoint
+            Effect: Allow
+            Resource: !Sub
+              - "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${endpointName}"
+              - endpointName: !Ref WhisperSageMakerEndpointName
+          - Action:
               - kinesis:PutRecord
             Effect: Allow
             Resource:  
@@ -1068,6 +1082,8 @@ Resources:
               Value: !Ref TranscribeLanguageOptions
             - Name: TRANSCRIBE_PREFERRED_LANGUAGE
               Value: !Ref TranscribePreferredLanguage
+            - Name: WHISPER_SAGEMAKER_ENDPOINT
+              Value: !Ref WhisperSageMakerEndpointName
             - Name: CUSTOM_VOCABULARY_NAME
               Value: !Ref CustomVocabularyName
             - Name: CUSTOM_LANGUAGE_MODEL_NAME
