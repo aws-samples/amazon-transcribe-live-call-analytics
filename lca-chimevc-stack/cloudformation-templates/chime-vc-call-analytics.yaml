@@ -187,6 +187,7 @@ Resources:
         - nodejs14.x
         - nodejs16.x
         - nodejs18.x
+        - nodejs22.x
       Description: >
         This is a layer with shared nodejs libraries for the LCA call transcriber 
         and call analytics initialization Lambdas.
