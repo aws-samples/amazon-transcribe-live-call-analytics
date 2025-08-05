@@ -1539,7 +1539,7 @@ Resources:
         Fn::GetAtt:
         - PCAIntegrationFunctionRole
         - Arn
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active

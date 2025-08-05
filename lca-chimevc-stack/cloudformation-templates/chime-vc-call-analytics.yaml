@@ -727,7 +727,7 @@ Resources:
         - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2'
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallAnalyticsInitFunctionRole.Arn
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       MemorySize: 128
       Timeout: 900
       Tracing: Active

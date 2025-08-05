@@ -74,6 +74,7 @@ Resources:
         - nodejs14.x
         - nodejs16.x
         - nodejs18.x
+        - nodejs22.x
       Description: >
         This is a layer with shared nodejs libraries for the LCA call transcriber 
         and call analytics initialization Lambdas.
@@ -97,7 +98,7 @@ Resources:
         - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt PCAIntegrationFunctionRole.Arn
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       MemorySize: 768
       Timeout: 900
       Tracing: Active
