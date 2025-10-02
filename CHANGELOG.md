@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.7]
 
+### Fixed
 - Github #232 issue - Fixed QnABot deployment permissions issue.
 
 
