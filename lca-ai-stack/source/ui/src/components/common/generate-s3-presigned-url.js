@@ -7,37 +7,66 @@ import { Sha256 } from '@aws-crypto/sha256-browser';
 import { formatUrl } from '@aws-sdk/util-format-url';
 import { Logger } from 'aws-amplify';
 
-let newUrl = '';
+const logger = new Logger('generateS3PresignedUrl');
 
 const generateS3PresignedUrl = async (url, credentials) => {
-  const logger = new Logger('CallPanel');
-
-  logger.debug('URL KISH:', url);
-  // prettier-ignore
-
-  const bucketName = url.split('/')[2].split('.')[0];
-  const key = `${url.split('/')[3]}/${url.split('/')[4]}`;
-  const region = url.split('/')[2].split('.')[2];
-
-  newUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
-
-  if (url.includes('detailType')) {
-    newUrl = url;
+  if (!url) {
+    logger.error('URL is undefined or empty');
+    return null;
   }
-  logger.debug('NEW URL KISH:', newUrl);
 
-  // const s3ObjectUrl = parseUrl(`https://${bucketName}.s3.${region}.amazonaws.com/${key}`);
-  const s3ObjectUrl = parseUrl(newUrl);
+  logger.debug('Original URL:', url);
 
-  const presigner = new S3RequestPresigner({
-    credentials,
-    region,
-    sha256: Sha256, // In browsers
-  });
-  // Create a GET request from S3 url.
-  const presignedResponse = await presigner.presign(new HttpRequest(s3ObjectUrl));
-  const presignedUrl = formatUrl(presignedResponse);
-  return presignedUrl;
+  try {
+    // Parse the URL correctly
+    const parsedUrl = new URL(url);
+
+    // Extract bucket name and region
+    const hostnameParts = parsedUrl.hostname.split('.');
+    let bucketName;
+    let region;
+
+    if (hostnameParts.length >= 4 && hostnameParts[1] === 's3') {
+      // Format: bucket-name.s3.region.amazonaws.com
+      bucketName = hostnameParts[0];
+      region = hostnameParts[2];
+    } else {
+      logger.error('Invalid S3 URL format:', url);
+      return null;
+    }
+
+    // Remove the leading slash from the path
+    const key = parsedUrl.pathname.substring(1);
+
+    if (!key || key === 'connect/us-connect') {
+      logger.error('Invalid or incomplete S3 object path:', key);
+      return null;
+    }
+
+    // Build the correct S3URL
+    const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+    logger.debug('Constructed S3 URL:', s3Url);
+
+    // Parse the S3URL
+    const s3ObjectUrl = parseUrl(s3Url);
+
+    // Generate the signed URL
+    const presigner = new S3RequestPresigner({
+      credentials,
+      region,
+      sha256: Sha256,
+    });
+
+    const presignedResponse = await presigner.presign(new HttpRequest(s3ObjectUrl));
+    const presignedUrl = formatUrl(presignedResponse);
+
+    logger.debug('Generated presigned URL (truncated):', presignedUrl.substring(0, 100) + '...');
+    return presignedUrl;
+
+  } catch (error) {
+    logger.error('Error generating presigned URL:', error);
+    return null;
+  }
 };
 
 export default generateS3PresignedUrl;
