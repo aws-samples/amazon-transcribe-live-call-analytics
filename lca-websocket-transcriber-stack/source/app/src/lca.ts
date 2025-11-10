@@ -358,7 +358,8 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
             }
         }
     } else if (TRANSCRIBE_LANGUAGE_CODE === 'identify-multiple-languages') {
-        tsParams.IdentifyMultipleLanguages = true;
+        // Type assertion to handle AWS SDK type compatibility
+        (tsParams as StartStreamTranscriptionCommandInput & { IdentifyMultipleLanguages?: boolean }).IdentifyMultipleLanguages = true;
         if (TRANSCRIBE_LANGUAGE_OPTIONS) {
             tsParams.LanguageOptions = TRANSCRIBE_LANGUAGE_OPTIONS.replace(/\s/g, '');
             if (TRANSCRIBE_PREFERRED_LANGUAGE !== 'None') {
@@ -409,7 +410,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
                 : new StartCallAnalyticsStreamTranscriptionCommand(tsParams as StartCallAnalyticsStreamTranscriptionCommandInput);
             
             const response = await transcribeClient.send(command);
-            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from TCA. Session Id: ${response.SessionId} ===`);
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from TCA. Session Id: ${(response as { SessionId?: string }).SessionId} ===`);
 
             // Cast response to handle both standard Transcribe and Whisper responses
             outputCallAnalyticsStream = (response as { CallAnalyticsTranscriptResultStream: AsyncIterable<CallAnalyticsTranscriptResultStream> }).CallAnalyticsTranscriptResultStream;
@@ -424,7 +425,7 @@ export const startTranscribe = async (callMetaData: CallMetaData, audioInputStre
                 : new StartStreamTranscriptionCommand(tsParams);
             
             const response = await transcribeClient.send(command);
-            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from ${useWhisper ? 'Whisper' : 'Transcribe'}. Session Id: ${response.SessionId} ===`);
+            server.log.debug(`[TRANSCRIBING]: [${callMetaData.callId}] === Received Initial response from ${useWhisper ? 'Whisper' : 'Transcribe'}. Session Id: ${(response as { SessionId?: string }).SessionId} ===`);
 
             // Cast response to handle both standard Transcribe and Whisper responses
             outputTranscriptStream = (response as { TranscriptResultStream: AsyncIterable<TranscriptResultStream> }).TranscriptResultStream;

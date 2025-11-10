@@ -409,7 +409,7 @@ export class WhisperStreamingClient {
                     if (leftResults.TranscriptEvents && leftResults.TranscriptEvents.length > 0) {
                         this.server.log.debug(`Debug: Found ${leftResults.TranscriptEvents.length} left channel events`);
                         leftResults.TranscriptEvents.forEach((event: EventResult) => {
-                            this.server.log.debug('Debug: Left channel event:', JSON.stringify(event));
+                            this.server.log.debug(`Debug: Left channel event: ${JSON.stringify(event)}`);
                             resultStream.write(event);
                         });
                     } else {
@@ -419,7 +419,7 @@ export class WhisperStreamingClient {
                     if (rightResults.TranscriptEvents && rightResults.TranscriptEvents.length > 0) {
                         this.server.log.debug(`Debug: Found ${rightResults.TranscriptEvents.length} right channel events`);
                         rightResults.TranscriptEvents.forEach((event: EventResult) => {
-                            this.server.log.debug('Debug: Right channel event:', JSON.stringify(event));
+                            this.server.log.debug(`Debug: Right channel event: ${JSON.stringify(event)}`);
                             resultStream.write(event);
                         });
                     } else {
@@ -615,7 +615,7 @@ export class WhisperStreamingClient {
                     results.silenceFrameCount = 0;
                 }
             } catch (vadError) {
-                this.server.log.error(`[WHISPER]: Error processing VAD for channel ${channelId}:`, vadError);
+                this.server.log.error(`[WHISPER]: Error processing VAD for channel ${channelId}: ${vadError}`);
             }
             
             results.remainingSamples = samples.slice(this.VAD_FRAME_LENGTH);

@@ -509,6 +509,101 @@ Resources:
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
+  # Patch Management Configuration
+  AsteriskPatchBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: !Sub "${AWS::StackName}-Ubuntu-Baseline"
+      Description: "Patch baseline for Asterisk Ubuntu instances"
+      OperatingSystem: UBUNTU
+      PatchGroups:
+        - !Sub "${AWS::StackName}-asterisk"
+      ApprovalRules:
+        PatchRules:
+          - PatchFilterGroup:
+              PatchFilters:
+                - Key: PRIORITY
+                  Values:
+                    - Required
+                    - Important
+                    - Standard
+                - Key: CLASSIFICATION
+                  Values:
+                    - Security
+                    - Bugfix
+            ApproveAfterDays: 0
+            ComplianceLevel: CRITICAL
+            EnableNonSecurity: true
+      ApprovedPatches:
+        - "*"
+      ApprovedPatchesComplianceLevel: CRITICAL
+      ApprovedPatchesEnableNonSecurity: true
+      RejectedPatches: []
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Ubuntu-Baseline"
+
+  AsteriskMaintenanceWindow:
+    Type: AWS::SSM::MaintenanceWindow
+    Properties:
+      Name: !Sub "${AWS::StackName}-Asterisk-Maintenance"
+      Description: "Maintenance window for Asterisk instance patching"
+      Duration: 2
+      Cutoff: 0
+      Schedule: "cron(0 2 ? * SUN *)"  # Every Sunday at 2 AM
+      ScheduleTimezone: "UTC"
+      AllowUnassociatedTargets: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Asterisk-Maintenance"
+
+  AsteriskMaintenanceWindowTarget:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      WindowId: !Ref AsteriskMaintenanceWindow
+      ResourceType: INSTANCE
+      Targets:
+        - Key: tag:Patch Group
+          Values:
+            - !Sub "${AWS::StackName}-asterisk"
+      Name: !Sub "${AWS::StackName}-Asterisk-Targets"
+      Description: "Asterisk instances for maintenance"
+
+  AsteriskPatchTask:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      WindowId: !Ref AsteriskMaintenanceWindow
+      TaskType: RUN_COMMAND
+      TaskArn: "AWS-RunPatchBaseline"
+      Targets:
+        - Key: WindowTargetIds
+          Values:
+            - !Ref AsteriskMaintenanceWindowTarget
+      Priority: 1
+      ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
+      TaskParameters:
+        Operation:
+          Values:
+            - Install
+      MaxConcurrency: "1"
+      MaxErrors: "0"
+      Name: !Sub "${AWS::StackName}-Patch-Task"
+      Description: "Install patches on Asterisk instances"
+
+  MaintenanceWindowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole
+      Path: /
+
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -550,6 +645,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "AsteriskInstance-${AWS::StackName}"
+        - Key: Patch Group
+          Value: !Sub "${AWS::StackName}-asterisk"
       UserData:
         Fn::Base64: !Sub |
           Content-Type: multipart/mixed; boundary="//"
@@ -596,11 +693,48 @@ Resources:
           trap error_exit EXIT
 
           echo =========================================
-          echo Install packages
+          echo Install packages and security updates
           echo =========================================
           sudo apt-get update
           while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do sleep 1 ; done
+          
+          # Apply all security updates first
+          sudo apt-get upgrade -y
+          
+          # Enable Ubuntu Pro ESM for security patches (free for personal use)
+          sudo pro enable esm-infra --assume-yes || echo "ESM already enabled or failed"
+          sudo apt-get update
+          
+          # Install specific ESM security-patched versions
+          sudo apt-get install -y liburiparser1=0:0.9.6+dfsg-1ubuntu0.1~esm1 || \
+          sudo apt-get install -y --only-upgrade liburiparser1 || echo "Could not update liburiparser1"
+          
+          sudo apt-get install -y libopusfile0=0:0.9+20170913-1.1ubuntu0.1~esm1 || \
+          sudo apt-get install -y --only-upgrade libopusfile0 || echo "Could not update libopusfile0"
+          
+          # Install required packages
           sudo apt-get install unzip asterisk python3-pip jq -y
+          
+          # Ensure SSM agent is installed and updated (Ubuntu 22.04 uses snap by default)
+          if ! snap list amazon-ssm-agent > /dev/null 2>&1; then
+            sudo snap install amazon-ssm-agent --classic
+          else
+            sudo snap refresh amazon-ssm-agent
+          fi
+          sudo systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+          sudo systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+          
+          # Wait for SSM agent to register, then run initial patch scan
+          echo "Waiting for SSM agent to register..."
+          sleep 30
+          
+          # Run initial patch baseline scan to populate patch state
+          /usr/local/bin/aws ssm send-command \
+            --instance-ids $(curl -s http://169.254.169.254/latest/meta-data/instance-id) \
+            --document-name "AWS-RunPatchBaseline" \
+            --parameters "Operation=Scan" \
+            --region ${AWS::Region} || echo "Initial patch scan will be retried by SSM"
+          
           curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
           unzip -q  -o awscliv2.zip
           sudo ./aws/install --update

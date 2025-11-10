@@ -53,11 +53,14 @@ const socketMap = new Map<WebSocket, SocketCallData>();
 const server = fastify({
     logger: {
         level: WS_LOG_LEVEL,
-        prettyPrint: {
-            ignore: 'pid,hostname',
-            translateTime: 'SYS:HH:MM:ss.l',
-            colorize: false,
-            levelFirst: true,
+        transport: {
+            target: 'pino-pretty',
+            options: {
+                ignore: 'pid,hostname',
+                translateTime: 'SYS:HH:MM:ss.l',
+                colorize: false,
+                levelFirst: true,
+            }
         },
     },
     disableRequestLogging: true,

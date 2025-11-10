@@ -249,9 +249,9 @@ if [ $LOGIN_RESULT -ne 0 ]; then
     fi
 fi
 
-# Build and push the Docker image
-echo "Building Docker image..."
-docker build -t $ECR_URI "$SOURCE_DIR"
+# Build and push the Docker image for linux/amd64 platform (ECS Fargate compatibility)
+echo "Building Docker image for linux/amd64 platform..."
+docker build --platform linux/amd64 -t $ECR_URI "$SOURCE_DIR"
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to build Docker image"
     exit 1
