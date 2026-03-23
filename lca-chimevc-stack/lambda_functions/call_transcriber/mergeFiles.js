@@ -9,12 +9,12 @@ const {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
-} = require('@aws-sdk/client-s3');
-const fs = require('fs');
+} = require("@aws-sdk/client-s3");
+const fs = require("fs");
 
-const REGION = process.env.REGION || 'us-east-1';
+const REGION = process.env.REGION || "us-east-1";
 const s3Client = new S3Client({ region: REGION });
-const tempFilePath = process.env.TEMP_FILE_PATH || '/tmp/';
+const tempFilePath = process.env.TEMP_FILE_PATH || "/tmp/";
 const bitDepth = 16;
 const bytesPerSample = bitDepth / 8;
 const outSampleRate = 8000;
@@ -78,21 +78,21 @@ const mergeFiles = async function mergeFiles(event) {
   }
   combinedStream.end();
 
-  console.log('Creating header');
+  console.log("Creating header");
   const header = createHeader(totalSize);
-  console.log('Creating merged file');
+  console.log("Creating merged file");
   const readStream = fs.createReadStream(combinedRawFilename);
   const writeStream = fs.createWriteStream(combinedWavFilename);
-  console.log('Writing header');
+  console.log("Writing header");
   writeStream.write(header);
-  console.log('Writing body chunks');
+  console.log("Writing body chunks");
   // eslint-disable-next-line no-restricted-syntax
   for await (const chunk of readStream) {
     writeStream.write(chunk);
   }
   writeStream.end();
 
-  console.log('Uploading merged file.');
+  console.log("Uploading merged file.");
   const readWavStream = fs.createReadStream(combinedWavFilename);
 
   // upload back to s3
@@ -105,7 +105,7 @@ const mergeFiles = async function mergeFiles(event) {
     Body: readWavStream,
   };
   const data = await s3Client.send(new PutObjectCommand(uploadParams));
-  console.log('Deleting old files');
+  console.log("Deleting old files");
   // delete old files
   for (let i = 0; i <= event.lambdaCount; i += 1) {
     const key = `${event.rawPrefix + event.callId}-${i}.raw`;
@@ -122,7 +122,7 @@ const mergeFiles = async function mergeFiles(event) {
     }
   }
 
-  console.log('Done', data);
+  console.log("Done", data);
 };
 
 exports.mergeFiles = mergeFiles;

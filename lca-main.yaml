@@ -18,7 +18,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - LCA (v0.9.7) (SO9072)
 
 Parameters:
-
   CallAudioSource:
     Type: String
     Default: Demo Asterisk PBX Server
@@ -285,14 +284,14 @@ Parameters:
       Set to 'whisper-on-sagemaker' to use the Whisper ASR model deployed on SageMaker.
       Whisper only works when the Call Audio Source is set to 'Demo Asterisk PBX Server' or 
       'Amazon Chime SDK Voice Connector (SIPREC)', and the Call Audio Processor is set to 'Call Transcriber Lambda'.
-      
+
   WhisperSageMakerEndpointName:
     Type: String
     Default: ""
     Description: >-
       The name of an existing SageMaker endpoint to use for Whisper ASR. This must be in the same region as the stack. Only
       used when TranscribeApiMode is set to "whisper-on-sagemaker". Leave empty to automatically create a new endpoint.
-      
+
   # Whisper SageMaker Autoscaling Parameters
   WhisperSageMakerEnableAutoScaling:
     Type: String
@@ -302,7 +301,7 @@ Parameters:
       - "false"
     Description: >
       Enable or disable autoscaling for the Whisper SageMaker endpoint.
-      
+
   WhisperSageMakerAutoScalingMinCapacity:
     Type: Number
     Default: 1
@@ -310,7 +309,7 @@ Parameters:
     MaxValue: 3
     Description: >
       The minimum number of instances for Whisper SageMaker endpoint autoscaling.
-      
+
   WhisperSageMakerAutoScalingMaxCapacity:
     Type: Number
     Default: 3
@@ -318,7 +317,7 @@ Parameters:
     MaxValue: 3
     Description: >
       The maximum number of instances for Whisper SageMaker endpoint autoscaling.
-      
+
   WhisperSageMakerAutoScalingTargetGpuUtilization:
     Type: Number
     Default: 50
@@ -326,7 +325,7 @@ Parameters:
     MaxValue: 90
     Description: >
       The target GPU utilization percentage for Whisper SageMaker endpoint autoscaling.
-      
+
   WhisperSageMakerAutoScalingScaleOutCooldown:
     Type: Number
     Default: 60
@@ -334,7 +333,7 @@ Parameters:
     MaxValue: 3600
     Description: >
       The cooldown period (in seconds) after a scale-out activity for Whisper SageMaker endpoint.
-      
+
   WhisperSageMakerAutoScalingScaleInCooldown:
     Type: Number
     Default: 300
@@ -704,7 +703,7 @@ Parameters:
       ID of the private subnet in Availability Zone 2. Required if UseExistingVPC is
       true. DO NOT CHANGE VALUE WHEN UPDATING AN EXISTING STACK.
     AllowedPattern: "^(|subnet-[a-zA-Z0-9-]+)$"
-      
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -1031,10 +1030,10 @@ Conditions:
   ShouldDeployWhisperSageMakerEndpoint:
     !And [
       !Condition ShouldUseWhisperOnSageMaker,
-      !Equals [!Ref WhisperSageMakerEndpointName, ""]
+      !Equals [!Ref WhisperSageMakerEndpointName, ""],
     ]
 
-  ShouldCreateVPC: !Equals [!Ref UseExistingVPC, "false"]    
+  ShouldCreateVPC: !Equals [!Ref UseExistingVPC, "false"]
 
 Mappings:
   TranscribeToComprehendLanguage:
@@ -1140,15 +1139,17 @@ Rules:
     Assertions:
       - Assert: !Not [!Equals [!Ref AgentAssistExistingLambdaFunctionArn, ""]]
         AssertDescription: AgentAssistExistingLambdaFunctionArn is required when AgentAssistOption is 'Bring your own Lambda function'
-        
+
   WhisperOnSageMakerCompatibility:
-    RuleCondition:
-      !Equals [!Ref TranscribeApiMode, "whisper-on-sagemaker"]
+    RuleCondition: !Equals [!Ref TranscribeApiMode, "whisper-on-sagemaker"]
     Assertions:
-      - Assert: 
+      - Assert:
           !Or [
             !Equals [!Ref CallAudioSource, "Demo Asterisk PBX Server"],
-            !Equals [!Ref CallAudioSource, "Amazon Chime SDK Voice Connector (SIPREC)"]
+            !Equals [
+              !Ref CallAudioSource,
+              "Amazon Chime SDK Voice Connector (SIPREC)",
+            ],
           ]
         AssertDescription: "When using 'whisper-on-sagemaker' as TranscribeApiMode, CallAudioSource must be either 'Demo Asterisk PBX Server' or 'Amazon Chime SDK Voice Connector (SIPREC)'"
       - Assert: !Equals [!Ref CallAudioProcessor, "Call Transcriber Lambda"]
@@ -1207,7 +1208,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - "bedrock:InvokeModel"
-                Resource: 
+                Resource:
                   - !Sub "arn:aws:bedrock:*::foundation-model/*"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*"
               - Effect: Allow
@@ -1593,7 +1594,7 @@ Resources:
         InstallLexResponseBots: "false"
         EmbeddingsApi: "BEDROCK"
         EmbeddingsBedrockModelId: "amazon.titan-embed-text-v2"
-        LLMApi: "DISABLED"  # LMA configures its own KB/QBusiness LambdaHooks
+        LLMApi: "DISABLED" # LMA configures its own KB/QBusiness LambdaHooks
         LogRetentionPeriod: 30
 
   LLMTEMPLATESTACK:
@@ -1860,7 +1861,7 @@ Resources:
         PublicSubnet1: !If
           - ShouldCreateVPC
           - !GetAtt VPCSTACK.Outputs.PublicSubnet1
-          - !Ref PublicSubnet1     
+          - !Ref PublicSubnet1
         Version: <VERSION_TOKEN>
 
   CONNECTKVSSTACK:
@@ -2003,7 +2004,6 @@ Resources:
           - !GetAtt VPCSTACK.Outputs.PrivateSubnet2
           - !Ref PrivateSubnet2
 
-          
   WEBSOCKETTRANSCRIBERSTACK:
     Type: AWS::CloudFormation::Stack
     Condition: ShouldInstallWebSocketStack

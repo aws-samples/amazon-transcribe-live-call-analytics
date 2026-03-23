@@ -86,7 +86,6 @@ const CallAnalyticsLayout = () => {
     splitPanelSize,
     onSplitPanelResize,
   } = useSplitPanel(selectedItems);
-
   // eslint-disable-next-line react/jsx-no-constructed-context-values
   const callsContextValue = {
     calls,

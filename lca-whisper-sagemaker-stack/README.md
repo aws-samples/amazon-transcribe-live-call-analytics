@@ -11,6 +11,7 @@ The Whisper SageMaker stack enables the use of OpenAI's Whisper model as an alte
 ## Integration with LCA
 
 This stack integrates with the main LCA solution when the `TranscribeApiMode` parameter is set to `whisper-on-sagemaker`. It's compatible with the following call audio sources:
+
 - Demo Asterisk PBX Server
 - Amazon Chime SDK Voice Connector (SIPREC)
 
@@ -31,6 +32,7 @@ The stack creates the following resources:
 #### Lambda Function (deploy_whisper)
 
 The `deploy_whisper` Lambda function is responsible for:
+
 - Downloading and preparing the Whisper model files
 - Creating a model archive and uploading it to S3
 - Creating and deploying the SageMaker model, endpoint configuration, and endpoint
@@ -39,6 +41,7 @@ The `deploy_whisper` Lambda function is responsible for:
 #### Inference Script (inference.py)
 
 The inference script handles:
+
 - Loading the Whisper model using the faster-whisper library
 - Processing audio data from various input sources (S3, direct input, base64 encoded)
 - Optimizing performance for both CPU and GPU environments
@@ -47,6 +50,7 @@ The inference script handles:
 #### Dependencies Layer
 
 A Lambda layer containing:
+
 - boto3 (AWS SDK for Python)
 - jsonschema (for JSON schema validation)
 - protobuf (for Protocol Buffers)
@@ -79,19 +83,19 @@ The stack can be deployed in two ways:
 
 ## Parameters
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| WhisperModelSize | Size of the Whisper model to deploy | large-v2 |
-| SageMakerInstanceType | Instance type for the SageMaker endpoint | ml.g5.2xlarge |
-| SageMakerInstanceCount | Number of instances for the endpoint | 1 |
-| S3BucketName | S3 bucket for model artifacts (optional) | (creates new bucket) |
-| EndpointName | Name for the SageMaker endpoint (optional) | (auto-generated) |
-| EnableAutoScaling | Enable/disable autoscaling | true |
-| AutoScalingMinCapacity | Minimum instances for autoscaling | 1 |
-| AutoScalingMaxCapacity | Maximum instances for autoscaling | 3 |
-| AutoScalingTargetGpuUtilization | Target GPU utilization percentage | 50 |
-| AutoScalingScaleOutCooldown | Cooldown period after scale-out (seconds) | 60 |
-| AutoScalingScaleInCooldown | Cooldown period after scale-in (seconds) | 300 |
+| Parameter                       | Description                                | Default              |
+| ------------------------------- | ------------------------------------------ | -------------------- |
+| WhisperModelSize                | Size of the Whisper model to deploy        | large-v2             |
+| SageMakerInstanceType           | Instance type for the SageMaker endpoint   | ml.g5.2xlarge        |
+| SageMakerInstanceCount          | Number of instances for the endpoint       | 1                    |
+| S3BucketName                    | S3 bucket for model artifacts (optional)   | (creates new bucket) |
+| EndpointName                    | Name for the SageMaker endpoint (optional) | (auto-generated)     |
+| EnableAutoScaling               | Enable/disable autoscaling                 | true                 |
+| AutoScalingMinCapacity          | Minimum instances for autoscaling          | 1                    |
+| AutoScalingMaxCapacity          | Maximum instances for autoscaling          | 3                    |
+| AutoScalingTargetGpuUtilization | Target GPU utilization percentage          | 50                   |
+| AutoScalingScaleOutCooldown     | Cooldown period after scale-out (seconds)  | 60                   |
+| AutoScalingScaleInCooldown      | Cooldown period after scale-in (seconds)   | 300                  |
 
 ## Auto Scaling
 
@@ -101,6 +105,7 @@ When auto scaling is enabled, the SageMaker endpoint will automatically scale ba
 - Scale in: Removes instances when GPU utilization falls below the target percentage
 
 The auto scaling configuration can be adjusted using the following parameters:
+
 - `EnableAutoScaling`: Set to "true" to enable auto scaling
 - `AutoScalingMinCapacity`: Minimum number of instances
 - `AutoScalingMaxCapacity`: Maximum number of instances
@@ -112,20 +117,20 @@ The auto scaling configuration can be adjusted using the following parameters:
 
 The stack supports various Whisper model sizes:
 
-| Model Size | Description | Recommended Instance Type |
-|------------|-------------|---------------------------|
-| tiny | Smallest model, fastest but less accurate | ml.g4dn.xlarge |
-| tiny.en | English-only tiny model | ml.g4dn.xlarge |
-| base | Small general model | ml.g4dn.xlarge |
-| base.en | English-only base model | ml.g4dn.xlarge |
-| small | Medium-sized general model | ml.g4dn.2xlarge |
-| small.en | English-only small model | ml.g4dn.2xlarge |
-| medium | Large general model | ml.g5.xlarge |
-| medium.en | English-only medium model | ml.g5.xlarge |
-| large | Very large general model | ml.g5.2xlarge |
-| large-v1 | Original large model | ml.g5.2xlarge |
-| large-v2 | Improved large model (default) | ml.g5.2xlarge |
-| large-v3 | Latest large model | ml.g5.2xlarge |
+| Model Size | Description                               | Recommended Instance Type |
+| ---------- | ----------------------------------------- | ------------------------- |
+| tiny       | Smallest model, fastest but less accurate | ml.g4dn.xlarge            |
+| tiny.en    | English-only tiny model                   | ml.g4dn.xlarge            |
+| base       | Small general model                       | ml.g4dn.xlarge            |
+| base.en    | English-only base model                   | ml.g4dn.xlarge            |
+| small      | Medium-sized general model                | ml.g4dn.2xlarge           |
+| small.en   | English-only small model                  | ml.g4dn.2xlarge           |
+| medium     | Large general model                       | ml.g5.xlarge              |
+| medium.en  | English-only medium model                 | ml.g5.xlarge              |
+| large      | Very large general model                  | ml.g5.2xlarge             |
+| large-v1   | Original large model                      | ml.g5.2xlarge             |
+| large-v2   | Improved large model (default)            | ml.g5.2xlarge             |
+| large-v3   | Latest large model                        | ml.g5.2xlarge             |
 
 Larger models provide better accuracy but require more computational resources.
 

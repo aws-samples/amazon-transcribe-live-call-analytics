@@ -1,6 +1,6 @@
 # How to run LCA UI Locally:
 
-1. To get the LCA UI to run locally, you will need to configure a `.env` file in the `/LCA-ai-stack/source/ui/` folder. The contents of the `.env` file must contain the environment variables listed below along with their values. 
+1. To get the LCA UI to run locally, you will need to configure a `.env` file in the `/LCA-ai-stack/source/ui/` folder. The contents of the `.env` file must contain the environment variables listed below along with their values.
 
 The values may be found in the Outputs of the nested AISTACK stack under `LocalUITestingEnv`.
 Example contents of `.env` file:
@@ -15,17 +15,14 @@ Example contents of `.env` file:
   REACT_APP_ENABLE_LEX_AGENT_ASSIST=true
 ```
 
-
-
 2. Make sure you have NodeJS 16+ installed.
 3. Run `npm install` to install dependencies
 4. Run `npm run start` to start the local development mode.
 5. Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
-
 Default React App Readme Below:
 
--------------------------------------------
+---
 
 # Getting Started with Create React App
 

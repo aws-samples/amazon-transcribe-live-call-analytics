@@ -37,7 +37,7 @@ Parameters:
       - "standard"
       - "analytics"
       - "whisper-on-sagemaker"
-    Description: Set the default operational mode for ASR. 
+    Description: Set the default operational mode for ASR.
 
   WhisperSageMakerEndpointName:
     Type: String
@@ -404,9 +404,9 @@ Resources:
 
   # Update EventBridge permissions to use new function
   AllowEventBridgeToCallTranscriberFunctionLambdaFromChimeVC:
-    Type: "AWS::Lambda::Permission" 
+    Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref CallTranscriberFunction  # Updated reference
+      FunctionName: !Ref CallTranscriberFunction # Updated reference
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromChimeVC.Arn
@@ -426,13 +426,13 @@ Resources:
           - aws.chime
       Targets:
         - Id: CallTranscriberTarget
-          Arn: !GetAtt CallTranscriberFunction.Arn  # Updated reference
+          Arn: !GetAtt CallTranscriberFunction.Arn # Updated reference
       State: "ENABLED"
 
   AllowEventBridgeToCallTranscriberFunctionLambdFromIVR:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref CallTranscriberFunction  # Updated reference
+      FunctionName: !Ref CallTranscriberFunction # Updated reference
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallTranscriberLambdaFromIVR.Arn
@@ -449,7 +449,7 @@ Resources:
           - lca-solution
       Targets:
         - Id: CallTranscriberTarget
-          Arn: !GetAtt CallTranscriberFunction.Arn  # Updated reference
+          Arn: !GetAtt CallTranscriberFunction.Arn # Updated reference
       State: "ENABLED"
 
   # Permission for Call Transcriber to invoke itself
@@ -457,7 +457,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref CallTranscriberFunction  # Updated reference
+      FunctionName: !Ref CallTranscriberFunction # Updated reference
       Principal: !GetAtt CallTranscriberFunctionRole.Arn
 
 Metadata:
@@ -511,7 +511,7 @@ Outputs:
   CallTranscriberFunctionArn:
     Value: !GetAtt CallTranscriberFunction.Arn
     Description: ARN of the Call Transcriber Lambda Function
-    
+
   CallTranscriberFunctionName:
     Value: !Ref CallTranscriberFunction
     Description: Name of the Call Transcriber Lambda Function

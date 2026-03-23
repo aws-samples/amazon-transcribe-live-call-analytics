@@ -8,7 +8,8 @@ test('renders app div element', () => {
   render(<App />);
   const divElement = screen.getByText(
     // eslint-disable-next-line prettier/prettier
-    (content, element) => element.tagName.toLowerCase() === 'div' && element.className.includes('App'),
+    (content, element) =>
+      element.tagName.toLowerCase() === 'div' && element.className.includes('App'),
   );
   expect(divElement).toBeInTheDocument();
 });

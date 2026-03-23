@@ -4,7 +4,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Process TCA PostCall
 
 Parameters:
-
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -46,8 +45,8 @@ Parameters:
       - true
       - false
     Description: >
-      Whether Amazon Chime SDK Call Analytics is used, instead the call transcriber Lambda.  
-        
+      Whether Amazon Chime SDK Call Analytics is used, instead the call transcriber Lambda.
+
 Resources:
   ##########################################################################
   # NodeJS Transcriber Lambda Layer
@@ -67,7 +66,7 @@ Resources:
   ##########################################################################
   # Call Transcriber
   ##########################################################################
- 
+
   ProcessTCAPostCallFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -137,7 +136,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref KinesisDataStreamArn
               - Effect: Allow
                 Action:

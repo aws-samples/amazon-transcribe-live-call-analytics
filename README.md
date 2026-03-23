@@ -75,7 +75,6 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
 
 3. On the CloudFormation `Create Stack` page, click `Next`
 4. Enter the following parameters:
-
    1. `Stack Name`: Name your stack, e.g. LCA  
       **Web UI Authentication**
    2. `Admin Email Address` - Enter the email address of the admin user to be used to log into the web UI. An initial temporary password will be automatically sent via email. This email also includes the link to the web UI
@@ -116,44 +115,44 @@ To get LCA up and running in your own AWS account, follow these steps (if you do
 
        **Transcript Event Processing Configuration**
 
-   26. `Enable Sentiment Analysis` - Enable or disable display of sentiment analysis.
-   27. `Sentiment Negative Score Threshold` - Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
-   28. `Sentiment Positive Score Threshold` - Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1. Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
-   29. `Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)` - If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each
+   27. `Enable Sentiment Analysis` - Enable or disable display of sentiment analysis.
+   28. `Sentiment Negative Score Threshold` - Minimum negative sentiment confidence required to declare a phrase as having negative sentiment, in the range 0-1. Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+   29. `Sentiment Positive Score Threshold` - Minimum positive sentiment confidence required to declare a phrase as having positive sentiment, in the range 0-1. Not applicable when using Contact Lens or Transcribe Call Analytics (as sentiment is pre-calculated).
+   30. `Lambda Hook Function ARN for Custom Transcript Segment Processing (existing)` - If present, the specified Lambda function is invoked by the LCA Call Event Processor Lambda function for each
        transcript segment. See [TranscriptLambdaHookFunction.md](./lca-ai-stack/TranscriptLambdaHookFunction.md).
-   30. `Lambda Hook Function Mode Non-Partial only` - Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for both Partial and Non-Partial transcript segments (false).
-   31. `End of Call Transcript Summary` - `BEDROCK` option (default) requires you to choose one of the supported model IDs from the provided list (BedrockModelId). Choose `SAGEMAKER` to automatically deploy a summarization model. Choose `ANTHROPIC` to use the Third Party Anthropic Claude model with your own API key. Alternatively, choose LAMBDA to use your own Lambda function to generate summaries using other models, or choose DISABLED if you are not interested in exploring the new Transcript Summarization feature. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more information.
-   32. `BedrockModelId` - If `EndOfCallTranscriptSummary` is `BEDROCK`, then choose a model ID from the list of supported models. Defaults to `us.amazon.nova-lite-v1:0`
-   33. `Initial Instance Count for Summarization SageMaker Endpoint` - When `SAGEMAKER` option is chosen (above) enter 0 for a SageMaker Serverless Inference endpoint, or 1 or greater for a provisioned endpoint with the specified number of instances. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
-   34. `End of Call Summarization LLM Third Party API Key` - Provide your API key if you choose ANTHROPIC above. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
-   35. `Lambda Hook Function ARN for Custom End of Call Processing (existing)` - When LAMBDA option is chosen (above) enter the ARN for your custom summarization Lambda function. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+   31. `Lambda Hook Function Mode Non-Partial only` - Specifies if Transcript Lambda Hook Function (if specified) is invoked for Non-Partial transcript segments only (true), or for both Partial and Non-Partial transcript segments (false).
+   32. `End of Call Transcript Summary` - `BEDROCK` option (default) requires you to choose one of the supported model IDs from the provided list (BedrockModelId). Choose `SAGEMAKER` to automatically deploy a summarization model. Choose `ANTHROPIC` to use the Third Party Anthropic Claude model with your own API key. Alternatively, choose LAMBDA to use your own Lambda function to generate summaries using other models, or choose DISABLED if you are not interested in exploring the new Transcript Summarization feature. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more information.
+   33. `BedrockModelId` - If `EndOfCallTranscriptSummary` is `BEDROCK`, then choose a model ID from the list of supported models. Defaults to `us.amazon.nova-lite-v1:0`
+   34. `Initial Instance Count for Summarization SageMaker Endpoint` - When `SAGEMAKER` option is chosen (above) enter 0 for a SageMaker Serverless Inference endpoint, or 1 or greater for a provisioned endpoint with the specified number of instances. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+   35. `End of Call Summarization LLM Third Party API Key` - Provide your API key if you choose ANTHROPIC above. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
+   36. `Lambda Hook Function ARN for Custom End of Call Processing (existing)` - When LAMBDA option is chosen (above) enter the ARN for your custom summarization Lambda function. See [Transcript Summarization](./lca-ai-stack/TranscriptSummarization.md) for more details.
 
        **Download locations**
 
-   36. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
-   37. `Demo Asterisk Agent Audio URL` - (Optional)
+   37. `Demo Asterisk Download URL` - (Optional) URL used to download the Asterisk PBX software
+   38. `Demo Asterisk Agent Audio URL` - (Optional)
        URL for audio (agent.wav) file download for demo Asterisk server. Audio file is automatically played when an agent is not connected with a softphone
 
        **Amazon CloudFront Configuration**
 
-   38. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
-   39. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
+   39. `CloudFront Price Class` - The CloudFront price class. See the [CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/) for a description of each price class.
+   40. `CloudFront Allowed Geographies` - (Optional) Comma separated list of two letter country codes (uppercase ISO 3166-1) that are allowed to access the web user interface via CloudFront. For example: US,CA. Leave empty if you do not want geo restrictions to be applied. For details, see: [Restricting the Geographic Distribution of your Content](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/georestrictions.html).
 
        **Record retention**
 
-   40. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.
+   41. `Record Expiration In Days` - The length of time, in days, that LCA will retain call records. Records and transcripts that are older than this number of days are permanently deleted.
 
        **User Experience**
 
-   41. `Category Alert Regular Expression` - If using the 'analytics' Transcribe API Mode, this regular expression will be used to show an alert in red in the web user interface if it matches a call category. This defaults to matching all categories.
+   42. `Category Alert Regular Expression` - If using the 'analytics' Transcribe API Mode, this regular expression will be used to show an alert in red in the web user interface if it matches a call category. This defaults to matching all categories.
 
        **Post Call Analytics (PCA) Integration**
 
-   42. `PCA InputBucket` - (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
-   43. `PCA InputBucket Transcript prefix` - Value of PCA stack "InputBucketTranscriptPrefix".
-   44. `PCA InputBucket Playback AudioFile prefix` - Value of PCA stack "InputBucketPlaybackAudioPrefix".
-   45. `PcaWebAppURL` - (Optional) Value of PCA stack "WebAppURL" - allows PCA UI to be launched from LCA UI.
-   46. `PCA Web App Call Path Prefix` - PCA path prefix for call detail pages.
+   43. `PCA InputBucket` - (Optional) Value of PCA stack "InputBucket". Effective if Transcribe API Mode parameter is 'analytics'.
+   44. `PCA InputBucket Transcript prefix` - Value of PCA stack "InputBucketTranscriptPrefix".
+   45. `PCA InputBucket Playback AudioFile prefix` - Value of PCA stack "InputBucketPlaybackAudioPrefix".
+   46. `PcaWebAppURL` - (Optional) Value of PCA stack "WebAppURL" - allows PCA UI to be launched from LCA UI.
+   47. `PCA Web App Call Path Prefix` - PCA path prefix for call detail pages.
 
 5. After reviewing, check the blue box for creating IAM resources.
 6. Choose **Create stack**. This will take ~15 minutes to complete.

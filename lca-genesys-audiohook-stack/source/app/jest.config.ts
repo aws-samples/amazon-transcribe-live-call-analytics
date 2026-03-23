@@ -1,16 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Config } from '@jest/types';
+import type { Config } from "@jest/types";
 
 // Sync object
 const config: Config.InitialOptions = {
-    roots: [
-        './src'
-    ],
-    verbose: true,
-    preset: 'ts-jest',
-    testEnvironment: 'node',
+  roots: ["./src"],
+  verbose: true,
+  preset: "ts-jest",
+  testEnvironment: "node",
 };
 export default config;
 

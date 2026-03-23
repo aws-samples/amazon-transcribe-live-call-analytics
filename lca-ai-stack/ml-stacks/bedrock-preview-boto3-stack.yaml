@@ -1,14 +1,13 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 
 Description: Lambda Layer for boto3 Amazon Bedrock SDK extensions - requires access to Amazon Bedrock Service, currently in limited preview.
 
 Resources:
-
   BedrockBoto3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
-        ServerSideEncryptionConfiguration: 
+        ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
@@ -33,8 +32,7 @@ Resources:
                   - 's3:PutObject'
                   - 's3:DeleteObject'
                   - 's3:ListBucket'
-                Resource: 
-                  !Sub 'arn:aws:s3:::${BedrockBoto3Bucket}*'
+                Resource: !Sub 'arn:aws:s3:::${BedrockBoto3Bucket}*'
           PolicyName: S3Policy
 
   BedrockBoto3ZipFunction:
@@ -129,7 +127,7 @@ Resources:
             reason: Lambda function is not communicating with any VPC resources.
           - id: W92
             reason: No requirements to set reserved concurrencies, function will not be invoked simultaneously.
-      
+
   BedrockBoto3Zip:
     Type: Custom::BedrockBoto3Zip
     Properties:
@@ -139,7 +137,7 @@ Resources:
       VERSION: 1
 
   BedrockBoto3Layer:
-    Type: "AWS::Lambda::LayerVersion"
+    Type: 'AWS::Lambda::LayerVersion'
     Properties:
       Content:
         S3Bucket: !GetAtt BedrockBoto3Zip.Bucket
@@ -148,7 +146,6 @@ Resources:
         - python3.12
 
 Outputs:
-
   BedrockBoto3Layer:
     Description: Lambda layer for Boto3 Bedrock SDK extensions
     Value: !Ref BedrockBoto3Layer

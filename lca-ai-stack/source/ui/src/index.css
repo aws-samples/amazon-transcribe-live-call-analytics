@@ -1,2 +1,87 @@
-/* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-   SPDX-License-Identifier: Apache-2.0 */
+/* ===============================
+   Root variables
+   =============================== */
+:root { 
+  --color-background-layout-main: rgb(222, 15, 15);
+  --color-header-gradient: white;
+  --color-button-gradient-start: rgb(179, 20, 41);
+  --color-button-gradient-end: rgb(160, 4, 43);
+  --color-text-white: #ffffff;
+}
+
+
+/* ===============================
+   AWSUI Top Navigation - White BG
+   =============================== */
+header[class*="awsui_top-navigation"] {
+    background-color: white !important; /* header background */
+    color: black !important; /* default text */
+}
+
+/* Header title text */
+header[class*="awsui_top-navigation"] span[class*="awsui_title"] {
+    color: black !important;
+}
+
+/* Identity/email text in the dropdown trigger */
+header[class*="awsui_top-navigation"] span[class*="awsui_text"],
+header[class*="awsui_top-navigation"] span[class*="awsui_description"] {
+    color: black !important;
+}
+
+/* Dropdown menu background */
+header[class*="awsui_top-navigation"] div[class*="awsui_dropdown-content-wrapper"],
+header[class*="awsui_top-navigation"] div[class*="awsui_dropdown-content"] {
+    background-color: white !important;
+    color: black !important;
+}
+
+/* Buttons and icons in the header */
+header[class*="awsui_top-navigation"] button,
+header[class*="awsui_top-navigation"] svg {
+    color: black !important;
+    fill: black !important;
+    stroke: black !important;
+}
+
+/* ===============================
+   Side Navigation container
+   =============================== */
+nav[class*="awsui_navigation"] > div[class*="awsui_content-container"] {
+  background-color: black !important;
+}
+
+/* Navigation text / links */
+nav[class*="awsui_navigation"] a,
+nav[class*="awsui_navigation"] span.awsui_link-text_eymn4_rug8v_6,
+nav[class*="awsui_navigation"] .awsui_header-text_gwq0h_1pven_440 {
+  color: var(--color-text-white) !important;
+}
+
+
+/* ===============================
+   Optional: SVG icons in nav
+   =============================== */
+nav[class*="awsui_navigation"] svg path {
+  stroke: var(--color-text-white) !important;
+  fill: var(--color-text-white) !important;
+}
+
+/* Remove all borders and inner outlines from dropdown/buttons, except inside the specific div */
+button[class*="awsui_button"]:not(.awsui_tools-align-right_wih1l_zysm5_186 *),
+button[class*="awsui_trigger-button"]:not(.awsui_tools-align-right_wih1l_zysm5_186 *),
+div[class*="awsui_dropdown"]:not(.awsui_tools-align-right_wih1l_zysm5_186 *) {
+    border: none !important;          
+    box-shadow: none !important;      
+    background-color: #0073bb !important; 
+    color: white !important;          
+    outline: none !important;         
+}
+
+/* Optional: remove focus ring when clicking or tabbing */
+button[class*="awsui_button"]:focus:not(.awsui_tools-align-right_wih1l_zysm5_186 *),
+button[class*="awsui_trigger-button"]:focus:not(.awsui_tools-align-right_wih1l_zysm5_186 *),
+div[class*="awsui_dropdown"]:focus:not(.awsui_tools-align-right_wih1l_zysm5_186 *) {
+    box-shadow: none !important;
+    outline: none !important;
+}

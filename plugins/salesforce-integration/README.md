@@ -48,8 +48,8 @@ LCA now has two additional Lambda hooks:
 
 ![LCA CRM Architecture](./images/lca-crm-architecture.png)
 
-*Start of call and Post call (summary) Lambda Hooks that integrates with
-Salesforce to look-up and update Case records respectively*
+_Start of call and Post call (summary) Lambda Hooks that integrates with
+Salesforce to look-up and update Case records respectively_
 
 We will first complete Salesforce setup to allow the custom Lambda hooks
 to look up or update the Case records. We will then deploy the LCA and
@@ -58,16 +58,16 @@ with the Salesforce integration Lambda hooks and perform validations.
 
 ## Prerequisites
 
--   An existing Salesforce organization. Sign up for a free [Salesforce
-    Developer Edition](https://developer.salesforce.com/signup)
-    organization, if you don\'t have one.
+- An existing Salesforce organization. Sign up for a free [Salesforce
+  Developer Edition](https://developer.salesforce.com/signup)
+  organization, if you don\'t have one.
 
--   An AWS account. If you don't have one, sign up at
-    [https://aws.amazon.com](https://aws.amazon.com/).
+- An AWS account. If you don't have one, sign up at
+  [https://aws.amazon.com](https://aws.amazon.com/).
 
--   [AWS Command Line Interface](http://aws.amazon.com/cli) (AWS CLI)
-    version 2
-    [installed](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html).
+- [AWS Command Line Interface](http://aws.amazon.com/cli) (AWS CLI)
+  version 2
+  [installed](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html).
 
 ## Create a Salesforce Connected App
 
@@ -171,37 +171,41 @@ sam deploy ---guided
 
 Use the following as a reference for parameter choices:
 
-  --------------------------------------------------------------------------
-  **Parameter Name**         **Description**
-  -------------------------- -----------------------------------------------
-  AWS Region                 The region where you have deployed the LCA
-                             solution.
+---
 
-  SalesforceUsername         The user name of your Salesforce organization
-                             that has permissions to read and create Cases.
+**Parameter Name** **Description**
 
-  SalesforcePassword         Password associated to your Salesforce user
-                             name.
+---
 
-  SalesforceAccessToken      The secret/access token you obtained from
-                             following the instructios under  Get your
-                             Salesforce access token section.
+AWS Region The region where you have deployed the LCA
+solution.
 
-  SalesforceConsumerKey      The Consumer Key you copied in Step 12 of the
-                             Create a Connected App section.
+SalesforceUsername The user name of your Salesforce organization
+that has permissions to read and create Cases.
 
-  SalesforceConsumerSecret   The Consumer Secret obtained from Step 12 the
-                             Create a Salesforce Connected App section.
+SalesforcePassword Password associated to your Salesforce user
+name.
 
-  SalesforceHostUrl          Login URL of your Salesforce organization.
+SalesforceAccessToken The secret/access token you obtained from
+following the instructios under  Get your
+Salesforce access token section.
 
-  SalesforceAPIVersion       Salesforce API version (choose default or
-                             v56.0)
+SalesforceConsumerKey The Consumer Key you copied in Step 12 of the
+Create a Connected App section.
 
-  LCACallDataStreamArn       The Kinesis Data Stream ARN (CallDataStreamArn)
-                             obtained from Step 4 of the Deploy the LCA
-                             stack section.
-  --------------------------------------------------------------------------
+SalesforceConsumerSecret The Consumer Secret obtained from Step 12 the
+Create a Salesforce Connected App section.
+
+SalesforceHostUrl Login URL of your Salesforce organization.
+
+SalesforceAPIVersion Salesforce API version (choose default or
+v56.0)
+
+LCACallDataStreamArn The Kinesis Data Stream ARN (CallDataStreamArn)
+obtained from Step 4 of the Deploy the LCA
+stack section.
+
+---
 
 5.  After the stack successfully deploys,  make a note of
     StartOfCallLambdaHookFunctionArn and
@@ -229,8 +233,8 @@ Use the following as a reference for parameter choices:
 ## Validate the integration
 
 Make a test call and ensure you are able to see the beginning of call
-AGENT ASSIST and post call AGENT ASSIST transcripts. Refer to *Explore
-live call analysis and agent assist features* section of the Live call
+AGENT ASSIST and post call AGENT ASSIST transcripts. Refer to _Explore
+live call analysis and agent assist features_ section of the Live call
 analytics and agent assist for your contact center with Amazon language
 AI services post for guidance. The following video shows the integration
 in action:

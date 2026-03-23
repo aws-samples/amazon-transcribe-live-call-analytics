@@ -18,16 +18,15 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Connect Integration Stack
 
 Parameters:
-
   # Required
   ConnectInstanceArn:
     Type: String
-    Description: Amazon Connect instance ARN 
+    Description: Amazon Connect instance ARN
 
   CallEventProcessorFunctionRoleName:
     Type: String
     Description: >-
-      Name of the AISTACK CallEventProcessorFunction IAM Role   
+      Name of the AISTACK CallEventProcessorFunction IAM Role
 
   CallDataStreamName:
     Type: String
@@ -47,10 +46,9 @@ Parameters:
   EventSourcingTableArn:
     Type: String
     Description: >-
-      DynamoDB Event Table Arn 
+      DynamoDB Event Table Arn
 
 Resources:
-
   LambdaRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -61,7 +59,7 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
         Version: 2012-10-17
-      ManagedPolicyArns: 
+      ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       Policies:
         - PolicyName: InlinePolicy
@@ -159,9 +157,9 @@ Resources:
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
-  # Add policy allowing AISTACK CallEventProcessorFunction Lambda to invoke Connect API 
+  # Add policy allowing AISTACK CallEventProcessorFunction Lambda to invoke Connect API
   TranscriptProcessorConnectPolicy:
-    Type: 'AWS::IAM::Policy'
+    Type: "AWS::IAM::Policy"
     Properties:
       PolicyName: ConnectPolicy
       PolicyDocument:
@@ -182,7 +180,7 @@ Resources:
       Runtime: python3.12
       Timeout: 20
       Description: >-
-        AWS Lambda Function triggered when 'CONNECTED_TO_AGENT' event is received from Connect. 
+        AWS Lambda Function triggered when 'CONNECTED_TO_AGENT' event is received from Connect.
       Environment:
         Variables:
           KINESIS_STREAM_NAME: !Ref CallDataStreamName
@@ -261,7 +259,7 @@ Resources:
             else:
               print("Call not transcribing. Skipping.")
             return "Done"
-  
+
   ContactEventProcessorFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -301,12 +299,12 @@ Resources:
               - Action:
                   - connect:DescribeUser
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Sub "${ConnectInstanceArn}/agent/*"
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref CallDataStreamArn
 
   AllowEventBridgeToCallContactEventFunction:

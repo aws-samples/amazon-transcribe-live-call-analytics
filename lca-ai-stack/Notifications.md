@@ -4,11 +4,11 @@ Amazon Transcribe Call Analytics supports the creation of custom categories so y
 
 You can create as many categories as you'd like to cover a range of different scenarios. For each category you create, you must create between 1 and 20 rules. Each rule is based on one of four criteria: interruptions, keywords, non-talk time, or sentiment. For more details on using these criteria with the [CreateCallAnalyticsCategory](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_CreateCallAnalyticsCategory.html) operation, refer to the [Rule criteria](https://docs.aws.amazon.com/transcribe/latest/dg/call-analytics-create-categories.html#call-analytics-create-categories-rules#call-analytics-create-categories-rules) section.
 
-When LCA receives a category match event from Amazon Transcribe Real-time Call Analytics, it publishes a message to a pre-created [Amazon Simple Notification Service (Amazon SNS) topic](https://docs.aws.amazon.com/sns/latest/dg/welcome.html) that is created during deployment. (*Amazon SNS is a managed service that provides message delivery from publishers (e.g. LCA) to subscribers (also known as producers and consumers).*)
+When LCA receives a category match event from Amazon Transcribe Real-time Call Analytics, it publishes a message to a pre-created [Amazon Simple Notification Service (Amazon SNS) topic](https://docs.aws.amazon.com/sns/latest/dg/welcome.html) that is created during deployment. (_Amazon SNS is a managed service that provides message delivery from publishers (e.g. LCA) to subscribers (also known as producers and consumers)._)
 
 ## Subscriptions
 
-LCA creates a new [SNS topic](https://docs.aws.amazon.com/sns/latest/dg/sns-create-topic.html) for each stack that is created, and the name of the SNS topic can be found in the CloudFormation outputs. To subscribe to messages that LCA publishes to SNS, you must [subscribe to the SNS topic](https://docs.aws.amazon.com/sns/latest/dg/sns-create-subscribe-endpoint-to-topic.html). 
+LCA creates a new [SNS topic](https://docs.aws.amazon.com/sns/latest/dg/sns-create-topic.html) for each stack that is created, and the name of the SNS topic can be found in the CloudFormation outputs. To subscribe to messages that LCA publishes to SNS, you must [subscribe to the SNS topic](https://docs.aws.amazon.com/sns/latest/dg/sns-create-subscribe-endpoint-to-topic.html).
 
 SNS subscription types include:
 
@@ -18,7 +18,6 @@ SNS subscription types include:
   - Amazon SQS
   - Amazon Event Fork Pipelines
   - HTTP/S endpoints
-  
 - Application-to-person notifications
   - SMS
   - Email
@@ -40,11 +39,10 @@ The schema that published by LCA to SNS is as follows:
 
 ```
 {
-  "call_id": "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", 
-  "category_name": "MatchedCategory", 
+  "call_id": "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
+  "category_name": "MatchedCategory",
   "alert": true/false
 }
 ```
 
 You can configure SNS with [SNS Filters](https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html) to only send messages to subscribers if `alert` is true.
-

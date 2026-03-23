@@ -51,6 +51,7 @@ The cloudformation stack deploys the websocket server and creates the required r
 ---
 
 ## Test docker build locally after making code changes
+
 ```
 cd ./lca-talkdesk-voicestream-stack/source/app
 npm install

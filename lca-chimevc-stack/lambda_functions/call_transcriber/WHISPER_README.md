@@ -70,7 +70,7 @@ Common issues and solutions:
    - Check IAM permissions for Lambda
    - Monitor endpoint metrics for performance
 
-3. **Audio Processing Issues**:
+2. **Audio Processing Issues**:
    - Verify audio format and sample rate
    - Check VAD sensitivity settings
    - Monitor memory usage for large audio buffers

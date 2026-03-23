@@ -3,13 +3,12 @@
 ## Overview
 
 A ChimeVC CallTranscriber Lambda Hook function can disable immediate processing of a call - see `shouldProcessCall` in [LambdaHookFunction.md](./LambdaHookFunction.md).
-  
-To start processing such a disabled call later, while it is still in progress, send a `START_CALL_PROCESSING` event. 
-  
-You might want to do this if your contact center SBC initiates a SIPREC session at the start of each call, but you don't want to start transcribing the call until later, when the caller and agent are connected.  In such cases, use a ChimeVC CallTranscriber Lambda Hook function to set `shouldProcessCall` to `false`, and then later, when the IVR connects agent and caller, send a `START_CALL_PROCESSING` event to instruct the LCA Chime CallTranscriber function to start processing the call from that point in time.
+
+To start processing such a disabled call later, while it is still in progress, send a `START_CALL_PROCESSING` event.
+
+You might want to do this if your contact center SBC initiates a SIPREC session at the start of each call, but you don't want to start transcribing the call until later, when the caller and agent are connected. In such cases, use a ChimeVC CallTranscriber Lambda Hook function to set `shouldProcessCall` to `false`, and then later, when the IVR connects agent and caller, send a `START_CALL_PROCESSING` event to instruct the LCA Chime CallTranscriber function to start processing the call from that point in time.
 
 You can optionally use the `START_CALL_PROCESSING` event to assign an AgentId to the call, or to change the default toNumber (System Phone Number) or fromNumber (Caller Phone Number) values assigned to the call.
-
 
 ## How to send a START_CALL_PROCESSING event
 
@@ -28,7 +27,7 @@ Use the Amazon EventBridge API to send an event with the following fields:
    }
 ```
 
-You must use the values shown above for `detail-type` (*START_CALL_PROCESSING*) and `source` (*lca-solution*).   
+You must use the values shown above for `detail-type` (_START_CALL_PROCESSING_) and `source` (_lca-solution_).
 
 In the `detail` object, you must provide the callId for an in-progress call. If you used your custom call initialization Lambda Hook function to change the default callId to a new value, you must use that new value here.
 
@@ -59,6 +58,7 @@ response = client.put_events(
 ## Logs
 
 Use the CallTranscriber CloudWatch logs to see messages that indicate receipt of the START_CALL_PROCESSING event, for example:
+
 ```
 INFO Event: {"version":"0","id":"b4ec7334-3d4d-ad3a-84e8-cf19a172ab7f","detail-type":"START_CALL_PROCESSING",...
 INFO START_CALL_PROCESSING event received, Retrieving previously stored callData.
@@ -75,6 +75,4 @@ INFO Ready to start processing call
 ```
 
 The CallTranscriber Lambda function also saves call metadata in a DynamoDB table. The table name has
-the following pattern: *LCAStackName*-CHIMEVCSTACK-*NNNN*-DeployCallTransriber-*NNNN*-TranscriberCallEventTable-*NNNN*.  Explore items in this table using DynamoDB console **Explore items**. Call metadata items have a Partition Key (**PK**) of the form `cd#<callId>`.  All items in this table are retained for 1 day only.
-
-
+the following pattern: _LCAStackName_-CHIMEVCSTACK-_NNNN_-DeployCallTransriber-_NNNN_-TranscriberCallEventTable-_NNNN_. Explore items in this table using DynamoDB console **Explore items**. Call metadata items have a Partition Key (**PK**) of the form `cd#<callId>`. All items in this table are retained for 1 day only.

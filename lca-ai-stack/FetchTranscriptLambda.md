@@ -8,7 +8,7 @@ The `FetchTranscript` Lambda function accepts 3 parameters:
 
 **CallId** (required, string) - This is the Call ID of the call to look up the transcripts for.
 
-**ProcessTranscript** (optional, bool) - If true, the transcript will condense sequential speaker utterances into a single utterance, remove filler words (uhh, uhm), and remove any HTML that was added to the transcript. 
+**ProcessTranscript** (optional, bool) - If true, the transcript will condense sequential speaker utterances into a single utterance, remove filler words (uhh, uhm), and remove any HTML that was added to the transcript.
 
 **TokenCount** (optional) - If this number is provided or greater than zero, the FetchTranscript function will trim the summary to this number of tokens. Tokens are words, punctuation, and new lines.
 
@@ -21,4 +21,3 @@ Example Lambda event payload:
       "ProcessTranscript": True
   }
 ```
-

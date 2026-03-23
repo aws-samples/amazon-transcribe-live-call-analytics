@@ -4,7 +4,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - PCA Integration
 
 Parameters:
-
   KinesisDataStreamName:
     Type: String
     Description: >-
@@ -52,7 +51,7 @@ Parameters:
 
   PcaWebAppURL:
     Type: String
-    Description: Value of PCA stack "WebAppURL". 
+    Description: Value of PCA stack "WebAppURL".
 
   PcaWebAppCallPathPrefix:
     Type: String
@@ -61,8 +60,8 @@ Parameters:
 
   IsContentRedactionEnabled:
     Type: String
-    Description: Is Content Redaction enabled 'true' or 'false' 
-        
+    Description: Is Content Redaction enabled 'true' or 'false'
+
 Resources:
   ##########################################################################
   # NodeJS Transcriber Lambda Layer
@@ -82,7 +81,7 @@ Resources:
   ##########################################################################
   # Call Transcriber
   ##########################################################################
- 
+
   PCAIntegrationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -156,7 +155,7 @@ Resources:
               - Action:
                   - kinesis:PutRecord
                 Effect: Allow
-                Resource:  
+                Resource:
                   - !Ref KinesisDataStreamArn
               - Effect: Allow
                 Action:
