@@ -61,11 +61,10 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: Store Salesforce Credentials
-      SecretString:
-        !Sub '{"Password": "${SalesforcePassword}", 
-               "ConsumerKey": "${SalesforceConsumerKey}", 
-               "ConsumerSecret": "${SalesforceConsumerSecret}", 
-               "AccessToken": "${SalesforceAccessToken}"}'
+      SecretString: !Sub '{"Password": "${SalesforcePassword}",
+        "ConsumerKey": "${SalesforceConsumerKey}",
+        "ConsumerSecret": "${SalesforceConsumerSecret}",
+        "AccessToken": "${SalesforceAccessToken}"}'
 
   SalesforceLookupLambda:
     Type: AWS::Serverless::Function
@@ -110,13 +109,13 @@ Resources:
     Properties:
       Description: Salesforce Lookup Lambda Role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
@@ -139,13 +138,13 @@ Resources:
     Properties:
       Description: Salesforce Update Lambda Role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:

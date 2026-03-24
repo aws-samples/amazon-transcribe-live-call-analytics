@@ -69,7 +69,7 @@ Parameters:
     Description: >
       The name to use for the SageMaker endpoint. If not provided, a name will be generated.
     Default: ""
-    
+
   # Autoscaling Parameters
   EnableAutoScaling:
     Type: String
@@ -79,7 +79,7 @@ Parameters:
       - "false"
     Description: >
       Enable or disable autoscaling for the SageMaker endpoint.
-      
+
   AutoScalingMinCapacity:
     Type: Number
     Default: 1
@@ -87,7 +87,7 @@ Parameters:
     MaxValue: 3
     Description: >
       The minimum number of instances for autoscaling.
-      
+
   AutoScalingMaxCapacity:
     Type: Number
     Default: 3
@@ -95,7 +95,7 @@ Parameters:
     MaxValue: 3
     Description: >
       The maximum number of instances for autoscaling.
-      
+
   AutoScalingTargetGpuUtilization:
     Type: Number
     Default: 50
@@ -103,7 +103,7 @@ Parameters:
     MaxValue: 90
     Description: >
       The target GPU utilization percentage for autoscaling.
-      
+
   AutoScalingScaleOutCooldown:
     Type: Number
     Default: 60
@@ -111,7 +111,7 @@ Parameters:
     MaxValue: 3600
     Description: >
       The cooldown period (in seconds) after a scale-out activity.
-      
+
   AutoScalingScaleInCooldown:
     Type: Number
     Default: 300
@@ -224,7 +224,7 @@ Resources:
                     - CreateS3Bucket
                     - !Sub ${ModelArtifactsBucket.Arn}/*
                     - !Sub arn:aws:s3:::${S3BucketName}/*
-                    
+
   # IAM Role for Application Auto Scaling
   AutoScalingRole:
     Type: AWS::IAM::Role
@@ -279,11 +279,17 @@ Resources:
       Environment:
         Variables:
           WHISPER_MODEL: !Ref WhisperModelSize
-          S3_BUCKET: !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
+          S3_BUCKET:
+            !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
           S3_PREFIX: whisper
           INSTANCE_TYPE: !Ref SageMakerInstanceType
           INSTANCE_COUNT: !Ref SageMakerInstanceCount
-          ENDPOINT_NAME: !If [UseGeneratedEndpointName, !Sub "whisper-endpoint-${AWS::StackName}", !Ref EndpointName]
+          ENDPOINT_NAME:
+            !If [
+              UseGeneratedEndpointName,
+              !Sub "whisper-endpoint-${AWS::StackName}",
+              !Ref EndpointName,
+            ]
           SAGEMAKER_ROLE_ARN: !GetAtt SageMakerExecutionRole.Arn
 
   # Custom resource for deploying the Whisper model
@@ -292,13 +298,19 @@ Resources:
     Properties:
       ServiceToken: !GetAtt WhisperDeploymentFunction.Arn
       WhisperModel: !Ref WhisperModelSize
-      S3Bucket: !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
+      S3Bucket:
+        !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
       S3Prefix: whisper
       InstanceType: !Ref SageMakerInstanceType
       InstanceCount: !Ref SageMakerInstanceCount
-      EndpointName: !If [UseGeneratedEndpointName, !Sub "whisper-endpoint-${AWS::StackName}", !Ref EndpointName]
+      EndpointName:
+        !If [
+          UseGeneratedEndpointName,
+          !Sub "whisper-endpoint-${AWS::StackName}",
+          !Ref EndpointName,
+        ]
       SageMakerRoleArn: !GetAtt SageMakerExecutionRole.Arn
-      
+
   # Application Auto Scaling - Scalable Target
   WhisperEndpointScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
@@ -311,7 +323,7 @@ Resources:
       RoleARN: !GetAtt AutoScalingRole.Arn
       ScalableDimension: sagemaker:variant:DesiredInstanceCount
       ServiceNamespace: sagemaker
-      
+
   # Application Auto Scaling - GPU Utilization Policy
   WhisperEndpointScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
@@ -340,33 +352,33 @@ Outputs:
   S3BucketName:
     Description: The S3 bucket used for model artifacts
     Value: !If [CreateS3Bucket, !Ref ModelArtifactsBucket, !Ref S3BucketName]
-    
+
   # Autoscaling Status
   AutoScalingEnabled:
     Description: Whether autoscaling is enabled for the SageMaker endpoint
     Value: !Ref EnableAutoScaling
-    
+
   # Autoscaling Outputs (only shown when autoscaling is enabled)
   AutoScalingMinCapacity:
     Condition: EnableAutoScalingCondition
     Description: The minimum number of instances for autoscaling
     Value: !Ref AutoScalingMinCapacity
-    
+
   AutoScalingMaxCapacity:
     Condition: EnableAutoScalingCondition
     Description: The maximum number of instances for autoscaling
     Value: !Ref AutoScalingMaxCapacity
-    
+
   AutoScalingTargetGpuUtilization:
     Condition: EnableAutoScalingCondition
     Description: The target GPU utilization percentage for autoscaling
     Value: !Ref AutoScalingTargetGpuUtilization
-    
+
   AutoScalingScaleOutCooldown:
     Condition: EnableAutoScalingCondition
     Description: The cooldown period (in seconds) after a scale-out activity
     Value: !Ref AutoScalingScaleOutCooldown
-    
+
   AutoScalingScaleInCooldown:
     Condition: EnableAutoScalingCondition
     Description: The cooldown period (in seconds) after a scale-in activity

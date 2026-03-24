@@ -15,7 +15,8 @@
     "@aws-sdk/url-parser": "^3.78.0",
     "@aws-sdk/util-format-url": "^3.78.0",
     "@cloudscape-design/collection-hooks": "^1.0.34",
-    "@cloudscape-design/components": "^3.0.512",
+    "@cloudscape-design/component-toolkit": "^1.0.0-beta.142",
+    "@cloudscape-design/components": "^3.0.1242",
     "@cloudscape-design/global-styles": "^1.0.21",
     "aws-amplify": "^4.3.21",
     "graphql-tag": "^2.12.6",
@@ -33,8 +34,8 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "./download-lexwebui.sh && ./generate-lexwebui-json.sh && react-scripts start",
-    "build": "./download-lexwebui.sh && react-scripts build",
+    "start": "react-scripts start",
+    "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "lint": "npx eslint 'src/**/*.{js,jsx}'"

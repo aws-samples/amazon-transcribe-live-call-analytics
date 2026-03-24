@@ -128,7 +128,7 @@ Parameters:
       - standard
       - analytics
       - whisper-on-sagemaker
-    Description: Set the default operational mode for Transcribe. 
+    Description: Set the default operational mode for Transcribe.
 
   WhisperSageMakerEndpointName:
     Type: String

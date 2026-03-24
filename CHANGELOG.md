@@ -10,15 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.7]
 
 ### Fixed
-- Github #232 issue - Fixed QnABot deployment permissions issue.
 
+- Github #232 issue - Fixed QnABot deployment permissions issue.
 
 ## [0.9.6]
 
 ### Added
+
 - Experimental transcription with Whisper on SageMaker AI - see [Whisper README](./lca-whisper-sagemaker-stack/README.md) for more details.
 
 ## [0.9.5] - 2025-02-16
+
 - Added support for Amazon Nova models (amazon.nova-micro-v1:0, amazon.nova-lite-v1:0) - PR #221
 - Updated Anthropic Claude models to the latest 3.5 versions (anthropic.claude-3-5-haiku-20241022-v1:0, anthropic.claude-3-5-sonnet-20241022-v2:0) - PR #221
 - Refactored Bedrock calls to use the Converse API eliminating the need for custom model specific payloads - PR #221
@@ -26,7 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added adaptive retry configuration to Bedrock api calls to add some tolerance for quota throttling exceptions (at the expense of latency) - PR #221
 
 ## [0.9.4] - 2024-10-11
+
 ### Fixed
+
 - Revert fastify dependabot version change - Issue #207
 
 ## [0.9.3] - 2024-10-03
@@ -37,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New README_DEVELOPERS.md with information on how to clone and publish LCA from source code.
 
 ### Fixed
+
 - Support deployment using existing VPC/subnets - PR #198
 - Updated QnABot nested stack to QnABot v6.1.1 - PR #119
 - Publish script fails to detect make failure in lca-ai-stack during build - #191
@@ -45,8 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Muliple dependabot PRs
 - Improved detail in [Genesys AudioHook README](./lca-genesys-audiohook-stack/README.md) - PR #199, #188
 - Upgrade all python Lambda functions to python3.12 (latest)
-- Fix failing mounting call_event_processor #189 
-
+- Fix failing mounting call_event_processor #189
 
 ## [0.9.2] - 2024-08-14
 
@@ -92,7 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Expanded redaction support to include all languages (and dialects) on the Amazon Transcribe supported languages page.
 - Call Transcriber Lambda
-
   - Refactor call end handling, to explicitly process ENDED messages from VoiceConnector, rather than imputing call end from stream data ending - adds robustness when stream can end (temporarily) for other reasons (such as call hold, etc.)
   - Identified a situation where if a call chained across multiple lambda invocations (lasted longer than 12 minutes), the new timer we introduced that checks if the call ends would leak into the next lambda invocation. This would have no effect for a single long running call other than duplicate checks to DynamoDB—however—if the call ends and a NEW call uses that warm Lambda, the new call would inherit the timers and within 5 seconds mark the call as ended. To fix this, we made modifications by adding proper clean-up of timers when the call ends, and also double checking when the next call begins that the new Lambda did not inherit any calls.
   - Added the callId to the log output, so that it is easier to trace calls.

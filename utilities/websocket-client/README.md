@@ -1,17 +1,18 @@
-Websocket Client utility makes it easier to test LCA/Agent Assist using a call recording. Websocket client utility 
-reads call recording in WAV file format (stereo) and streams the audio data to the websocket server. 
+Websocket Client utility makes it easier to test LCA/Agent Assist using a call recording. Websocket client utility
+reads call recording in WAV file format (stereo) and streams the audio data to the websocket server.
 
 ## How to use
-The websocket client can be run from a local command line (such MacOs terminal) or from Cloud9/Cloud Shell command line. 
-This command line environmentshould have access to AWS resources. 
+
+The websocket client can be run from a local command line (such MacOs terminal) or from Cloud9/Cloud Shell command line.
+This command line environmentshould have access to AWS resources.
 
 To get started, cd to `utilities/websocket-client` directory in LCA repo.
 
-1. Setup the package dependencies (first time you run the utility)
+1.  Setup the package dependencies (first time you run the utility)
 
     `npm run setup`
 
-2. Build and check for build errors (optional, but recommended whenever you make changes)
+2.  Build and check for build errors (optional, but recommended whenever you make changes)
 
     `npm run build`
 
@@ -31,9 +32,9 @@ To get started, cd to `utilities/websocket-client` directory in LCA repo.
 
     `LCA_JWT_TOKEN=`
 
-    Get the `LCA_JWT_TOKEN` from your LCA Cognito credentials.  
+    Get the `LCA_JWT_TOKEN` from your LCA Cognito credentials.
 
-4. Run the websocket client using npm run command 
+4.  Run the websocket client using npm run command
 
     `npm run start -- --uri <<Websocket Server Endpoint>>  --wavfile <<wav file name>>`
 

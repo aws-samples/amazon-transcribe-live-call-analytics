@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Amplify, Logger } from 'aws-amplify';
 import { HashRouter } from 'react-router-dom';
-
 import { AppContext } from './contexts/app';
 
 import useUserAuthState from './hooks/use-user-auth-state';

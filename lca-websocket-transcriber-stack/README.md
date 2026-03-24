@@ -1,9 +1,11 @@
 # Websocket Server for Amazon Transcribe Live Call Analytics
 
 ## Introduction
+
 This WebSocket server ingests audio from web clients (web and microphone audio streams), transcribes the audio in real-time, and writes the transcription events to Amazon Kinesis Data Streams (KDS). The server supports multiple transcription engines including Amazon Transcribe, Amazon Transcribe Call Analytics, and OpenAI's Whisper model deployed on Amazon SageMaker.
 
 ## Architecture
+
 ![Architecture Diagram](../images/lca-genesys-architecture.png)
 
 ## Transcription Engine Options
@@ -40,20 +42,20 @@ The CloudFormation stack deploys the WebSocket server to ECS Fargate and creates
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| TRANSCRIBE_API_MODE | Transcription engine to use (`standard`, `analytics`, or `whisper-on-sagemaker`) | `standard` |
-| WHISPER_SAGEMAKER_ENDPOINT | Name of the SageMaker endpoint running Whisper (required when using `whisper-on-sagemaker` mode) | - |
-| NO_SPEECH_THRESHOLD | Threshold for no-speech probability in Whisper (higher values are more aggressive at filtering silence) | `0.2` |
-| TRANSCRIPTION_INTERVAL | Interval for partial results in milliseconds | `5000` |
-| TRANSCRIBE_LANGUAGE_CODE | Language code for transcription | `en-US` |
-| TRANSCRIBE_LANGUAGE_OPTIONS | Comma-separated list of language options for language identification | `en-US,es-US` |
-| TRANSCRIBE_PREFERRED_LANGUAGE | Preferred language for language identification | `None` |
-| IS_CONTENT_REDACTION_ENABLED | Enable content redaction | `false` |
-| CONTENT_REDACTION_TYPE | Type of content to redact | `PII` |
-| TRANSCRIBE_PII_ENTITY_TYPES | Types of PII entities to redact | - |
-| CUSTOM_VOCABULARY_NAME | Custom vocabulary name | - |
-| CUSTOM_LANGUAGE_MODEL_NAME | Custom language model name | - |
+| Variable                      | Description                                                                                             | Default       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- | ------------- |
+| TRANSCRIBE_API_MODE           | Transcription engine to use (`standard`, `analytics`, or `whisper-on-sagemaker`)                        | `standard`    |
+| WHISPER_SAGEMAKER_ENDPOINT    | Name of the SageMaker endpoint running Whisper (required when using `whisper-on-sagemaker` mode)        | -             |
+| NO_SPEECH_THRESHOLD           | Threshold for no-speech probability in Whisper (higher values are more aggressive at filtering silence) | `0.2`         |
+| TRANSCRIPTION_INTERVAL        | Interval for partial results in milliseconds                                                            | `5000`        |
+| TRANSCRIBE_LANGUAGE_CODE      | Language code for transcription                                                                         | `en-US`       |
+| TRANSCRIBE_LANGUAGE_OPTIONS   | Comma-separated list of language options for language identification                                    | `en-US,es-US` |
+| TRANSCRIBE_PREFERRED_LANGUAGE | Preferred language for language identification                                                          | `None`        |
+| IS_CONTENT_REDACTION_ENABLED  | Enable content redaction                                                                                | `false`       |
+| CONTENT_REDACTION_TYPE        | Type of content to redact                                                                               | `PII`         |
+| TRANSCRIBE_PII_ENTITY_TYPES   | Types of PII entities to redact                                                                         | -             |
+| CUSTOM_VOCABULARY_NAME        | Custom vocabulary name                                                                                  | -             |
+| CUSTOM_LANGUAGE_MODEL_NAME    | Custom language model name                                                                              | -             |
 
 ### Using Whisper on SageMaker
 
@@ -70,6 +72,7 @@ The WebSocket API supports the following message types:
 ### Client to Server
 
 - `startCall`: Initiates a new call session
+
   ```json
   {
     "action": "startCall",
@@ -92,6 +95,7 @@ The WebSocket API supports the following message types:
   ```
 
 - `audioMessage`: Sends audio data for transcription
+
   ```json
   {
     "action": "audioMessage",
@@ -112,6 +116,7 @@ The WebSocket API supports the following message types:
 ### Server to Client
 
 - `transcriptEvent`: Delivers transcription results
+
   ```json
   {
     "action": "transcriptEvent",
@@ -142,4 +147,3 @@ The WebSocket API supports the following message types:
 ## Testing
 
 The WebSocket server can be tested by streaming a call recording using a node client utility. Check `utilities/websocket-client` for an example client implementation.
-

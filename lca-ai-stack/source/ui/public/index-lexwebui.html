@@ -1,4 +1,24 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,minimal-ui"><title>LexWebUi Demo</title><link href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=" rel="icon" type="image/x-icon"/><link href="lex-web-ui-loader.min.css" rel="stylesheet"><link rel="stylesheet" href="./custom-chatbot-style.css"></head><body><script src="lex-web-ui-loader.min.js"></script><script>// In the most simple form, you can load the component in a single statement:
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,minimal-ui"
+    />
+    <title>LexWebUi Demo</title>
+    <link
+      href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII="
+      rel="icon"
+      type="image/x-icon"
+    />
+    <link href="lex-web-ui-loader.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="./custom-chatbot-style.css" />
+  </head>
+  <body>
+    <script src="lex-web-ui-loader.min.js"></script>
+    <script>
+      // In the most simple form, you can load the component in a single statement:
       //   new ChatBotUiLoader.FullPageLoader().load();
 
       // The script below break the process into parts to further illustrate
@@ -31,8 +51,8 @@
 
       // Get callid from URL params
       const urlParams = new URLSearchParams(window.location.search);
-      const callId = urlParams.get("callId");
-      console.log(`DEBUG: URL Params: ${urlParams}, CallId: ${callId}`)
+      const callId = urlParams.get('callId');
+      console.log(`DEBUG: URL Params: ${urlParams}, CallId: ${callId}`);
 
       // When loading the chatbot UI component, you can optionally pass it a
       // configuration object
@@ -41,9 +61,9 @@
           sessionAttributes: {
             /* QNAClientFilter: '', */
             callId: callId,
-            userAgent: navigator.userAgent
-          }
-        }
+            userAgent: navigator.userAgent,
+          },
+        },
       };
 
       // Calling the load function of the loader does a few things:
@@ -53,5 +73,12 @@
       //   3. Instantiates the chatbot UI component in the DOM
       loader
         .load(chatbotUiConfig)
-        .then(function () { console.log('ChatBotUiLoader loaded'); })
-        .catch(function (error) { console.error(error); });</script></body></html>
+        .then(function () {
+          console.log('ChatBotUiLoader loaded');
+        })
+        .catch(function (error) {
+          console.error(error);
+        });
+    </script>
+  </body>
+</html>

@@ -10,14 +10,17 @@ For example:
 AGENT: Hello, thank you for calling. How can I help you?
 CALLER: Hi, I'm calling about my rewards card.
 ```
-There are new lines for each speaker turn. 
+
+There are new lines for each speaker turn.
 
 The Lambda function accepts 3 parameters in the event:
 
 ### CallId (string)
+
 This is the callId of the call to get the transcript
 
-### ProcessTranscript (bool) 
+### ProcessTranscript (bool)
+
 If processTranscript is set to true, the following processing will occur:
 
 1. Sequential speaker transcript segments will be merged together into one utterance.
@@ -27,7 +30,7 @@ If processTranscript is set to true, the following processing will occur:
 
 ### TokenCount (int)
 
-This is the maximum number of words and symbols that will be returned. This can be used if your summarization model has a max token count.  If `0`, the entire transcript will be returned. 
+This is the maximum number of words and symbols that will be returned. This can be used if your summarization model has a max token count. If `0`, the entire transcript will be returned.
 
 ## Example event payload:
 
@@ -38,6 +41,7 @@ This is the maximum number of words and symbols that will be returned. This can 
   "TokenCount": 1024
 }
 ```
+
 ## Lambda Response
 
 The Lambda function returns a json with a single parameter, called `transcript` that contains the entire transcript as a string.

@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Parameters:
@@ -27,13 +27,13 @@ Conditions:
       - 0
 
 Outputs:
-  EndpointName: 
+  EndpointName:
     Description: Summarizer Model Endpoint Name
     Value: !If
       - ProvisionedSageMakerEndpoint
       - !GetAtt LCASMProvisionedSummarizationEndpoint.EndpointName
-      - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName 
-  InvokeLambdaArn: 
+      - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName
+  InvokeLambdaArn:
     Description: ARN of the Lambda that invokes the summarizer endpoint
     Value: !GetAtt SummaryLambda.Arn
 
@@ -90,18 +90,18 @@ Resources:
     Properties:
       AssumeRolePolicyDocument:
         Statement:
-        - Action:
-          - sts:AssumeRole
-          Effect: Allow
-          Principal:
-            Service:
-            - sagemaker.amazonaws.com
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
         Version: '2012-10-17'
-      Path: "/"
+      Path: '/'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
 
-  # Lambda Function to call the summarizer. 
+  # Lambda Function to call the summarizer.
   SummaryLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -115,10 +115,10 @@ Resources:
           ENDPOINT_NAME: !If
             - ProvisionedSageMakerEndpoint
             - !GetAtt LCASMProvisionedSummarizationEndpoint.EndpointName
-            - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName 
+            - !GetAtt LCASMServerlessSummarizationEndpoint.EndpointName
           FETCH_TRANSCRIPT_LAMBDA_ARN: !Ref FetchTranscriptArn
-          PROCESS_TRANSCRIPT: "True"
-          TOKEN_COUNT: "1024"
+          PROCESS_TRANSCRIPT: 'True'
+          TOKEN_COUNT: '1024'
 
       Code:
         ZipFile: |
@@ -131,21 +131,21 @@ Resources:
           import csv
           import logging
           import re
-          
+
           # grab environment variables
           ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
           FETCH_TRANSCRIPT_LAMBDA_ARN = os.environ['FETCH_TRANSCRIPT_LAMBDA_ARN']
           PROCESS_TRANSCRIPT = (os.getenv('PROCESS_TRANSCRIPT', 'False') == 'True')
           TOKEN_COUNT = int(os.getenv('TOKEN_COUNT', '0'))
-          
+
           runtime = boto3.client('runtime.sagemaker')
           logger = logging.getLogger(__name__)
           ddb = boto3.resource('dynamodb')
           lambda_client = boto3.client('lambda')
-          
+
           html_remover = re.compile('<[^>]*>')
           filler_remover = re.compile('([Uu]m|[Uu]h|[Ll]ike|[Mm]hm)[,]?')
-          
+
           def get_transcripts(callId):
               payload = {
                   'CallId': callId, 
@@ -158,10 +158,10 @@ Resources:
                   Payload=json.dumps(payload)
               )
               return response
-          
+
           def lambda_handler(event, context):
               print("Received event: " + json.dumps(event, indent=2))
-          
+
               # Setup model input data using text (utterances) received from LCA
               data = json.loads(json.dumps(event))
               callId = data['CallId']
@@ -170,7 +170,7 @@ Resources:
               transcript_json = json.loads(transcript_data)
               # print(transcript_json)
               payload = {'inputs': transcript_json['transcript']}
-          
+
               summaryText = ""
               try:
                   data = json.dumps(event)
@@ -179,7 +179,7 @@ Resources:
                                                     Body=bytes(json.dumps(payload), 'utf-8'))
                   # print(response)
                   result = json.loads(response['Body'].read().decode())
-          
+
                   if len(result) > 0:
                       summary = result[0]
                       # print("Summary: " + summary["generated_text"])
@@ -187,15 +187,13 @@ Resources:
                   else:
                       print("No Summary")
                       summaryText = "No summary"
-          
+
               except Exception as e:
                   print("An exception occurred:", e)
                   summaryText = ""
-          
+
               return {"summary": summaryText}
-        
-        
-  
+
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -203,28 +201,27 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
-          Action:
-          - 'sts:AssumeRole'
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-InvokeSummarizer
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
-              - Effect: "Allow"
-                Action: "sagemaker:InvokeEndpoint"
+              - Effect: 'Allow'
+                Action: 'sagemaker:InvokeEndpoint'
                 Resource: !If
                   - ProvisionedSageMakerEndpoint
                   - !Ref LCASMProvisionedSummarizationEndpoint
                   - !Ref LCASMServerlessSummarizationEndpoint
-              - Effect: "Allow"
-                Action: "dynamodb:Query"
-                Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CallEventsTable}"
-              - Effect: "Allow"
-                Action: "lambda:InvokeFunction"
+              - Effect: 'Allow'
+                Action: 'dynamodb:Query'
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CallEventsTable}'
+              - Effect: 'Allow'
+                Action: 'lambda:InvokeFunction'
                 Resource: !Ref FetchTranscriptArn
-

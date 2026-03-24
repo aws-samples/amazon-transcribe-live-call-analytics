@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: Amazon Transcribe Live Call Analytics with Agent Assist - Amazon Chime SDK Call Analytics w/Amazon Chime SDK Voice Connector
@@ -54,23 +54,23 @@ Parameters:
 
   IsPartialTranscriptEnabled:
     Type: String
-    Default: 'true'
+    Default: "true"
     Description: >-
       Enable partial transcripts to receive low latency evolving transcriptions for each conversation turn. Set to false to process only the
       final version of each conversation turn.
     AllowedValues:
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"
 
   IsContentRedactionEnabled:
     Type: String
-    Default: 'false'
+    Default: "false"
     Description: >-
       Enable content redaction from Amazon Transcribe transcription output. This is only used when
       the 'en-US', 'en-AU', 'en-GB' or 'es-US' languages are selected in the TranscribeLanguageCode parameter.
     AllowedValues:
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"
 
   TranscribeContentRedactionType:
     Type: String
@@ -87,26 +87,26 @@ Parameters:
       language identification can't  be combined with custom language models or redaction.
     Default: en-US
     AllowedValues:
-    - identify-language
-    - identify-multiple-languages
-    - en-US
-    - es-US
-    - en-GB
-    - fr-CA
-    - fr-FR
-    - en-AU
-    - it-IT
-    - de-DE
-    - pt-BR
-    - ja-JP
-    - ko-KR
-    - zh-CN
-    - hi-IN
-    - th-TH
+      - identify-language
+      - identify-multiple-languages
+      - en-US
+      - es-US
+      - en-GB
+      - fr-CA
+      - fr-FR
+      - en-AU
+      - it-IT
+      - de-DE
+      - pt-BR
+      - ja-JP
+      - ko-KR
+      - zh-CN
+      - hi-IN
+      - th-TH
 
   TranscribeLanguageOptions:
     Type: String
-    Default: 'en-US, es-US'
+    Default: "en-US, es-US"
     AllowedPattern: '^(?:\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*(?:,\s*(?:en-US|es-US|en-GB|fr-CA|fr-FR|en-AU|it-IT|de-DE|pt-BR|ja-JP|ko-KR|zh-CN|hi-IN|th-TH)\s*)*)?$'
     ConstraintDescription: >-
       Unsupported language code. Allowed values are: en-US, es-US, en-GB, fr-CA, fr-FR,
@@ -137,23 +137,23 @@ Parameters:
 
   CustomVocabularyName:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       The name of the vocabulary to use when processing the transcription job. Leave blank if no
       custom vocabulary to be used. If yes, the custom vocabulary must pre-exist in your account.
 
   CustomLanguageModelName:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       The name of the custom language model to use when processing the transcription job. Leave blank if no
       custom language model is to be used. If specified, the custom language model must pre-exist in your account, 
       match the Language Code selected above, and use the 'Narrow Band' base model.
 
   SiprecLambdaHookFunctionArn:
-    Default: ''
+    Default: ""
     Type: String
-    AllowedPattern: '^(|arn:aws:lambda:.*)$'
+    AllowedPattern: "^(|arn:aws:lambda:.*)$"
     Description: >
       (Optional) Used only when CallAudioSource is set to 'Chime Voice Connector (SIPREC)'.
       If present, the specified Lambda function is invoked at the start of each call. 
@@ -163,13 +163,13 @@ Parameters:
 
   VoiceConnectorId:
     Type: String
-    Default: ''
+    Default: ""
     Description: >-
       Voice connector Id for setting up EventBridge Rule to restrict events to specific Amazon Chime SDK Voice Connector.
 
   CustomVoiceConnectorId:
     Type: String
-    Default: ''
+    Default: ""
     Description: Existing Amazon Chime SDK Voice Connector Id.
 
   Boto3LayerArn:
@@ -249,7 +249,7 @@ Resources:
                   - transcribe:StartCallAnalyticsStreamTranscription
                   - transcribe:StartTranscriptionJob
                 Effect: Allow
-                Resource: '*'
+                Resource: "*"
               - Action:
                   - kinesisvideo:GetDataEndpoint
                   - kinesisvideo:GetMedia
@@ -300,16 +300,16 @@ Resources:
       StackName: !Ref LCAStackName
       TranscribeApiMode: !Ref TranscribeApiMode
       OutputBucket: !Ref S3BucketName
-      RawFilePrefix: 'lca-audio-raw/'
+      RawFilePrefix: "lca-audio-raw/"
       RecordingFilePrefix: !Ref AudioFilePrefix
       CallAnalyticsFilePrefix: !Ref CallAnalyticsPrefix
       TcaDataAccessRoleArn: !GetAtt TcaDataAccessRole.Arn
-      PostCallContentRedactionOutput: 'redacted'
+      PostCallContentRedactionOutput: "redacted"
       SavePartialTranscripts: !Ref IsPartialTranscriptEnabled
       IsContentRedactionEnabled: !If
         - ShouldEnableContentRedaction
-        - 'true'
-        - 'false'
+        - "true"
+        - "false"
       TranscribeLanguageCode: !Ref TranscribeLanguageCode
       TranscribeLanguageOptions: !Ref TranscribeLanguageOptions
       TranscribePreferredLanguage: !Ref TranscribePreferredLanguage
@@ -317,7 +317,7 @@ Resources:
       PiiEntityTypes: !Ref TranscribePiiEntityTypes
       CustomVocabularyName: !Ref CustomVocabularyName
       CustomLanguageModelName: !Ref CustomLanguageModelName
-      CustomResourceVersion: '1.2'
+      CustomResourceVersion: "1.2"
 
   CreateMediaPipelineConfigForVCFunction:
     Type: AWS::Serverless::Function
@@ -325,7 +325,7 @@ Resources:
       Layers:
         - !Ref Boto3LayerArn
       Policies:
-        - Version: '2012-10-17'
+        - Version: "2012-10-17"
           Statement:
             - Effect: Allow
               Action:
@@ -356,22 +356,22 @@ Resources:
         import cfnresponse
         import uuid
         import traceback
-        
+
         responseData = {}
-        
+
         voiceClient = boto3.client('chime-sdk-voice')
         mediaPipelineClient = boto3.client('chime-sdk-media-pipelines')
         cloudformation = boto3.resource("cloudformation")
-        
+
         def is_valid_uuid(value):
           try:
             uuid.UUID(str(value))
-        
+
             return True
           except ValueError:
             return False
-        
-        
+
+
         def delete_pipeline_config(event):
           id = event.get('PhysicalResourceId', '')
           try:
@@ -380,20 +380,20 @@ Resources:
           except Exception as e:
             error = f'Error deleting transcribe media insight pipeline config: {e}.'
             print(error)
-        
+
           try:
             pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
             mediaPipelineClient.delete_media_insights_pipeline_configuration(Identifier=pipelineConfigName)
           except Exception as e:
             error = f'Error deleting media insight pipeline config: {e}.'
             print(error)
-        
+
           return {'PhysicalResourceId': id}
-        
-        
+
+
         def generate_config(event, pipelineConfigName, resourceAccessRoleArn):
           elements = []
-        
+
           # configure kds
           kdsArn = event['ResourceProperties'].get('KinesisStreamArn', '')
           kds = {
@@ -403,7 +403,7 @@ Resources:
             }
           }
           elements.append(kds)
-        
+
           # configure transcribe
           transcribeApiMode = event['ResourceProperties'].get('TranscribeApiMode', '')
           transcribeLanguageCode = event['ResourceProperties'].get('TranscribeLanguageCode', '')
@@ -419,7 +419,7 @@ Resources:
           postCallContentRedactionOutput = event['ResourceProperties'].get('PostCallContentRedactionOutput', '')
           tcaDataAccessRoleArn = event['ResourceProperties'].get('TcaDataAccessRoleArn', '')
           outputLocation = "s3://%s/%s"%(outputBucket,callAnalyticsFilePrefix)
-        
+
           if transcribeApiMode == 'analytics':
             transcribeConfig = "AmazonTranscribeCallAnalyticsProcessorConfiguration"
             transcribe = {
@@ -454,7 +454,7 @@ Resources:
                         transcribe.PreferredLanguage = transcribePreferredLanguage
             else:
                 transcribe.LanguageCode = transcribeLanguageCode
-        
+
           if isContentRedactionEnabled == 'true':
             transcribe[transcribeConfig]["ContentRedactionType"] = contentRedactionType
             transcribe[transcribeConfig]["PiiEntityTypes"] = piiEntityTypes
@@ -463,7 +463,7 @@ Resources:
           if customVocabularyName:
             transcribe[transcribeConfig]["VocabularyName"] = customVocabularyName
           elements.append(transcribe)
-        
+
           # configure lambda sink
           lambdaSinkArn = event['ResourceProperties'].get('LambdaSinkArn', '')
           lambdaSink = {
@@ -473,7 +473,7 @@ Resources:
             }
           }
           elements.append(lambdaSink)
-        
+
           # configure voice analytics
           enableVoiceToneAnalysis = event['ResourceProperties'].get('EnableVoiceToneAnalysis', '')
           enableSpeakerSearch = event['ResourceProperties'].get('EnableSpeakerSearch', '')
@@ -488,8 +488,8 @@ Resources:
           print("Media pipeline configuration")
           print(json.dumps(elements))
           return elements
-        
-        
+
+
         def update_media_pipeline_config(event):
           id = event.get('PhysicalResourceId')
           pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
@@ -508,16 +508,16 @@ Resources:
             'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
             'PhysicalResourceId': id
           }
-        
-        
+
+
         def create_media_pipeline_config(event):
           print('creating media pipeline configuration')
           id = str(uuid.uuid4())
           pipelineConfigName = event['ResourceProperties'].get('StackName', '') + '-' + id
           resourceAccessRoleArn = event['ResourceProperties'].get('ResourceAccessRoleArn', '')
-        
+
           elements = generate_config(event, pipelineConfigName, resourceAccessRoleArn)
-        
+
           print("Creating media pipeline config: ", pipelineConfigName)
           response = mediaPipelineClient.create_media_insights_pipeline_configuration(
             MediaInsightsPipelineConfigurationName=pipelineConfigName,
@@ -527,17 +527,17 @@ Resources:
             },
             Elements=elements
           )
-        
+
           return {
             'ConfigArn': response['MediaInsightsPipelineConfiguration']['MediaInsightsPipelineConfigurationArn'],
             'PhysicalResourceId': id
           }
-        
-        
+
+
         def get_vc_configuration(event):
           voiceConnectorId = event['ResourceProperties']['VoiceConnectorId']
           print(f"Getting existing configuration... {voiceConnectorId}")
-        
+
           try:
             response = voiceClient.get_voice_connector_streaming_configuration(VoiceConnectorId=voiceConnectorId)
             streamingConfiguration = response["StreamingConfiguration"]
@@ -548,8 +548,8 @@ Resources:
             error = f'Error getting voice connector streaming config: {e}.'
             print(error)
           return None
-        
-        
+
+
         def update_vc_configuration(event, config_arn, delete=False):
           print("Updating VC configuration")
           voiceConnectorId = event['ResourceProperties']['VoiceConnectorId']
@@ -557,16 +557,16 @@ Resources:
             # skip updating VC configuration when VC ID is not set. This occurs when existing/custom VC is provided.
             print("Skip updating VC configuration.")
             return None
-        
+
           streamingConfiguration = get_vc_configuration(event)
           if streamingConfiguration is None:
             # nothing to do?
             return None
-        
+
           print("Disabling Removing Streaming Config from VC")
           if 'MediaInsightsConfiguration' in streamingConfiguration:
             del streamingConfiguration['MediaInsightsConfiguration']
-        
+
           print(json.dumps(streamingConfiguration))
           print("Saving configuration...")
           response = voiceClient.put_voice_connector_streaming_configuration(
@@ -575,8 +575,8 @@ Resources:
           )
           print(response)
           return response
-        
-        
+
+
         def lambda_handler(event, context):
           print(event)
           responseData = {
@@ -600,7 +600,6 @@ Resources:
             error = f'Exception thrown: {e}. Please see https://github.com/aws-samples/amazon-transcribe-live-call-analytics/blob/main/TROUBLESHOOTING.md for more information.'
             print(error)
             cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=error)
-
 
   ##########################################################################
   # Voice Tone Lambda Function
@@ -656,7 +655,7 @@ Resources:
                   - chime:StopVoiceToneAnalysisTask
                   - chime:StartSpeakerSearchTask
                   - chime:StopSpeakerSearchTask
-                Resource: '*'
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -723,7 +722,7 @@ Resources:
       Layers:
         # periodically update the Lambda Insights Layer
         # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-        - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2'
+        - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:2"
         - !Ref TranscriberLambdaLayer
       Role: !GetAtt CallAnalyticsInitFunctionRole.Arn
       Runtime: nodejs18.x
@@ -736,23 +735,23 @@ Resources:
           CHIME_MEDIAPIPELINE_CONFIG_ARN: !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
           LCA_STACK_NAME: !Ref LCAStackName
           TRANSCRIBE_API_MODE: !Ref TranscribeApiMode
-          BUFFER_SIZE: '128'
-          LAMBDA_INVOKE_TIMEOUT: '720000'
+          BUFFER_SIZE: "128"
+          LAMBDA_INVOKE_TIMEOUT: "720000"
           KINESIS_STREAM_NAME: !Ref KinesisDataStreamName
           TRANSCRIBER_CALL_EVENT_TABLE_NAME: !Ref TranscriberCallEventTable
           REGION: !Ref AWS::Region
           OUTPUT_BUCKET: !Ref S3BucketName
-          RAW_FILE_PREFIX: 'lca-audio-raw/'
+          RAW_FILE_PREFIX: "lca-audio-raw/"
           RECORDING_FILE_PREFIX: !Ref AudioFilePrefix
           CALL_ANALYTICS_FILE_PREFIX: !Ref CallAnalyticsPrefix
           TCA_DATA_ACCESS_ROLE_ARN: !GetAtt TcaDataAccessRole.Arn
-          POST_CALL_CONTENT_REDACTION_OUTPUT: 'redacted'
-          TEMP_FILE_PATH: '/tmp/'
+          POST_CALL_CONTENT_REDACTION_OUTPUT: "redacted"
+          TEMP_FILE_PATH: "/tmp/"
           SAVE_PARTIAL_TRANSCRIPTS: !Ref IsPartialTranscriptEnabled
           IS_CONTENT_REDACTION_ENABLED: !If
             - ShouldEnableContentRedaction
-            - 'true'
-            - 'false'
+            - "true"
+            - "false"
           TRANSCRIBE_LANGUAGE_CODE: !Ref TranscribeLanguageCode
           CONTENT_REDACTION_TYPE: !Ref TranscribeContentRedactionType
           PII_ENTITY_TYPES: !Ref TranscribePiiEntityTypes
@@ -799,7 +798,7 @@ Resources:
                   - chime:DeleteMediaPipeline
                 Resource:
                   - !GetAtt CreateMediaPipelineConfigForVC.ConfigArn
-                  - !Sub 'arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*'
+                  - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
               - Effect: Allow
                 Action:
                   - chime:StartVoiceToneAnalysisTask
@@ -808,7 +807,7 @@ Resources:
                 Action:
                   - chime:GetMediaPipeline
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*'
+                  - !Sub "arn:${AWS::Partition}:chime:${AWS::Region}:${AWS::AccountId}:media-pipeline/*"
               - Effect: Allow
                 Action:
                   - transcribe:DeleteTranscriptionJob
@@ -819,13 +818,13 @@ Resources:
                   - transcribe:StartStreamTranscription
                   - transcribe:StartCallAnalyticsStreamTranscription
                   - transcribe:StartTranscriptionJob
-                Resource: '*'
+                Resource: "*"
               - Action:
-                  - 'kinesisvideo:Describe*'
-                  - 'kinesisvideo:Get*'
-                  - 'kinesisvideo:List*'
-                Effect: 'Allow'
-                Resource: '*'
+                  - "kinesisvideo:Describe*"
+                  - "kinesisvideo:Get*"
+                  - "kinesisvideo:List*"
+                Effect: "Allow"
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -856,17 +855,17 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub
-                    - 'arn:aws:s3:::${bucket}'
+                    - "arn:aws:s3:::${bucket}"
                     - bucket: !Ref S3BucketName
                   - !Sub
-                    - 'arn:aws:s3:::${bucket}/*'
+                    - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName
               - !If
                 - ShouldEnableLambdaHook
                 - Effect: Allow
                   Action:
                     - lambda:InvokeFunction
-                  Resource: !Sub '${SiprecLambdaHookFunctionArn}'
+                  Resource: !Sub "${SiprecLambdaHookFunctionArn}"
                 - Ref: AWS::NoValue
 
   TcaDataAccessRole:
@@ -895,10 +894,10 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub
-                    - 'arn:aws:s3:::${bucket}'
+                    - "arn:aws:s3:::${bucket}"
                     - bucket: !Ref S3BucketName
                   - !Sub
-                    - 'arn:aws:s3:::${bucket}/*'
+                    - "arn:aws:s3:::${bucket}/*"
                     - bucket: !Ref S3BucketName
     Metadata:
       cfn_nag:
@@ -912,10 +911,10 @@ Resources:
   ##########################################################################
 
   AllowEventBridgeToCallAnalyticsInitFunctionLambdaFromChimeVC:
-    Type: 'AWS::Lambda::Permission'
+    Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !Ref CallAnalyticsInitFunction
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromChimeVC.Arn
       SourceAccount: !Ref AWS::AccountId
@@ -923,25 +922,29 @@ Resources:
   EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromChimeVC:
     Type: AWS::Events::Rule
     Properties:
-      Description: 'This rule is triggered when the ChimeVC streaming status changes'
+      Description: "This rule is triggered when the ChimeVC streaming status changes"
       EventPattern:
         detail:
           voiceConnectorId:
-            - !If [ShouldUseCreatedVoiceConnector, !Ref VoiceConnectorId, !Ref CustomVoiceConnectorId]
+            - !If [
+                ShouldUseCreatedVoiceConnector,
+                !Ref VoiceConnectorId,
+                !Ref CustomVoiceConnectorId,
+              ]
         detail-type:
-          - 'Chime VoiceConnector Streaming Status'
+          - "Chime VoiceConnector Streaming Status"
         source:
           - aws.chime
       Targets:
         - Id: CallAnalyticsInitTarget
           Arn: !GetAtt CallAnalyticsInitFunction.Arn
-      State: 'ENABLED'
+      State: "ENABLED"
 
   AllowEventBridgeToCallAnalyticsInitFunctionLambdFromIVR:
-    Type: 'AWS::Lambda::Permission'
+    Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !Ref CallAnalyticsInitFunction
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromIVR.Arn
       SourceAccount: !Ref AWS::AccountId
@@ -949,17 +952,17 @@ Resources:
   EventBridgeRuleToTriggerCallAnalyticsInitLambdaFromIVR:
     Type: AWS::Events::Rule
     Properties:
-      Description: 'This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR'
+      Description: "This rule is triggered  when a START_CALL_PROCESSING event is sent from IVR"
       EventPattern:
         detail-type:
-          - 'START_CALL_PROCESSING'
-          - 'CALL_SESSION_MAPPING'
+          - "START_CALL_PROCESSING"
+          - "CALL_SESSION_MAPPING"
         source:
           - lca-solution
       Targets:
         - Id: CallAnalyticsInitTarget
           Arn: !GetAtt CallAnalyticsInitFunction.Arn
-      State: 'ENABLED'
+      State: "ENABLED"
 
   # Permission for Call Transcriber to invoke itself
   CallAnalyticsInitPermission:
@@ -970,7 +973,7 @@ Resources:
       Principal: !GetAtt CallAnalyticsInitFunctionRole.Arn
 
 Metadata:
-  'AWS::CloudFormation::Interface':
+  "AWS::CloudFormation::Interface":
     ParameterGroups:
       - Label:
           default: Amazon S3 Configuration
@@ -996,14 +999,14 @@ Metadata:
 
 Conditions:
   ShouldEnableContentRedaction: !And
-    - !Equals [!Ref IsContentRedactionEnabled, 'true']
-    - !Or 
-      - !Equals [!Ref TranscribeLanguageCode, 'en-US']
-      - !Equals [!Ref TranscribeLanguageCode, 'en-AU']
-      - !Equals [!Ref TranscribeLanguageCode, 'en-GB']
-      - !Equals [!Ref TranscribeLanguageCode, 'es-US']
-  ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, '']]
-  ShouldUseCreatedVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, '']
+    - !Equals [!Ref IsContentRedactionEnabled, "true"]
+    - !Or
+      - !Equals [!Ref TranscribeLanguageCode, "en-US"]
+      - !Equals [!Ref TranscribeLanguageCode, "en-AU"]
+      - !Equals [!Ref TranscribeLanguageCode, "en-GB"]
+      - !Equals [!Ref TranscribeLanguageCode, "es-US"]
+  ShouldEnableLambdaHook: !Not [!Equals [!Ref SiprecLambdaHookFunctionArn, ""]]
+  ShouldUseCreatedVoiceConnector: !Equals [!Ref CustomVoiceConnectorId, ""]
 
 Outputs:
   CallTranscriberEventTableName:
@@ -1015,5 +1018,5 @@ Outputs:
   IsContentRedactionEnabled:
     Value: !If
       - ShouldEnableContentRedaction
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"

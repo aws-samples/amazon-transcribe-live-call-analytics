@@ -1,8 +1,7 @@
-// Based on sample from 
+// Based on sample from
 // https://github.com/GoogleChromeLabs/web-audio-samples/blob/main/src/audio-worklet/migration/worklet-recorder/recording-processor.js
 
 class RecordingProcessor extends AudioWorkletProcessor {
-
   floatTo16BitPCM = (input) => {
     const output = new Int16Array(input.length);
     for (let i = 0; i < input.length; i += 1) {
@@ -27,7 +26,6 @@ class RecordingProcessor extends AudioWorkletProcessor {
 
     return interleaved;
   };
-
 
   process(inputs, outputs, parameters) {
     const input = inputs[0];
